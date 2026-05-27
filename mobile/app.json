@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "SNAP",
+    "slug": "snap-marketplace",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "snap",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.snapmedical.marketplace",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#6366F1"
+      },
+      "package": "com.snapmedical.marketplace"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9de4ba24-a1a2-429e-b04c-1147b9d53171"
+      }
+    },
+    "owner": "brookfieldequity",
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

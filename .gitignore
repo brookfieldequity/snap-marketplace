@@ -1,0 +1,48 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Environment variables ─────────────────────────────────────────────────────
+# Keep .env.example files — exclude everything else
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+# Web portal (Vite)
+web/dist/
+
+# Mobile (Expo export)
+mobile/dist/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Expo / React Native ───────────────────────────────────────────────────────
+.expo/
+mobile/.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# ── Prisma ────────────────────────────────────────────────────────────────────
+backend/prisma/generated/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,652 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PROVIDER
+  FACILITY_USER
+  ADMIN
+}
+
+enum Specialty {
+  CRNA
+  ANESTHESIOLOGIST
+  ANESTHESIA_ASSISTANT
+}
+
+enum NotifPreference {
+  IMMEDIATE
+  DAILY_DIGEST
+  WEEKLY_SUMMARY
+  NONE
+}
+
+enum SubscriptionTier {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum ShiftStatus {
+  DEPOSIT_PENDING
+  LIVE
+  FILLED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VIPReason {
+  DAILY_LOGIN
+  CALENDAR_UPDATED
+  SHIFT_ACCEPTED
+  SHIFT_COMPLETED
+  HIGH_RATING
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+}
+
+// ── SNAP Shifts enums ─────────────────────────────────────────────────────────
+
+enum SnapMode {
+  MARKETPLACE
+  SHIFTS
+  BOTH
+}
+
+enum EmploymentCategory {
+  FULL_TIME
+  PER_DIEM
+  LOCUMS
+}
+
+enum IncentiveShiftStatus {
+  OPEN
+  FILLED
+  EXPIRED
+  ESCALATED
+}
+
+enum AvailabilityWindowStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum InsightType {
+  LATE_SCHEDULING
+  PROVIDER_MIX
+  DEMAND_FORECAST
+  UTILIZATION
+}
+
+enum CalculatorType {
+  AGENCY_REPLACEMENT
+  EFFICIENCY
+}
+
+enum LeadFollowUpStatus {
+  NEW
+  CONTACTED
+  DEMO_SCHEDULED
+  CUSTOMER
+  NOT_INTERESTED
+}
+
+// ── Existing models ───────────────────────────────────────────────────────────
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  password            String?
+  role                UserRole  @default(PROVIDER)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  providerProfile     ProviderProfile?
+  facilityMemberships FacilityUser[]
+}
+
+model ProviderProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id])
+
+  firstName             String?
+  lastName              String?
+  specialty             Specialty?
+  additionalSpecialties Specialty[]
+  yearsExperience       Int?
+  city                  String?
+  zipCode               String?
+  state                 String    @default("MA")
+  lat                   Float?
+  lng                   Float?
+  photoUrl              String?
+
+  pin                   String?
+
+  credentialed          Boolean   @default(false)
+  maLicenseNumber       String?
+  maLicenseExpiry       DateTime?
+  maLicenseAcknowledged Boolean   @default(false)
+
+  personalStatement     String?
+  equipmentPreferences  String?
+  caseMixExperience     String?
+
+  vipPoints             Int       @default(0)
+  vipStatus             Boolean   @default(false)
+  vipEarnedAt           DateTime?
+  lastLoginAt           DateTime?
+
+  notifPreference       NotifPreference @default(IMMEDIATE)
+  notifSurge            Boolean   @default(true)
+  expoPushToken         String?
+
+  profileCompletePct    Int       @default(0)
+
+  applications          ShiftApplication[]
+  bookings              ShiftBooking[]
+  completions           ShiftCompletion[]
+  availability          ProviderAvailability[]
+  ratingsReceived       ProviderRating[]
+  facilityRatings       FacilityRating[]
+  preferredAt           PreferredProvider[]
+  vipLogs               VIPPointsLog[]
+  sentMessages          Message[]
+  availabilitySubmissions AvailabilitySubmission[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Facility {
+  id              String    @id @default(cuid())
+  name            String
+  facilityType    String?
+  address         String?
+  zipCode         String?
+  state           String    @default("MA")
+  lat             Float?
+  lng             Float?
+  photoUrls       String[]
+  description     String?
+  caseMix         String?
+  parking         String?
+  whatToBring     String?
+  profileScore    Int       @default(0)
+  snapMode        SnapMode  @default(MARKETPLACE)
+
+  users               FacilityUser[]
+  subscription        FacilitySubscription?
+  shifts              Shift[]
+  preferredProviders  PreferredProvider[]
+  providerRatings     ProviderRating[]
+  facilityRatings     FacilityRating[]
+  messages            Message[]
+  rosterEntries       InternalRosterEntry[]
+  availabilityWindows AvailabilityWindow[]
+  scheduleDays        ScheduleDay[]
+  schedulingUploads   SchedulingUpload[]
+  schedulingRecords   SchedulingRecord[]
+  staffiqInsights     StaffIQInsight[]
+  incentiveShifts     InternalIncentiveShift[]
+  staffiqInputs       StaffIQInput[]
+  staffiqScoreHistory StaffIQScoreHistory[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model FacilityUser {
+  id           String    @id @default(cuid())
+  userId       String
+  facilityId   String
+  facilityRole String    @default("SCHEDULER")
+  user         User      @relation(fields: [userId], references: [id])
+  facility     Facility  @relation(fields: [facilityId], references: [id])
+  createdAt    DateTime  @default(now())
+
+  @@unique([userId, facilityId])
+}
+
+model FacilitySubscription {
+  id                    String           @id @default(cuid())
+  facilityId            String           @unique
+  facility              Facility         @relation(fields: [facilityId], references: [id])
+  tier                  SubscriptionTier @default(BASIC)
+  status                String           @default("ACTIVE")
+  shiftsPostedThisMonth Int              @default(0)
+  monthResetAt          DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
+
+model Shift {
+  id                  String      @id @default(cuid())
+  facilityId          String
+  facility            Facility    @relation(fields: [facilityId], references: [id])
+
+  specialty           Specialty
+  date                DateTime
+  startTime           String
+  durationHours       Float
+  baseRate            Float
+  currentRate         Float
+  surgeEnabled        Boolean     @default(false)
+  surgeMultiplier     Float       @default(1.0)
+  featured            Boolean     @default(false)
+  status              ShiftStatus @default(DEPOSIT_PENDING)
+
+  preferredAccessOnly Boolean     @default(false)
+  preferredWindowEnds DateTime?
+
+  expiresAt           DateTime?
+  currentViewers      Int         @default(0)
+
+  estimatedTotal      Float?
+  depositAmount       Float?
+  depositConfirmed    Boolean     @default(false)
+  depositConfirmedAt  DateTime?
+
+  platformFeePercent  Float       @default(10.0)
+  platformFeeAmount   Float?
+  paymentStatus       PaymentStatus @default(PENDING)
+  paymentSettledAt    DateTime?
+
+  applications        ShiftApplication[]
+  booking             ShiftBooking?
+  completions         ShiftCompletion[]
+  messages            Message[]
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+}
+
+model ShiftApplication {
+  id          String            @id @default(cuid())
+  shiftId     String
+  providerId  String
+  shift       Shift             @relation(fields: [shiftId], references: [id])
+  provider    ProviderProfile   @relation(fields: [providerId], references: [id])
+  status      ApplicationStatus @default(PENDING)
+  appliedAt   DateTime          @default(now())
+  reviewedAt  DateTime?
+
+  @@unique([shiftId, providerId])
+}
+
+model ShiftBooking {
+  id                 String           @id @default(cuid())
+  shiftId            String           @unique
+  providerId         String
+  shift              Shift            @relation(fields: [shiftId], references: [id])
+  provider           ProviderProfile  @relation(fields: [providerId], references: [id])
+
+  providerHourlyRate Float?
+  shiftDurationHours Float?
+  totalShiftValue    Float?
+  platformFeePercent Float?
+  platformFeeAmount  Float?
+  facilityTier       SubscriptionTier?
+
+  paymentStatus      PaymentStatus    @default(PENDING)
+  confirmedAt        DateTime         @default(now())
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+
+  providerRating     ProviderRating?
+  facilityRating     FacilityRating?
+  completion         ShiftCompletion?
+
+  createdAt          DateTime         @default(now())
+}
+
+model ShiftCompletion {
+  id                  String          @id @default(cuid())
+  shiftId             String
+  bookingId           String          @unique
+  providerId          String
+  shift               Shift           @relation(fields: [shiftId], references: [id])
+  booking             ShiftBooking    @relation(fields: [bookingId], references: [id])
+  provider            ProviderProfile @relation(fields: [providerId], references: [id])
+
+  providerConfirmed   Boolean         @default(false)
+  providerHours       Float?
+  providerNotes       String?
+  providerConfirmedAt DateTime?
+
+  facilityConfirmed   Boolean         @default(false)
+  facilityHours       Float?
+  facilityNotes       String?
+  facilityConfirmedAt DateTime?
+
+  disputed            Boolean         @default(false)
+  disputeResolvedAt   DateTime?
+  disputeNotes        String?
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model ProviderAvailability {
+  id          String          @id @default(cuid())
+  providerId  String
+  date        DateTime        @db.Date
+  available   Boolean
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  createdAt   DateTime        @default(now())
+
+  @@unique([providerId, date])
+}
+
+model ProviderRating {
+  id          String          @id @default(cuid())
+  facilityId  String
+  providerId  String
+  bookingId   String          @unique
+  stars       Int
+  notes       String?
+  facility    Facility        @relation(fields: [facilityId], references: [id])
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  booking     ShiftBooking    @relation(fields: [bookingId], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+model FacilityRating {
+  id          String          @id @default(cuid())
+  providerId  String
+  facilityId  String
+  bookingId   String          @unique
+  stars       Int
+  notes       String?
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  facility    Facility        @relation(fields: [facilityId], references: [id])
+  booking     ShiftBooking    @relation(fields: [bookingId], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+model PreferredProvider {
+  id          String          @id @default(cuid())
+  facilityId  String
+  providerId  String
+  facility    Facility        @relation(fields: [facilityId], references: [id])
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  addedAt     DateTime        @default(now())
+
+  @@unique([facilityId, providerId])
+}
+
+model VIPPointsLog {
+  id          String          @id @default(cuid())
+  providerId  String
+  points      Int
+  reason      VIPReason
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+model Message {
+  id          String          @id @default(cuid())
+  shiftId     String
+  facilityId  String
+  senderId    String
+  body        String
+  flagged     Boolean         @default(false)
+  readAt      DateTime?
+  shift       Shift           @relation(fields: [shiftId], references: [id])
+  facility    Facility        @relation(fields: [facilityId], references: [id])
+  sender      ProviderProfile @relation(fields: [senderId], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+// ── SNAP Shifts models ────────────────────────────────────────────────────────
+
+model InternalRosterEntry {
+  id                  String             @id @default(cuid())
+  facilityId          String
+  facility            Facility           @relation(fields: [facilityId], references: [id])
+  providerName        String
+  providerType        Specialty
+  employmentCategory  EmploymentCategory
+  snapAccountEmail    String?
+  phoneNumber         String?
+  licenseNumber       String?
+  licenseExpiration   DateTime?
+  notes               String?
+  snapAccountLinked   Boolean            @default(false)
+  linkedProviderId    String?
+  inviteSentAt        DateTime?
+  createdAt           DateTime           @default(now())
+
+  scheduleAssignments ScheduleAssignment[]
+  incentiveResponses  InternalIncentiveShiftResponse[]
+}
+
+model AvailabilityWindow {
+  id          String                   @id @default(cuid())
+  facilityId  String
+  facility    Facility                 @relation(fields: [facilityId], references: [id])
+  windowName  String
+  openDate    DateTime
+  closeDate   DateTime
+  message     String?
+  notifyAll   Boolean                  @default(true)
+  status      AvailabilityWindowStatus @default(DRAFT)
+  createdAt   DateTime                 @default(now())
+
+  submissions AvailabilitySubmission[]
+}
+
+model AvailabilitySubmission {
+  id          String             @id @default(cuid())
+  windowId    String
+  providerId  String
+  facilityId  String
+  window      AvailabilityWindow @relation(fields: [windowId], references: [id])
+  provider    ProviderProfile    @relation(fields: [providerId], references: [id])
+  submittedAt DateTime           @default(now())
+
+  @@unique([windowId, providerId])
+}
+
+model ScheduleDay {
+  id            String    @id @default(cuid())
+  facilityId    String
+  date          DateTime  @db.Date
+  location      String
+  roomsRequired Int       @default(1)
+  publishedAt   DateTime?
+  facility      Facility  @relation(fields: [facilityId], references: [id])
+
+  assignments   ScheduleAssignment[]
+
+  @@unique([facilityId, date, location])
+}
+
+model ScheduleAssignment {
+  id            String               @id @default(cuid())
+  scheduleDayId String
+  scheduleDay   ScheduleDay          @relation(fields: [scheduleDayId], references: [id])
+  roomNumber    Int
+  rosterId      String?
+  rosterEntry   InternalRosterEntry? @relation(fields: [rosterId], references: [id])
+  facilityId    String
+  createdAt     DateTime             @default(now())
+
+  @@unique([scheduleDayId, roomNumber])
+}
+
+model SchedulingUpload {
+  id             String    @id @default(cuid())
+  facilityId     String
+  facility       Facility  @relation(fields: [facilityId], references: [id])
+  fileName       String
+  rowCount       Int       @default(0)
+  dateRangeStart DateTime?
+  dateRangeEnd   DateTime?
+  status         String    @default("PROCESSED")
+  uploadedAt     DateTime  @default(now())
+
+  records        SchedulingRecord[]
+}
+
+model SchedulingRecord {
+  id               String           @id @default(cuid())
+  facilityId       String
+  facility         Facility         @relation(fields: [facilityId], references: [id])
+  providerName     String?
+  providerType     String?
+  shiftDate        DateTime?
+  startTime        String?
+  endTime          String?
+  durationHours    Float?
+  facilityLocation String?
+  caseType         String?
+  rate             Float?
+  sourceUploadId   String?
+  sourceUpload     SchedulingUpload? @relation(fields: [sourceUploadId], references: [id])
+  createdAt        DateTime         @default(now())
+}
+
+model StaffIQInsight {
+  id                   String      @id @default(cuid())
+  facilityId           String
+  facility             Facility    @relation(fields: [facilityId], references: [id])
+  generatedAt          DateTime    @default(now())
+  insightType          InsightType
+  insightData          Json
+  dollarImpactEstimate Float?
+  dataPointsAnalyzed   Int?
+}
+
+model InternalIncentiveShift {
+  id                     String               @id @default(cuid())
+  facilityId             String
+  facility               Facility             @relation(fields: [facilityId], references: [id])
+  shiftDate              DateTime
+  startTime              String
+  durationHours          Float
+  facilityLocation       String
+  incentiveRate          Float
+  providerTypeRequired   Specialty
+  responseDeadline       DateTime
+  status                 IncentiveShiftStatus @default(OPEN)
+  escalatedToMarketplace Boolean              @default(false)
+  escalationApprovedAt   DateTime?
+  escalationApprovedBy   String?
+  marketplaceShiftId     String?
+  createdAt              DateTime             @default(now())
+
+  responses              InternalIncentiveShiftResponse[]
+}
+
+model InternalIncentiveShiftResponse {
+  id          String                 @id @default(cuid())
+  shiftId     String
+  shift       InternalIncentiveShift @relation(fields: [shiftId], references: [id])
+  rosterId    String
+  rosterEntry InternalRosterEntry    @relation(fields: [rosterId], references: [id])
+  accepted    Boolean
+  respondedAt DateTime               @default(now())
+
+  @@unique([shiftId, rosterId])
+}
+
+model StaffIQCalculatorResult {
+  id              String         @id @default(cuid())
+  calculatorType  CalculatorType
+  facilityName    String?
+  contactName     String?
+  email           String?
+  inputData       Json
+  outputData      Json
+  reportGenerated Boolean        @default(false)
+  reportSent      Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+}
+
+model Lead {
+  id              String             @id @default(cuid())
+  source          String             @default("calculator")
+  facilityName    String?
+  contactName     String?
+  email           String
+  calculatorType  CalculatorType?
+  savingsEstimate Float?
+  reportSentAt    DateTime?
+  followUpStatus  LeadFollowUpStatus @default(NEW)
+  createdAt       DateTime           @default(now())
+}
+
+model StaffIQInput {
+  id                              String   @id @default(cuid())
+  facilityId                      String
+  facility                        Facility @relation(fields: [facilityId], references: [id])
+  totalLocations                  Int
+  avgRoomsPerDay                  Float
+  ftAnesthesiologists             Int
+  ftCrnas                         Int
+  pdAnesthesiologistsPerMonth     Int
+  pdCrnasPerMonth                 Int
+  agencyAnesthesiologistsPerMonth Int
+  agencyCrnasPerMonth             Int
+  avgAnesthesiologistRate         Float
+  avgCrnaRate                     Float
+  avgShiftHours                   Float    @default(10)
+  operatingDaysPerYear            Int      @default(250)
+  primaryTeamModel                String
+  staffiqScore                    Int
+  inefficiency1Pct                Float
+  inefficiency2Pct                Float
+  inefficiency1Cost               Float
+  inefficiency2Cost               Float
+  totalBudget                     Float
+  calculatedAt                    DateTime @default(now())
+  createdAt                       DateTime @default(now())
+}
+
+model StaffIQScoreHistory {
+  id                String   @id @default(cuid())
+  facilityId        String
+  facility          Facility @relation(fields: [facilityId], references: [id])
+  score             Int
+  calculationMethod String
+  calculatedAt      DateTime @default(now())
+}
+
+model CalculatorLead {
+  id                String    @id @default(cuid())
+  facilityName      String
+  contactName       String
+  email             String
+  phone             String?
+  locationsInput    Int
+  providersInput    Int
+  hourlyRateInput   Float
+  estimatedBudget   Float
+  inefficiency1Cost Float
+  inefficiency2Cost Float
+  totalInefficiency Float
+  reportGenerated   Boolean   @default(false)
+  reportSentAt      DateTime?
+  followUpStatus    String    @default("NEW")
+  createdAt         DateTime  @default(now())
+}
