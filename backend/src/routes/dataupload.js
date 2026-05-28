@@ -41,10 +41,15 @@ function buildColumnMapping(headers) {
 
 /**
  * Parse Schedule4 "All_Assignments" matrix export format.
- * Row 0: header — col 0 empty, cols 1..N are date strings like "6/1 Mon", "6/2 Tue"
- * Subsequent rows: col 0 is facility+type label OR provider name filling that section.
- * Facility sections: "Atrius K ANES", "Atrius K CRNA", "Shattuck ANES", etc.
- * Provider rows: provider name in col 0, date cells contain shift annotations or empty.
+ *
+ * Actual file structure (confirmed from CAPA export):
+ *   Row 0:  col 0 empty, cols 1..N are date strings like "6/01 Mon"
+ *   Section headers: "Atrius K (ANES)", "Atrius K (CRNA)", "Shattuck (ANES)" etc.
+ *   Data rows: col 0 is EMPTY, date columns contain PROVIDER NAMES (one per room/day)
+ *              Annotations stripped: "Mlansing (10hr 1)" → provider Mlansing, 10hr shift
+ *
+ * Data is column-oriented: each date column lists every provider who worked that day
+ * within the current facility+type section. Multiple rows = multiple rooms covered.
  */
 function parseSchedule4Matrix(workbook) {
   const sheetName = workbook.SheetNames[0];
@@ -60,74 +65,95 @@ function parseSchedule4Matrix(workbook) {
   const looksLikeMatrix = firstCell === '' && /\d+\/\d+/.test(secondCell);
   if (!looksLikeMatrix) return null;
 
-  // Parse date columns from header row
-  const dateCols = []; // [{ colIndex, date, dayName }]
-  const SKIP_DAYS = ['Sat', 'Sun', 'Saturday', 'Sunday'];
+  // Parse date columns from header row — skip weekends
+  const dateCols = [];
+  const SKIP_DAYS = ['Sat', 'Sun'];
   for (let c = 1; c < headerRow.length; c++) {
     const cell = String(headerRow[c] || '').trim();
     if (!cell) continue;
-    // Format: "6/1 Mon" or "6/1\nMon" or "6/1 Monday"
     const match = cell.match(/(\d+)\/(\d+)\s*(.+)?/);
     if (!match) continue;
     const dayPart = (match[3] || '').trim().slice(0, 3);
-    if (SKIP_DAYS.some(d => d.startsWith(dayPart))) continue;
-    // Construct a full date (we'll use current year)
+    if (SKIP_DAYS.includes(dayPart)) continue;
     const year = new Date().getFullYear();
     const month = parseInt(match[1], 10);
     const day = parseInt(match[2], 10);
     const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    dateCols.push({ colIndex: c, date, dayName: dayPart, month, day });
+    dateCols.push({ colIndex: c, date, dayPart });
   }
 
   if (dateCols.length === 0) return null;
 
-  // Parse rows into records
-  const records = [];
-  const SKIP_ROWS = /^(PTO|Holiday|Sick|Off|Bereavement|Jury|Vacation|LOA)/i;
+  // Accumulate providers per facility+type per date
+  // { facilityName: { date: { anes: Set, crna: Set } } }
+  const facilityDays = {};
 
-  let currentFacility = '';
-  let currentType = ''; // 'ANES' or 'CRNA'
+  let currentFacility = null;
+  let currentType = null;
+
+  function normalizeFacility(name) {
+    return name.trim()
+      .replace(/Atrius\s+K\b/i, 'Kenmore')
+      .replace(/Atrius\s+W\b/i, 'Weymouth')
+      .replace(/Atrius\s+/i, '');
+  }
+
+  function stripAnnotations(cell) {
+    // Remove parenthetical room/hour annotations: (10hr 1), (8hr), (2), (orient), etc.
+    return String(cell).replace(/\s*\(.*?\)\s*/g, '').trim();
+  }
 
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const col0 = String(row[0] || '').trim();
-    if (!col0) continue;
 
-    // Check if this is a facility section header
-    const facMatch = col0.match(/^(.+?)\s+(ANES|CRNA)$/i);
+    // Section header: "Facility Name (ANES)" or "Facility Name (CRNA)"
+    const facMatch = col0.match(/^(.+?)\s*\((ANES|CRNA)\)$/i);
     if (facMatch) {
-      // Normalize facility name
-      currentFacility = facMatch[1].trim()
-        .replace(/Atrius\s+K/i, 'Kenmore')
-        .replace(/Atrius\s+W/i, 'Weymouth')
-        .replace(/Atrius\s+/i, '');
+      currentFacility = normalizeFacility(facMatch[1]);
       currentType = facMatch[2].toUpperCase();
+      if (!facilityDays[currentFacility]) facilityDays[currentFacility] = {};
+      // Fall through — the section header row also contains providers in date columns
+    } else if (col0) {
+      // Non-empty col0 that isn't a facility header = skip section (PTO, Off, Brown, etc.)
+      currentFacility = null;
+      currentType = null;
       continue;
     }
 
     if (!currentFacility || !currentType) continue;
-    if (SKIP_ROWS.test(col0)) continue;
 
-    // Provider name — strip parenthetical annotations
-    const providerName = col0.replace(/\s*\(.*?\)\s*/g, '').trim();
-    if (!providerName) continue;
-
-    // Each date column where the cell is non-empty = this provider worked that day
+    // Read provider names from each date column
     dateCols.forEach(({ colIndex, date }) => {
-      const cell = String(row[colIndex] || '').trim();
-      if (!cell) return;
-      // Parse shift hours from annotation if present
-      const hoursMatch = cell.match(/(\d+)hr/i);
+      const raw = String(row[colIndex] || '').trim();
+      if (!raw) return;
+
+      const providerName = stripAnnotations(raw);
+      if (!providerName) return;
+
+      const hoursMatch = raw.match(/(\d+)hr/i);
       const shiftHours = hoursMatch ? parseInt(hoursMatch[1], 10) : 10;
 
-      records.push({
-        facility: currentFacility,
-        providerName,
-        providerType: currentType,
-        date,
-        shiftHours,
-      });
+      if (!facilityDays[currentFacility][date]) {
+        facilityDays[currentFacility][date] = { anes: [], crna: [] };
+      }
+
+      const key = currentType === 'ANES' ? 'anes' : 'crna';
+      facilityDays[currentFacility][date][key].push({ providerName, shiftHours });
     });
+  }
+
+  // Flatten facilityDays into a flat records array
+  const records = [];
+  for (const [facility, days] of Object.entries(facilityDays)) {
+    for (const [date, { anes, crna }] of Object.entries(days)) {
+      anes.forEach(({ providerName, shiftHours }) => records.push({
+        facility, providerName, providerType: 'ANES', date, shiftHours,
+      }));
+      crna.forEach(({ providerName, shiftHours }) => records.push({
+        facility, providerName, providerType: 'CRNA', date, shiftHours,
+      }));
+    }
   }
 
   return records.length > 0 ? records : null;
