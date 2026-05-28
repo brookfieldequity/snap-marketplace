@@ -180,6 +180,7 @@ export const facilityAPI = {
   // Schedule Builder
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  deleteScheduleDay: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}`, { method: 'DELETE', headers: facilityHeaders() }),
   assignProvider: (dayId, roomNumber, rosterId) => apiFetch(`${BASE}/schedule/days/${dayId}/assignments/${roomNumber}`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ rosterId }) }),
   publishSchedule: (year, month) => apiFetch(`${BASE}/schedule/publish`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month }) }),
   exportSchedule: (year, month) => apiFetch(`${BASE}/schedule/export?year=${year}&month=${month}`, { headers: facilityHeaders() }),

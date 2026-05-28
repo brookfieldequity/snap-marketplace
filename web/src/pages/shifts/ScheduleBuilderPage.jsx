@@ -116,6 +116,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
   const [dayDetailModal, setDayDetailModal] = useState(null) // dateStr
   const [assignLoading, setAssignLoading] = useState({})
+  const [editingLocation, setEditingLocation] = useState(null) // row.id being updated
+  const [deletingLocation, setDeletingLocation] = useState(null) // row.id being deleted
   const [publishing, setPublishing] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -155,6 +157,37 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       alert('Save failed: ' + e.message)
     } finally {
       setSavingLoc(false)
+    }
+  }
+
+  async function handleEditRooms(row, delta) {
+    const next = (row.roomsRequired || 1) + delta
+    if (next < 1) return
+    setEditingLocation(row.id)
+    try {
+      const dateStr = row.date?.slice(0, 10)
+      await facilityAPI.upsertScheduleDay({ date: dateStr, location: row.location, roomsRequired: next })
+      await load()
+    } catch (e) {
+      alert('Update failed: ' + e.message)
+    } finally {
+      setEditingLocation(null)
+    }
+  }
+
+  async function handleDeleteLocation(row) {
+    if (!window.confirm(`Remove "${row.location}" from this day? All room assignments will be cleared.`)) return
+    setDeletingLocation(row.id)
+    try {
+      await facilityAPI.deleteScheduleDay(row.id)
+      await load()
+      // If this was the last location, close the modal
+      const remaining = detailDayRows.filter(r => r.id !== row.id)
+      if (remaining.length === 0) setDayDetailModal(null)
+    } catch (e) {
+      alert('Delete failed: ' + e.message)
+    } finally {
+      setDeletingLocation(null)
     }
   }
 
@@ -373,10 +406,34 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               return (
                 <div key={row.id} style={{ marginBottom: 20, border: `1px solid ${sc.border}`, borderRadius: 12, overflow: 'hidden' }}>
                   {/* Location header */}
-                  <div style={{ background: sc.bg, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A' }}>{row.location}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>
-                      {filled}/{required} rooms filled
+                  <div style={{ background: sc.bg, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1 }}>{row.location}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                      {/* Room count adjuster */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <button
+                          onClick={() => handleEditRooms(row, -1)}
+                          disabled={required <= 1 || editingLocation === row.id}
+                          title="Remove a room"
+                          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', cursor: required <= 1 ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, color: '#374151', opacity: required <= 1 ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >−</button>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', minWidth: 22, textAlign: 'center' }}>{required}</span>
+                        <button
+                          onClick={() => handleEditRooms(row, +1)}
+                          disabled={editingLocation === row.id}
+                          title="Add a room"
+                          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >+</button>
+                        <span style={{ fontSize: 11, color: '#64748B', marginLeft: 2 }}>rooms</span>
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled</div>
+                      {/* Delete location */}
+                      <button
+                        onClick={() => handleDeleteLocation(row)}
+                        disabled={deletingLocation === row.id}
+                        title="Remove this location"
+                        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', cursor: 'pointer', color: '#EF4444', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: deletingLocation === row.id ? 0.5 : 1 }}
+                      >🗑</button>
                     </div>
                   </div>
 
