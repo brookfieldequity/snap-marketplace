@@ -330,7 +330,7 @@ router.get('/facility/mine', facilityAuth, async (req, res) => {
       include: {
         applications: { include: { provider: { select: { id: true, firstName: true, lastName: true, specialty: true, credentialed: true, photoUrl: true } } } },
         booking: { include: { provider: { select: { id: true, firstName: true, lastName: true, specialty: true } } } },
-        completion: true,
+        completions: true,
       },
       orderBy: { date: 'asc' },
     });
