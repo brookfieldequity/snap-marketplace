@@ -341,8 +341,17 @@ export default function SnapShiftsDashboard({ onNavigate }) {
 
   useEffect(() => {
     facilityAPI.getStaffIQScore(scorePeriod)
-      .then(data => { if (data) setStaffiqScore(data); })
-      .catch(() => {}); // keep default
+      .then(res => {
+        if (!res) return;
+        // status comes back as { label, message, zone } — flatten it
+        setStaffiqScore({
+          score: res.score ?? 84,
+          status: res.status?.message || (typeof res.status === 'string' ? res.status : '') || '',
+          zone: res.status?.zone || res.zone || 'yellow',
+          calculationMethod: res.calculationMethod || 'default',
+        });
+      })
+      .catch(() => {}); // keep default on error
   }, [scorePeriod])
 
   async function handleRunAnalysis() {
