@@ -459,7 +459,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
                           const action = insight.snapSolution.buttonAction
                           if (action === 'create-incentive') onNavigate('incentive')
                           else if (action === 'friday-alerts') onNavigate('windows')
-                          else if (action === 'post-shift') onNavigate('windows')
+                          else if (action === 'post-shift') onNavigate('dashboard')
                           else onNavigate('windows')
                         }}
                         style={{ padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(99,102,241,0.35)', flexShrink: 0 }}

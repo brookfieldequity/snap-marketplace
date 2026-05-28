@@ -60,27 +60,26 @@ function daysUntil(dateStr) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
 }
 
-function detectGaps(schedDays) {
+function detectGaps(data) {
   const gaps = []
-  const days = Array.isArray(schedDays) ? schedDays : schedDays?.days || []
+  // Schedule month returns { days: [...], availabilities: [...] } or a plain array
+  const days = Array.isArray(data) ? data : data?.days || []
   days.forEach(day => {
-    const locations = day.locations || []
-    locations.forEach(loc => {
-      const roomCount = loc.roomsRequired || 1
-      let unfilled = 0
-      const assignments = loc.assignments || {}
-      for (let r = 1; r <= roomCount; r++) {
-        if (!assignments[r] && !assignments[r - 1]) unfilled++
-      }
-      if (unfilled > 0) {
-        gaps.push({
-          date: day.date,
-          location: loc.location || loc.name || 'Unknown',
-          roomsUnfilled: unfilled,
-          daysUntil: daysUntil(day.date),
-        })
-      }
-    })
+    const required = day.roomsRequired || 1
+    const assignments = day.assignments || []
+    const filledRooms = assignments.filter(a => a.rosterId).length
+    const unfilled = required - filledRooms
+    if (unfilled > 0) {
+      const dateStr = typeof day.date === 'string'
+        ? day.date.substring(0, 10)
+        : new Date(day.date).toISOString().substring(0, 10)
+      gaps.push({
+        date: dateStr,
+        location: day.location || 'Unknown',
+        roomsUnfilled: unfilled,
+        daysUntil: daysUntil(dateStr),
+      })
+    }
   })
   return gaps
 }

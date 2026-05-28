@@ -13,15 +13,22 @@ const EMPLOY_BADGE = {
   LOCUMS: { bg: '#FFF7ED', color: '#C2410C', label: 'Locums' },
 }
 
+const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+const SHIFT_LENGTHS = [
+  { value: '8hr', label: '8 hours' },
+  { value: '10hr', label: '10 hours' },
+  { value: '12hr', label: '12 hours' },
+  { value: 'none', label: 'No preference' },
+]
+
 const BLANK_FORM = {
-  providerName: '',
-  providerType: 'CRNA',
-  employmentCategory: 'FULL_TIME',
-  snapEmail: '',
-  phoneNumber: '',
-  licenseNumber: '',
-  licenseExpiration: '',
-  notes: '',
+  providerName: '', providerType: 'CRNA', employmentCategory: 'FULL_TIME',
+  snapEmail: '', phoneNumber: '', licenseNumber: '', licenseExpiration: '',
+  // Category fields
+  fteHours: '', annualRate: '', hourlyRate: '',
+  preferredShiftLength: 'none', preferredDays: [],
+  locationRankings: [], maxShiftsPerMonth: '',
+  contractStart: '', contractEnd: '', notes: '',
 }
 
 function isExpiringSoon(dateStr) {
@@ -41,7 +48,7 @@ function Badge({ bg, color, label }) {
 function Modal({ title, onClose, children }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B', lineHeight: 1 }}>✕</button>
@@ -52,25 +59,29 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, required, children }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</label>
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}{required && <span style={{ color: '#EF4444', marginLeft: 2 }}>*</span>}
+      </label>
       {children}
     </div>
   )
 }
 
+function SectionDivider({ label }) {
+  return (
+    <div style={{ borderTop: '1px solid #E2E8F0', margin: '20px 0 14px', paddingTop: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+    </div>
+  )
+}
+
 const inputStyle = {
-  width: '100%',
-  padding: '9px 12px',
-  border: '1px solid #E2E8F0',
-  borderRadius: 8,
-  fontSize: 14,
-  color: '#0F172A',
-  background: '#F8FAFC',
-  boxSizing: 'border-box',
-  outline: 'none',
+  width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0',
+  borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#F8FAFC',
+  boxSizing: 'border-box', outline: 'none',
 }
 
 export default function InternalRosterPage({ onNavigate }) {
@@ -78,11 +89,12 @@ export default function InternalRosterPage({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
-  const [editTarget, setEditTarget] = useState(null) // null = add, else provider object
+  const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(BLANK_FORM)
   const [saving, setSaving] = useState(false)
   const [invitedIds, setInvitedIds] = useState({})
   const [deletingIds, setDeletingIds] = useState({})
+  const [locationInput, setLocationInput] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -101,6 +113,7 @@ export default function InternalRosterPage({ onNavigate }) {
   function openAdd() {
     setEditTarget(null)
     setForm(BLANK_FORM)
+    setLocationInput('')
     setShowModal(true)
   }
 
@@ -110,23 +123,54 @@ export default function InternalRosterPage({ onNavigate }) {
       providerName: p.providerName || '',
       providerType: p.providerType || 'CRNA',
       employmentCategory: p.employmentCategory || 'FULL_TIME',
-      snapEmail: p.snapEmail || '',
+      snapEmail: p.snapAccountEmail || '',
       phoneNumber: p.phoneNumber || '',
       licenseNumber: p.licenseNumber || '',
       licenseExpiration: p.licenseExpiration ? p.licenseExpiration.substring(0, 10) : '',
+      fteHours: p.fteHours ?? '',
+      annualRate: p.annualRate ?? '',
+      hourlyRate: p.hourlyRate ?? '',
+      preferredShiftLength: p.preferredShiftLength || 'none',
+      preferredDays: Array.isArray(p.preferredDays) ? p.preferredDays : [],
+      locationRankings: Array.isArray(p.locationRankings) ? p.locationRankings : [],
+      maxShiftsPerMonth: p.maxShiftsPerMonth ?? '',
+      contractStart: p.contractStart ? p.contractStart.substring(0, 10) : '',
+      contractEnd: p.contractEnd ? p.contractEnd.substring(0, 10) : '',
       notes: p.notes || '',
     })
+    setLocationInput('')
     setShowModal(true)
   }
 
   async function handleSave() {
     if (!form.providerName.trim()) return alert('Provider name is required.')
+    if (form.employmentCategory === 'FULL_TIME' && !form.annualRate) return alert('Annual base rate is required for Full Time providers.')
+    if ((form.employmentCategory === 'PER_DIEM' || form.employmentCategory === 'LOCUMS') && !form.hourlyRate) return alert('Base hourly rate is required.')
     setSaving(true)
     try {
+      const payload = {
+        providerName: form.providerName,
+        providerType: form.providerType,
+        employmentCategory: form.employmentCategory,
+        snapAccountEmail: form.snapEmail || null,
+        phoneNumber: form.phoneNumber || null,
+        licenseNumber: form.licenseNumber || null,
+        licenseExpiration: form.licenseExpiration || null,
+        fteHours: form.fteHours !== '' ? parseFloat(form.fteHours) : null,
+        annualRate: form.annualRate !== '' ? parseFloat(form.annualRate) : null,
+        hourlyRate: form.hourlyRate !== '' ? parseFloat(form.hourlyRate) : null,
+        preferredShiftLength: form.preferredShiftLength !== 'none' ? form.preferredShiftLength : null,
+        preferredDays: form.preferredDays.length > 0 ? form.preferredDays : null,
+        locationRankings: form.locationRankings.length > 0 ? form.locationRankings : null,
+        maxShiftsPerMonth: form.maxShiftsPerMonth !== '' ? parseInt(form.maxShiftsPerMonth) : null,
+        contractStart: form.contractStart || null,
+        contractEnd: form.contractEnd || null,
+        notes: form.notes || null,
+      }
       if (editTarget) {
-        await facilityAPI.updateRosterEntry(editTarget.id, form)
+        await facilityAPI.updateRosterEntry(editTarget.id, payload)
       } else {
-        await facilityAPI.createRosterEntry(form)
+        await facilityAPI.createRosterEntry(payload)
       }
       setShowModal(false)
       await load()
@@ -161,6 +205,36 @@ export default function InternalRosterPage({ onNavigate }) {
 
   function setF(k, v) { setForm((p) => ({ ...p, [k]: v })) }
 
+  function toggleDay(day) {
+    setForm(p => ({
+      ...p,
+      preferredDays: p.preferredDays.includes(day)
+        ? p.preferredDays.filter(d => d !== day)
+        : [...p.preferredDays, day],
+    }))
+  }
+
+  function addLocation() {
+    const loc = locationInput.trim()
+    if (!loc || form.locationRankings.includes(loc)) return
+    setForm(p => ({ ...p, locationRankings: [...p.locationRankings, loc] }))
+    setLocationInput('')
+  }
+
+  function removeLocation(i) {
+    setForm(p => ({ ...p, locationRankings: p.locationRankings.filter((_, idx) => idx !== i) }))
+  }
+
+  function moveLocation(i, dir) {
+    const arr = [...form.locationRankings]
+    const swap = i + dir
+    if (swap < 0 || swap >= arr.length) return
+    ;[arr[i], arr[swap]] = [arr[swap], arr[i]]
+    setForm(p => ({ ...p, locationRankings: arr }))
+  }
+
+  const cat = form.employmentCategory
+
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
@@ -177,17 +251,13 @@ export default function InternalRosterPage({ onNavigate }) {
         </button>
       </div>
 
-      {/* Loading / Error */}
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading roster...</div>
-      )}
+      {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading roster...</div>}
       {error && !loading && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 12, padding: '16px 20px', color: '#DC2626', marginBottom: 24 }}>
           Failed to load roster: {error}
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && !error && roster.length === 0 && (
         <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
@@ -199,7 +269,6 @@ export default function InternalRosterPage({ onNavigate }) {
         </div>
       )}
 
-      {/* Grid */}
       {!loading && roster.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
           {roster.map((p) => {
@@ -207,10 +276,12 @@ export default function InternalRosterPage({ onNavigate }) {
             const empBadge = EMPLOY_BADGE[p.employmentCategory] || EMPLOY_BADGE.FULL_TIME
             const linked = !!p.snapAccountLinked
             const expiringSoon = isExpiringSoon(p.licenseExpiration)
+            const rateLabel = p.employmentCategory === 'FULL_TIME'
+              ? (p.annualRate ? `$${Number(p.annualRate).toLocaleString()}/yr` : null)
+              : (p.hourlyRate ? `$${p.hourlyRate}/hr` : null)
 
             return (
-              <div key={p.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* Name + badges */}
+              <div key={p.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', marginBottom: 8 }}>{p.providerName}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -219,7 +290,6 @@ export default function InternalRosterPage({ onNavigate }) {
                   </div>
                 </div>
 
-                {/* Linked status */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: linked ? '#10B981' : '#CBD5E1', flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: linked ? '#059669' : '#94A3B8', fontWeight: 500 }}>
@@ -227,35 +297,33 @@ export default function InternalRosterPage({ onNavigate }) {
                   </span>
                 </div>
 
-                {/* License expiration */}
+                {rateLabel && (
+                  <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
+                )}
+
+                {p.preferredDays && Array.isArray(p.preferredDays) && p.preferredDays.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                    Prefers: {p.preferredDays.join(', ')}
+                    {p.preferredShiftLength && p.preferredShiftLength !== 'none' ? ` · ${p.preferredShiftLength}` : ''}
+                  </div>
+                )}
+
                 {p.licenseExpiration && (
                   <div style={{ fontSize: 12, color: expiringSoon ? '#DC2626' : '#64748B', fontWeight: expiringSoon ? 700 : 400 }}>
                     {expiringSoon ? '⚠️ ' : ''}License expires: {p.licenseExpiration.substring(0, 10)}
                   </div>
                 )}
 
-                {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => openEdit(p)}
-                    style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}
-                  >
+                  <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                     ✏️ Edit
                   </button>
                   {!linked && (
-                    <button
-                      onClick={() => handleInvite(p.id)}
-                      disabled={invitedIds[p.id]}
-                      style={{ padding: '6px 14px', background: invitedIds[p.id] ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${invitedIds[p.id] ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: invitedIds[p.id] ? 'default' : 'pointer', color: invitedIds[p.id] ? '#15803D' : '#4F46E5' }}
-                    >
-                      {invitedIds[p.id] ? '✓ Invite Sent' : '✉️ Invite'}
+                    <button onClick={() => handleInvite(p.id)} disabled={invitedIds[p.id]} style={{ padding: '6px 14px', background: invitedIds[p.id] ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${invitedIds[p.id] ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: invitedIds[p.id] ? 'default' : 'pointer', color: invitedIds[p.id] ? '#15803D' : '#4F46E5' }}>
+                      {invitedIds[p.id] ? '✓ Invited' : '✉️ Invite'}
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    disabled={deletingIds[p.id]}
-                    style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626', marginLeft: 'auto' }}
-                  >
+                  <button onClick={() => handleDelete(p.id)} disabled={deletingIds[p.id]} style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626', marginLeft: 'auto' }}>
                     {deletingIds[p.id] ? '...' : '🗑️'}
                   </button>
                 </div>
@@ -265,12 +333,12 @@ export default function InternalRosterPage({ onNavigate }) {
         </div>
       )}
 
-      {/* Add / Edit Modal */}
       {showModal && (
         <Modal title={editTarget ? 'Edit Provider' : 'Add Provider'} onClose={() => setShowModal(false)}>
+          {/* Core fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <Field label="Provider Name">
+              <Field label="Provider Name" required>
                 <input style={inputStyle} value={form.providerName} onChange={(e) => setF('providerName', e.target.value)} placeholder="Dr. Jane Smith" />
               </Field>
             </div>
@@ -300,18 +368,132 @@ export default function InternalRosterPage({ onNavigate }) {
             <Field label="License Expiration">
               <input style={inputStyle} type="date" value={form.licenseExpiration} onChange={(e) => setF('licenseExpiration', e.target.value)} />
             </Field>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <Field label="Notes">
-                <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={form.notes} onChange={(e) => setF('notes', e.target.value)} placeholder="Any relevant notes..." />
-              </Field>
-            </div>
           </div>
+
+          {/* FULL_TIME fields */}
+          {cat === 'FULL_TIME' && (
+            <>
+              <SectionDivider label="Full Time Details" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <Field label="FTE Hours / Week" required>
+                  <input style={inputStyle} type="number" min="1" max="60" value={form.fteHours} onChange={(e) => setF('fteHours', e.target.value)} placeholder="40" />
+                </Field>
+                <Field label="Annual Base Rate ($)" required>
+                  <input style={inputStyle} type="number" min="0" value={form.annualRate} onChange={(e) => setF('annualRate', e.target.value)} placeholder="e.g. 220000" />
+                </Field>
+              </div>
+            </>
+          )}
+
+          {/* PER_DIEM fields */}
+          {cat === 'PER_DIEM' && (
+            <>
+              <SectionDivider label="Per Diem Details" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <Field label="Base Hourly Rate ($)" required>
+                  <input style={inputStyle} type="number" min="0" value={form.hourlyRate} onChange={(e) => setF('hourlyRate', e.target.value)} placeholder="e.g. 185" />
+                </Field>
+                <Field label="Max Shifts / Month">
+                  <input style={inputStyle} type="number" min="1" value={form.maxShiftsPerMonth} onChange={(e) => setF('maxShiftsPerMonth', e.target.value)} placeholder="e.g. 12" />
+                </Field>
+              </div>
+            </>
+          )}
+
+          {/* LOCUMS fields */}
+          {cat === 'LOCUMS' && (
+            <>
+              <SectionDivider label="Locums Details" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <Field label="Base Hourly Rate ($)" required>
+                  <input style={inputStyle} type="number" min="0" value={form.hourlyRate} onChange={(e) => setF('hourlyRate', e.target.value)} placeholder="e.g. 220" />
+                </Field>
+                <div />
+                <Field label="Contract Start">
+                  <input style={inputStyle} type="date" value={form.contractStart} onChange={(e) => setF('contractStart', e.target.value)} />
+                </Field>
+                <Field label="Contract End">
+                  <input style={inputStyle} type="date" value={form.contractEnd} onChange={(e) => setF('contractEnd', e.target.value)} />
+                </Field>
+              </div>
+            </>
+          )}
+
+          {/* Shared preference fields */}
+          <SectionDivider label="Scheduling Preferences" />
+
+          <Field label="Preferred Shift Length">
+            <select style={inputStyle} value={form.preferredShiftLength} onChange={(e) => setF('preferredShiftLength', e.target.value)}>
+              {SHIFT_LENGTHS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Preferred Days">
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+              {ALL_DAYS.map(day => {
+                const active = form.preferredDays.includes(day)
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      background: active ? '#6366F1' : '#F8FAFC',
+                      color: active ? '#fff' : '#64748B',
+                      border: `1px solid ${active ? '#6366F1' : '#E2E8F0'}`,
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {day}
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+
+          <Field label="Location Preference Ranking">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLocation() } }}
+                placeholder="e.g. Kenmore, Weymouth…"
+              />
+              <button
+                type="button"
+                onClick={addLocation}
+                style={{ padding: '9px 16px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: '#4F46E5', whiteSpace: 'nowrap' }}
+              >
+                Add
+              </button>
+            </div>
+            {form.locationRankings.length > 0 && (
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' }}>
+                {form.locationRankings.map((loc, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < form.locationRankings.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', minWidth: 20 }}>#{i + 1}</span>
+                    <span style={{ flex: 1, fontSize: 13, color: '#374151' }}>{loc}</span>
+                    <button onClick={() => moveLocation(i, -1)} disabled={i === 0} style={{ padding: '2px 7px', background: 'none', border: '1px solid #E2E8F0', borderRadius: 4, cursor: i === 0 ? 'not-allowed' : 'pointer', color: '#64748B', opacity: i === 0 ? 0.35 : 1, fontSize: 12 }}>↑</button>
+                    <button onClick={() => moveLocation(i, 1)} disabled={i === form.locationRankings.length - 1} style={{ padding: '2px 7px', background: 'none', border: '1px solid #E2E8F0', borderRadius: 4, cursor: i === form.locationRankings.length - 1 ? 'not-allowed' : 'pointer', color: '#64748B', opacity: i === form.locationRankings.length - 1 ? 0.35 : 1, fontSize: 12 }}>↓</button>
+                    <button onClick={() => removeLocation(i)} style={{ padding: '2px 7px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 4, cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Field>
+
+          <Field label="Additional Notes">
+            <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }} value={form.notes} onChange={(e) => setF('notes', e.target.value)} placeholder="Any relevant notes..." />
+          </Field>
+
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
               Cancel
             </button>
             <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? 'Saving...' : 'Save Provider'}
             </button>
           </div>
         </Modal>

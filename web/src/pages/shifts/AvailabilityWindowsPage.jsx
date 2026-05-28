@@ -7,7 +7,7 @@ const STATUS_STYLE = {
   CLOSED: { bg: '#F8FAFC', color: '#64748B', border: '#CBD5E1', label: 'CLOSED' },
 }
 
-const BLANK_FORM = { name: '', openDate: '', closeDate: '', message: '', notifyAll: true }
+const BLANK_FORM = { windowName: '', openDate: '', closeDate: '', message: '', notifyAll: true }
 
 const inputStyle = {
   width: '100%',
@@ -97,7 +97,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
   function openEdit(w) {
     setEditTarget(w)
     setForm({
-      name: w.name || '',
+      windowName: w.windowName || '',
       openDate: w.openDate ? w.openDate.substring(0, 10) : '',
       closeDate: w.closeDate ? w.closeDate.substring(0, 10) : '',
       message: w.message || '',
@@ -107,7 +107,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
   }
 
   async function handleSave() {
-    if (!form.name.trim() || !form.openDate || !form.closeDate) return alert('Name, open date, and close date are required.')
+    if (!form.windowName.trim() || !form.openDate || !form.closeDate) return alert('Name, open date, and close date are required.')
     setSaving(true)
     try {
       if (editTarget) {
@@ -221,7 +221,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
       {/* Window cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {sorted.map((w) => {
-          const submitted = w.submittedCount ?? 0
+          const submitted = w._count?.submissions ?? w.submittedCount ?? 0
           const total = w.rosterCount ?? 0
           const pct = total > 0 ? Math.round((submitted / total) * 100) : 0
 
@@ -233,7 +233,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, fontSize: 17, color: '#0F172A' }}>{w.name}</span>
+                    <span style={{ fontWeight: 700, fontSize: 17, color: '#0F172A' }}>{w.windowName}</span>
                     <StatusBadge status={w.status} />
                   </div>
                   <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
@@ -300,7 +300,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
       {showForm && (
         <Modal title={editTarget ? 'Edit Window' : 'Create Availability Window'} onClose={() => setShowForm(false)}>
           <Field label="Window Name">
-            <input style={inputStyle} value={form.name} onChange={(e) => setF('name', e.target.value)} placeholder="e.g. June 2026 Availability" />
+            <input style={inputStyle} value={form.windowName} onChange={(e) => setF('windowName', e.target.value)} placeholder="e.g. June 2026 Availability" />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
             <Field label="Open Date">
@@ -328,7 +328,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
 
       {/* Report modal */}
       {reportWindow && (
-        <Modal title={`Report — ${reportWindow.name}`} onClose={() => { setReportWindow(null); setReport(null) }}>
+        <Modal title={`Report — ${reportWindow.windowName}`} onClose={() => { setReportWindow(null); setReport(null) }}>
           {reportLoading && <div style={{ textAlign: 'center', padding: '40px 0', color: '#94A3B8' }}>Loading report...</div>}
           {report && report.error && <div style={{ color: '#DC2626', fontSize: 14 }}>Error loading report: {report.error}</div>}
           {report && !report.error && (

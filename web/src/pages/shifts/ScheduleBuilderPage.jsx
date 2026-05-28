@@ -116,24 +116,32 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
   const [dayDetailModal, setDayDetailModal] = useState(null) // dateStr
   const [assignLoading, setAssignLoading] = useState({})
-  const [editingLocation, setEditingLocation] = useState(null) // row.id being updated
-  const [deletingLocation, setDeletingLocation] = useState(null) // row.id being deleted
+  const [editingLocation, setEditingLocation] = useState(null)
+  const [deletingLocation, setDeletingLocation] = useState(null)
   const [publishing, setPublishing] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  const [intelligence, setIntelligence] = useState(null)
+  const [availabilities, setAvailabilities] = useState([]) // from schedule month response
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [sched, summ, rosterData] = await Promise.all([
+      const [sched, summ, rosterData, intel] = await Promise.all([
         facilityAPI.getScheduleMonth(year, month),
         facilityAPI.getScheduleSummary(year, month).catch(() => null),
         facilityAPI.getRoster().catch(() => []),
+        facilityAPI.getScheduleIntelligence().catch(() => null),
       ])
       setScheduleData(sched)
       setSummary(summ)
       const r = Array.isArray(rosterData) ? rosterData : rosterData.roster || []
       setRoster(r)
+      setIntelligence(intel)
+      // Extract availabilities from schedule month response
+      const av = sched?.availabilities || []
+      setAvailabilities(av)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -237,6 +245,48 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     }
   }
 
+  // Score a roster provider for a given date/location using preference data
+  function scoreProvider(provider, dateStr, locationName) {
+    const date = new Date(dateStr + 'T12:00:00')
+    const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
+    let score = 0
+    const tags = []
+
+    // 1. Availability on this date
+    const isAvailable = availabilities.some(a => {
+      const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
+      return a.rosterId === provider.id && avDate === dateStr
+    })
+    if (isAvailable) { score += 40; tags.push('Available') }
+
+    // 2. Preferred day
+    const prefDays = Array.isArray(provider.preferredDays) ? provider.preferredDays : []
+    if (prefDays.includes(dayName)) { score += 20; tags.push('Preferred Day') }
+
+    // 3. Location ranking
+    const rankings = Array.isArray(provider.locationRankings) ? provider.locationRankings : []
+    const locIdx = rankings.findIndex(l => l.toLowerCase() === locationName.toLowerCase())
+    if (locIdx === 0) { score += 15; tags.push('Top Location') }
+    else if (locIdx === 1) { score += 10; tags.push('Preferred Location') }
+    else if (locIdx > 1) { score += 5 }
+
+    // 4. Employment category (FT > PD > Locums)
+    const catScore = { FULL_TIME: 10, PER_DIEM: 6, LOCUMS: 3 }
+    score += catScore[provider.employmentCategory] || 0
+
+    // 5. Lower cost (invert: lower hourly = higher score)
+    const rate = provider.hourlyRate || (provider.annualRate ? provider.annualRate / 2080 : 999)
+    score += Math.max(0, 10 - Math.floor(rate / 20))
+
+    return { score, tags }
+  }
+
+  function rankedRoster(dateStr, locationName) {
+    return [...roster]
+      .map(p => ({ ...p, _rank: scoreProvider(p, dateStr, locationName) }))
+      .sort((a, b) => b._rank.score - a._rank.score)
+  }
+
   const daysInMonth = getDaysInMonth(year, month)
   const firstDow = getFirstDayOfWeek(year, month)
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
@@ -282,6 +332,26 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             {exporting ? 'Exporting...' : '⬇️ Export CSV'}
           </button>
         </div>
+      </div>
+
+      {/* Schedule Intelligence banner */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+        <span style={{ fontSize: 16 }}>🧠</span>
+        <div style={{ flex: 1, fontSize: 13, color: '#5B21B6' }}>
+          <strong>StaffIQ Schedule Intelligence</strong> — Suggestions are ranked by provider availability, preferences, and cost optimization.
+        </div>
+        {intelligence && (
+          <div style={{ display: 'flex', align: 'center', gap: 12, flexShrink: 0 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#6366F1' }}>{intelligence.score}%</div>
+              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600, textTransform: 'uppercase' }}>Intelligence</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#6366F1' }}>{intelligence.dataPoints}</div>
+              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600, textTransform: 'uppercase' }}>Data Points</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Legend */}
@@ -460,15 +530,35 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                           <select
                             value={assignedRosterId}
                             disabled={isLoading}
-                            onChange={e => handleAssign(row.id, roomNum, e.target.value)}
+                            onChange={e => {
+                              const newId = e.target.value
+                              // Record feedback: what rank was selected
+                              if (newId) {
+                                const ranked = rankedRoster(dayDetailModal, row.location)
+                                const selectedIdx = ranked.findIndex(p => p.id === newId)
+                                facilityAPI.recordScheduleFeedback({
+                                  rosterId: newId,
+                                  shiftDate: dayDetailModal,
+                                  facilityLocation: row.location,
+                                  wasSuggested: selectedIdx >= 0,
+                                  suggestionRank: selectedIdx >= 0 ? selectedIdx + 1 : null,
+                                  wasSelected: true,
+                                }).catch(() => {})
+                              }
+                              handleAssign(row.id, roomNum, newId)
+                            }}
                             style={{ ...inputStyle, fontSize: 13, padding: '7px 10px', flex: 1 }}
                           >
                             <option value="">— Unassigned —</option>
-                            {roster.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}
-                              </option>
-                            ))}
+                            {rankedRoster(dayDetailModal, row.location).map((p, pi) => {
+                              const tags = p._rank.tags
+                              const tagStr = tags.length > 0 ? ` · ${tags.join(', ')}` : ''
+                              return (
+                                <option key={p.id} value={p.id}>
+                                  {pi === 0 ? '⭐ ' : ''}{EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}{tagStr}
+                                </option>
+                              )
+                            })}
                           </select>
                         </div>
                       )

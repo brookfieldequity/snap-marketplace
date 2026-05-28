@@ -44,14 +44,11 @@ router.get('/', facilityAuth, async (req, res) => {
 router.post('/', facilityAuth, async (req, res) => {
   try {
     const {
-      providerName,
-      providerType,
-      employmentCategory,
-      snapAccountEmail,
-      phoneNumber,
-      licenseNumber,
-      licenseExpiration,
-      notes,
+      providerName, providerType, employmentCategory,
+      snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
+      fteHours, annualRate, hourlyRate, preferredShiftLength,
+      preferredDays, locationRankings, maxShiftsPerMonth,
+      contractStart, contractEnd,
     } = req.body;
 
     const linkFields = await resolveLinkFields(snapAccountEmail);
@@ -59,14 +56,21 @@ router.post('/', facilityAuth, async (req, res) => {
     const entry = await prisma.internalRosterEntry.create({
       data: {
         facilityId: req.facility.id,
-        providerName,
-        providerType,
-        employmentCategory,
+        providerName, providerType, employmentCategory,
         snapAccountEmail: snapAccountEmail || null,
         phoneNumber: phoneNumber || null,
         licenseNumber: licenseNumber || null,
         licenseExpiration: licenseExpiration ? new Date(licenseExpiration) : null,
         notes: notes || null,
+        fteHours: fteHours != null ? parseFloat(fteHours) : null,
+        annualRate: annualRate != null ? parseFloat(annualRate) : null,
+        hourlyRate: hourlyRate != null ? parseFloat(hourlyRate) : null,
+        preferredShiftLength: preferredShiftLength || null,
+        preferredDays: preferredDays ?? null,
+        locationRankings: locationRankings ?? null,
+        maxShiftsPerMonth: maxShiftsPerMonth != null ? parseInt(maxShiftsPerMonth) : null,
+        contractStart: contractStart ? new Date(contractStart) : null,
+        contractEnd: contractEnd ? new Date(contractEnd) : null,
         ...linkFields,
       },
     });
@@ -90,14 +94,11 @@ router.patch('/:id', facilityAuth, async (req, res) => {
     }
 
     const {
-      providerName,
-      providerType,
-      employmentCategory,
-      snapAccountEmail,
-      phoneNumber,
-      licenseNumber,
-      licenseExpiration,
-      notes,
+      providerName, providerType, employmentCategory,
+      snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
+      fteHours, annualRate, hourlyRate, preferredShiftLength,
+      preferredDays, locationRankings, maxShiftsPerMonth,
+      contractStart, contractEnd,
     } = req.body;
 
     // Re-check linkage if email is being changed
@@ -119,6 +120,15 @@ router.patch('/:id', facilityAuth, async (req, res) => {
           licenseExpiration: licenseExpiration ? new Date(licenseExpiration) : null,
         }),
         ...(notes !== undefined && { notes }),
+        ...(fteHours !== undefined && { fteHours: fteHours != null ? parseFloat(fteHours) : null }),
+        ...(annualRate !== undefined && { annualRate: annualRate != null ? parseFloat(annualRate) : null }),
+        ...(hourlyRate !== undefined && { hourlyRate: hourlyRate != null ? parseFloat(hourlyRate) : null }),
+        ...(preferredShiftLength !== undefined && { preferredShiftLength }),
+        ...(preferredDays !== undefined && { preferredDays }),
+        ...(locationRankings !== undefined && { locationRankings }),
+        ...(maxShiftsPerMonth !== undefined && { maxShiftsPerMonth: maxShiftsPerMonth != null ? parseInt(maxShiftsPerMonth) : null }),
+        ...(contractStart !== undefined && { contractStart: contractStart ? new Date(contractStart) : null }),
+        ...(contractEnd !== undefined && { contractEnd: contractEnd ? new Date(contractEnd) : null }),
         ...linkFields,
       },
     });

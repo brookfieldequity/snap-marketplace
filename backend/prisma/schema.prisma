@@ -205,6 +205,7 @@ model Facility {
   availabilityWindows AvailabilityWindow[]
   scheduleDays        ScheduleDay[]
   schedulingUploads   SchedulingUpload[]
+  scheduleFeedback    ScheduleFeedback[]
   schedulingRecords   SchedulingRecord[]
   staffiqInsights     StaffIQInsight[]
   incentiveShifts     InternalIncentiveShift[]
@@ -420,24 +421,51 @@ model Message {
 // ── SNAP Shifts models ────────────────────────────────────────────────────────
 
 model InternalRosterEntry {
-  id                  String             @id @default(cuid())
-  facilityId          String
-  facility            Facility           @relation(fields: [facilityId], references: [id])
-  providerName        String
-  providerType        Specialty
-  employmentCategory  EmploymentCategory
-  snapAccountEmail    String?
-  phoneNumber         String?
-  licenseNumber       String?
-  licenseExpiration   DateTime?
-  notes               String?
-  snapAccountLinked   Boolean            @default(false)
-  linkedProviderId    String?
-  inviteSentAt        DateTime?
-  createdAt           DateTime           @default(now())
+  id                   String             @id @default(cuid())
+  facilityId           String
+  facility             Facility           @relation(fields: [facilityId], references: [id])
+  providerName         String
+  providerType         Specialty
+  employmentCategory   EmploymentCategory
+  snapAccountEmail     String?
+  phoneNumber          String?
+  licenseNumber        String?
+  licenseExpiration    DateTime?
+  notes                String?
+  snapAccountLinked    Boolean            @default(false)
+  linkedProviderId     String?
+  inviteSentAt         DateTime?
+  createdAt            DateTime           @default(now())
 
-  scheduleAssignments ScheduleAssignment[]
-  incentiveResponses  InternalIncentiveShiftResponse[]
+  // Employment-specific preference fields
+  fteHours             Float?             // FULL_TIME: hours per week
+  annualRate           Float?             // FULL_TIME: annual base salary
+  hourlyRate           Float?             // PER_DIEM / LOCUMS: hourly rate
+  preferredShiftLength String?            // "8hr" | "10hr" | "12hr" | "none"
+  preferredDays        Json?              // String[] e.g. ["Mon","Tue","Wed"]
+  locationRankings     Json?              // Array of location name strings (ranked)
+  maxShiftsPerMonth    Int?               // PER_DIEM: cap on shifts
+  contractStart        DateTime?          // LOCUMS: contract start
+  contractEnd          DateTime?          // LOCUMS: contract end
+
+  scheduleAssignments  ScheduleAssignment[]
+  incentiveResponses   InternalIncentiveShiftResponse[]
+  scheduleFeedback     ScheduleFeedback[]
+}
+
+model ScheduleFeedback {
+  id               String              @id @default(cuid())
+  facilityId       String
+  facility         Facility            @relation(fields: [facilityId], references: [id])
+  rosterId         String
+  rosterEntry      InternalRosterEntry @relation(fields: [rosterId], references: [id])
+  shiftDate        DateTime            @db.Date
+  facilityLocation String
+  wasSuggested     Boolean
+  suggestionRank   Int?
+  wasSelected      Boolean
+  shiftCompleted   Boolean             @default(false)
+  createdAt        DateTime            @default(now())
 }
 
 model AvailabilityWindow {

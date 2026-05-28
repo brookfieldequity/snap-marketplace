@@ -374,4 +374,52 @@ router.get('/summary', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /feedback — record a provider selection (for Schedule Intelligence)
+router.post('/feedback', facilityAuth, async (req, res) => {
+  try {
+    const { rosterId, shiftDate, facilityLocation, wasSuggested, suggestionRank, wasSelected } = req.body;
+    if (!rosterId || !shiftDate || !facilityLocation) {
+      return res.status(400).json({ error: 'rosterId, shiftDate, and facilityLocation are required' });
+    }
+    const feedback = await prisma.scheduleFeedback.create({
+      data: {
+        facilityId: req.facility.id,
+        rosterId,
+        shiftDate: new Date(shiftDate),
+        facilityLocation,
+        wasSuggested: !!wasSuggested,
+        suggestionRank: suggestionRank != null ? parseInt(suggestionRank) : null,
+        wasSelected: !!wasSelected,
+      },
+    });
+    res.status(201).json(feedback);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /intelligence — Schedule Intelligence score
+router.get('/intelligence', facilityAuth, async (req, res) => {
+  try {
+    const total = await prisma.scheduleFeedback.count({ where: { facilityId: req.facility.id } });
+    const topRankSelected = await prisma.scheduleFeedback.count({
+      where: { facilityId: req.facility.id, wasSuggested: true, wasSelected: true, suggestionRank: { lte: 3 } },
+    });
+    const suggested = await prisma.scheduleFeedback.count({
+      where: { facilityId: req.facility.id, wasSuggested: true, wasSelected: true },
+    });
+    const totalSuggested = await prisma.scheduleFeedback.count({
+      where: { facilityId: req.facility.id, wasSuggested: true },
+    });
+
+    const accuracy = totalSuggested > 0 ? Math.round((suggested / totalSuggested) * 100) : 0;
+    const score = Math.min(100, Math.round((total / 50) * 100)); // hits 100% at 50 data points
+    res.json({ dataPoints: total, accuracy, score });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

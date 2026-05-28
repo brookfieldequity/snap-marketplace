@@ -45,7 +45,9 @@ export default function AdminProvidersPage() {
   }
 
   const filtered = providers.filter((p) => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.email.toLowerCase().includes(search.toLowerCase())
+    const fullName = p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()
+    const email = p.email || p.user?.email || ''
+    const matchSearch = !search || fullName.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase())
     const matchCred = filterCred === 'all' || (filterCred === 'yes' ? p.credentialed : !p.credentialed)
     return matchSearch && matchCred
   })
@@ -101,9 +103,22 @@ export default function AdminProvidersPage() {
 
         {loading && <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Loading...</div>}
 
+        {!loading && filtered.length === 0 && (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>
+            {providers.length === 0 ? 'No providers registered yet.' : 'No providers match your filters.'}
+          </div>
+        )}
+
         {filtered.map((p, i) => {
-          const days = daysUntil(p.licenseExpiry)
-          const licenseRed = days < 90
+          const fullName = p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Unknown'
+          const email = p.email || p.user?.email || '—'
+          const licenseExpiry = p.licenseExpiry || p.maLicenseExpiry
+          const days = licenseExpiry ? daysUntil(licenseExpiry) : 9999
+          const licenseRed = licenseExpiry && days < 90
+          const vip = p.vip ?? p.vipStatus ?? false
+          const vipPoints = p.vipPoints ?? 0
+          const shiftsBooked = p.shiftsBooked ?? p._count?.bookings ?? 0
+          const initial = fullName.split(' ').filter(Boolean).slice(-1)[0]?.[0] || '?'
 
           return (
             <div
@@ -118,16 +133,16 @@ export default function AdminProvidersPage() {
               {/* Name */}
               <div style={{ padding: '14px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #7C3AED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-                  {p.name.split(' ').slice(-1)[0][0]}
+                  {initial}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.name}
+                  {fullName}
                 </div>
               </div>
 
               {/* Email */}
               <div style={{ padding: '14px 14px', fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.email}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
               </div>
 
               {/* Specialty */}
@@ -162,7 +177,7 @@ export default function AdminProvidersPage() {
 
               {/* VIP */}
               <div style={{ padding: '14px 14px', display: 'flex', alignItems: 'center' }}>
-                {p.vip && (
+                {vip && (
                   <span style={{ background: '#F3E8FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
                     ✦ VIP
                   </span>
@@ -170,8 +185,8 @@ export default function AdminProvidersPage() {
               </div>
 
               {/* VIP Points */}
-              <div style={{ padding: '14px 14px', fontSize: 13, fontWeight: 700, color: p.vip ? '#7C3AED' : '#64748B', display: 'flex', alignItems: 'center' }}>
-                {p.vipPoints.toLocaleString()}
+              <div style={{ padding: '14px 14px', fontSize: 13, fontWeight: 700, color: vip ? '#7C3AED' : '#64748B', display: 'flex', alignItems: 'center' }}>
+                {vipPoints.toLocaleString()}
               </div>
 
               {/* License expiry */}
@@ -186,13 +201,13 @@ export default function AdminProvidersPage() {
                     borderRadius: 4,
                   }}
                 >
-                  {p.licenseExpiry}
+                  {licenseExpiry ? String(licenseExpiry).substring(0, 10) : '—'}
                 </span>
               </div>
 
               {/* Shifts */}
               <div style={{ padding: '14px 14px', fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center' }}>
-                {p.shiftsBooked}
+                {shiftsBooked}
               </div>
             </div>
           )
