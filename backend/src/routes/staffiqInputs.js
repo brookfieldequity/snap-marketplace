@@ -40,26 +40,32 @@ router.post('/', facilityAuth, async (req, res) => {
       primaryTeamModel,
     } = req.body;
 
-    if (
-      totalLocations == null ||
-      avgRoomsPerDay == null ||
-      avgAnesthesiologistRate == null ||
-      avgCrnaRate == null ||
-      primaryTeamModel == null
-    ) {
-      return res.status(400).json({
-        error: 'totalLocations, avgRoomsPerDay, avgAnesthesiologistRate, avgCrnaRate, and primaryTeamModel are required',
-      });
+    if (totalLocations == null || totalLocations === '') {
+      return res.status(400).json({ error: 'totalLocations is required' });
     }
 
+    // Apply defaults for optional fields
+    const resolvedRooms = avgRoomsPerDay != null && avgRoomsPerDay !== ''
+      ? Number(avgRoomsPerDay)
+      : Math.round(Number(totalLocations) * 0.75);
+    const resolvedAnesRate = avgAnesthesiologistRate != null && avgAnesthesiologistRate !== ''
+      ? Number(avgAnesthesiologistRate)
+      : 390;
+    const resolvedCrnaRate = avgCrnaRate != null && avgCrnaRate !== ''
+      ? Number(avgCrnaRate)
+      : 260;
+    const resolvedTeamModel = primaryTeamModel || 'mixed';
+    const resolvedShiftHours = avgShiftHours != null && avgShiftHours !== '' ? Number(avgShiftHours) : 10;
+    const resolvedOperatingDays = operatingDaysPerYear != null && operatingDaysPerYear !== '' ? Number(operatingDaysPerYear) : 250;
+
     const scoreResult = calculateStaffIQScore({
-      totalLocations,
-      avgRoomsPerDay,
-      avgAnesthesiologistRate,
-      avgCrnaRate,
-      avgShiftHours: avgShiftHours ?? 10,
-      operatingDaysPerYear: operatingDaysPerYear ?? 250,
-      primaryTeamModel,
+      totalLocations: Number(totalLocations),
+      avgRoomsPerDay: resolvedRooms,
+      avgAnesthesiologistRate: resolvedAnesRate,
+      avgCrnaRate: resolvedCrnaRate,
+      avgShiftHours: resolvedShiftHours,
+      operatingDaysPerYear: resolvedOperatingDays,
+      primaryTeamModel: resolvedTeamModel,
     });
 
     const { score, inefficiency1Pct, inefficiency2Pct, inefficiency1Cost, inefficiency2Cost, totalBudget } = scoreResult;
@@ -69,18 +75,18 @@ router.post('/', facilityAuth, async (req, res) => {
         data: {
           facilityId: req.facility.id,
           totalLocations: Number(totalLocations),
-          avgRoomsPerDay: Number(avgRoomsPerDay),
+          avgRoomsPerDay: resolvedRooms,
           ftAnesthesiologists: Number(ftAnesthesiologists ?? 0),
           ftCrnas: Number(ftCrnas ?? 0),
           pdAnesthesiologistsPerMonth: Number(pdAnesthesiologistsPerMonth ?? 0),
           pdCrnasPerMonth: Number(pdCrnasPerMonth ?? 0),
           agencyAnesthesiologistsPerMonth: Number(agencyAnesthesiologistsPerMonth ?? 0),
           agencyCrnasPerMonth: Number(agencyCrnasPerMonth ?? 0),
-          avgAnesthesiologistRate: Number(avgAnesthesiologistRate),
-          avgCrnaRate: Number(avgCrnaRate),
-          avgShiftHours: Number(avgShiftHours ?? 10),
-          operatingDaysPerYear: Number(operatingDaysPerYear ?? 250),
-          primaryTeamModel,
+          avgAnesthesiologistRate: resolvedAnesRate,
+          avgCrnaRate: resolvedCrnaRate,
+          avgShiftHours: resolvedShiftHours,
+          operatingDaysPerYear: resolvedOperatingDays,
+          primaryTeamModel: resolvedTeamModel,
           staffiqScore: score,
           inefficiency1Pct,
           inefficiency2Pct,

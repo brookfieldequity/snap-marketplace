@@ -17,11 +17,16 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
-function Field({ label, hint, children }) {
+function Field({ label, hint, optional, children }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {label}
+        {optional && (
+          <span style={{ fontSize: 10, fontWeight: 500, color: '#94A3B8', textTransform: 'none', letterSpacing: 0, background: '#F1F5F9', borderRadius: 4, padding: '1px 6px' }}>
+            optional
+          </span>
+        )}
       </label>
       {hint && (
         <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6, lineHeight: 1.4 }}>{hint}</div>
@@ -33,20 +38,21 @@ function Field({ label, hint, children }) {
 
 const ZONE_COLORS = { red: '#EF4444', yellow: '#F59E0B', green: '#10B981', blue: '#3B82F6' }
 
+// Field names match backend schema exactly
 const DEFAULT_FORM = {
   totalLocations: '',
   avgRoomsPerDay: '',
   ftAnesthesiologists: '',
-  ftCRNAs: '',
-  perDiemAnesthesiologists: '',
-  perDiemCRNAs: '',
-  agencyAnesthesiologists: '',
-  agencyCRNAs: '',
-  avgHourlyAnesthesiologist: '',
-  avgHourlyCRNA: '',
-  avgShiftLength: 10,
+  ftCrnas: '',
+  pdAnesthesiologistsPerMonth: '',
+  pdCrnasPerMonth: '',
+  agencyAnesthesiologistsPerMonth: '',
+  agencyCrnasPerMonth: '',
+  avgAnesthesiologistRate: '',
+  avgCrnaRate: '',
+  avgShiftHours: 10,
   operatingDaysPerYear: 250,
-  primaryTeamModel: '1:2',
+  primaryTeamModel: '',
 }
 
 // ─── Score History SVG Line Chart ─────────────────────────────────────────────
@@ -64,13 +70,12 @@ function ScoreHistoryChart({ history }) {
   const innerH = H - padT - padB
   const n = history.length
 
-  function xPos(i) { return padL + (i / (n - 1)) * innerW }
+  function xPos(i) { return padL + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2) }
   function yPos(score) { return padT + innerH - (score / 100) * innerH }
 
-  const pts = history.map((d, i) => ({ x: xPos(i), y: yPos(d.score), score: d.score, label: d.label || d.date }))
+  const pts = history.map((d, i) => ({ x: xPos(i), y: yPos(d.score), score: d.score, label: d.label || d.calculatedAt }))
   const polyline = pts.map(p => `${p.x},${p.y}`).join(' ')
 
-  // Zone bands background
   const zoneBands = [
     { start: 0, end: 40, color: '#EF4444' },
     { start: 40, end: 70, color: '#F59E0B' },
@@ -80,36 +85,17 @@ function ScoreHistoryChart({ history }) {
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
-      {/* Zone background bands */}
       {zoneBands.map((band, i) => {
         const y1 = padT + innerH - (band.end / 100) * innerH
         const bandH = ((band.end - band.start) / 100) * innerH
-        return (
-          <rect
-            key={i}
-            x={padL}
-            y={y1}
-            width={innerW}
-            height={bandH}
-            fill={band.color}
-            opacity={0.1}
-          />
-        )
+        return <rect key={i} x={padL} y={y1} width={innerW} height={bandH} fill={band.color} opacity={0.1} />
       })}
-
-      {/* Axis lines */}
       <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#E2E8F0" strokeWidth={1} />
       <line x1={padL} y1={padT + innerH} x2={padL + innerW} y2={padT + innerH} stroke="#E2E8F0" strokeWidth={1} />
-
-      {/* Y axis labels */}
       {[0, 25, 50, 75, 100].map(v => (
         <text key={v} x={padL - 4} y={yPos(v) + 4} textAnchor="end" fontSize={9} fill="#94A3B8">{v}</text>
       ))}
-
-      {/* Line */}
-      <polyline points={polyline} fill="none" stroke="#6366F1" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-
-      {/* Dots + labels */}
+      {n > 1 && <polyline points={polyline} fill="none" stroke="#6366F1" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
       {pts.map((p, i) => (
         <g key={i}>
           <circle cx={p.x} cy={p.y} r={4} fill="#6366F1" />
@@ -135,7 +121,23 @@ export default function StaffIQInputsPage({ onNavigate }) {
     facilityAPI.getStaffIQInputs()
       .then(data => {
         if (data && typeof data === 'object') {
-          setForm(prev => ({ ...prev, ...data }))
+          // Field names already match backend schema
+          setForm(prev => ({
+            ...prev,
+            totalLocations: data.totalLocations ?? '',
+            avgRoomsPerDay: data.avgRoomsPerDay ?? '',
+            ftAnesthesiologists: data.ftAnesthesiologists ?? '',
+            ftCrnas: data.ftCrnas ?? '',
+            pdAnesthesiologistsPerMonth: data.pdAnesthesiologistsPerMonth ?? '',
+            pdCrnasPerMonth: data.pdCrnasPerMonth ?? '',
+            agencyAnesthesiologistsPerMonth: data.agencyAnesthesiologistsPerMonth ?? '',
+            agencyCrnasPerMonth: data.agencyCrnasPerMonth ?? '',
+            avgAnesthesiologistRate: data.avgAnesthesiologistRate ?? '',
+            avgCrnaRate: data.avgCrnaRate ?? '',
+            avgShiftHours: data.avgShiftHours ?? 10,
+            operatingDaysPerYear: data.operatingDaysPerYear ?? 250,
+            primaryTeamModel: data.primaryTeamModel ?? '',
+          }))
         }
       })
       .catch(() => {})
@@ -152,11 +154,30 @@ export default function StaffIQInputsPage({ onNavigate }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!form.totalLocations) {
+      setSubmitError('Total anesthetizing locations is required.')
+      return
+    }
     setSubmitting(true)
     setSubmitError(null)
     setResult(null)
     try {
-      const data = await facilityAPI.saveStaffIQInputs(form)
+      // Send only non-empty fields; backend applies defaults for missing ones
+      const payload = { totalLocations: form.totalLocations }
+      if (form.avgRoomsPerDay !== '') payload.avgRoomsPerDay = form.avgRoomsPerDay
+      if (form.ftAnesthesiologists !== '') payload.ftAnesthesiologists = form.ftAnesthesiologists
+      if (form.ftCrnas !== '') payload.ftCrnas = form.ftCrnas
+      if (form.pdAnesthesiologistsPerMonth !== '') payload.pdAnesthesiologistsPerMonth = form.pdAnesthesiologistsPerMonth
+      if (form.pdCrnasPerMonth !== '') payload.pdCrnasPerMonth = form.pdCrnasPerMonth
+      if (form.agencyAnesthesiologistsPerMonth !== '') payload.agencyAnesthesiologistsPerMonth = form.agencyAnesthesiologistsPerMonth
+      if (form.agencyCrnasPerMonth !== '') payload.agencyCrnasPerMonth = form.agencyCrnasPerMonth
+      if (form.avgAnesthesiologistRate !== '') payload.avgAnesthesiologistRate = form.avgAnesthesiologistRate
+      if (form.avgCrnaRate !== '') payload.avgCrnaRate = form.avgCrnaRate
+      if (form.avgShiftHours) payload.avgShiftHours = form.avgShiftHours
+      if (form.operatingDaysPerYear) payload.operatingDaysPerYear = form.operatingDaysPerYear
+      if (form.primaryTeamModel) payload.primaryTeamModel = form.primaryTeamModel
+
+      const data = await facilityAPI.saveStaffIQInputs(payload)
       setResult(data)
     } catch (err) {
       setSubmitError(err.message || 'Failed to save inputs. Please try again.')
@@ -179,6 +200,11 @@ export default function StaffIQInputsPage({ onNavigate }) {
         </p>
       </div>
 
+      {/* Quick-start note */}
+      <div style={{ padding: '14px 18px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#4338CA', lineHeight: 1.6 }}>
+        <strong>Only one field is required to get your score.</strong> Enter your total anesthetizing locations and we'll apply industry-standard defaults for any fields you leave blank ($390/hr ANES, $260/hr CRNA, 75% utilization, mixed team model).
+      </div>
+
       {/* Input Form */}
       <form onSubmit={handleSubmit}>
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginBottom: 28 }}>
@@ -190,17 +216,18 @@ export default function StaffIQInputsPage({ onNavigate }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
             <Field label="Total Anesthetizing Locations">
               <input
-                style={inputStyle}
+                style={{ ...inputStyle, border: '1px solid #6366F1' }}
                 type="number"
                 min="1"
                 value={form.totalLocations}
                 onChange={e => setF('totalLocations', e.target.value)}
-                placeholder="e.g. 20"
+                placeholder="e.g. 20  ← required"
               />
             </Field>
             <Field
               label="Average Rooms Run Per Day"
-              hint="Your typical daily utilization. E.g. if you have 20 rooms but typically run 15, enter 15."
+              optional
+              hint="Default: 75% of total locations. E.g. 20 rooms → assumes 15 active per day."
             >
               <input
                 style={inputStyle}
@@ -208,14 +235,14 @@ export default function StaffIQInputsPage({ onNavigate }) {
                 min="1"
                 value={form.avgRoomsPerDay}
                 onChange={e => setF('avgRoomsPerDay', e.target.value)}
-                placeholder="e.g. 15"
+                placeholder="default: 75% of locations"
               />
             </Field>
           </div>
 
           {/* Row 2: FT staff */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
-            <Field label="Full Time Anesthesiologists Employed">
+            <Field label="Full Time Anesthesiologists Employed" optional>
               <input
                 style={inputStyle}
                 type="number"
@@ -225,13 +252,13 @@ export default function StaffIQInputsPage({ onNavigate }) {
                 placeholder="e.g. 4"
               />
             </Field>
-            <Field label="Full Time CRNAs Employed">
+            <Field label="Full Time CRNAs Employed" optional>
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.ftCRNAs}
-                onChange={e => setF('ftCRNAs', e.target.value)}
+                value={form.ftCrnas}
+                onChange={e => setF('ftCrnas', e.target.value)}
                 placeholder="e.g. 12"
               />
             </Field>
@@ -239,23 +266,23 @@ export default function StaffIQInputsPage({ onNavigate }) {
 
           {/* Row 3: Per diem */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
-            <Field label="Per Diem Anesthesiologists Per Month (avg)">
+            <Field label="Per Diem Anesthesiologists Per Month (avg)" optional>
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.perDiemAnesthesiologists}
-                onChange={e => setF('perDiemAnesthesiologists', e.target.value)}
+                value={form.pdAnesthesiologistsPerMonth}
+                onChange={e => setF('pdAnesthesiologistsPerMonth', e.target.value)}
                 placeholder="e.g. 2"
               />
             </Field>
-            <Field label="Per Diem CRNAs Per Month (avg)">
+            <Field label="Per Diem CRNAs Per Month (avg)" optional>
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.perDiemCRNAs}
-                onChange={e => setF('perDiemCRNAs', e.target.value)}
+                value={form.pdCrnasPerMonth}
+                onChange={e => setF('pdCrnasPerMonth', e.target.value)}
                 placeholder="e.g. 5"
               />
             </Field>
@@ -263,23 +290,23 @@ export default function StaffIQInputsPage({ onNavigate }) {
 
           {/* Row 4: Agency */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
-            <Field label="Agency Anesthesiologists Per Month (avg)">
+            <Field label="Agency Anesthesiologists Per Month (avg)" optional>
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.agencyAnesthesiologists}
-                onChange={e => setF('agencyAnesthesiologists', e.target.value)}
+                value={form.agencyAnesthesiologistsPerMonth}
+                onChange={e => setF('agencyAnesthesiologistsPerMonth', e.target.value)}
                 placeholder="e.g. 1"
               />
             </Field>
-            <Field label="Agency CRNAs Per Month (avg)">
+            <Field label="Agency CRNAs Per Month (avg)" optional>
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.agencyCRNAs}
-                onChange={e => setF('agencyCRNAs', e.target.value)}
+                value={form.agencyCrnasPerMonth}
+                onChange={e => setF('agencyCrnasPerMonth', e.target.value)}
                 placeholder="e.g. 3"
               />
             </Field>
@@ -287,41 +314,41 @@ export default function StaffIQInputsPage({ onNavigate }) {
 
           {/* Row 5: Hourly rates */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
-            <Field label="Average Hourly Rate — Anesthesiologists ($)">
+            <Field label="Average Hourly Rate — Anesthesiologists ($)" optional hint="Default: $390/hr">
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.avgHourlyAnesthesiologist}
-                onChange={e => setF('avgHourlyAnesthesiologist', e.target.value)}
-                placeholder="e.g. 320"
+                value={form.avgAnesthesiologistRate}
+                onChange={e => setF('avgAnesthesiologistRate', e.target.value)}
+                placeholder="default: $390"
               />
             </Field>
-            <Field label="Average Hourly Rate — CRNAs ($)">
+            <Field label="Average Hourly Rate — CRNAs ($)" optional hint="Default: $260/hr">
               <input
                 style={inputStyle}
                 type="number"
                 min="0"
-                value={form.avgHourlyCRNA}
-                onChange={e => setF('avgHourlyCRNA', e.target.value)}
-                placeholder="e.g. 215"
+                value={form.avgCrnaRate}
+                onChange={e => setF('avgCrnaRate', e.target.value)}
+                placeholder="default: $260"
               />
             </Field>
           </div>
 
           {/* Row 6: Shift length & operating days */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
-            <Field label="Average Shift Length (hours)">
+            <Field label="Average Shift Length (hours)" optional hint="Default: 10 hours">
               <input
                 style={inputStyle}
                 type="number"
                 min="1"
                 max="24"
-                value={form.avgShiftLength}
-                onChange={e => setF('avgShiftLength', Number(e.target.value))}
+                value={form.avgShiftHours}
+                onChange={e => setF('avgShiftHours', Number(e.target.value))}
               />
             </Field>
-            <Field label="Operating Days Per Year">
+            <Field label="Operating Days Per Year" optional hint="Default: 250 days">
               <input
                 style={inputStyle}
                 type="number"
@@ -334,12 +361,13 @@ export default function StaffIQInputsPage({ onNavigate }) {
           </div>
 
           {/* Team model */}
-          <Field label="Primary Team Model Currently Used">
+          <Field label="Primary Team Model Currently Used" optional hint="Default: Mixed models">
             <select
               style={inputStyle}
               value={form.primaryTeamModel}
               onChange={e => setF('primaryTeamModel', e.target.value)}
             >
+              <option value="">Mixed Models (default)</option>
               <option value="1:3">Mostly 1:3 (1 Anesthesiologist + 3 CRNAs) — Efficient</option>
               <option value="solo">Mostly Solo Anesthesiologists — Efficient</option>
               <option value="1:2">Mostly 1:2 (1 Anesthesiologist + 2 CRNAs) — Industry standard waste</option>
@@ -386,21 +414,21 @@ export default function StaffIQInputsPage({ onNavigate }) {
             {result.status || result.message}
           </div>
 
-          {(result.teamModelInefficiencyPct != null || result.overstaffingPct != null) && (
+          {(result.inefficiency1Pct != null || result.inefficiency2Pct != null) && (
             <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 20, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {result.teamModelInefficiencyPct != null && (
+              {result.inefficiency1Pct != null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#FEF2F2', borderRadius: 10 }}>
                   <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Team Model Inefficiency</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>
-                    {result.teamModelInefficiencyPct}% of budget = {fmt(result.teamModelInefficiencyCost)}/year
+                    {result.inefficiency1Pct}% of budget = {fmt(result.inefficiency1Cost)}/year
                   </span>
                 </div>
               )}
-              {result.overstaffingPct != null && (
+              {result.inefficiency2Pct != null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#FFFBEB', borderRadius: 10 }}>
-                  <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Overstaffing Waste</span>
+                  <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Overstaffing / Utilization Gap</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>
-                    {result.overstaffingPct}% of budget = {fmt(result.overstaffingCost)}/year
+                    {result.inefficiency2Pct}% of budget = {fmt(result.inefficiency2Cost)}/year
                   </span>
                 </div>
               )}
