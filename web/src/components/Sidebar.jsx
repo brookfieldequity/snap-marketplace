@@ -102,7 +102,6 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
     <aside
       style={{
         width: 240,
-        minHeight: '100vh',
         background: '#0F172A',
         display: 'flex',
         flexDirection: 'column',
@@ -112,7 +111,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         left: 0,
         bottom: 0,
         zIndex: 100,
-        overflowY: 'auto',
+        overflow: 'hidden',
       }}
     >
       {/* Facility Name */}
@@ -142,7 +141,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
       )}
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '8px 0' }}>
+      <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         {/* SNAP Shifts section */}
         {isShiftsMode && (
           <>
