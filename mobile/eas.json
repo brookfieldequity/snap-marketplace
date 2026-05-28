@@ -14,7 +14,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://your-backend.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://sublime-flexibility-production-4f52.up.railway.app/api"
       }
     }
   },
