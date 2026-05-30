@@ -253,7 +253,7 @@ model Facility {
   staffiqInputs       StaffIQInput[]
   staffiqScoreHistory StaffIQScoreHistory[]
   credentialUsers     CredentialUser[]
-  rosterEntries       FacilityRosterEntry[]
+  credRosterEntries   FacilityRosterEntry[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
