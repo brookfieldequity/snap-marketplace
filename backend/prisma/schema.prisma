@@ -109,6 +109,44 @@ enum LeadFollowUpStatus {
   NOT_INTERESTED
 }
 
+// ── SNAP Credentialing enums ──────────────────────────────────────────────────
+
+enum CredentialPermission {
+  COORDINATOR
+  DEPT_HEAD
+  BILLING
+}
+
+enum CredentialType {
+  STATE_LICENSE
+  DEA_CERTIFICATE
+  MA_CS_LICENSE
+  BOARD_CERTIFICATION
+  MALPRACTICE_INSURANCE
+  MALPRACTICE_HISTORY
+  ACLS_CERTIFICATION
+  BLS_CERTIFICATION
+  EDUCATION_HISTORY
+  HOSPITAL_PRIVILEGES
+  WORK_HISTORY
+  NPDB_AUTHORIZATION
+  CV
+}
+
+enum CredStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  MISSING
+  PENDING
+}
+
+enum RosterMatchStatus {
+  LINKED
+  INVITED
+  NOT_INVITED
+}
+
 // ── Existing models ───────────────────────────────────────────────────────────
 
 model User {
@@ -141,6 +179,7 @@ model ProviderProfile {
   photoUrl              String?
 
   pin                   String?
+  npiNumber             String?   @unique
 
   credentialed          Boolean   @default(false)
   maLicenseNumber       String?
@@ -172,6 +211,8 @@ model ProviderProfile {
   vipLogs               VIPPointsLog[]
   sentMessages          Message[]
   availabilitySubmissions AvailabilitySubmission[]
+  credentials             ProviderCredential[]
+  rosterEntries           FacilityRosterEntry[]
 
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -211,6 +252,8 @@ model Facility {
   incentiveShifts     InternalIncentiveShift[]
   staffiqInputs       StaffIQInput[]
   staffiqScoreHistory StaffIQScoreHistory[]
+  credentialUsers     CredentialUser[]
+  rosterEntries       FacilityRosterEntry[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -677,4 +720,128 @@ model CalculatorLead {
   reportSentAt      DateTime?
   followUpStatus    String    @default("NEW")
   createdAt         DateTime  @default(now())
+}
+
+// ── SNAP Credentialing models ─────────────────────────────────────────────────
+
+model CredentialUser {
+  id           String               @id @default(cuid())
+  facilityId   String
+  facility     Facility             @relation(fields: [facilityId], references: [id])
+  name         String
+  email        String               @unique
+  passwordHash String
+  permission   CredentialPermission @default(COORDINATOR)
+  createdAt    DateTime             @default(now())
+  lastLoginAt  DateTime?
+
+  verifications CredentialVerification[]
+  flags         CredentialFlag[]
+  notes         FacilityCredentialNote[]
+  accessLogs    CredentialAccessLog[]
+}
+
+model FacilityRosterEntry {
+  id                 String            @id @default(cuid())
+  facilityId         String
+  facility           Facility          @relation(fields: [facilityId], references: [id])
+  providerId         String?
+  provider           ProviderProfile?  @relation(fields: [providerId], references: [id])
+  npiNumber          String
+  firstName          String
+  lastName           String
+  credentialType     String
+  employmentCategory String?
+  department         String?
+  notes              String?
+  matchStatus        RosterMatchStatus @default(NOT_INVITED)
+  invitationSentAt   DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([facilityId, npiNumber])
+}
+
+model ProviderCredential {
+  id                 String          @id @default(cuid())
+  providerId         String
+  provider           ProviderProfile @relation(fields: [providerId], references: [id])
+  credentialType     CredentialType
+  status             CredStatus      @default(PENDING)
+  expirationDate     DateTime?
+  issueDate          DateTime?
+  data               Json?
+  documentPath       String?
+  documentName       String?
+  documentSize       Int?
+  documentUploadedAt DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  verifications CredentialVerification[]
+  flags         CredentialFlag[]
+  notes         FacilityCredentialNote[]
+  reminders     CredentialReminder[]
+
+  @@unique([providerId, credentialType])
+}
+
+model CredentialVerification {
+  id           String             @id @default(cuid())
+  facilityId   String
+  credentialId String
+  credential   ProviderCredential @relation(fields: [credentialId], references: [id])
+  verifiedById String
+  verifiedBy   CredentialUser     @relation(fields: [verifiedById], references: [id])
+  verifiedAt   DateTime           @default(now())
+  notes        String?
+
+  @@unique([facilityId, credentialId])
+}
+
+model CredentialFlag {
+  id           String             @id @default(cuid())
+  facilityId   String
+  credentialId String
+  credential   ProviderCredential @relation(fields: [credentialId], references: [id])
+  flaggedById  String
+  flaggedBy    CredentialUser     @relation(fields: [flaggedById], references: [id])
+  flaggedAt    DateTime           @default(now())
+  resolvedAt   DateTime?
+  notes        String?
+}
+
+model FacilityCredentialNote {
+  id           String              @id @default(cuid())
+  facilityId   String
+  providerId   String
+  credentialId String?
+  credential   ProviderCredential? @relation(fields: [credentialId], references: [id])
+  noteText     String
+  createdById  String
+  createdBy    CredentialUser      @relation(fields: [createdById], references: [id])
+  createdAt    DateTime            @default(now())
+}
+
+model CredentialAccessLog {
+  id             String         @id @default(cuid())
+  facilityId     String
+  userId         String
+  user           CredentialUser @relation(fields: [userId], references: [id])
+  providerId     String
+  credentialType String?
+  action         String
+  documentName   String?
+  ipAddress      String?
+  timestamp      DateTime       @default(now())
+}
+
+model CredentialReminder {
+  id             String             @id @default(cuid())
+  facilityId     String
+  credentialId   String
+  credential     ProviderCredential @relation(fields: [credentialId], references: [id])
+  reminderType   String
+  sentAt         DateTime           @default(now())
+  expirationDate DateTime?
 }

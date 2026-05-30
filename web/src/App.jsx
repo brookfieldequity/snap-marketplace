@@ -37,6 +37,7 @@ import AdminLeadsPage from './pages/admin/AdminLeadsPage.jsx'
 import AdminWindowsPage from './pages/admin/AdminWindowsPage.jsx'
 import AdminIncentivesPage from './pages/admin/AdminIncentivesPage.jsx'
 import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
+import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 
 export default function App() {
   const [facilityToken, setFacilityToken] = useState(
@@ -56,7 +57,10 @@ export default function App() {
   const [adminPage, setAdminPage] = useState('overview')
 
   // Portal selection state (when not yet logged in)
-  const [portalChoice, setPortalChoice] = useState(null) // null | 'facility' | 'admin'
+  // null | 'facility' | 'admin' | 'credential'
+  const [portalChoice, setPortalChoice] = useState(
+    () => localStorage.getItem('snapCredToken') ? 'credential' : null
+  )
 
   // Load snapMode whenever facilityToken is present
   useEffect(() => {
@@ -301,6 +305,11 @@ export default function App() {
     )
   }
 
+  // ── Credentialing portal ────────────────────────────────────────────────────
+  if (portalChoice === 'credential') {
+    return <CredentialApp onBack={() => setPortalChoice(null)} />
+  }
+
   // ── Portal choice / auth ────────────────────────────────────────────────────
   if (portalChoice === 'facility') {
     if (authMode === 'register') {
@@ -362,6 +371,52 @@ export default function App() {
 
       {/* Choice cards */}
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          onClick={() => setPortalChoice('credential')}
+          style={{
+            width: 280,
+            padding: '40px 32px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: 20,
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s ease',
+            backdropFilter: 'blur(12px)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(16,185,129,0.08)'
+            e.currentTarget.style.borderColor = 'rgba(16,185,129,0.6)'
+            e.currentTarget.style.transform = 'translateY(-4px)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+            e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'
+            e.currentTarget.style.transform = 'translateY(0)'
+          }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#F1F5F9', marginBottom: 8 }}>
+            Credentialing
+          </div>
+          <div style={{ fontSize: 14, color: '#64748B', lineHeight: 1.6 }}>
+            Manage provider credentials, expirations, and passport verification for your facility.
+          </div>
+          <div
+            style={{
+              marginTop: 24,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              color: '#10B981',
+              fontWeight: 600,
+              fontSize: 14,
+            }}
+          >
+            Credentialing Portal →
+          </div>
+        </button>
+
         <button
           onClick={() => setPortalChoice('facility')}
           style={{

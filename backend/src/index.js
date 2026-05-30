@@ -24,10 +24,12 @@ const datauploadRoutes = require('./routes/dataupload');
 const calculatorRoutes = require('./routes/calculator');
 const leadsRoutes = require('./routes/leads');
 const staffiqInputsRoutes = require('./routes/staffiqInputs');
+const credentialingRoutes = require('./routes/credentialing');
 
 const { runSurgePricing, expireOldShifts, openPreferredShifts, notifySurgeExpiring } = require('./jobs/surge');
 const { checkAllVipStatuses } = require('./jobs/vip');
 const { checkExpiredIncentiveShifts } = require('./services/notifications');
+const { runCredentialAlerts } = require('./jobs/credentialAlerts');
 
 const app = express();
 
@@ -61,6 +63,7 @@ app.use('/api/data-upload', datauploadRoutes);
 app.use('/api/calculator', calculatorRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/staffiq-inputs', staffiqInputsRoutes);
+app.use('/api/credentialing', credentialingRoutes);
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 
@@ -77,6 +80,11 @@ cron.schedule('0 * * * *', async () => {
 
 cron.schedule('0 */6 * * *', async () => {
   await checkExpiredIncentiveShifts();
+});
+
+// Daily at 6 AM — credential expiration alerts
+cron.schedule('0 6 * * *', async () => {
+  await runCredentialAlerts();
 });
 
 // ── Seed admin ────────────────────────────────────────────────────────────────

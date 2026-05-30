@@ -234,6 +234,92 @@ export const facilityAPI = {
   submitStaffIQLead: (data) => apiFetch(`${BASE}/calculator/staffiq-simple/lead`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 }
 
+// ─── Credential API ───────────────────────────────────────────────────────────
+
+function getCredToken() {
+  return localStorage.getItem('snapCredToken')
+}
+
+function credHeaders(extra = {}) {
+  const token = getCredToken()
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  }
+}
+
+export const credentialAPI = {
+  login: (email, password) =>
+    apiFetch(`${BASE}/credentialing/auth/login`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ email, password }) }),
+  me: () => apiFetch(`${BASE}/credentialing/auth/me`, { headers: credHeaders() }),
+
+  // Users
+  getUsers: () => apiFetch(`${BASE}/credentialing/users`, { headers: credHeaders() }),
+  createUser: (data) => apiFetch(`${BASE}/credentialing/users`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
+  updateUser: (id, data) => apiFetch(`${BASE}/credentialing/users/${id}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  deleteUser: (id) => apiFetch(`${BASE}/credentialing/users/${id}`, { method: 'DELETE', headers: credHeaders() }),
+
+  // Roster
+  getRoster: () => apiFetch(`${BASE}/credentialing/roster`, { headers: credHeaders() }),
+  addRosterEntry: (data) => apiFetch(`${BASE}/credentialing/roster`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
+  removeRosterEntry: (id) => apiFetch(`${BASE}/credentialing/roster/${id}`, { method: 'DELETE', headers: credHeaders() }),
+  inviteRosterEntry: (id) => apiFetch(`${BASE}/credentialing/roster/${id}/invite`, { method: 'POST', headers: credHeaders() }),
+  getRosterTemplate: () => `${BASE}/credentialing/roster/template`,
+  bulkUploadRoster: async (csvText) => {
+    const token = getCredToken()
+    const res = await fetch(`${BASE}/credentialing/roster/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: csvText,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    return data
+  },
+
+  // Providers
+  getSummary: () => apiFetch(`${BASE}/credentialing/providers/summary`, { headers: credHeaders() }),
+  getProviders: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return apiFetch(`${BASE}/credentialing/providers${q ? `?${q}` : ''}`, { headers: credHeaders() })
+  },
+  getProvider: (providerId) => apiFetch(`${BASE}/credentialing/providers/${providerId}`, { headers: credHeaders() }),
+  getProviderActivity: (providerId) => apiFetch(`${BASE}/credentialing/providers/${providerId}/activity`, { headers: credHeaders() }),
+  exportProviders: () => `${BASE}/credentialing/providers/export`,
+
+  // Credentials
+  getDocToken: (providerId, type) => apiFetch(`${BASE}/credentialing/providers/${providerId}/documents/${type}/token`, { headers: credHeaders() }),
+  uploadDocument: async (providerId, type, file) => {
+    const token = getCredToken()
+    const form = new FormData()
+    form.append('document', file)
+    const res = await fetch(`${BASE}/credentialing/providers/${providerId}/documents/${type}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    return data
+  },
+
+  // Actions
+  verifyCredential: (providerId, type, notes) => apiFetch(`${BASE}/credentialing/providers/${providerId}/credentials/${type}/verify`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ notes }) }),
+  unverifyCredential: (providerId, type) => apiFetch(`${BASE}/credentialing/providers/${providerId}/credentials/${type}/verify`, { method: 'DELETE', headers: credHeaders() }),
+  flagCredential: (providerId, type, notes) => apiFetch(`${BASE}/credentialing/providers/${providerId}/credentials/${type}/flag`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ notes }) }),
+  resolveFlag: (providerId, type, flagId) => apiFetch(`${BASE}/credentialing/providers/${providerId}/credentials/${type}/flag/${flagId}`, { method: 'DELETE', headers: credHeaders() }),
+  addNote: (providerId, noteText, credentialId) => apiFetch(`${BASE}/credentialing/providers/${providerId}/notes`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ noteText, credentialId }) }),
+  sendReminder: (providerId, credentialType, message) => apiFetch(`${BASE}/credentialing/providers/${providerId}/remind`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ credentialType, message }) }),
+  requestDocument: (providerId, credentialType, toEmail, message) => apiFetch(`${BASE}/credentialing/providers/${providerId}/request-document`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ credentialType, toEmail, message }) }),
+
+  // Audit
+  getAuditLog: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return apiFetch(`${BASE}/credentialing/audit${q ? `?${q}` : ''}`, { headers: credHeaders() })
+  },
+}
+
 // ─── Admin API ────────────────────────────────────────────────────────────────
 
 export const adminAPI = {
