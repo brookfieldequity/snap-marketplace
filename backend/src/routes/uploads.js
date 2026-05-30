@@ -17,6 +17,7 @@ const s3 = new S3Client({
 });
 
 const BUCKET = process.env.AWS_S3_BUCKET;
+const PHOTOS_BUCKET = process.env.AWS_S3_BUCKET_PHOTOS || BUCKET;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -27,14 +28,14 @@ const upload = multer({
   },
 });
 
-async function uploadToS3(buffer, mimetype, key) {
+async function uploadToS3(buffer, mimetype, key, bucket = BUCKET) {
   await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
+    Bucket: bucket,
     Key: key,
     Body: buffer,
     ContentType: mimetype,
   }));
-  return `https://${BUCKET}.s3.amazonaws.com/${key}`;
+  return `https://${bucket}.s3.amazonaws.com/${key}`;
 }
 
 // ── Provider profile photo ────────────────────────────────────────────────────
@@ -42,14 +43,14 @@ async function uploadToS3(buffer, mimetype, key) {
 router.post('/provider-photo', auth, upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (!BUCKET) return res.status(500).json({ error: 'S3 not configured — set AWS_S3_BUCKET env var' });
+    if (!PHOTOS_BUCKET) return res.status(500).json({ error: 'S3 not configured — set AWS_S3_BUCKET_PHOTOS env var' });
 
     const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
     if (!provider) return res.status(400).json({ error: 'Provider not found' });
 
     const ext = req.file.mimetype.split('/')[1] || 'jpg';
     const key = `providers/${provider.id}/${crypto.randomUUID()}.${ext}`;
-    const url = await uploadToS3(req.file.buffer, req.file.mimetype, key);
+    const url = await uploadToS3(req.file.buffer, req.file.mimetype, key, PHOTOS_BUCKET);
 
     await prisma.providerProfile.update({
       where: { id: provider.id },
