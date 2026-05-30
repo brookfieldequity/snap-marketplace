@@ -29,7 +29,7 @@ function CredStatusBadge({ status }) {
   )
 }
 
-function CredentialSection({ section, credential, facilityId, providerId, permission, onRefresh }) {
+function CredentialSection({ section, credential, entityApi, permission, onRefresh }) {
   const [showNote, setShowNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [viewingDoc, setViewingDoc] = useState(null)
@@ -43,52 +43,42 @@ function CredentialSection({ section, credential, facilityId, providerId, permis
   const notes = cred?.notes || []
 
   async function handleVerify() {
-    try {
-      await credentialAPI.verifyCredential(providerId, section.type)
-      onRefresh()
-    } catch (err) { setActionMsg(err.message) }
+    try { await entityApi.verify(section.type); onRefresh() }
+    catch (err) { setActionMsg(err.message) }
   }
 
   async function handleUnverify() {
-    try {
-      await credentialAPI.unverifyCredential(providerId, section.type)
-      onRefresh()
-    } catch (err) { setActionMsg(err.message) }
+    try { await entityApi.unverify(section.type); onRefresh() }
+    catch (err) { setActionMsg(err.message) }
   }
 
   async function handleFlag() {
-    const notes = window.prompt('Flag reason (optional):')
-    if (notes === null) return
-    try {
-      await credentialAPI.flagCredential(providerId, section.type, notes)
-      onRefresh()
-    } catch (err) { setActionMsg(err.message) }
+    const reason = window.prompt('Flag reason (optional):')
+    if (reason === null) return
+    try { await entityApi.flag(section.type, reason); onRefresh() }
+    catch (err) { setActionMsg(err.message) }
   }
 
   async function handleAddNote(e) {
     e.preventDefault()
     if (!noteText.trim()) return
     try {
-      await credentialAPI.addNote(providerId, noteText, cred?.id)
-      setNoteText('')
-      setShowNote(false)
-      onRefresh()
+      await entityApi.addNote(noteText, cred?.id)
+      setNoteText(''); setShowNote(false); onRefresh()
     } catch (err) { setActionMsg(err.message) }
   }
 
   async function handleViewDoc() {
     try {
-      const { url } = await credentialAPI.getDocToken(providerId, section.type)
+      const { url } = await entityApi.getDocToken(section.type)
       setViewingDoc(url)
     } catch (err) { setActionMsg('Failed to load document: ' + err.message) }
   }
 
   async function handleUpload(file) {
     setUploading(true)
-    try {
-      await credentialAPI.uploadDocument(providerId, section.type, file)
-      onRefresh()
-    } catch (err) { setActionMsg(err.message) }
+    try { await entityApi.uploadDocument(section.type, file); onRefresh() }
+    catch (err) { setActionMsg(err.message) }
     setUploading(false)
   }
 
@@ -154,7 +144,7 @@ function CredentialSection({ section, credential, facilityId, providerId, permis
         {/* Flag */}
         {permission === 'COORDINATOR' && cred && (
           flags.length > 0 ? (
-            <button onClick={() => credentialAPI.resolveFlag(providerId, section.type, flags[0].id).then(onRefresh)} style={actionBtn('#EF4444')}>
+            <button onClick={() => entityApi.resolveFlag(section.type, flags[0].id).then(onRefresh)} style={actionBtn('#EF4444')}>
               🚩 Flagged — Click to Resolve
             </button>
           ) : (
@@ -261,7 +251,7 @@ function ActivityLog({ providerId }) {
   )
 }
 
-export default function CredentialProviderFile({ providerId, permission, onBack }) {
+export default function CredentialProviderFile({ providerId, rosterId, permission, onBack }) {
   const [provider, setProvider] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -269,18 +259,55 @@ export default function CredentialProviderFile({ providerId, permission, onBack 
   const [reminderType, setReminderType] = useState('')
   const [reminderMsg, setReminderMsg] = useState('')
 
+  const isRoster = !providerId && !!rosterId
+
+  // Unified API adapter — same interface regardless of linked/unlinked
+  const entityApi = {
+    upload: isRoster
+      ? (type, file) => credentialAPI.uploadRosterDocument(rosterId, type, file)
+      : (type, file) => credentialAPI.uploadDocument(providerId, type, file),
+    uploadDocument: isRoster
+      ? (type, file) => credentialAPI.uploadRosterDocument(rosterId, type, file)
+      : (type, file) => credentialAPI.uploadDocument(providerId, type, file),
+    getDocToken: isRoster
+      ? (type) => credentialAPI.getRosterDocToken(rosterId, type)
+      : (type) => credentialAPI.getDocToken(providerId, type),
+    verify: isRoster
+      ? (type, notes) => credentialAPI.verifyRosterCredential(rosterId, type, notes)
+      : (type, notes) => credentialAPI.verifyCredential(providerId, type, notes),
+    unverify: isRoster
+      ? (type) => credentialAPI.unverifyRosterCredential(rosterId, type)
+      : (type) => credentialAPI.unverifyCredential(providerId, type),
+    flag: isRoster
+      ? (type, notes) => credentialAPI.flagRosterCredential(rosterId, type, notes)
+      : (type, notes) => credentialAPI.flagCredential(providerId, type, notes),
+    resolveFlag: isRoster
+      ? (type, flagId) => credentialAPI.resolveRosterFlag(rosterId, type, flagId)
+      : (type, flagId) => credentialAPI.resolveFlag(providerId, type, flagId),
+    addNote: isRoster
+      ? (noteText, credentialId) => credentialAPI.addRosterNote(rosterId, noteText, credentialId)
+      : (noteText, credentialId) => credentialAPI.addNote(providerId, noteText, credentialId),
+  }
+
   const load = () => {
     setLoading(true)
-    credentialAPI.getProvider(providerId)
+    const fetch = isRoster
+      ? credentialAPI.getRosterFile(rosterId)
+      : credentialAPI.getProvider(providerId)
+    fetch
       .then(setProvider)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [providerId])
+  useEffect(load, [providerId, rosterId])
 
   async function handleSendReminder(e) {
     e.preventDefault()
+    if (isRoster) {
+      alert('This provider has no linked SNAP account. Add their email in the roster to send reminders.')
+      return
+    }
     try {
       await credentialAPI.sendReminder(providerId, reminderType, reminderMsg)
       setShowReminderModal(false)
@@ -301,7 +328,6 @@ export default function CredentialProviderFile({ providerId, permission, onBack 
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
-      {/* Back */}
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6 }}>
         ← Back to providers
       </button>
@@ -317,35 +343,41 @@ export default function CredentialProviderFile({ providerId, permission, onBack 
               <h2 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
                 {provider.firstName} {provider.lastName}
               </h2>
-              <span style={{ padding: '3px 10px', borderRadius: 999, background: '#EEF2FF', color: '#6366F1', fontSize: 12, fontWeight: 700 }}>{provider.specialty}</span>
+              {provider.specialty && (
+                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#EEF2FF', color: '#6366F1', fontSize: 12, fontWeight: 700 }}>{provider.specialty}</span>
+              )}
               <span style={{ padding: '3px 10px', borderRadius: 999, background: `${statusColor}18`, color: statusColor, fontSize: 12, fontWeight: 700 }}>
-                {provider.status}
+                {provider.status || 'No Credentials'}
               </span>
+              {isRoster && (
+                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#FEF3C7', color: '#D97706', fontSize: 11, fontWeight: 700 }}>
+                  No SNAP Account
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 24, marginTop: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#64748B' }}>NPI: <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{provider.npiNumber || '—'}</strong></span>
-              <span style={{ fontSize: 13, color: '#64748B' }}>Email: <strong style={{ color: '#0F172A' }}>{provider.email}</strong></span>
-              <span style={{ fontSize: 13, color: '#64748B' }}>Member since: <strong style={{ color: '#0F172A' }}>{provider.memberSince ? new Date(provider.memberSince).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}</strong></span>
+              {provider.email && <span style={{ fontSize: 13, color: '#64748B' }}>Email: <strong style={{ color: '#0F172A' }}>{provider.email}</strong></span>}
+              {provider.memberSince && <span style={{ fontSize: 13, color: '#64748B' }}>Member since: <strong style={{ color: '#0F172A' }}>{new Date(provider.memberSince).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</strong></span>}
             </div>
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1, maxWidth: 200 }}>
-                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>PASSPORT COMPLETION</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ width: `${provider.passportCompletion}%`, height: '100%', background: provider.passportCompletion === 100 ? '#10B981' : '#6366F1', borderRadius: 4 }} />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{provider.passportCompletion}%</span>
+            <div style={{ marginTop: 12, maxWidth: 200 }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>CREDENTIAL COMPLETION</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ width: `${provider.passportCompletion || 0}%`, height: '100%', background: provider.passportCompletion === 100 ? '#10B981' : '#6366F1', borderRadius: 4 }} />
                 </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{provider.passportCompletion || 0}%</span>
               </div>
             </div>
           </div>
 
-          {/* Actions */}
           {permission === 'COORDINATOR' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-              <button onClick={() => setShowReminderModal(true)} style={{ padding: '8px 14px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                Send Reminder
-              </button>
+              {!isRoster && (
+                <button onClick={() => setShowReminderModal(true)} style={{ padding: '8px 14px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Send Reminder
+                </button>
+              )}
               <a
                 href={credentialAPI.exportProviders()}
                 style={{ padding: '8px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center', textDecoration: 'none' }}
@@ -364,16 +396,14 @@ export default function CredentialProviderFile({ providerId, permission, onBack 
           key={section.type}
           section={section}
           credential={credMap[section.type] || null}
-          providerId={providerId}
+          entityApi={entityApi}
           permission={permission}
           onRefresh={load}
         />
       ))}
 
-      {/* Activity log */}
-      {permission === 'COORDINATOR' && <ActivityLog providerId={providerId} />}
+      {permission === 'COORDINATOR' && !isRoster && <ActivityLog providerId={providerId} />}
 
-      {/* Reminder modal */}
       {showReminderModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '32px', width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>

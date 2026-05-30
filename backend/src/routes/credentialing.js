@@ -415,6 +415,8 @@ router.get('/providers', credentialAuth, async (req, res) => {
       let creds = []
       if (entry.providerId) {
         creds = await prisma.providerCredential.findMany({ where: { providerId: entry.providerId } })
+      } else {
+        creds = await prisma.providerCredential.findMany({ where: { rosterId: entry.id } })
       }
 
       const summary = buildProviderSummary(entry, creds)
@@ -764,6 +766,170 @@ router.post('/providers/:providerId/documents/:type', credentialAuth, requireCoo
       res.status(500).json({ error: 'Internal server error' })
     }
   })
+})
+
+// ── Roster-keyed provider file (unlinked providers) ──────────────────────────
+
+router.get('/roster/:rosterId/file', credentialAuth, async (req, res) => {
+  try {
+    const { rosterId } = req.params
+    const entry = await prisma.facilityRosterEntry.findFirst({
+      where: { id: rosterId, facilityId: req.facilityId },
+      include: {
+        credentials: {
+          include: {
+            verifications: { where: { facilityId: req.facilityId }, include: { verifiedBy: { select: { name: true } } } },
+            flags: { where: { facilityId: req.facilityId, resolvedAt: null } },
+            notes: { where: { facilityId: req.facilityId }, orderBy: { createdAt: 'desc' } },
+          },
+        },
+      },
+    })
+    if (!entry) return res.status(404).json({ error: 'Roster entry not found' })
+
+    const status = overallStatusColor(entry.credentials)
+    const completion = passportCompletion(entry.credentials)
+    const nextExp = nextExpiration(entry.credentials)
+
+    res.json({
+      rosterId: entry.id,
+      providerId: null,
+      firstName: entry.firstName,
+      lastName: entry.lastName,
+      npiNumber: entry.npiNumber,
+      credentialType: entry.credentialType,
+      matchStatus: entry.matchStatus,
+      status,
+      passportCompletion: completion,
+      nextExpiration: nextExp,
+      credentials: entry.credentials,
+      roster: entry,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/roster/:rosterId/documents/:type', credentialAuth, requireCoordinator, async (req, res) => {
+  const { rosterId, type } = req.params
+  const upload = getUpload(req.facilityId, `roster_${rosterId}`, type)
+
+  upload.single('document')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message })
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+
+    try {
+      const entry = await prisma.facilityRosterEntry.findFirst({ where: { id: rosterId, facilityId: req.facilityId } })
+      if (!entry) return res.status(404).json({ error: 'Roster entry not found' })
+
+      const filePath = process.env.AWS_S3_BUCKET ? req.file.key : req.file.path
+      const updated = await prisma.providerCredential.upsert({
+        where: { rosterId_credentialType: { rosterId, credentialType: type } },
+        update: {
+          documentPath: filePath,
+          documentName: req.file.originalname,
+          documentSize: req.file.size,
+          documentUploadedAt: new Date(),
+          status: 'PENDING',
+        },
+        create: {
+          rosterId,
+          credentialType: type,
+          documentPath: filePath,
+          documentName: req.file.originalname,
+          documentSize: req.file.size,
+          documentUploadedAt: new Date(),
+          status: 'PENDING',
+        },
+      })
+
+      await logAccess(req.facilityId, req.credUser.id, rosterId, 'UPLOAD_DOCUMENT', type, req.file.originalname, req)
+      res.json({ success: true, credential: updated })
+    } catch (e) {
+      console.error(e)
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+})
+
+router.get('/roster/:rosterId/documents/:type/token', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    const { rosterId, type } = req.params
+    const cred = await prisma.providerCredential.findUnique({
+      where: { rosterId_credentialType: { rosterId, credentialType: type } },
+    })
+    if (!cred?.documentPath) return res.status(404).json({ error: 'No document found' })
+
+    await logAccess(req.facilityId, req.credUser.id, rosterId, 'VIEW_DOCUMENT', type, cred.documentName, req)
+    const token = signDocToken(cred.documentPath)
+    res.json({ token, url: `/api/credentialing/doc/${token}` })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Roster-keyed verify / flag / note / activity
+router.post('/roster/:rosterId/credentials/:type/verify', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    const { rosterId, type } = req.params
+    const cred = await prisma.providerCredential.upsert({
+      where: { rosterId_credentialType: { rosterId, credentialType: type } },
+      update: {},
+      create: { rosterId, credentialType: type },
+    })
+    await prisma.credentialVerification.upsert({
+      where: { facilityId_credentialId: { facilityId: req.facilityId, credentialId: cred.id } },
+      update: { verifiedById: req.credUser.id, verifiedAt: new Date(), notes: req.body.notes },
+      create: { facilityId: req.facilityId, credentialId: cred.id, verifiedById: req.credUser.id, notes: req.body.notes },
+    })
+    await logAccess(req.facilityId, req.credUser.id, rosterId, 'VERIFY', type, null, req)
+    res.json({ success: true })
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
+})
+
+router.delete('/roster/:rosterId/credentials/:type/verify', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    const { rosterId, type } = req.params
+    const cred = await prisma.providerCredential.findUnique({ where: { rosterId_credentialType: { rosterId, credentialType: type } } })
+    if (cred) await prisma.credentialVerification.deleteMany({ where: { facilityId: req.facilityId, credentialId: cred.id } })
+    res.json({ success: true })
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
+})
+
+router.post('/roster/:rosterId/credentials/:type/flag', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    const { rosterId, type } = req.params
+    const cred = await prisma.providerCredential.upsert({
+      where: { rosterId_credentialType: { rosterId, credentialType: type } },
+      update: {},
+      create: { rosterId, credentialType: type },
+    })
+    const flag = await prisma.credentialFlag.create({
+      data: { facilityId: req.facilityId, credentialId: cred.id, flaggedById: req.credUser.id, notes: req.body.notes },
+    })
+    await logAccess(req.facilityId, req.credUser.id, rosterId, 'FLAG', type, null, req)
+    res.json({ success: true, flag })
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
+})
+
+router.delete('/roster/:rosterId/credentials/:type/flag/:flagId', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    await prisma.credentialFlag.update({ where: { id: req.params.flagId }, data: { resolvedAt: new Date() } })
+    res.json({ success: true })
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
+})
+
+router.post('/roster/:rosterId/notes', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    const { rosterId } = req.params
+    const { noteText, credentialId } = req.body
+    const note = await prisma.facilityCredentialNote.create({
+      data: { facilityId: req.facilityId, credentialId: credentialId || null, authorId: req.credUser.id, noteText },
+    })
+    res.json({ success: true, note })
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
 })
 
 // ── Secure document serving ───────────────────────────────────────────────────

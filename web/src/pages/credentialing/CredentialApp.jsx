@@ -14,6 +14,7 @@ export default function CredentialApp({ onBack }) {
   const [loadingMe, setLoadingMe] = useState(true)
   const [page, setPage] = useState('dashboard')
   const [providerDetailId, setProviderDetailId] = useState(null)
+  const [rosterDetailId, setRosterDetailId] = useState(null)
 
   // Verify stored token on mount
   useEffect(() => {
@@ -45,10 +46,16 @@ export default function CredentialApp({ onBack }) {
   function handleNavigate(dest) {
     if (dest.startsWith('provider:')) {
       setProviderDetailId(dest.replace('provider:', ''))
+      setRosterDetailId(null)
+      setPage('provider')
+    } else if (dest.startsWith('roster:')) {
+      setRosterDetailId(dest.replace('roster:', ''))
+      setProviderDetailId(null)
       setPage('provider')
     } else {
       setPage(dest)
       setProviderDetailId(null)
+      setRosterDetailId(null)
     }
   }
 
@@ -103,14 +110,15 @@ export default function CredentialApp({ onBack }) {
         )
 
       case 'provider':
-        if (!providerDetailId) {
+        if (!providerDetailId && !rosterDetailId) {
           return <CredentialProviderList onNavigate={handleNavigate} permission={permission} filterExpiring={false} />
         }
         return (
           <CredentialProviderFile
             providerId={providerDetailId}
+            rosterId={rosterDetailId}
             permission={permission}
-            onBack={() => { setPage('providers'); setProviderDetailId(null) }}
+            onBack={() => { setPage('providers'); setProviderDetailId(null); setRosterDetailId(null) }}
           />
         )
 

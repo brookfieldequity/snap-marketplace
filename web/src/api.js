@@ -313,6 +313,28 @@ export const credentialAPI = {
   sendReminder: (providerId, credentialType, message) => apiFetch(`${BASE}/credentialing/providers/${providerId}/remind`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ credentialType, message }) }),
   requestDocument: (providerId, credentialType, toEmail, message) => apiFetch(`${BASE}/credentialing/providers/${providerId}/request-document`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ credentialType, toEmail, message }) }),
 
+  // Roster-keyed provider file (unlinked providers)
+  getRosterFile: (rosterId) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/file`, { headers: credHeaders() }),
+  uploadRosterDocument: async (rosterId, type, file) => {
+    const token = getCredToken()
+    const form = new FormData()
+    form.append('document', file)
+    const res = await fetch(`${BASE}/credentialing/roster/${rosterId}/documents/${type}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    return data
+  },
+  getRosterDocToken: (rosterId, type) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/documents/${type}/token`, { headers: credHeaders() }),
+  verifyRosterCredential: (rosterId, type, notes) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/credentials/${type}/verify`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ notes }) }),
+  unverifyRosterCredential: (rosterId, type) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/credentials/${type}/verify`, { method: 'DELETE', headers: credHeaders() }),
+  flagRosterCredential: (rosterId, type, notes) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/credentials/${type}/flag`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ notes }) }),
+  resolveRosterFlag: (rosterId, type, flagId) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/credentials/${type}/flag/${flagId}`, { method: 'DELETE', headers: credHeaders() }),
+  addRosterNote: (rosterId, noteText, credentialId) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/notes`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ noteText, credentialId }) }),
+
   // Audit
   getAuditLog: (params = {}) => {
     const q = new URLSearchParams(params).toString()

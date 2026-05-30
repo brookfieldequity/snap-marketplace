@@ -759,15 +759,19 @@ model FacilityRosterEntry {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  credentials        ProviderCredential[]
+
   @@unique([facilityId, npiNumber])
 }
 
 model ProviderCredential {
-  id                 String          @id @default(cuid())
-  providerId         String
-  provider           ProviderProfile @relation(fields: [providerId], references: [id])
+  id                 String               @id @default(cuid())
+  providerId         String?
+  provider           ProviderProfile?     @relation(fields: [providerId], references: [id])
+  rosterId           String?
+  rosterEntry        FacilityRosterEntry? @relation(fields: [rosterId], references: [id])
   credentialType     CredentialType
-  status             CredStatus      @default(PENDING)
+  status             CredStatus           @default(PENDING)
   expirationDate     DateTime?
   issueDate          DateTime?
   data               Json?
@@ -775,15 +779,15 @@ model ProviderCredential {
   documentName       String?
   documentSize       Int?
   documentUploadedAt DateTime?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   verifications CredentialVerification[]
   flags         CredentialFlag[]
   notes         FacilityCredentialNote[]
   reminders     CredentialReminder[]
 
-  @@unique([providerId, credentialType])
+  @@unique([rosterId, credentialType])
 }
 
 model CredentialVerification {
