@@ -38,6 +38,19 @@ curl -s https://<backend>/api/does-not-exist        # expect {"error":"Not found
 # 25 rapid POSTs to /api/auth/admin/login -> 429 after ~20
 ```
 
+## Known limitations during the pilot
+
+- **SMS notifications are disabled.** `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
+  `TWILIO_PHONE_NUMBER` are not set on Railway, so `sendSMS()` in
+  `src/services/notifications.js` silently returns without sending. Affected flows
+  (no SMS sent — provider/coordinator must learn about events via web/mobile push
+  or email instead):
+  - `routes/windows.js` — when a shift window opens, no roster SMS blast
+  - `routes/schedule.js` — schedule-published / change-of-assignment alerts
+  - `routes/incentive.js` — incentive-shift offers to roster
+  - `services/notifications.js` — provider-accepts, schedule-reminder, shift-fill
+  Wire Twilio up (SID + auth token + phone number) when SMS is needed.
+
 ## Post-pilot punch list (not done yet)
 
 - **`xlsx` dependency** has a known high-severity prototype-pollution/ReDoS (no npm fix).
