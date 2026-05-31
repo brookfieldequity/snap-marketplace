@@ -1,9 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const cron = require('node-cron');
 const bcrypt = require('bcryptjs');
 const prisma = require('./config/db');
+// Validates required env (JWT_SECRET, CORS_ORIGINS in prod) at boot — throws if missing.
+const { corsOrigins } = require('./config/env');
+const { globalLimiter, authLimiter } = require('./middleware/rateLimit');
 
 const authRoutes = require('./routes/auth');
 const shiftRoutes = require('./routes/shifts');
@@ -33,16 +37,36 @@ const { runCredentialAlerts } = require('./jobs/credentialAlerts');
 
 const app = express();
 
-// Allow origins listed in CORS_ORIGINS env var (comma-separated).
-// Falls back to allow all origins when the variable is not set (local dev).
-const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-  : true;
+// Behind Railway's proxy — trust the first hop so req.ip / rate limiting use
+// the real client IP from X-Forwarded-For (and not the proxy address).
+app.set('trust proxy', 1);
+
+// Security headers. CSP is disabled (JSON API, no HTML) and cross-origin
+// resource policy is relaxed so the SPA can fetch credential documents/images.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS allowlist comes from config/env (required in production).
 app.use(cors({ origin: corsOrigins, credentials: true }));
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Broad rate-limit on all routes; the health check stays unthrottled.
+app.use(globalLimiter);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', app: 'SNAP Marketplace' }));
+
+// Strict throttling on credential-bearing endpoints (login/register/reset).
+app.use('/api/auth', authLimiter);
+app.use([
+  '/api/credentialing/auth/login',
+  '/api/credentialing/auth/forgot-password',
+  '/api/credentialing/auth/reset-password',
+], authLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/shifts', shiftRoutes);
@@ -87,11 +111,35 @@ cron.schedule('0 6 * * *', async () => {
   await runCredentialAlerts();
 });
 
+// ── 404 + error handling ──────────────────────────────────────────────────────
+
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+
+// Global error handler — returns generic messages so internals/stack traces
+// are never leaked to clients. Full error is logged server-side.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+  // Multer / upload validation errors carry a safe, user-facing message.
+  if (err.message && (/allowed/i.test(err.message) || err.code === 'LIMIT_FILE_SIZE')) {
+    return res.status(400).json({ error: err.message });
+  }
+  console.error('[error]', req.method, req.path, '-', err.message);
+  res.status(err.status || 500).json({ error: 'Internal server error' });
+});
+
 // ── Seed admin ────────────────────────────────────────────────────────────────
 
 async function seedAdmin() {
-  const email = process.env.ADMIN_EMAIL || 'admin@snapmedical.com';
-  const password = process.env.ADMIN_PASSWORD || 'SnapAdmin2024!';
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  // No insecure default — skip seeding if credentials are not configured.
+  if (!email || !password) {
+    console.warn('[seed] ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping admin seed');
+    return;
+  }
   const existing = await prisma.user.findUnique({ where: { email } });
   if (!existing) {
     const hashed = await bcrypt.hash(password, 10);

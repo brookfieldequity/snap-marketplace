@@ -19,12 +19,14 @@ const s3 = new S3Client({
 const BUCKET = process.env.AWS_S3_BUCKET;
 const PHOTOS_BUCKET = process.env.AWS_S3_BUCKET_PHOTOS || BUCKET;
 
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed'));
+    if (ALLOWED_IMAGE_MIME.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPG, PNG, WEBP, or HEIC images are allowed'));
   },
 });
 

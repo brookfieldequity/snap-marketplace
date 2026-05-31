@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken')
 const prisma = require('../config/db')
-
-const JWT_SECRET = process.env.JWT_SECRET || 'snap-secret'
+const { JWT_SECRET } = require('../config/env')
 
 module.exports = async function credentialAuth(req, res, next) {
   const header = req.headers.authorization

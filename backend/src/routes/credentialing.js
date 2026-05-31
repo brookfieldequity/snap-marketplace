@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs')
 const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
+const crypto = require('crypto')
 const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
 const { sign, signDocToken, verifyDocToken } = require('../middleware/credentialAuth')
@@ -16,6 +17,28 @@ const router = express.Router()
 // Set AWS_S3_BUCKET env var to automatically switch from local to S3 storage.
 const STORAGE_BASE = process.env.CREDENTIAL_STORAGE_PATH || path.join(__dirname, '../../credential_storage')
 
+// Credential documents are PDFs or scanned images only.
+const ALLOWED_DOC_EXT = ['.pdf', '.jpg', '.jpeg', '.png']
+const ALLOWED_DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png']
+const DOC_SIZE_LIMIT = 20 * 1024 * 1024
+
+function docFileFilter(req, file, cb) {
+  const ext = path.extname(file.originalname || '').toLowerCase()
+  if (ALLOWED_DOC_EXT.includes(ext) && ALLOWED_DOC_MIME.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error('Only PDF, JPG, and PNG files are allowed'))
+  }
+}
+
+// Random, sanitized storage name — never trust the client-supplied filename
+// in the path (the display name is stored separately as documentName).
+function safeStorageName(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase()
+  const suffix = ALLOWED_DOC_EXT.includes(ext) ? ext : ''
+  return `${Date.now()}_${crypto.randomUUID()}${suffix}`
+}
+
 function getUpload(facilityId, providerId, credType) {
   if (process.env.AWS_S3_BUCKET) {
     // S3 storage — multer-s3 wired up when AWS_S3_BUCKET is set
@@ -27,9 +50,10 @@ function getUpload(facilityId, providerId, credType) {
         s3,
         bucket: process.env.AWS_S3_BUCKET,
         key: (req, file, cb) =>
-          cb(null, `credentials/${facilityId}/${providerId}/${credType}/${Date.now()}_${file.originalname}`),
+          cb(null, `credentials/${facilityId}/${providerId}/${credType}/${safeStorageName(file)}`),
       }),
-      limits: { fileSize: 20 * 1024 * 1024 },
+      limits: { fileSize: DOC_SIZE_LIMIT },
+      fileFilter: docFileFilter,
     })
   }
 
@@ -38,9 +62,10 @@ function getUpload(facilityId, providerId, credType) {
   return multer({
     storage: multer.diskStorage({
       destination: dir,
-      filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`),
+      filename: (req, file, cb) => cb(null, safeStorageName(file)),
     }),
-    limits: { fileSize: 20 * 1024 * 1024 },
+    limits: { fileSize: DOC_SIZE_LIMIT },
+    fileFilter: docFileFilter,
   })
 }
 
