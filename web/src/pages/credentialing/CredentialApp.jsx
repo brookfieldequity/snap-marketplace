@@ -1,5 +1,63 @@
 import React, { useEffect, useState } from 'react'
 import { credentialAPI } from '../../api.js'
+
+function ForcePasswordChange({ user, onDone, onLogout }) {
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (pw.length < 8) return setError('Password must be at least 8 characters.')
+    if (pw !== pw2) return setError('Passwords do not match.')
+    setLoading(true)
+    try {
+      await credentialAPI.changePassword(pw)
+      onDone({ ...user, forcePasswordChange: false })
+    } catch (err) {
+      setError(err.message || 'Failed to update password.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const inp = { width: '100%', padding: '12px 16px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#0F172A', boxSizing: 'border-box', outline: 'none', background: '#fff' }
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 40, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.06em' }}>SNAP</div>
+          <div style={{ fontSize: 15, color: '#64748B', marginTop: 4 }}>Credentialing Dashboard</div>
+        </div>
+        <div style={{ background: '#fff', borderRadius: 20, padding: '36px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 8, padding: '10px 14px', marginBottom: 24, fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+            Welcome, {user.name}. Please set a new password to continue.
+          </div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: '0 0 24px' }}>Set your password</h2>
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>New Password</label>
+              <input type="password" style={inp} value={pw} onChange={e => setPw(e.target.value)} required placeholder="Minimum 8 characters" autoFocus />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>Confirm Password</label>
+              <input type="password" style={inp} value={pw2} onChange={e => setPw2(e.target.value)} required placeholder="Re-enter password" />
+            </div>
+            {error && <div style={{ padding: '10px 14px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+            <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: loading ? '#A5B4FC' : '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {loading ? 'Saving…' : 'Set Password & Continue →'}
+            </button>
+          </form>
+          <div style={{ textAlign: 'center', marginTop: 20 }}>
+            <button onClick={onLogout} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer' }}>Sign out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 import CredentialSidebar from '../../components/CredentialSidebar.jsx'
 import CredentialLoginPage from './CredentialLoginPage.jsx'
 import CredentialDashboard from './CredentialDashboard.jsx'
@@ -71,6 +129,11 @@ export default function CredentialApp({ onBack }) {
   // Not logged in
   if (!token || !user) {
     return <CredentialLoginPage onLogin={handleLogin} onBack={onBack} />
+  }
+
+  // Force password change on first login
+  if (user.forcePasswordChange) {
+    return <ForcePasswordChange user={user} onDone={(updatedUser) => setUser(updatedUser)} onLogout={handleLogout} />
   }
 
   // Determine which page to show, with permission gating

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { credentialAPI } from '../../api.js'
 
-const PERMISSIONS = ['COORDINATOR', 'DEPT_HEAD', 'BILLING']
+const ALL_PERMISSIONS = ['COORDINATOR', 'DEPT_HEAD', 'BILLING']
+const COORDINATOR_ALLOWED = ['DEPT_HEAD', 'BILLING']
 const PERM_LABELS = { COORDINATOR: 'Coordinator', DEPT_HEAD: 'Dept Head', BILLING: 'Billing' }
 
 function Modal({ title, onClose, children }) {
@@ -35,7 +36,8 @@ function inp(extra = {}) {
 // ─── User Management ─────────────────────────────────────────────────────────
 
 function UserForm({ initial, onSave, onCancel }) {
-  const [form, setForm] = useState(initial || { name: '', email: '', password: '', permission: 'BILLING' })
+  const allowedPermissions = initial ? ALL_PERMISSIONS : COORDINATOR_ALLOWED
+  const [form, setForm] = useState(initial || { name: '', email: '', permission: 'BILLING' })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
@@ -45,10 +47,9 @@ function UserForm({ initial, onSave, onCancel }) {
     e.preventDefault()
     setErr('')
     if (!form.name.trim() || !form.email.trim()) return setErr('Name and email are required.')
-    if (!initial && !form.password.trim()) return setErr('Password is required for new users.')
     setSaving(true)
     try {
-      await onSave(form)
+      await onSave({ name: form.name, email: form.email, permission: form.permission })
     } catch (ex) {
       setErr(ex.message || 'Save failed')
     } finally {
@@ -66,26 +67,25 @@ function UserForm({ initial, onSave, onCancel }) {
         <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 5 }}>Email</label>
         <input style={inp()} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="user@facility.com" required />
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 5 }}>
-          {initial ? 'New Password (leave blank to keep current)' : 'Password'}
-        </label>
-        <input style={inp()} type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
-      </div>
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 16 }}>
         <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 5 }}>Permission Level</label>
         <select style={inp()} value={form.permission} onChange={e => set('permission', e.target.value)}>
-          {PERMISSIONS.map(p => <option key={p} value={p}>{PERM_LABELS[p]}</option>)}
+          {allowedPermissions.map(p => <option key={p} value={p}>{PERM_LABELS[p]}</option>)}
         </select>
         <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-          Coordinator: full access · Dept Head: view status · Billing: name + NPI only
+          Dept Head: view status · Billing: name + NPI only
         </div>
       </div>
+      {!initial && (
+        <div style={{ padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 13, color: '#1D4ED8', marginBottom: 16 }}>
+          A welcome email with a temporary password will be sent to the user automatically.
+        </div>
+      )}
       {err && <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 6, color: '#DC2626', fontSize: 13, marginBottom: 14 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 10 }}>
         <button type="button" onClick={onCancel} style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
         <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 8, background: saving ? '#A5B4FC' : '#6366F1', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
-          {saving ? 'Saving…' : (initial ? 'Update User' : 'Create User')}
+          {saving ? 'Saving…' : (initial ? 'Update User' : 'Create & Send Welcome Email')}
         </button>
       </div>
     </form>
@@ -146,14 +146,14 @@ function UsersTab() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#F8FAFC' }}>
               <tr>
-                {['Name', 'Email', 'Permission', 'Actions'].map(h => (
+                {['Name', 'Email', 'Permission', 'Status', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {users.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>No users yet.</td></tr>
+                <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>No users yet.</td></tr>
               ) : users.map((u, i) => (
                 <tr key={u.id} style={{ borderTop: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
                   <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{u.name}</td>
@@ -162,6 +162,12 @@ function UsersTab() {
                     <span style={{ fontSize: 11, fontWeight: 700, color: permColor[u.permission] || '#64748B', background: `${permColor[u.permission] || '#94A3B8'}15`, padding: '3px 8px', borderRadius: 6 }}>
                       {PERM_LABELS[u.permission] || u.permission}
                     </span>
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {u.forcePasswordChange
+                      ? <span style={{ fontSize: 11, fontWeight: 700, color: '#D97706', background: '#FEF3C7', padding: '3px 8px', borderRadius: 6 }}>Pending login</span>
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: '#15803D', background: '#F0FDF4', padding: '3px 8px', borderRadius: 6 }}>Active</span>
+                    }
                   </td>
                   <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>

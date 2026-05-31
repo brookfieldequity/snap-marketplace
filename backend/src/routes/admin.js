@@ -1,6 +1,8 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
+const { sendWelcomeEmail, sendPasswordResetEmail } = require('../services/credentialEmail');
 
 const router = express.Router();
 
@@ -601,5 +603,102 @@ router.get('/staffiq/gary-presentation', adminAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to load presentation data' });
   }
 });
+
+// ── Credential User Management (SNAP admin) ───────────────────────────────────
+
+router.get('/credential-users', adminAuth, async (req, res) => {
+  try {
+    const users = await prisma.credentialUser.findMany({
+      include: { facility: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json(users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      permission: u.permission,
+      facilityId: u.facilityId,
+      facilityName: u.facility.name,
+      isActive: u.isActive,
+      forcePasswordChange: u.forcePasswordChange,
+      lastLoginAt: u.lastLoginAt,
+      createdAt: u.createdAt,
+    })))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/credential-users', adminAuth, async (req, res) => {
+  try {
+    const { name, email, permission, facilityName } = req.body
+    if (!name || !email || !permission || !facilityName) {
+      return res.status(400).json({ error: 'name, email, permission, facilityName required' })
+    }
+    let facility = await prisma.facility.findFirst({ where: { name: { equals: facilityName, mode: 'insensitive' } } })
+    if (!facility) {
+      facility = await prisma.facility.create({ data: { name: facilityName, email: email.toLowerCase() } })
+    }
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const passwordHash = await bcrypt.hash(tempPassword, 10)
+    const user = await prisma.credentialUser.create({
+      data: {
+        facilityId: facility.id,
+        name,
+        email: email.toLowerCase(),
+        passwordHash,
+        permission,
+        forcePasswordChange: true,
+      },
+      select: { id: true, name: true, email: true, permission: true, createdAt: true },
+    })
+    await sendWelcomeEmail(email.toLowerCase(), name, facilityName, tempPassword)
+    res.status(201).json({ ...user, facilityName: facility.name })
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Email already in use' })
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/credential-users/:id/reset-password', adminAuth, async (req, res) => {
+  try {
+    const user = await prisma.credentialUser.findUnique({
+      where: { id: req.params.id },
+      include: { facility: { select: { name: true } } },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const passwordHash = await bcrypt.hash(tempPassword, 10)
+    await prisma.credentialUser.update({
+      where: { id: user.id },
+      data: { passwordHash, forcePasswordChange: true },
+    })
+    await sendWelcomeEmail(user.email, user.name, user.facility.name, tempPassword)
+    res.json({ message: 'Password reset and welcome email sent' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.patch('/credential-users/:id', adminAuth, async (req, res) => {
+  try {
+    const { isActive, permission } = req.body
+    const data = {}
+    if (typeof isActive === 'boolean') data.isActive = isActive
+    if (permission) data.permission = permission
+    const user = await prisma.credentialUser.update({
+      where: { id: req.params.id },
+      data,
+      select: { id: true, name: true, email: true, permission: true, isActive: true },
+    })
+    res.json(user)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 
 module.exports = router;

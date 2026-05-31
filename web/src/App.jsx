@@ -37,6 +37,7 @@ import AdminLeadsPage from './pages/admin/AdminLeadsPage.jsx'
 import AdminWindowsPage from './pages/admin/AdminWindowsPage.jsx'
 import AdminIncentivesPage from './pages/admin/AdminIncentivesPage.jsx'
 import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
+import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 
 export default function App() {
@@ -300,6 +301,7 @@ export default function App() {
           {adminPage === 'admin-windows'     && <AdminWindowsPage />}
           {adminPage === 'admin-incentives'  && <AdminIncentivesPage />}
           {adminPage === 'admin-uploads'     && <AdminUploadsPage />}
+          {adminPage === 'credential-users' && <AdminCredentialUsersPage />}
         </main>
       </div>
     )

@@ -127,11 +127,56 @@ async function sendCredentialReminder(toEmail, providerName, credentialType, mes
   })
 }
 
+// Welcome email for new facility users (temp password)
+async function sendWelcomeEmail(toEmail, name, facilityName, tempPassword) {
+  const loginUrl = `${APP_URL}`
+  await send({
+    to: toEmail,
+    from: FROM,
+    subject: `Welcome to SNAP Credentialing — ${facilityName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+        <h2 style="color:#0F172A">Welcome to SNAP Credentialing</h2>
+        <p>Hi ${name},</p>
+        <p>Your facility credentialing account has been created for <strong>${facilityName}</strong>.</p>
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:20px;margin:24px 0">
+          <p style="margin:0 0 8px"><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+          <p style="margin:0 0 8px"><strong>Email:</strong> ${toEmail}</p>
+          <p style="margin:0"><strong>Temporary Password:</strong> <code style="background:#E2E8F0;padding:2px 8px;border-radius:4px;font-size:15px">${tempPassword}</code></p>
+        </div>
+        <p style="color:#DC2626;font-weight:600">You will be required to set a new password on your first login.</p>
+        <a href="${loginUrl}" style="background:#6366F1;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px;font-weight:600">Sign In to SNAP Credentialing →</a>
+        <p style="color:#94A3B8;font-size:12px;margin-top:24px">If you did not expect this email, please contact admin@snapmedical.com.</p>
+      </div>
+    `,
+  })
+}
+
+// Password reset email
+async function sendPasswordResetEmail(toEmail, name, resetLink) {
+  await send({
+    to: toEmail,
+    from: FROM,
+    subject: '[SNAP Credentialing] Password Reset Request',
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+        <h2 style="color:#0F172A">Reset Your Password</h2>
+        <p>Hi ${name},</p>
+        <p>We received a request to reset your SNAP Credentialing password. Click the button below to set a new password.</p>
+        <a href="${resetLink}" style="background:#6366F1;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;margin:16px 0;font-weight:600">Reset My Password →</a>
+        <p style="color:#64748B;font-size:13px">This link expires in 1 hour. If you did not request a password reset, you can ignore this email.</p>
+      </div>
+    `,
+  })
+}
+
 module.exports = {
   sendExpirationAlertToFacility,
   sendExpirationReminderToProvider,
   sendProviderInvitation,
   sendDocumentRequest,
   sendCredentialReminder,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
   credTypeName,
 }

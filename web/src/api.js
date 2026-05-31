@@ -253,6 +253,12 @@ export const credentialAPI = {
   login: (email, password) =>
     apiFetch(`${BASE}/credentialing/auth/login`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ email, password }) }),
   me: () => apiFetch(`${BASE}/credentialing/auth/me`, { headers: credHeaders() }),
+  forgotPassword: (email) =>
+    apiFetch(`${BASE}/credentialing/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }),
+  resetPassword: (token, password) =>
+    apiFetch(`${BASE}/credentialing/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }) }),
+  changePassword: (newPassword) =>
+    apiFetch(`${BASE}/credentialing/auth/change-password`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ newPassword }) }),
 
   // Users
   getUsers: () => apiFetch(`${BASE}/credentialing/users`, { headers: credHeaders() }),
@@ -422,4 +428,10 @@ export const adminAPI = {
   getCalculatorLeads: () => apiFetch(`${BASE}/admin/calculator-leads`, { headers: adminHeaders() }),
   updateCalculatorLead: (id, followUpStatus) => apiFetch(`${BASE}/admin/calculator-leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
   getGaryPresentation: () => apiFetch(`${BASE}/admin/staffiq/gary-presentation`, { headers: adminHeaders() }),
+
+  // Credential user management
+  getCredentialUsers: () => apiFetch(`${BASE}/admin/credential-users`, { headers: adminHeaders() }),
+  createCredentialUser: (data) => apiFetch(`${BASE}/admin/credential-users`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),
+  resetCredentialUserPassword: (id) => apiFetch(`${BASE}/admin/credential-users/${id}/reset-password`, { method: 'POST', headers: adminHeaders() }),
+  updateCredentialUser: (id, data) => apiFetch(`${BASE}/admin/credential-users/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(data) }),
 }

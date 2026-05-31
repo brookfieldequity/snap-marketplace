@@ -6,7 +6,7 @@ const fs = require('fs')
 const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
 const { sign, signDocToken, verifyDocToken } = require('../middleware/credentialAuth')
-const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, credTypeName } = require('../services/credentialEmail')
+const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sendWelcomeEmail, sendPasswordResetEmail, credTypeName } = require('../services/credentialEmail')
 const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = require('../utils/credentialStatus')
 
 const router = express.Router()
@@ -112,6 +112,7 @@ router.post('/auth/login', async (req, res) => {
       include: { facility: { select: { id: true, name: true } } },
     })
     if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated. Contact admin@snapmedical.com.' })
 
     const valid = await bcrypt.compare(password, user.passwordHash)
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
@@ -128,6 +129,7 @@ router.post('/auth/login', async (req, res) => {
         permission: user.permission,
         facilityId: user.facilityId,
         facilityName: user.facility.name,
+        forcePasswordChange: user.forcePasswordChange,
       },
     })
   } catch (err) {
@@ -145,7 +147,68 @@ router.get('/auth/me', credentialAuth, (req, res) => {
     permission: u.permission,
     facilityId: u.facilityId,
     facilityName: u.facility.name,
+    forcePasswordChange: u.forcePasswordChange,
   })
+})
+
+router.post('/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ error: 'Email required' })
+    const user = await prisma.credentialUser.findUnique({ where: { email: email.toLowerCase() } })
+    // Always return 200 to avoid user enumeration
+    if (!user || !user.isActive) return res.json({ message: 'If that email exists, a reset link has been sent.' })
+    const token = require('crypto').randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+    await prisma.credentialUser.update({
+      where: { id: user.id },
+      data: { resetToken: token, resetTokenExpiresAt: expires },
+    })
+    const APP_URL = process.env.APP_URL || 'https://snap-marketplace.up.railway.app'
+    const resetLink = `${APP_URL}?resetToken=${token}`
+    await sendPasswordResetEmail(user.email, user.name, resetLink)
+    res.json({ message: 'If that email exists, a reset link has been sent.' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body
+    if (!token || !password) return res.status(400).json({ error: 'Token and password required' })
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    const user = await prisma.credentialUser.findFirst({
+      where: { resetToken: token, resetTokenExpiresAt: { gt: new Date() } },
+    })
+    if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
+    const passwordHash = await bcrypt.hash(password, 10)
+    await prisma.credentialUser.update({
+      where: { id: user.id },
+      data: { passwordHash, resetToken: null, resetTokenExpiresAt: null, forcePasswordChange: false },
+    })
+    res.json({ message: 'Password updated successfully' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/auth/change-password', credentialAuth, async (req, res) => {
+  try {
+    const { newPassword } = req.body
+    if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await prisma.credentialUser.update({
+      where: { id: req.credUser.id },
+      data: { passwordHash, forcePasswordChange: false },
+    })
+    res.json({ message: 'Password changed successfully' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
 })
 
 // ── User management (coordinator only) ───────────────────────────────────────
@@ -166,11 +229,13 @@ router.get('/users', credentialAuth, requireCoordinator, async (req, res) => {
 
 router.post('/users', credentialAuth, requireCoordinator, async (req, res) => {
   try {
-    const { name, email, password, permission } = req.body
-    if (!name || !email || !password || !permission) {
-      return res.status(400).json({ error: 'name, email, password, permission required' })
+    const { name, email, permission } = req.body
+    if (!name || !email || !permission) {
+      return res.status(400).json({ error: 'name, email, permission required' })
     }
-    const passwordHash = await bcrypt.hash(password, 10)
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const passwordHash = await bcrypt.hash(tempPassword, 10)
+    const facility = await prisma.facility.findUnique({ where: { id: req.facilityId }, select: { name: true } })
     const user = await prisma.credentialUser.create({
       data: {
         facilityId: req.facilityId,
@@ -178,9 +243,11 @@ router.post('/users', credentialAuth, requireCoordinator, async (req, res) => {
         email: email.toLowerCase(),
         passwordHash,
         permission,
+        forcePasswordChange: true,
       },
-      select: { id: true, name: true, email: true, permission: true, createdAt: true },
+      select: { id: true, name: true, email: true, permission: true, createdAt: true, forcePasswordChange: true },
     })
+    await sendWelcomeEmail(email.toLowerCase(), name, facility?.name || 'your facility', tempPassword)
     res.status(201).json(user)
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Email already in use' })

@@ -725,15 +725,19 @@ model CalculatorLead {
 // ── SNAP Credentialing models ─────────────────────────────────────────────────
 
 model CredentialUser {
-  id           String               @id @default(cuid())
-  facilityId   String
-  facility     Facility             @relation(fields: [facilityId], references: [id])
-  name         String
-  email        String               @unique
-  passwordHash String
-  permission   CredentialPermission @default(COORDINATOR)
-  createdAt    DateTime             @default(now())
-  lastLoginAt  DateTime?
+  id                  String               @id @default(cuid())
+  facilityId          String
+  facility            Facility             @relation(fields: [facilityId], references: [id])
+  name                String
+  email               String               @unique
+  passwordHash        String
+  permission          CredentialPermission @default(COORDINATOR)
+  forcePasswordChange Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime             @default(now())
+  lastLoginAt         DateTime?
 
   verifications CredentialVerification[]
   flags         CredentialFlag[]

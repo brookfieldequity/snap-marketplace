@@ -1,13 +1,14 @@
 import React from 'react'
 
 const NAV_ITEMS = [
-  { key: 'overview',   label: 'Overview',       icon: '📊' },
-  { key: 'providers',  label: 'Providers',      icon: '👩‍⚕️' },
-  { key: 'facilities', label: 'Facilities',     icon: '🏥' },
-  { key: 'shifts',     label: 'Shifts',         icon: '📋' },
-  { key: 'disputes',   label: 'Disputes',       icon: '⚖️' },
-  { key: 'messages',   label: 'Messages',       icon: '💬' },
-  { key: 'analytics',  label: 'Analytics',      icon: '📈' },
+  { key: 'overview',         label: 'Overview',         icon: '📊' },
+  { key: 'providers',        label: 'Providers',        icon: '👩‍⚕️' },
+  { key: 'facilities',       label: 'Facilities',       icon: '🏥' },
+  { key: 'credential-users', label: 'Credential Users', icon: '🔐' },
+  { key: 'shifts',           label: 'Shifts',           icon: '📋' },
+  { key: 'disputes',         label: 'Disputes',         icon: '⚖️' },
+  { key: 'messages',         label: 'Messages',         icon: '💬' },
+  { key: 'analytics',        label: 'Analytics',        icon: '📈' },
 ]
 
 const SNAP_SHIFTS_ITEMS = [
