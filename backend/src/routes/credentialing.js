@@ -233,7 +233,7 @@ router.post('/users', credentialAuth, requireCoordinator, async (req, res) => {
     if (!name || !email || !permission) {
       return res.status(400).json({ error: 'name, email, permission required' })
     }
-    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})(?=.)/g, '$1-')
     const passwordHash = await bcrypt.hash(tempPassword, 10)
     const facility = await prisma.facility.findUnique({ where: { id: req.facilityId }, select: { name: true } })
     const user = await prisma.credentialUser.create({

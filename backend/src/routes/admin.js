@@ -638,9 +638,9 @@ router.post('/credential-users', adminAuth, async (req, res) => {
     }
     let facility = await prisma.facility.findFirst({ where: { name: { equals: facilityName, mode: 'insensitive' } } })
     if (!facility) {
-      facility = await prisma.facility.create({ data: { name: facilityName, email: email.toLowerCase() } })
+      facility = await prisma.facility.create({ data: { name: facilityName } })
     }
-    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})(?=.)/g, '$1-')
     const passwordHash = await bcrypt.hash(tempPassword, 10)
     const user = await prisma.credentialUser.create({
       data: {
@@ -669,7 +669,7 @@ router.post('/credential-users/:id/reset-password', adminAuth, async (req, res) 
       include: { facility: { select: { name: true } } },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
-    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})/, '$1-')
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})(?=.)/g, '$1-')
     const passwordHash = await bcrypt.hash(tempPassword, 10)
     await prisma.credentialUser.update({
       where: { id: user.id },

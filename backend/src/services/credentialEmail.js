@@ -62,7 +62,7 @@ async function sendExpirationAlertToFacility(toEmail, facilityName, items) {
 
 // Expiration reminder to provider
 async function sendExpirationReminderToProvider(toEmail, providerName, credentialType, expirationDate, daysLeft) {
-  const urgency = daysLeft <= 0 ? 'has EXPIRED' : daysLeft <= 30 ? 'expires in ${daysLeft} days' : `expires in ${daysLeft} days`
+  const urgency = daysLeft <= 0 ? 'has EXPIRED' : `expires in ${daysLeft} days`
   await send({
     to: toEmail,
     from: FROM,
