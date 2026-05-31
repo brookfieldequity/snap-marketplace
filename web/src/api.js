@@ -2,7 +2,7 @@
 //   - Railway: set in the web service's Variables tab
 //   - Local dev: set in web/.env.local (points to localhost:3001)
 //   - Netlify: set in site environment variables
-const BASE = import.meta.env.VITE_API_URL || 'https://snap-marketplace-backend.onrender.com/api'
+const BASE = import.meta.env.VITE_API_URL || 'https://snap-marketplace-production-70bf.up.railway.app/api'
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 
