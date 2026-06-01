@@ -123,7 +123,7 @@ Now that you have both URLs, configure the backend to accept requests from the w
 1. Go to the **backend** service → **Variables** tab
 2. Set `CORS_ORIGINS` to your web portal URL (comma-separated if you have multiple):
    ```
-   https://snap-web-xxxx.up.railway.app,https://charming-cassata-46043f.netlify.app
+   https://snap-web-xxxx.up.railway.app
    ```
 3. Railway will automatically redeploy the backend
 
