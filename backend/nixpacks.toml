@@ -5,4 +5,4 @@ cmds = ["npm ci"]
 cmds = ["npx prisma generate"]
 
 [start]
-cmd = "npx prisma migrate deploy && node src/index.js"
+cmd = "npx prisma db push --accept-data-loss && node src/index.js"
