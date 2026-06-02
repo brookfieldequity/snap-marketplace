@@ -29,6 +29,8 @@ const calculatorRoutes = require('./routes/calculator');
 const leadsRoutes = require('./routes/leads');
 const staffiqInputsRoutes = require('./routes/staffiqInputs');
 const credentialingRoutes = require('./routes/credentialing');
+const coverageTemplatesRoutes = require('./routes/coverageTemplates');
+const holidayRoutes = require('./routes/holidays');
 
 const { runSurgePricing, expireOldShifts, openPreferredShifts, notifySurgeExpiring } = require('./jobs/surge');
 const { checkAllVipStatuses } = require('./jobs/vip');
@@ -88,6 +90,10 @@ app.use('/api/calculator', calculatorRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/staffiq-inputs', staffiqInputsRoutes);
 app.use('/api/credentialing', credentialingRoutes);
+// Coverage Templates + holiday overrides (per-facility). See
+// docs/coverage-templates-design.md.
+app.use('/api/coverage-templates', coverageTemplatesRoutes);
+app.use('/api/facilities', holidayRoutes); // mounts /:id/holidays/* under /api/facilities
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 

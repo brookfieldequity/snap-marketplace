@@ -422,4 +422,137 @@ router.get('/intelligence', facilityAuth, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /generate — materialize a month's ScheduleDay rows from a Coverage
+// Template, skipping the practice's effective holidays. See
+// docs/coverage-templates-design.md.
+//
+// body: { year, month (1-12), templateId }
+//
+// Idempotent: re-running on the same (facility, year, month, template)
+// upserts roomsRequired (bumps counts), NEVER deletes rows from prior runs.
+// This is the conservative choice — coordinator's manual edits and prior
+// generations are preserved.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/generate', facilityAuth, async (req, res) => {
+  try {
+    const { year, month, templateId } = req.body || {};
+    const yr = Number(year);
+    const mo = Number(month);
+    if (!Number.isInteger(yr) || yr < 2000 || yr > 2200) {
+      return res.status(400).json({ error: 'year is required and must be valid.' });
+    }
+    if (!Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'month is required and must be 1-12.' });
+    }
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required.' });
+    }
+
+    // Load template scoped to caller's facility.
+    const template = await prisma.coverageTemplate.findUnique({
+      where: { id: templateId },
+      include: { days: true },
+    });
+    if (!template || template.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Template not found.' });
+    }
+
+    // Compute the active holiday set (federal merged with overrides) for
+    // BOTH the year and the year-of-the-last-day-of-month (handles edge
+    // case where month boundary touches Jan 1 — unlikely but cheap).
+    const { getActiveHolidayDates } = require('./holidays');
+    const holidaySet = await getActiveHolidayDates(req.facility.id, yr);
+
+    // Index template days by dayOfWeek for O(1) lookup per date.
+    const daysByDow = {};
+    for (const d of template.days) {
+      if (!daysByDow[d.dayOfWeek]) daysByDow[d.dayOfWeek] = [];
+      daysByDow[d.dayOfWeek].push(d);
+    }
+
+    // Iterate every date in the requested month.
+    const daysInMonth = new Date(yr, mo, 0).getDate(); // day 0 of next month = last day
+    let rowsCreated = 0;
+    let rowsUpdated = 0;
+    let holidaysSkipped = 0;
+    const locationsSeen = new Set();
+
+    // Pre-load existing ScheduleDay rows for the month so we can report
+    // created vs updated counts accurately (ScheduleDay has no createdAt/
+    // updatedAt — we can't distinguish from the upsert response alone).
+    const monthStart = new Date(Date.UTC(yr, mo - 1, 1));
+    const monthEnd = new Date(Date.UTC(yr, mo, 1));
+    const existingRows = await prisma.scheduleDay.findMany({
+      where: {
+        facilityId: req.facility.id,
+        date: { gte: monthStart, lt: monthEnd },
+      },
+      select: { date: true, location: true },
+    });
+    const existingSet = new Set(
+      existingRows.map((r) => `${r.date.toISOString().slice(0, 10)}::${r.location}`)
+    );
+
+    // Run all upserts in a transaction so partial generation doesn't leave
+    // the schedule in a weird half-state.
+    await prisma.$transaction(async (tx) => {
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(Date.UTC(yr, mo - 1, day));
+        const iso = date.toISOString().slice(0, 10);
+
+        if (holidaySet.has(iso)) {
+          holidaysSkipped += 1;
+          continue;
+        }
+
+        const dow = date.getUTCDay();
+        const entries = daysByDow[dow] || [];
+        for (const entry of entries) {
+          if (entry.roomsRequired <= 0) continue; // template explicitly says "no rooms"
+          locationsSeen.add(entry.location);
+          const key = `${iso}::${entry.location}`;
+          const wasExisting = existingSet.has(key);
+          // Upsert ScheduleDay on the existing (facilityId, date, location)
+          // unique constraint. Assignments live on a separate table and
+          // reference ScheduleDay.id, which is preserved by upsert — they
+          // are never affected by re-generation.
+          await tx.scheduleDay.upsert({
+            where: {
+              facilityId_date_location: {
+                facilityId: req.facility.id,
+                date,
+                location: entry.location,
+              },
+            },
+            create: {
+              facilityId: req.facility.id,
+              date,
+              location: entry.location,
+              roomsRequired: entry.roomsRequired,
+            },
+            update: {
+              roomsRequired: entry.roomsRequired,
+            },
+          });
+          wasExisting ? rowsUpdated++ : rowsCreated++;
+        }
+      }
+    });
+
+    res.json({
+      summary: {
+        rowsCreated,
+        rowsUpdated,
+        holidaysSkipped,
+        locations: Array.from(locationsSeen).sort(),
+      },
+      template: { id: template.id, name: template.name },
+    });
+  } catch (err) {
+    console.error('[schedule] generate failed:', err);
+    res.status(500).json({ error: 'Failed to generate schedule.' });
+  }
+});
+
 module.exports = router;

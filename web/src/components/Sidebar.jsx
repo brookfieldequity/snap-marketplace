@@ -7,15 +7,16 @@ const SHARED_ITEMS = [
 ]
 
 const SHIFTS_ITEMS = [
-  { key: 'shifts-dashboard', label: 'Dashboard',           icon: '📊' },
-  { key: 'schedule',         label: 'Schedule Builder',    icon: '📅' },
-  { key: 'roster',           label: 'Internal Roster',     icon: '👥' },
-  { key: 'windows',          label: 'Availability Windows',icon: '🗓' },
-  { key: 'gaps',             label: 'Gaps & Incentives',   icon: '🔴' },
-  { key: 'staffiq',          label: 'StaffIQ Insights',    icon: '🧠' },
-  { key: 'staffiq-inputs',   label: 'StaffIQ Data Input',  icon: '📝' },
-  { key: 'data-upload',      label: 'Data Upload',         icon: '📤' },
-  { key: 'calculator',       label: 'Calculator',          icon: '🧮' },
+  { key: 'shifts-dashboard',  label: 'Dashboard',           icon: '📊' },
+  { key: 'schedule',          label: 'Schedule Builder',    icon: '📅' },
+  { key: 'coverage-templates',label: 'Coverage Templates',  icon: '🧩' },
+  { key: 'roster',            label: 'Internal Roster',     icon: '👥' },
+  { key: 'windows',           label: 'Availability Windows',icon: '🗓' },
+  { key: 'gaps',              label: 'Gaps & Incentives',   icon: '🔴' },
+  { key: 'staffiq',           label: 'StaffIQ Insights',    icon: '🧠' },
+  { key: 'staffiq-inputs',    label: 'StaffIQ Data Input',  icon: '📝' },
+  { key: 'data-upload',       label: 'Data Upload',         icon: '📤' },
+  { key: 'calculator',        label: 'Calculator',          icon: '🧮' },
 ]
 
 const MARKETPLACE_ITEMS = [
