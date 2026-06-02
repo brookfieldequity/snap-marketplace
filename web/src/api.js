@@ -187,6 +187,25 @@ export const facilityAPI = {
   publishSchedule: (year, month) => apiFetch(`${BASE}/schedule/publish`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month }) }),
   exportSchedule: (year, month) => apiFetch(`${BASE}/schedule/export?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   getScheduleSummary: (year, month) => apiFetch(`${BASE}/schedule/summary?year=${year}&month=${month}`, { headers: facilityHeaders() }),
+  // Materialize ScheduleDay rows for a month from a Coverage Template.
+  // Skips holidays automatically (computed server-side). Idempotent.
+  generateScheduleFromTemplate: (year, month, templateId) =>
+    apiFetch(`${BASE}/schedule/generate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, templateId }) }),
+
+  // Coverage Templates (per-practice staffing patterns).
+  // See docs/coverage-templates-design.md.
+  getCoverageTemplates: () => apiFetch(`${BASE}/coverage-templates`, { headers: facilityHeaders() }),
+  getCoverageTemplate: (id) => apiFetch(`${BASE}/coverage-templates/${id}`, { headers: facilityHeaders() }),
+  createCoverageTemplate: (data) => apiFetch(`${BASE}/coverage-templates`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  updateCoverageTemplate: (id, data) => apiFetch(`${BASE}/coverage-templates/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  deleteCoverageTemplate: (id) => apiFetch(`${BASE}/coverage-templates/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
+  duplicateCoverageTemplate: (id, name) => apiFetch(`${BASE}/coverage-templates/${id}/duplicate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ name }) }),
+
+  // Holidays (effective per-facility list = federal merged with overrides).
+  getHolidays: (facilityId, year) => apiFetch(`${BASE}/facilities/${facilityId}/holidays?year=${year}`, { headers: facilityHeaders() }),
+  addHoliday: (facilityId, date, label) => apiFetch(`${BASE}/facilities/${facilityId}/holidays`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ date, label }) }),
+  excludeFederalHoliday: (facilityId, date) => apiFetch(`${BASE}/facilities/${facilityId}/holidays/exclude`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ date }) }),
+  removeHolidayOverride: (facilityId, date) => apiFetch(`${BASE}/facilities/${facilityId}/holidays/${date}`, { method: 'DELETE', headers: facilityHeaders() }),
 
   // Incentive Shifts
   getIncentiveShifts: (status) => apiFetch(`${BASE}/incentive${status ? `?status=${status}` : ''}`, { headers: facilityHeaders() }),

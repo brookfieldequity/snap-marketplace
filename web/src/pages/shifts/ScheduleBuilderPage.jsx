@@ -124,15 +124,24 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [intelligence, setIntelligence] = useState(null)
   const [availabilities, setAvailabilities] = useState([]) // from schedule month response
 
+  // Coverage Templates for the "Generate from template" banner shown when
+  // the current month is empty. Loaded once on mount; generation pulls the
+  // selected template + month and bulk-creates ScheduleDay rows server-side.
+  const [coverageTemplates, setCoverageTemplates] = useState([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [generateMessage, setGenerateMessage] = useState(null) // success or error
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [sched, summ, rosterData, intel] = await Promise.all([
+      const [sched, summ, rosterData, intel, tmplRes] = await Promise.all([
         facilityAPI.getScheduleMonth(year, month),
         facilityAPI.getScheduleSummary(year, month).catch(() => null),
         facilityAPI.getRoster().catch(() => []),
         facilityAPI.getScheduleIntelligence().catch(() => null),
+        facilityAPI.getCoverageTemplates().catch(() => ({ templates: [] })),
       ])
       setScheduleData(sched)
       setSummary(summ)
@@ -142,6 +151,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       // Extract availabilities from schedule month response
       const av = sched?.availabilities || []
       setAvailabilities(av)
+      const templates = tmplRes?.templates || []
+      setCoverageTemplates(templates)
+      // Default the dropdown selection to the practice's default template, or
+      // the first one in the list. Coordinator can always pick a different one.
+      if (!selectedTemplateId && templates.length > 0) {
+        const def = templates.find((t) => t.isDefault) || templates[0]
+        setSelectedTemplateId(def.id)
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -150,6 +167,28 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   }, [year, month])
 
   useEffect(() => { load() }, [load])
+
+  async function handleGenerateFromTemplate() {
+    if (!selectedTemplateId) return
+    setGenerating(true)
+    setGenerateMessage(null)
+    try {
+      const res = await facilityAPI.generateScheduleFromTemplate(year, month, selectedTemplateId)
+      const s = res.summary || {}
+      setGenerateMessage({
+        kind: 'success',
+        text: `Generated ${s.rowsCreated || 0} new schedule rows across ${s.locations?.length || 0} locations${
+          s.rowsUpdated ? `, updated ${s.rowsUpdated} existing` : ''
+        }${s.holidaysSkipped ? `. Skipped ${s.holidaysSkipped} holiday day(s).` : '.'}`,
+      })
+      // Reload to pull the freshly-materialized days into the calendar view.
+      await load()
+    } catch (e) {
+      setGenerateMessage({ kind: 'error', text: e.message || 'Generate failed.' })
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   function prevMonth() { if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1) }
   function nextMonth() { if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1) }
@@ -333,6 +372,68 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* Generate-from-template banner — shown only when this month has no
+          schedule rows yet AND the practice has at least one Coverage
+          Template configured. After generation, the existing click-a-day
+          editor takes over. */}
+      {(() => {
+        const days = scheduleData ? (Array.isArray(scheduleData) ? scheduleData : scheduleData.days || []) : []
+        if (loading || days.length > 0 || coverageTemplates.length === 0) return null
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '14px 18px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 20 }}>🧩</span>
+            <div style={{ flex: 1, fontSize: 13, color: '#064E3B', minWidth: 240 }}>
+              <strong>{monthName} {year} is empty.</strong>
+              <span style={{ color: '#047857' }}> Pre-fill it from one of your Coverage Templates — you can edit any day afterward.</span>
+            </div>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              style={{ padding: '8px 12px', border: '1.5px solid #A7F3D0', borderRadius: 8, fontSize: 13, background: '#fff', color: '#064E3B', minWidth: 200 }}
+              disabled={generating}
+            >
+              {coverageTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleGenerateFromTemplate}
+              disabled={generating || !selectedTemplateId}
+              style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: generating ? 'not-allowed' : 'pointer', opacity: generating ? 0.7 : 1 }}
+            >
+              {generating ? 'Generating…' : `Generate ${monthName}`}
+            </button>
+          </div>
+        )
+      })()}
+      {generateMessage && (
+        <div
+          style={{
+            background: generateMessage.kind === 'success' ? '#ECFDF5' : '#FEF2F2',
+            border: `1px solid ${generateMessage.kind === 'success' ? '#A7F3D0' : '#FECACA'}`,
+            color: generateMessage.kind === 'success' ? '#065F46' : '#991B1B',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            marginBottom: 12,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span>{generateMessage.text}</span>
+          <button
+            onClick={() => setGenerateMessage(null)}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, opacity: 0.6 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Schedule Intelligence banner */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>

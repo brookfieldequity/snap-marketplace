@@ -23,6 +23,7 @@ import StaffIQInsightsPage from './pages/shifts/StaffIQInsightsPage.jsx'
 import StaffIQCalculatorPage from './pages/shifts/StaffIQCalculatorPage.jsx'
 import StaffIQInputsPage from './pages/shifts/StaffIQInputsPage.jsx'
 import DataUploadPage from './pages/shifts/DataUploadPage.jsx'
+import CoverageTemplatesPage from './pages/shifts/CoverageTemplatesPage.jsx'
 
 // Admin pages
 import AdminLoginPage from './pages/AdminLoginPage.jsx'
@@ -234,6 +235,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'schedule' && (
               <ScheduleBuilderPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && facilityPage === 'coverage-templates' && (
+              <CoverageTemplatesPage />
             )}
             {isShiftsMode && facilityPage === 'gaps' && (
               <GapsPage onNavigate={setFacilityPage} />
