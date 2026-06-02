@@ -158,21 +158,21 @@ enum RosterMatchStatus {
 // ── Existing models ───────────────────────────────────────────────────────────
 
 model User {
-  id                  String    @id @default(cuid())
-  email               String    @unique
-  password            String?
-  role                UserRole  @default(PROVIDER)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?
+  role      UserRole @default(PROVIDER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   providerProfile     ProviderProfile?
   facilityMemberships FacilityUser[]
 }
 
 model ProviderProfile {
-  id                    String    @id @default(cuid())
-  userId                String    @unique
-  user                  User      @relation(fields: [userId], references: [id])
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
   firstName             String?
   lastName              String?
@@ -181,67 +181,67 @@ model ProviderProfile {
   yearsExperience       Int?
   city                  String?
   zipCode               String?
-  state                 String    @default("MA")
+  state                 String      @default("MA")
   lat                   Float?
   lng                   Float?
   photoUrl              String?
 
-  pin                   String?
-  npiNumber             String?   @unique
+  pin       String?
+  npiNumber String? @unique
 
   credentialed          Boolean   @default(false)
   maLicenseNumber       String?
   maLicenseExpiry       DateTime?
   maLicenseAcknowledged Boolean   @default(false)
 
-  personalStatement     String?
-  equipmentPreferences  String?
-  caseMixExperience     String?
+  personalStatement    String?
+  equipmentPreferences String?
+  caseMixExperience    String?
 
-  vipPoints             Int       @default(0)
-  vipStatus             Boolean   @default(false)
-  vipEarnedAt           DateTime?
-  lastLoginAt           DateTime?
+  vipPoints   Int       @default(0)
+  vipStatus   Boolean   @default(false)
+  vipEarnedAt DateTime?
+  lastLoginAt DateTime?
 
-  notifPreference       NotifPreference @default(IMMEDIATE)
-  notifSurge            Boolean   @default(true)
-  expoPushToken         String?
+  notifPreference NotifPreference @default(IMMEDIATE)
+  notifSurge      Boolean         @default(true)
+  expoPushToken   String?
 
-  profileCompletePct    Int       @default(0)
+  profileCompletePct Int @default(0)
 
-  applications          ShiftApplication[]
-  bookings              ShiftBooking[]
-  completions           ShiftCompletion[]
-  availability          ProviderAvailability[]
-  ratingsReceived       ProviderRating[]
-  facilityRatings       FacilityRating[]
-  preferredAt           PreferredProvider[]
-  vipLogs               VIPPointsLog[]
-  sentMessages          Message[]
+  applications            ShiftApplication[]
+  bookings                ShiftBooking[]
+  completions             ShiftCompletion[]
+  availability            ProviderAvailability[]
+  ratingsReceived         ProviderRating[]
+  facilityRatings         FacilityRating[]
+  preferredAt             PreferredProvider[]
+  vipLogs                 VIPPointsLog[]
+  sentMessages            Message[]
   availabilitySubmissions AvailabilitySubmission[]
   credentials             ProviderCredential[]
   rosterEntries           FacilityRosterEntry[]
 
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Facility {
-  id              String    @id @default(cuid())
-  name            String
-  facilityType    FacilityType?
-  address         String?
-  zipCode         String?
-  state           String    @default("MA")
-  lat             Float?
-  lng             Float?
-  photoUrls       String[]
-  description     String?
-  caseMix         String?
-  parking         String?
-  whatToBring     String?
-  profileScore    Int       @default(0)
-  snapMode        SnapMode  @default(MARKETPLACE)
+  id           String        @id @default(cuid())
+  name         String
+  facilityType FacilityType?
+  address      String?
+  zipCode      String?
+  state        String        @default("MA")
+  lat          Float?
+  lng          Float?
+  photoUrls    String[]
+  description  String?
+  caseMix      String?
+  parking      String?
+  whatToBring  String?
+  profileScore Int           @default(0)
+  snapMode     SnapMode      @default(MARKETPLACE)
 
   users               FacilityUser[]
   subscription        FacilitySubscription?
@@ -262,19 +262,21 @@ model Facility {
   staffiqScoreHistory StaffIQScoreHistory[]
   credentialUsers     CredentialUser[]
   credRosterEntries   FacilityRosterEntry[]
+  coverageTemplates   CoverageTemplate[]
+  holidays            FacilityHoliday[]
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model FacilityUser {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
   facilityId   String
-  facilityRole String    @default("SCHEDULER")
-  user         User      @relation(fields: [userId], references: [id])
-  facility     Facility  @relation(fields: [facilityId], references: [id])
-  createdAt    DateTime  @default(now())
+  facilityRole String   @default("SCHEDULER")
+  user         User     @relation(fields: [userId], references: [id])
+  facility     Facility @relation(fields: [facilityId], references: [id])
+  createdAt    DateTime @default(now())
 
   @@unique([userId, facilityId])
 }
@@ -292,65 +294,65 @@ model FacilitySubscription {
 }
 
 model Shift {
-  id                  String      @id @default(cuid())
-  facilityId          String
-  facility            Facility    @relation(fields: [facilityId], references: [id])
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id])
 
-  specialty           Specialty
-  date                DateTime
-  startTime           String
-  durationHours       Float
-  baseRate            Float
-  currentRate         Float
-  surgeEnabled        Boolean     @default(false)
-  surgeMultiplier     Float       @default(1.0)
-  featured            Boolean     @default(false)
-  status              ShiftStatus @default(DEPOSIT_PENDING)
+  specialty       Specialty
+  date            DateTime
+  startTime       String
+  durationHours   Float
+  baseRate        Float
+  currentRate     Float
+  surgeEnabled    Boolean     @default(false)
+  surgeMultiplier Float       @default(1.0)
+  featured        Boolean     @default(false)
+  status          ShiftStatus @default(DEPOSIT_PENDING)
 
-  preferredAccessOnly Boolean     @default(false)
+  preferredAccessOnly Boolean   @default(false)
   preferredWindowEnds DateTime?
 
-  expiresAt           DateTime?
-  currentViewers      Int         @default(0)
+  expiresAt      DateTime?
+  currentViewers Int       @default(0)
 
-  estimatedTotal      Float?
-  depositAmount       Float?
-  depositConfirmed    Boolean     @default(false)
-  depositConfirmedAt  DateTime?
+  estimatedTotal     Float?
+  depositAmount      Float?
+  depositConfirmed   Boolean   @default(false)
+  depositConfirmedAt DateTime?
 
-  platformFeePercent  Float       @default(10.0)
-  platformFeeAmount   Float?
-  paymentStatus       PaymentStatus @default(PENDING)
-  paymentSettledAt    DateTime?
+  platformFeePercent Float         @default(10.0)
+  platformFeeAmount  Float?
+  paymentStatus      PaymentStatus @default(PENDING)
+  paymentSettledAt   DateTime?
 
-  applications        ShiftApplication[]
-  booking             ShiftBooking?
-  completions         ShiftCompletion[]
-  messages            Message[]
+  applications ShiftApplication[]
+  booking      ShiftBooking?
+  completions  ShiftCompletion[]
+  messages     Message[]
 
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ShiftApplication {
-  id          String            @id @default(cuid())
-  shiftId     String
-  providerId  String
-  shift       Shift             @relation(fields: [shiftId], references: [id])
-  provider    ProviderProfile   @relation(fields: [providerId], references: [id])
-  status      ApplicationStatus @default(PENDING)
-  appliedAt   DateTime          @default(now())
-  reviewedAt  DateTime?
+  id         String            @id @default(cuid())
+  shiftId    String
+  providerId String
+  shift      Shift             @relation(fields: [shiftId], references: [id])
+  provider   ProviderProfile   @relation(fields: [providerId], references: [id])
+  status     ApplicationStatus @default(PENDING)
+  appliedAt  DateTime          @default(now())
+  reviewedAt DateTime?
 
   @@unique([shiftId, providerId])
 }
 
 model ShiftBooking {
-  id                 String           @id @default(cuid())
-  shiftId            String           @unique
-  providerId         String
-  shift              Shift            @relation(fields: [shiftId], references: [id])
-  provider           ProviderProfile  @relation(fields: [providerId], references: [id])
+  id         String          @id @default(cuid())
+  shiftId    String          @unique
+  providerId String
+  shift      Shift           @relation(fields: [shiftId], references: [id])
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
 
   providerHourlyRate Float?
   shiftDurationHours Float?
@@ -359,149 +361,149 @@ model ShiftBooking {
   platformFeeAmount  Float?
   facilityTier       SubscriptionTier?
 
-  paymentStatus      PaymentStatus    @default(PENDING)
-  confirmedAt        DateTime         @default(now())
-  completedAt        DateTime?
-  cancelledAt        DateTime?
+  paymentStatus PaymentStatus @default(PENDING)
+  confirmedAt   DateTime      @default(now())
+  completedAt   DateTime?
+  cancelledAt   DateTime?
 
-  providerRating     ProviderRating?
-  facilityRating     FacilityRating?
-  completion         ShiftCompletion?
+  providerRating ProviderRating?
+  facilityRating FacilityRating?
+  completion     ShiftCompletion?
 
-  createdAt          DateTime         @default(now())
+  createdAt DateTime @default(now())
 }
 
 model ShiftCompletion {
-  id                  String          @id @default(cuid())
-  shiftId             String
-  bookingId           String          @unique
-  providerId          String
-  shift               Shift           @relation(fields: [shiftId], references: [id])
-  booking             ShiftBooking    @relation(fields: [bookingId], references: [id])
-  provider            ProviderProfile @relation(fields: [providerId], references: [id])
+  id         String          @id @default(cuid())
+  shiftId    String
+  bookingId  String          @unique
+  providerId String
+  shift      Shift           @relation(fields: [shiftId], references: [id])
+  booking    ShiftBooking    @relation(fields: [bookingId], references: [id])
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
 
-  providerConfirmed   Boolean         @default(false)
+  providerConfirmed   Boolean   @default(false)
   providerHours       Float?
   providerNotes       String?
   providerConfirmedAt DateTime?
 
-  facilityConfirmed   Boolean         @default(false)
+  facilityConfirmed   Boolean   @default(false)
   facilityHours       Float?
   facilityNotes       String?
   facilityConfirmedAt DateTime?
 
-  disputed            Boolean         @default(false)
-  disputeResolvedAt   DateTime?
-  disputeNotes        String?
+  disputed          Boolean   @default(false)
+  disputeResolvedAt DateTime?
+  disputeNotes      String?
 
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ProviderAvailability {
-  id          String          @id @default(cuid())
-  providerId  String
-  date        DateTime        @db.Date
-  available   Boolean
-  provider    ProviderProfile @relation(fields: [providerId], references: [id])
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  providerId String
+  date       DateTime        @db.Date
+  available  Boolean
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  createdAt  DateTime        @default(now())
 
   @@unique([providerId, date])
 }
 
 model ProviderRating {
-  id          String          @id @default(cuid())
-  facilityId  String
-  providerId  String
-  bookingId   String          @unique
-  stars       Int
-  notes       String?
-  facility    Facility        @relation(fields: [facilityId], references: [id])
-  provider    ProviderProfile @relation(fields: [providerId], references: [id])
-  booking     ShiftBooking    @relation(fields: [bookingId], references: [id])
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  facilityId String
+  providerId String
+  bookingId  String          @unique
+  stars      Int
+  notes      String?
+  facility   Facility        @relation(fields: [facilityId], references: [id])
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  booking    ShiftBooking    @relation(fields: [bookingId], references: [id])
+  createdAt  DateTime        @default(now())
 }
 
 model FacilityRating {
-  id          String          @id @default(cuid())
-  providerId  String
-  facilityId  String
-  bookingId   String          @unique
-  stars       Int
-  notes       String?
-  provider    ProviderProfile @relation(fields: [providerId], references: [id])
-  facility    Facility        @relation(fields: [facilityId], references: [id])
-  booking     ShiftBooking    @relation(fields: [bookingId], references: [id])
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  providerId String
+  facilityId String
+  bookingId  String          @unique
+  stars      Int
+  notes      String?
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  facility   Facility        @relation(fields: [facilityId], references: [id])
+  booking    ShiftBooking    @relation(fields: [bookingId], references: [id])
+  createdAt  DateTime        @default(now())
 }
 
 model PreferredProvider {
-  id          String          @id @default(cuid())
-  facilityId  String
-  providerId  String
-  facility    Facility        @relation(fields: [facilityId], references: [id])
-  provider    ProviderProfile @relation(fields: [providerId], references: [id])
-  addedAt     DateTime        @default(now())
+  id         String          @id @default(cuid())
+  facilityId String
+  providerId String
+  facility   Facility        @relation(fields: [facilityId], references: [id])
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  addedAt    DateTime        @default(now())
 
   @@unique([facilityId, providerId])
 }
 
 model VIPPointsLog {
-  id          String          @id @default(cuid())
-  providerId  String
-  points      Int
-  reason      VIPReason
-  provider    ProviderProfile @relation(fields: [providerId], references: [id])
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  providerId String
+  points     Int
+  reason     VIPReason
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  createdAt  DateTime        @default(now())
 }
 
 model Message {
-  id          String          @id @default(cuid())
-  shiftId     String
-  facilityId  String
-  senderId    String
-  body        String
-  flagged     Boolean         @default(false)
-  readAt      DateTime?
-  shift       Shift           @relation(fields: [shiftId], references: [id])
-  facility    Facility        @relation(fields: [facilityId], references: [id])
-  sender      ProviderProfile @relation(fields: [senderId], references: [id])
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  shiftId    String
+  facilityId String
+  senderId   String
+  body       String
+  flagged    Boolean         @default(false)
+  readAt     DateTime?
+  shift      Shift           @relation(fields: [shiftId], references: [id])
+  facility   Facility        @relation(fields: [facilityId], references: [id])
+  sender     ProviderProfile @relation(fields: [senderId], references: [id])
+  createdAt  DateTime        @default(now())
 }
 
 // ── SNAP Shifts models ────────────────────────────────────────────────────────
 
 model InternalRosterEntry {
-  id                   String             @id @default(cuid())
-  facilityId           String
-  facility             Facility           @relation(fields: [facilityId], references: [id])
-  providerName         String
-  providerType         Specialty
-  employmentCategory   EmploymentCategory
-  snapAccountEmail     String?
-  phoneNumber          String?
-  licenseNumber        String?
-  licenseExpiration    DateTime?
-  notes                String?
-  snapAccountLinked    Boolean            @default(false)
-  linkedProviderId     String?
-  inviteSentAt         DateTime?
-  createdAt            DateTime           @default(now())
+  id                 String             @id @default(cuid())
+  facilityId         String
+  facility           Facility           @relation(fields: [facilityId], references: [id])
+  providerName       String
+  providerType       Specialty
+  employmentCategory EmploymentCategory
+  snapAccountEmail   String?
+  phoneNumber        String?
+  licenseNumber      String?
+  licenseExpiration  DateTime?
+  notes              String?
+  snapAccountLinked  Boolean            @default(false)
+  linkedProviderId   String?
+  inviteSentAt       DateTime?
+  createdAt          DateTime           @default(now())
 
   // Employment-specific preference fields
-  fteHours             Float?             // FULL_TIME: hours per week
-  annualRate           Float?             // FULL_TIME: annual base salary
-  hourlyRate           Float?             // PER_DIEM / LOCUMS: hourly rate
-  preferredShiftLength String?            // "8hr" | "10hr" | "12hr" | "none"
-  preferredDays        Json?              // String[] e.g. ["Mon","Tue","Wed"]
-  locationRankings     Json?              // Array of location name strings (ranked)
-  maxShiftsPerMonth    Int?               // PER_DIEM: cap on shifts
-  contractStart        DateTime?          // LOCUMS: contract start
-  contractEnd          DateTime?          // LOCUMS: contract end
+  fteHours             Float? // FULL_TIME: hours per week
+  annualRate           Float? // FULL_TIME: annual base salary
+  hourlyRate           Float? // PER_DIEM / LOCUMS: hourly rate
+  preferredShiftLength String? // "8hr" | "10hr" | "12hr" | "none"
+  preferredDays        Json? // String[] e.g. ["Mon","Tue","Wed"]
+  locationRankings     Json? // Array of location name strings (ranked)
+  maxShiftsPerMonth    Int? // PER_DIEM: cap on shifts
+  contractStart        DateTime? // LOCUMS: contract start
+  contractEnd          DateTime? // LOCUMS: contract end
 
-  scheduleAssignments  ScheduleAssignment[]
-  incentiveResponses   InternalIncentiveShiftResponse[]
-  scheduleFeedback     ScheduleFeedback[]
+  scheduleAssignments ScheduleAssignment[]
+  incentiveResponses  InternalIncentiveShiftResponse[]
+  scheduleFeedback    ScheduleFeedback[]
 }
 
 model ScheduleFeedback {
@@ -520,16 +522,16 @@ model ScheduleFeedback {
 }
 
 model AvailabilityWindow {
-  id          String                   @id @default(cuid())
-  facilityId  String
-  facility    Facility                 @relation(fields: [facilityId], references: [id])
-  windowName  String
-  openDate    DateTime
-  closeDate   DateTime
-  message     String?
-  notifyAll   Boolean                  @default(true)
-  status      AvailabilityWindowStatus @default(DRAFT)
-  createdAt   DateTime                 @default(now())
+  id         String                   @id @default(cuid())
+  facilityId String
+  facility   Facility                 @relation(fields: [facilityId], references: [id])
+  windowName String
+  openDate   DateTime
+  closeDate  DateTime
+  message    String?
+  notifyAll  Boolean                  @default(true)
+  status     AvailabilityWindowStatus @default(DRAFT)
+  createdAt  DateTime                 @default(now())
 
   submissions AvailabilitySubmission[]
 }
@@ -555,7 +557,7 @@ model ScheduleDay {
   publishedAt   DateTime?
   facility      Facility  @relation(fields: [facilityId], references: [id])
 
-  assignments   ScheduleAssignment[]
+  assignments ScheduleAssignment[]
 
   @@unique([facilityId, date, location])
 }
@@ -584,13 +586,13 @@ model SchedulingUpload {
   status         String    @default("PROCESSED")
   uploadedAt     DateTime  @default(now())
 
-  records        SchedulingRecord[]
+  records SchedulingRecord[]
 }
 
 model SchedulingRecord {
-  id               String           @id @default(cuid())
+  id               String            @id @default(cuid())
   facilityId       String
-  facility         Facility         @relation(fields: [facilityId], references: [id])
+  facility         Facility          @relation(fields: [facilityId], references: [id])
   providerName     String?
   providerType     String?
   shiftDate        DateTime?
@@ -602,7 +604,7 @@ model SchedulingRecord {
   rate             Float?
   sourceUploadId   String?
   sourceUpload     SchedulingUpload? @relation(fields: [sourceUploadId], references: [id])
-  createdAt        DateTime         @default(now())
+  createdAt        DateTime          @default(now())
 }
 
 model StaffIQInsight {
@@ -634,7 +636,7 @@ model InternalIncentiveShift {
   marketplaceShiftId     String?
   createdAt              DateTime             @default(now())
 
-  responses              InternalIncentiveShiftResponse[]
+  responses InternalIncentiveShiftResponse[]
 }
 
 model InternalIncentiveShiftResponse {
@@ -771,7 +773,7 @@ model FacilityRosterEntry {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  credentials        ProviderCredential[]
+  credentials ProviderCredential[]
 
   @@unique([facilityId, npiNumber])
 }
@@ -860,4 +862,60 @@ model CredentialReminder {
   reminderType   String
   sentAt         DateTime           @default(now())
   expirationDate DateTime?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SNAP Shifts — Coverage Templates
+//
+// Per-practice templates capturing standard staffing patterns (locations ×
+// day-of-week × room count). Used to bulk-materialize ScheduleDay rows when
+// a coordinator generates a new month's schedule. See
+// docs/coverage-templates-design.md for the full design (incl. v1.1 plans
+// for per-site coverage rules that feed StaffIQ).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CoverageTemplate {
+  id         String                @id @default(cuid())
+  facilityId String
+  facility   Facility              @relation(fields: [facilityId], references: [id])
+  name       String // e.g. "Standard Week", "Summer Schedule"
+  isDefault  Boolean               @default(false) // practice's default pick
+  days       CoverageTemplateDay[]
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  @@unique([facilityId, name])
+  @@index([facilityId, isDefault])
+}
+
+model CoverageTemplateDay {
+  id            String           @id @default(cuid())
+  templateId    String
+  template      CoverageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  location      String // free text — matches ScheduleDay.location string semantics
+  dayOfWeek     Int // 0=Sunday … 6=Saturday
+  roomsRequired Int              @default(1)
+
+  // v1.1 reserved (not used in v1; do not remove without checking design doc):
+  // roleMix Json?
+  // notes   String?
+
+  @@unique([templateId, location, dayOfWeek])
+}
+
+enum HolidaySource {
+  PRACTICE_ADDED // practice-defined holiday in addition to federal calendar
+  PRACTICE_EXCLUDED // practice opted out of a normally-federal holiday
+}
+
+model FacilityHoliday {
+  id         String        @id @default(cuid())
+  facilityId String
+  facility   Facility      @relation(fields: [facilityId], references: [id])
+  date       DateTime      @db.Date
+  label      String
+  source     HolidaySource
+
+  @@unique([facilityId, date])
+  @@index([facilityId, date])
 }
