@@ -65,8 +65,11 @@ export default function AvailabilityScreen() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
-  // availability: { 'YYYY-MM-DD': true | false }
+  // availability: { 'YYYY-MM-DD': true | false }  (absent key = unmarked/neutral)
   const [availability, setAvailability] = useState({});
+  // Dates the user cycled back to neutral that previously had a server value —
+  // sent to the backend on save so it can delete those rows.
+  const [clearedDates, setClearedDates] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -97,10 +100,12 @@ export default function AvailabilityScreen() {
         map[a.date] = a.available;
       });
       setAvailability(map);
+      setClearedDates(new Set());
       setDirty(false);
     } catch {
       // Use empty availability if API unavailable
       setAvailability({});
+      setClearedDates(new Set());
       setDirty(false);
     } finally {
       setLoading(false);
@@ -190,13 +195,35 @@ export default function AvailabilityScreen() {
     }
 
     if (isPast(year, month, day)) return; // don't allow editing past days
-    setAvailability((prev) => {
-      const current = prev[key]; // undefined = unmarked, true = available, false = unavailable
-      let next;
-      if (current === undefined || current === false) next = true;  // cycle: unmarked/unavail → avail
-      else next = false; // avail → unavail
-      return { ...prev, [key]: next };
-    });
+
+    const current = availability[key]; // undefined = unmarked, true = available, false = unavailable
+    if (current === undefined) {
+      // unmarked → available
+      setAvailability((prev) => ({ ...prev, [key]: true }));
+      // If this date was queued for backend clearing, cancel that — it's set again now.
+      if (clearedDates.has(key)) {
+        setClearedDates((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    } else if (current === true) {
+      // available → unavailable
+      setAvailability((prev) => ({ ...prev, [key]: false }));
+    } else {
+      // unavailable → unmarked (neutral) — remove from state and queue for backend deletion
+      setAvailability((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setClearedDates((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+    }
     setDirty(true);
   };
 
@@ -204,7 +231,9 @@ export default function AvailabilityScreen() {
     setSaving(true);
     try {
       const payload = Object.entries(availability).map(([date, available]) => ({ date, available }));
-      await providerAPI.setAvailability({ dates: payload });
+      const clearList = Array.from(clearedDates);
+      await providerAPI.setAvailability({ dates: payload, clearDates: clearList });
+      setClearedDates(new Set());
       setDirty(false);
       Alert.alert('Saved', 'Your availability has been updated.');
     } catch (err) {

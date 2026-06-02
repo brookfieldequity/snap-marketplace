@@ -6,6 +6,14 @@ const router = express.Router();
 
 const VIP_THRESHOLD = 100;
 
+const VIP_REASON_LABELS = {
+  DAILY_LOGIN: 'Daily login',
+  CALENDAR_UPDATED: 'Updated availability',
+  SHIFT_ACCEPTED: 'Accepted a shift',
+  SHIFT_COMPLETED: 'Completed a shift',
+  HIGH_RATING: 'Received a 4★+ rating',
+};
+
 function calcProfilePct(p) {
   const fields = [p.firstName, p.lastName, p.specialty, p.yearsExperience, p.city, p.photoUrl, p.maLicenseNumber, p.personalStatement];
   return Math.round((fields.filter(Boolean).length / fields.length) * 100);
@@ -87,7 +95,9 @@ router.get('/me/availability', auth, async (req, res) => {
 
 router.post('/me/availability', auth, async (req, res) => {
   try {
-    const { dates } = req.body; // [{ date: "2026-06-01", available: true }, ...]
+    const { dates = [], clearDates = [] } = req.body;
+    // dates:       [{ date: "2026-06-01", available: true }, ...]
+    // clearDates:  ["2026-06-02", ...]  — dates the provider cycled back to neutral
     const profile = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
 
     const ops = dates.map(({ date, available }) =>
@@ -97,6 +107,16 @@ router.post('/me/availability', auth, async (req, res) => {
         update: { available },
       })
     );
+    if (clearDates.length > 0) {
+      ops.push(
+        prisma.providerAvailability.deleteMany({
+          where: {
+            providerId: profile.id,
+            date: { in: clearDates.map((d) => new Date(d)) },
+          },
+        })
+      );
+    }
     const results = await prisma.$transaction(ops);
 
     // VIP point for keeping calendar updated
@@ -167,12 +187,25 @@ router.get('/me/vip', auth, async (req, res) => {
   try {
     const profile = await prisma.providerProfile.findUnique({
       where: { userId: req.user.userId },
-      select: { vipPoints: true, vipStatus: true, vipEarnedAt: true },
+      select: { id: true, vipPoints: true, vipStatus: true, vipEarnedAt: true },
+    });
+    const logEntries = await prisma.vIPPointsLog.findMany({
+      where: { providerId: profile.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
     res.json({
-      ...profile,
+      vipPoints: profile.vipPoints,
+      vipStatus: profile.vipStatus,
+      vipEarnedAt: profile.vipEarnedAt,
       threshold: VIP_THRESHOLD,
       pointsToVip: Math.max(0, VIP_THRESHOLD - profile.vipPoints),
+      vipLog: logEntries.map((entry) => ({
+        reason: entry.reason,
+        description: VIP_REASON_LABELS[entry.reason] || entry.reason,
+        points: entry.points,
+        date: entry.createdAt,
+      })),
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load VIP status' });

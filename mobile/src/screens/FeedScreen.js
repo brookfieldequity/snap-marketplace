@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { shiftAPI } from '../api/client';
+import FilterSheet from '../components/FilterSheet';
+import ShiftMap from '../components/ShiftMap';
 
 const COLORS = {
   primary: '#6366F1',
@@ -25,13 +27,24 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+// "Location" sort is implicit when the user opens the Map view, so it's been
+// removed from the sort chips and replaced by the List/Map header toggle.
 const SORT_OPTIONS = [
   { key: 'featured', label: 'Featured' },
-  { key: 'location', label: 'Location' },
   { key: 'newest', label: 'Newest' },
   { key: 'pay', label: 'Pay Rate' },
   { key: 'surge', label: 'Surge' },
 ];
+
+function countActiveFilters(f) {
+  let n = 0;
+  if (f.minRate != null) n++;
+  if (f.maxRate != null) n++;
+  if (f.dateRange) n++;
+  if (f.shiftType) n++;
+  if (f.facilityType?.length) n++;
+  return n;
+}
 
 function normalizeShift(s) {
   const rawStart = s.startTime;
@@ -183,11 +196,27 @@ export default function FeedScreen({ navigation }) {
   const [activeSort, setActiveSort] = useState('featured');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [filters, setFilters] = useState({});
 
   const fetchShifts = useCallback(
-    async ({ sort = activeSort, pageNum = 1, append = false } = {}) => {
+    async ({ sort = activeSort, pageNum = 1, append = false, currentFilters = filters, mode = viewMode } = {}) => {
       try {
-        const res = await shiftAPI.getFeed({ sort, page: pageNum, limit: 15 });
+        const params = {
+          sort: mode === 'map' ? 'location' : sort,
+          page: pageNum,
+          // Map view loads everything that fits (no pagination on a map).
+          limit: mode === 'map' ? 200 : 15,
+          minRate: currentFilters.minRate,
+          maxRate: currentFilters.maxRate,
+          dateRange: currentFilters.dateRange,
+          shiftType: currentFilters.shiftType,
+          facilityType: currentFilters.facilityType?.length
+            ? currentFilters.facilityType.join(',')
+            : undefined,
+        };
+        const res = await shiftAPI.getFeed(params);
         const raw = res.data?.shifts || res.data || [];
         const data = raw.map(normalizeShift);
         const total = res.data?.total || data.length;
@@ -197,7 +226,7 @@ export default function FeedScreen({ navigation }) {
         } else {
           setShifts(data);
         }
-        setHasMore(pageNum * 15 < total);
+        setHasMore(mode === 'list' && pageNum * 15 < total);
         setPage(pageNum);
       } catch (err) {
         if (!append) {
@@ -206,24 +235,25 @@ export default function FeedScreen({ navigation }) {
         }
       }
     },
-    [activeSort]
+    [activeSort, filters, viewMode]
   );
 
   useEffect(() => {
     setLoading(true);
-    fetchShifts({ sort: activeSort, pageNum: 1 }).finally(() => setLoading(false));
-  }, [activeSort]);
+    fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode })
+      .finally(() => setLoading(false));
+  }, [activeSort, filters, viewMode]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchShifts({ sort: activeSort, pageNum: 1 });
+    await fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode });
     setRefreshing(false);
   };
 
   const handleLoadMore = async () => {
-    if (loadingMore || !hasMore) return;
+    if (viewMode !== 'list' || loadingMore || !hasMore) return;
     setLoadingMore(true);
-    await fetchShifts({ sort: activeSort, pageNum: page + 1, append: true });
+    await fetchShifts({ sort: activeSort, pageNum: page + 1, append: true, currentFilters: filters, mode: 'list' });
     setLoadingMore(false);
   };
 
@@ -232,6 +262,14 @@ export default function FeedScreen({ navigation }) {
     setPage(1);
     setHasMore(true);
   };
+
+  const handleApplyFilters = (next) => {
+    setFilters(next);
+    setPage(1);
+    setHasMore(true);
+  };
+
+  const activeFilterCount = countActiveFilters(filters);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -246,36 +284,64 @@ export default function FeedScreen({ navigation }) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Available Shifts</Text>
           <Text style={styles.headerSub}>Massachusetts · Anesthesia</Text>
         </View>
-        <View style={styles.headerLogoBox}>
-          <Text style={styles.headerLogoText}>S</Text>
+
+        {/* List / Map toggle */}
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, viewMode === 'list' && styles.viewToggleBtnActive]}
+            onPress={() => setViewMode('list')}
+          >
+            <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>
+              List
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, viewMode === 'map' && styles.viewToggleBtnActive]}
+            onPress={() => setViewMode('map')}
+          >
+            <Text style={[styles.viewToggleText, viewMode === 'map' && styles.viewToggleTextActive]}>
+              Map
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Sort bar */}
-      <View style={styles.sortBarWrapper}>
-        <FlatList
-          horizontal
-          data={SORT_OPTIONS}
-          keyExtractor={(item) => item.key}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortBar}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.sortChip, activeSort === item.key && styles.sortChipActive]}
-              onPress={() => handleSortChange(item.key)}
-            >
-              <Text
-                style={[styles.sortChipText, activeSort === item.key && styles.sortChipTextActive]}
+      {/* Sort bar + filter button */}
+      <View style={styles.sortRow}>
+        <View style={styles.sortBarWrapper}>
+          <FlatList
+            horizontal
+            data={SORT_OPTIONS}
+            keyExtractor={(item) => item.key}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.sortBar}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.sortChip, activeSort === item.key && styles.sortChipActive]}
+                onPress={() => handleSortChange(item.key)}
+                disabled={viewMode === 'map'}
               >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
+                <Text
+                  style={[styles.sortChipText, activeSort === item.key && styles.sortChipTextActive]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+        <TouchableOpacity
+          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+          onPress={() => setFilterVisible(true)}
+        >
+          <Text style={[styles.filterButtonText, activeFilterCount > 0 && styles.filterButtonTextActive]}>
+            Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Feed */}
@@ -284,6 +350,11 @@ export default function FeedScreen({ navigation }) {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading shifts...</Text>
         </View>
+      ) : viewMode === 'map' ? (
+        <ShiftMap
+          shifts={shifts}
+          onShiftPress={(s) => navigation.navigate('ShiftDetail', { shiftId: s._id || s.id, shift: s })}
+        />
       ) : (
         <FlatList
           data={shifts}
@@ -316,6 +387,13 @@ export default function FeedScreen({ navigation }) {
           }
         />
       )}
+
+      <FilterSheet
+        visible={filterVisible}
+        initial={filters}
+        onApply={handleApplyFilters}
+        onClose={() => setFilterVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -409,10 +487,64 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.white,
   },
-  sortBarWrapper: {
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+  },
+  viewToggleBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  viewToggleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  viewToggleTextActive: {
+    color: COLORS.textDark,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    paddingRight: 12,
+  },
+  filterButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    marginLeft: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  filterButtonTextActive: {
+    color: COLORS.white,
+  },
+  sortBarWrapper: {
+    flex: 1,
+    backgroundColor: COLORS.white,
   },
   sortBar: {
     paddingHorizontal: 16,

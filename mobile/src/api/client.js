@@ -78,9 +78,17 @@ export const authAPI = {
 export const shiftAPI = {
   /**
    * Get the shift feed with optional filters/sort.
-   * @param {object} params - { page, limit, sort, specialty, lat, lng }
+   * @param {object} params - { page, limit, sort, specialty, minRate, maxRate,
+   *                            dateRange ('NEXT_7'|'THIS_MONTH'|'NEXT_MONTH'|'ALL'),
+   *                            facilityType (CSV of FacilityType enum),
+   *                            shiftType ('DAY'|'NIGHT') }
    */
   getFeed: (params = {}) => api.get('/shifts/feed', { params }),
+
+  /**
+   * Get the FacilityType options + counts for the filter UI.
+   */
+  getFacilityTypes: () => api.get('/facilities/types'),
 
   /**
    * Get a single shift by ID.

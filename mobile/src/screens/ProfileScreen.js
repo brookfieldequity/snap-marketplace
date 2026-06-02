@@ -10,6 +10,8 @@ import {
   TextInput,
   Modal,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,6 +33,88 @@ const COLORS = {
 };
 
 const VIP_THRESHOLD = 100;
+
+// Ways providers earn VIP points. Keep in sync with backend VIPReason enum + grants.
+const VIP_EARN_RULES = [
+  { label: 'Complete a shift', points: 10, icon: '✅' },
+  { label: 'Accept a shift', points: 5, icon: '📅' },
+  { label: 'Receive a 4★+ rating from the facility', points: 5, icon: '⭐' },
+  { label: 'Daily login', points: 1, icon: '🔓' },
+  { label: 'Update your availability', points: 1, icon: '🗓️' },
+];
+
+function formatLogDate(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatLicenseExpiry(value) {
+  if (!value) return '—';
+  // Accept ISO date strings, Date objects, and pre-formatted strings ("06/2026").
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function VipDetailModal({ visible, points, threshold, isVip, log, onClose }) {
+  const sortedLog = [...(log || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const pointsToGo = Math.max(0, threshold - points);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>VIP Status</Text>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.vipSummaryBox}>
+              <Text style={styles.vipSummaryPoints}>{points}</Text>
+              <Text style={styles.vipSummaryLabel}>
+                {isVip ? 'VIP — early shift access unlocked' : `${pointsToGo} pts to VIP`}
+              </Text>
+              <ProgressBar value={points} max={threshold} color={COLORS.vip} />
+            </View>
+
+            <Text style={styles.modalSectionTitle}>Ways to Earn More</Text>
+            <View style={styles.earnList}>
+              {VIP_EARN_RULES.map((rule) => (
+                <View key={rule.label} style={styles.earnRow}>
+                  <Text style={styles.earnIcon}>{rule.icon}</Text>
+                  <Text style={styles.earnLabel}>{rule.label}</Text>
+                  <Text style={styles.earnPoints}>+{rule.points}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={styles.modalSectionTitle}>Points History</Text>
+            {sortedLog.length === 0 ? (
+              <Text style={styles.emptyLogText}>
+                No points yet. Start by accepting a shift or marking availability.
+              </Text>
+            ) : (
+              <View style={styles.historyList}>
+                {sortedLog.map((entry, idx) => (
+                  <View key={idx} style={styles.historyRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.historyDesc}>{entry.description}</Text>
+                      <Text style={styles.historyDate}>{formatLogDate(entry.date)}</Text>
+                    </View>
+                    <Text style={styles.historyPoints}>+{entry.points}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <Text style={styles.cancelButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 function ProgressBar({ value, max, color }) {
   const pct = Math.min((value / max) * 100, 100);
@@ -69,8 +153,9 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await providerAPI.updateMe({ firstName, lastName, city, personalStatement });
-      onSave({ firstName, lastName, city, personalStatement });
+      const res = await providerAPI.updateMe({ firstName, lastName, city, personalStatement });
+      // Merge the fresh server response (includes profileCompletePct) with the local edits as fallback.
+      onSave({ firstName, lastName, city, personalStatement, ...(res?.data || {}) });
       onClose();
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || 'Could not save changes.');
@@ -81,12 +166,19 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.modalSheet}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>Edit Profile</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 12 }}
+          >
             <View style={styles.rowFields}>
               <View style={[styles.fieldGroup, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.fieldLabel}>First name</Text>
@@ -150,7 +242,7 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -165,7 +257,7 @@ const PLACEHOLDER_PROVIDER = {
   maLicenseNumber: 'RN-102345',
   maLicenseExpiry: '06/2026',
   personalStatement: 'Experienced CRNA with 8 years in high-volume ORs. Specializing in pediatric and cardiac cases. Reliable, team-oriented, and committed to patient safety.',
-  profileCompletion: 85,
+  profileCompletePct: 85,
   vipStatus: true,
   vipPoints: 72,
   vipLog: [
@@ -182,6 +274,7 @@ export default function ProfileScreen({ navigation }) {
   const [vipData, setVipData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [vipModalVisible, setVipModalVisible] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
 
   useEffect(() => {
@@ -277,7 +370,7 @@ export default function ProfileScreen({ navigation }) {
   const displayVip = vipData || provider;
   const points = displayVip?.vipPoints || 0;
   const isVip = displayVip?.vipStatus || false;
-  const completion = provider?.profileCompletion || 0;
+  const completion = provider?.profileCompletePct ?? 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -353,7 +446,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Massachusetts License</Text>
           <InfoRow label="License / Cert #" value={provider?.maLicenseNumber} />
-          <InfoRow label="Expiry" value={provider?.maLicenseExpiry} />
+          <InfoRow label="Expiry" value={formatLicenseExpiry(provider?.maLicenseExpiry)} />
           <View style={styles.verifiedRow}>
             <View style={styles.verifiedDot} />
             <Text style={styles.verifiedText}>MA License Acknowledged</Text>
@@ -369,9 +462,13 @@ export default function ProfileScreen({ navigation }) {
         ) : null}
 
         {/* VIP section */}
-        <View style={[styles.sectionCard, styles.vipCard]}>
+        <TouchableOpacity
+          style={[styles.sectionCard, styles.vipCard]}
+          onPress={() => setVipModalVisible(true)}
+          activeOpacity={0.85}
+        >
           <View style={styles.vipHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.vipTitle}>★ VIP Status</Text>
               <Text style={styles.vipSubtitle}>
                 {isVip ? 'You have VIP status — enjoy early shift access!' : `Earn ${VIP_THRESHOLD - points} more points to unlock VIP`}
@@ -388,7 +485,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.vipProgressLabel}>{points} / {VIP_THRESHOLD} pts to VIP</Text>
           </View>
 
-          {/* VIP point log */}
+          {/* VIP point log preview */}
           {(displayVip?.vipLog || []).length > 0 && (
             <View style={styles.vipLog}>
               <Text style={styles.vipLogTitle}>Recent Points</Text>
@@ -400,7 +497,9 @@ export default function ProfileScreen({ navigation }) {
               ))}
             </View>
           )}
-        </View>
+
+          <Text style={styles.vipTapHint}>Tap to see how to earn more →</Text>
+        </TouchableOpacity>
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -410,6 +509,15 @@ export default function ProfileScreen({ navigation }) {
         provider={provider}
         onClose={() => setEditModalVisible(false)}
         onSave={handleProfileSaved}
+      />
+
+      <VipDetailModal
+        visible={vipModalVisible}
+        points={points}
+        threshold={VIP_THRESHOLD}
+        isVip={isVip}
+        log={displayVip?.vipLog || []}
+        onClose={() => setVipModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -733,6 +841,120 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   vipLogPoints: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.vip,
+    marginLeft: 8,
+  },
+  vipTapHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.vip,
+    marginTop: 12,
+    textAlign: 'right',
+  },
+  // VIP detail modal
+  vipSummaryBox: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.vip + '12',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.vip + '30',
+    marginBottom: 20,
+  },
+  vipSummaryPoints: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: COLORS.vip,
+    letterSpacing: -1,
+    marginBottom: 4,
+  },
+  vipSummaryLabel: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  modalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  earnList: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingVertical: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  earnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  earnIcon: {
+    fontSize: 18,
+    marginRight: 12,
+    width: 22,
+    textAlign: 'center',
+  },
+  earnLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textDark,
+    fontWeight: '500',
+  },
+  earnPoints: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.vip,
+    marginLeft: 8,
+  },
+  emptyLogText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  historyList: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingVertical: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  historyDesc: {
+    fontSize: 13,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  historyDate: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  historyPoints: {
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.vip,

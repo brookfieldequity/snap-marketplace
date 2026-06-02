@@ -6,6 +6,35 @@ const router = express.Router();
 
 const AGENCY_RATES = { ANESTHESIOLOGIST: 425, CRNA: 300, ANESTHESIA_ASSISTANT: 250 };
 
+const FACILITY_TYPE_LABELS = {
+  HOSPITAL: 'Hospital',
+  SURGERY_CENTER: 'Surgery Center',
+  OUTPATIENT: 'Outpatient Clinic',
+  DENTAL: 'Dental Office',
+  OTHER: 'Other',
+};
+
+// ── List facility types (for filter UI) ───────────────────────────────────────
+// Public — no auth needed; this is enum metadata + live counts.
+router.get('/types', async (req, res) => {
+  try {
+    const grouped = await prisma.facility.groupBy({
+      by: ['facilityType'],
+      _count: { _all: true },
+    });
+    const counts = new Map(grouped.map((g) => [g.facilityType, g._count._all]));
+    const types = Object.keys(FACILITY_TYPE_LABELS).map((value) => ({
+      value,
+      label: FACILITY_TYPE_LABELS[value],
+      count: counts.get(value) || 0,
+    }));
+    res.json({ types });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load facility types' });
+  }
+});
+
 // ── Get my facility profile ───────────────────────────────────────────────────
 
 router.get('/me', facilityAuth, async (req, res) => {

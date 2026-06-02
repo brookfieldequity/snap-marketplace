@@ -56,6 +56,14 @@ enum VIPReason {
   HIGH_RATING
 }
 
+enum FacilityType {
+  HOSPITAL
+  SURGERY_CENTER
+  OUTPATIENT
+  DENTAL
+  OTHER
+}
+
 enum PaymentStatus {
   PENDING
   PROCESSING
@@ -221,7 +229,7 @@ model ProviderProfile {
 model Facility {
   id              String    @id @default(cuid())
   name            String
-  facilityType    String?
+  facilityType    FacilityType?
   address         String?
   zipCode         String?
   state           String    @default("MA")

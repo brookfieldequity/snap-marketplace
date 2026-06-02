@@ -22,7 +22,17 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 
 router.get('/feed', auth, async (req, res) => {
   try {
-    const { sort = 'location', page = 1, limit = 20, specialty } = req.query;
+    const {
+      sort = 'location',
+      page = 1,
+      limit = 20,
+      specialty,
+      minRate,
+      maxRate,
+      dateRange,            // NEXT_7 | THIS_MONTH | NEXT_MONTH | ALL
+      facilityType,         // CSV: HOSPITAL,SURGERY_CENTER,...
+      shiftType,            // DAY | NIGHT
+    } = req.query;
     const provider = await prisma.providerProfile.findUnique({
       where: { userId: req.user.userId },
     });
@@ -32,10 +42,45 @@ router.get('/feed', auth, async (req, res) => {
       ...(specialty ? { specialty } : {}),
     };
 
+    if (minRate || maxRate) {
+      where.currentRate = {};
+      if (minRate) where.currentRate.gte = Number(minRate);
+      if (maxRate) where.currentRate.lte = Number(maxRate);
+    }
+
+    if (dateRange && dateRange !== 'ALL') {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let start, end;
+      if (dateRange === 'NEXT_7') {
+        start = startOfToday;
+        end = new Date(startOfToday.getTime() + 7 * 86400000);
+      } else if (dateRange === 'THIS_MONTH') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      } else if (dateRange === 'NEXT_MONTH') {
+        start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+      }
+      if (start && end) where.date = { gte: start, lt: end };
+    }
+
+    if (facilityType) {
+      const types = String(facilityType).split(',').map((t) => t.trim()).filter(Boolean);
+      if (types.length > 0) {
+        where.facility = { facilityType: { in: types } };
+      }
+    }
+
     const shifts = await prisma.shift.findMany({
       where,
       include: {
-        facility: { select: { id: true, name: true, photoUrls: true, zipCode: true, lat: true, lng: true } },
+        facility: {
+          select: {
+            id: true, name: true, photoUrls: true, zipCode: true,
+            lat: true, lng: true, address: true, facilityType: true,
+          },
+        },
         booking: { select: { id: true } },
         _count: { select: { applications: true } },
       },
@@ -45,6 +90,19 @@ router.get('/feed', auth, async (req, res) => {
         : sort === 'surge' ? { surgeMultiplier: 'desc' }
         : { createdAt: 'desc' },
     });
+
+    // Day/Night derived from shift.startTime — "HH:MM" string (24h).
+    // Night = start >= 19:00 OR start < 07:00. Day = otherwise.
+    const filteredByShiftType = shiftType
+      ? shifts.filter((s) => {
+          const t = String(s.startTime || '');
+          const m = /^(\d{1,2}):/.exec(t);
+          if (!m) return true; // keep unparseable so we don't silently drop rows
+          const hour = parseInt(m[1], 10);
+          const isNight = hour >= 19 || hour < 7;
+          return shiftType === 'NIGHT' ? isNight : !isNight;
+        })
+      : shifts;
 
     // Check VIP/preferred window
     const isVip = provider?.vipStatus || false;
@@ -62,7 +120,7 @@ router.get('/feed', auth, async (req, res) => {
       : [];
     const workedFacilityIds = new Set(workedFacilities.map((b) => b.shift.facilityId));
 
-    let results = shifts.map((shift) => {
+    let results = filteredByShiftType.map((shift) => {
       const now = new Date();
       const inVipWindow =
         shift.preferredAccessOnly &&

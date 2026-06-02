@@ -9,14 +9,19 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.snapmedical.marketplace",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Used to center the shift map near you and sort shifts by distance."
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#6366F1"
       },
-      "package": "com.snapmedical.marketplace"
+      "package": "com.snapmedical.marketplace",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "extra": {
       "eas": {
