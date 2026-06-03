@@ -60,7 +60,15 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 // Broad rate-limit on all routes; the health check stays unthrottled.
 app.use(globalLimiter);
 
-app.get('/health', (req, res) => res.json({ status: 'ok', app: 'SNAP Marketplace' }));
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', app: 'SNAP Marketplace', db: 'connected' });
+  } catch (err) {
+    console.error('[health] DB check failed:', err.message);
+    res.status(503).json({ status: 'degraded', app: 'SNAP Marketplace', db: 'disconnected', error: err.message });
+  }
+});
 
 // Strict throttling on credential-bearing endpoints (login/register/reset).
 app.use('/api/auth', authLimiter);
