@@ -387,6 +387,11 @@ export const credentialAPI = {
     const q = new URLSearchParams(params).toString()
     return apiFetch(`${BASE}/credentialing/audit${q ? `?${q}` : ''}`, { headers: credHeaders() })
   },
+
+  // Cost-savings widget — time-saved by SNAP automation across this facility.
+  // Returns { thisWeek, thisMonth, total } where each is
+  // { eventCount, minutesSaved, hoursSaved, dollarsSaved }.
+  getSavings: () => apiFetch(`${BASE}/credentialing/savings`, { headers: credHeaders() }),
 }
 
 // ─── Admin API ────────────────────────────────────────────────────────────────

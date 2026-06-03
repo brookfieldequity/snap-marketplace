@@ -22,6 +22,8 @@ function StatusBadge({ status }) {
   )
 }
 
+import AutomationSavingsCard from '../../components/AutomationSavingsCard.jsx'
+
 export default function CredentialDashboard({ onNavigate }) {
   const [summary, setSummary] = useState(null)
   const [providers, setProviders] = useState([])
@@ -49,6 +51,11 @@ export default function CredentialDashboard({ onNavigate }) {
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>Credentialing Dashboard</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Overview of your facility's provider credential status</p>
+      </div>
+
+      {/* Cost-savings widget — time saved by SNAP automation, $50/hr */}
+      <div style={{ marginBottom: 28 }}>
+        <AutomationSavingsCard fetcher={credentialAPI.getSavings} />
       </div>
 
       {/* Summary cards */}

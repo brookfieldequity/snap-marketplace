@@ -9,6 +9,7 @@ const credentialAuth = require('../middleware/credentialAuth')
 const { sign, signDocToken, verifyDocToken } = require('../middleware/credentialAuth')
 const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sendWelcomeEmail, sendPasswordResetEmail, credTypeName } = require('../services/credentialEmail')
 const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = require('../utils/credentialStatus')
+const { getSavings: getAutomationSavings } = require('../services/automationEvents')
 
 const router = express.Router()
 
@@ -1184,6 +1185,25 @@ router.get('/audit', credentialAuth, requireCoordinator, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+/**
+ * GET /api/credentialing/savings
+ *
+ * Cost-savings widget on the credentialing facility portal dashboard.
+ * Same shape as /api/automation-events/savings; this one is scoped via
+ * credentialAuth instead of facilityAuth so credentialing-portal
+ * coordinators (who have a separate token + token table) can hit it
+ * without switching auth flows.
+ */
+router.get('/savings', credentialAuth, async (req, res) => {
+  try {
+    const savings = await getAutomationSavings({ facilityId: req.facilityId })
+    res.json(savings)
+  } catch (err) {
+    console.error('[credentialing/savings] error:', err)
+    res.status(500).json({ error: 'Failed to load savings.' })
   }
 })
 
