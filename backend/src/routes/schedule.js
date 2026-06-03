@@ -555,4 +555,316 @@ router.post('/generate', facilityAuth, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Schedule Builder v2 — POST /api/schedule/build, GET /:batchId, etc.
+// See services/scheduleBuilder.js + docs/schedule-builder-v2-design.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+const scheduleBuilder = require('../services/scheduleBuilder');
+const crypto = require('crypto');
+
+/**
+ * POST /build
+ * Triggers one or more build runs for a (year, month). Returns batchId
+ * immediately; runs each mode synchronously (algorithm is fast — <1s per
+ * mode for typical months). Future: queue + long-poll if algorithm gets
+ * heavier.
+ *
+ * body: { year, month, modes: ['COST_EFFICIENT', 'HIGHEST_QUALITY', 'HYBRID', 'STAFFIQ'] }
+ */
+router.post('/build', facilityAuth, async (req, res) => {
+  try {
+    const { year, month, modes } = req.body || {};
+    const yr = Number(year);
+    const mo = Number(month);
+    if (!Number.isInteger(yr) || yr < 2000 || yr > 2200) {
+      return res.status(400).json({ error: 'year is required and must be valid.' });
+    }
+    if (!Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'month is required and must be 1-12.' });
+    }
+    const requestedModes = Array.isArray(modes) && modes.length > 0
+      ? modes
+      : scheduleBuilder.MODES; // default: run all four
+    const invalid = requestedModes.filter((m) => !scheduleBuilder.MODES.includes(m));
+    if (invalid.length) {
+      return res.status(400).json({ error: `Unknown modes: ${invalid.join(', ')}` });
+    }
+
+    // Load inputs: ScheduleDay rows for the month + roster + StaffIQ weights
+    const monthStart = new Date(Date.UTC(yr, mo - 1, 1));
+    const monthEnd = new Date(Date.UTC(yr, mo, 1));
+    const scheduleDays = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id, date: { gte: monthStart, lt: monthEnd } },
+    });
+    if (scheduleDays.length === 0) {
+      return res.status(400).json({
+        error: 'No schedule days exist for that month yet. Generate from a Coverage Template first.',
+      });
+    }
+    const roster = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+    });
+    if (roster.length === 0) {
+      return res.status(400).json({
+        error: 'Roster is empty. Add providers to your Internal Roster before building.',
+      });
+    }
+    const staffiqWeights = await scheduleBuilder.resolveStaffIQWeights(req.facility.id);
+
+    // Shared input snapshot — lets us reproduce and explain each run later.
+    const inputSnapshot = {
+      generatedAt: new Date().toISOString(),
+      scheduleDayCount: scheduleDays.length,
+      rosterCount: roster.length,
+      staffiqWeights,
+      // Persist enough roster data to reconstruct: id, name, type, employment,
+      // rates, reliability. Not the entire object (keeps the JSON tractable).
+      rosterSnapshot: roster.map((r) => ({
+        id: r.id,
+        name: r.providerName,
+        type: r.providerType,
+        employment: r.employmentCategory,
+        hourlyRate: r.hourlyRate,
+        annualRate: r.annualRate,
+        reliabilityScore: r.reliabilityScore,
+      })),
+    };
+
+    const buildBatchId = crypto.randomUUID();
+    const userId = req.user.userId || req.user.id;
+
+    // Run each requested mode and persist a ScheduleBuildRun row per mode.
+    // For v1 we run synchronously (algorithm is fast). Wrapping in
+    // Promise.all so they don't block each other on DB writes.
+    const runs = await Promise.all(
+      requestedModes.map(async (mode) => {
+        const startedAt = new Date();
+        try {
+          const { assignments, insights, warnings, score } = scheduleBuilder.runMode({
+            mode,
+            scheduleDays,
+            roster,
+            staffiqWeights,
+          });
+          return prisma.scheduleBuildRun.create({
+            data: {
+              facilityId: req.facility.id,
+              year: yr,
+              month: mo,
+              buildBatchId,
+              mode,
+              status: 'COMPLETE',
+              inputSnapshot,
+              assignments,
+              staffiqScore: score,
+              insights,
+              warnings,
+              startedAt,
+              completedAt: new Date(),
+              triggeredByUserId: userId,
+            },
+          });
+        } catch (err) {
+          console.error(`[schedule:build] ${mode} failed:`, err);
+          return prisma.scheduleBuildRun.create({
+            data: {
+              facilityId: req.facility.id,
+              year: yr,
+              month: mo,
+              buildBatchId,
+              mode,
+              status: 'FAILED',
+              inputSnapshot,
+              assignments: [],
+              warnings: [err.message || 'Unknown error'],
+              startedAt,
+              completedAt: new Date(),
+              triggeredByUserId: userId,
+            },
+          });
+        }
+      })
+    );
+
+    res.status(201).json({
+      buildBatchId,
+      runs: runs.map(serializeRun),
+    });
+  } catch (err) {
+    console.error('[schedule:build] failed:', err);
+    res.status(500).json({ error: 'Failed to build schedule.' });
+  }
+});
+
+/**
+ * GET /build/:batchId
+ * Returns all runs in a batch (1-4 entries per batchId). Used by the
+ * compare-all UI.
+ */
+router.get('/build/:batchId', facilityAuth, async (req, res) => {
+  try {
+    const runs = await prisma.scheduleBuildRun.findMany({
+      where: { buildBatchId: req.params.batchId, facilityId: req.facility.id },
+      orderBy: { mode: 'asc' },
+    });
+    if (runs.length === 0) return res.status(404).json({ error: 'Batch not found.' });
+    res.json({ runs: runs.map(serializeRun) });
+  } catch (err) {
+    console.error('[schedule:build] get batch failed:', err);
+    res.status(500).json({ error: 'Failed to load build batch.' });
+  }
+});
+
+/**
+ * POST /build/:runId/select
+ * Coordinator picks a run as the active schedule. Materializes the run's
+ * assignments JSON into real ScheduleAssignment rows (upserting on the
+ * existing @@unique([scheduleDayId, roomNumber])), and marks the other
+ * runs in the same batch as SUPERSEDED so the UI can hide them.
+ */
+router.post('/build/:runId/select', facilityAuth, async (req, res) => {
+  try {
+    const run = await prisma.scheduleBuildRun.findUnique({
+      where: { id: req.params.runId },
+    });
+    if (!run || run.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Build run not found.' });
+    }
+    if (run.status !== 'COMPLETE') {
+      return res.status(409).json({ error: `Run is ${run.status.toLowerCase()}.` });
+    }
+
+    const assignments = Array.isArray(run.assignments) ? run.assignments : [];
+
+    await prisma.$transaction(async (tx) => {
+      // Upsert each assignment. ScheduleAssignment's unique constraint is
+      // (scheduleDayId, roomNumber) so re-running this for the same room
+      // replaces the prior pick (good — coordinator can re-select a
+      // different run).
+      for (const a of assignments) {
+        await tx.scheduleAssignment.upsert({
+          where: {
+            scheduleDayId_roomNumber: {
+              scheduleDayId: a.scheduleDayId,
+              roomNumber: a.roomNumber,
+            },
+          },
+          create: {
+            scheduleDayId: a.scheduleDayId,
+            roomNumber: a.roomNumber,
+            rosterId: a.rosterId,
+            facilityId: req.facility.id,
+          },
+          update: {
+            rosterId: a.rosterId,
+          },
+        });
+      }
+      // Mark this run as selected, others in batch as superseded.
+      await tx.scheduleBuildRun.update({
+        where: { id: req.params.runId },
+        data: { selectedAt: new Date() },
+      });
+      await tx.scheduleBuildRun.updateMany({
+        where: {
+          buildBatchId: run.buildBatchId,
+          facilityId: req.facility.id,
+          NOT: { id: req.params.runId },
+          status: 'COMPLETE',
+        },
+        data: { status: 'SUPERSEDED' },
+      });
+    });
+
+    res.json({
+      assignmentsApplied: assignments.length,
+      message: `Schedule activated using "${run.mode}" build (StaffIQ score ${run.staffiqScore}).`,
+    });
+  } catch (err) {
+    console.error('[schedule:build] select failed:', err);
+    res.status(500).json({ error: 'Failed to select build run.' });
+  }
+});
+
+/**
+ * POST /build/:runId/rescore
+ * Recompute the StaffIQ score for the selected run based on the schedule's
+ * CURRENT assignments (which may have been edited by the coordinator after
+ * selection). Persists the updated score and returns the delta.
+ */
+router.post('/build/:runId/rescore', facilityAuth, async (req, res) => {
+  try {
+    const run = await prisma.scheduleBuildRun.findUnique({
+      where: { id: req.params.runId },
+    });
+    if (!run || run.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Build run not found.' });
+    }
+
+    // Pull the CURRENT state of the month's assignments (post-edits).
+    const monthStart = new Date(Date.UTC(run.year, run.month - 1, 1));
+    const monthEnd = new Date(Date.UTC(run.year, run.month, 1));
+    const days = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id, date: { gte: monthStart, lt: monthEnd } },
+      include: { assignments: true },
+    });
+    const roster = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+    });
+
+    const currentAssignments = days.flatMap((d) =>
+      d.assignments
+        .filter((a) => a.rosterId)
+        .map((a) => ({ scheduleDayId: d.id, roomNumber: a.roomNumber, rosterId: a.rosterId }))
+    );
+    const insights = scheduleBuilder.computeInsights({
+      mode: run.mode,
+      assignments: currentAssignments,
+      roster,
+    });
+    const newScore = scheduleBuilder.computeStaffIQScore({
+      mode: run.mode,
+      assignments: currentAssignments,
+      roster,
+      warnings: [],
+      scheduleDays: days,
+    });
+    const delta = newScore - (run.staffiqScore || 0);
+
+    await prisma.scheduleBuildRun.update({
+      where: { id: req.params.runId },
+      data: { staffiqScore: newScore, insights },
+    });
+
+    res.json({ score: newScore, previousScore: run.staffiqScore, delta, insights });
+  } catch (err) {
+    console.error('[schedule:build] rescore failed:', err);
+    res.status(500).json({ error: 'Failed to rescore.' });
+  }
+});
+
+/**
+ * Trim a build run for transport — strip the giant inputSnapshot from
+ * responses unless the client explicitly asks for it (future query param).
+ */
+function serializeRun(run) {
+  return {
+    id: run.id,
+    facilityId: run.facilityId,
+    year: run.year,
+    month: run.month,
+    buildBatchId: run.buildBatchId,
+    mode: run.mode,
+    status: run.status,
+    staffiqScore: run.staffiqScore,
+    insights: run.insights,
+    warnings: run.warnings,
+    assignmentCount: Array.isArray(run.assignments) ? run.assignments.length : 0,
+    selectedAt: run.selectedAt,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+  };
+}
+
 module.exports = router;

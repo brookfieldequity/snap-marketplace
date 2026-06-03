@@ -169,8 +169,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  providerProfile     ProviderProfile?
-  facilityMemberships FacilityUser[]
+  providerProfile           ProviderProfile?
+  facilityMemberships       FacilityUser[]
+  scheduleBuildRunsTriggered ScheduleBuildRun[]
 }
 
 model ProviderProfile {
@@ -268,6 +269,7 @@ model Facility {
   credRosterEntries   FacilityRosterEntry[]
   coverageTemplates   CoverageTemplate[]
   holidays            FacilityHoliday[]
+  scheduleBuildRuns   ScheduleBuildRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -504,6 +506,12 @@ model InternalRosterEntry {
   maxShiftsPerMonth    Int? // PER_DIEM: cap on shifts
   contractStart        DateTime? // LOCUMS: contract start
   contractEnd          DateTime? // LOCUMS: contract end
+
+  // Reliability score 0.0-1.0 used by Schedule Builder v2 quality algorithm.
+  // Computed by a future background job from ShiftCompletion history (no-shows,
+  // late arrivals, cancellations). null = not yet computed; algorithm treats
+  // null as the practice's average (currently 0.85 as a sensible default).
+  reliabilityScore     Float?
 
   scheduleAssignments ScheduleAssignment[]
   incentiveResponses  InternalIncentiveShiftResponse[]
@@ -922,4 +930,59 @@ model FacilityHoliday {
 
   @@unique([facilityId, date])
   @@index([facilityId, date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SNAP Shifts — Schedule Builder v2
+//
+// Stores each "Build the Schedule" attempt so the coordinator can compare
+// candidates side-by-side, and so we accumulate the data StaffIQ learns
+// from over time. See docs/schedule-builder-v2-design.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum BuildMode {
+  COST_EFFICIENT
+  HIGHEST_QUALITY
+  HYBRID
+  STAFFIQ
+}
+
+enum BuildRunStatus {
+  RUNNING
+  COMPLETE
+  FAILED
+  SUPERSEDED // newer run for the same month replaced this one
+}
+
+model ScheduleBuildRun {
+  id           String         @id @default(cuid())
+  facilityId   String
+  facility     Facility       @relation(fields: [facilityId], references: [id])
+  year         Int
+  month        Int // 1-12
+  buildBatchId String // groups multi-mode runs triggered together
+  mode         BuildMode
+  status       BuildRunStatus
+
+  // Snapshot of input state — enough to reproduce + explain the run later.
+  // Includes ScheduleDay rows + the roster + availability + holidays.
+  inputSnapshot Json
+
+  // Output: array of { scheduleDayId, roomNumber, rosterId } objects.
+  // Stored as JSON so we can compare 4 candidates without writing to
+  // ScheduleAssignment until the coordinator selects one.
+  assignments Json
+
+  staffiqScore Int? // 0-100, null while RUNNING or FAILED
+  insights     Json? // { totalCost, locumsUsed, avgSeniority, ... }
+  warnings     String[] // human-readable: "Could not staff Kenmore Mon 8/4"
+
+  selectedAt        DateTime? // when coordinator picked this run as active
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  triggeredByUserId String
+  triggeredByUser   User      @relation(fields: [triggeredByUserId], references: [id])
+
+  @@index([facilityId, year, month, buildBatchId])
+  @@index([facilityId, selectedAt])
 }
