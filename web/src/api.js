@@ -192,6 +192,14 @@ export const facilityAPI = {
   generateScheduleFromTemplate: (year, month, templateId) =>
     apiFetch(`${BASE}/schedule/generate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, templateId }) }),
 
+  // Schedule Builder v2 — kick off one or more algorithm modes; results
+  // grouped by buildBatchId. See docs/schedule-builder-v2-design.md.
+  buildSchedule: (year, month, modes) =>
+    apiFetch(`${BASE}/schedule/build`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, modes }) }),
+  getBuildBatch: (batchId) => apiFetch(`${BASE}/schedule/build/${batchId}`, { headers: facilityHeaders() }),
+  selectBuildRun: (runId) => apiFetch(`${BASE}/schedule/build/${runId}/select`, { method: 'POST', headers: facilityHeaders() }),
+  rescoreBuildRun: (runId) => apiFetch(`${BASE}/schedule/build/${runId}/rescore`, { method: 'POST', headers: facilityHeaders() }),
+
   // Coverage Templates (per-practice staffing patterns).
   // See docs/coverage-templates-design.md.
   getCoverageTemplates: () => apiFetch(`${BASE}/coverage-templates`, { headers: facilityHeaders() }),

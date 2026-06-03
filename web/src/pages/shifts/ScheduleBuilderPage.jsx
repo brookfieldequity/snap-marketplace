@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { facilityAPI } from '../../api.js'
+import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
@@ -132,6 +133,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [generating, setGenerating] = useState(false)
   const [generateMessage, setGenerateMessage] = useState(null) // success or error
 
+  // Schedule Builder v2 — the build flow modal. selectedRunId persists
+  // across navigations so we can offer the "Re-score after edits" button.
+  const [showBuildFlow, setShowBuildFlow] = useState(false)
+  const [selectedRunId, setSelectedRunId] = useState(null)
+  const [selectedRunScore, setSelectedRunScore] = useState(null)
+  const [rescoring, setRescoring] = useState(false)
+  const [rescoreMessage, setRescoreMessage] = useState(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -167,6 +176,26 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   }, [year, month])
 
   useEffect(() => { load() }, [load])
+
+  async function handleRescore() {
+    if (!selectedRunId) return
+    setRescoring(true)
+    setRescoreMessage(null)
+    try {
+      const res = await facilityAPI.rescoreBuildRun(selectedRunId)
+      setSelectedRunScore(res.score)
+      const delta = res.delta || 0
+      const sign = delta > 0 ? '+' : ''
+      setRescoreMessage({
+        kind: 'success',
+        text: `New StaffIQ score: ${res.score} (${sign}${delta} from build).`,
+      })
+    } catch (err) {
+      setRescoreMessage({ kind: 'error', text: err.message || 'Re-score failed.' })
+    } finally {
+      setRescoring(false)
+    }
+  }
 
   async function handleGenerateFromTemplate() {
     if (!selectedTemplateId) return
@@ -364,6 +393,21 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           <StatBox label="Est. Cost" value={summary?.estimatedCost != null ? fmt(summary.estimatedCost) : '—'} color="#6366F1" poweredBy />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => setShowBuildFlow(true)}
+            style={{
+              padding: '10px 20px',
+              background: '#10B981',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            🚀 Build the Schedule
+          </button>
           <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
             {publishing ? 'Publishing...' : '📢 Publish Schedule'}
           </button>
@@ -468,6 +512,72 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           <span style={{ fontSize: 11, color: '#64748B', fontWeight: 500 }}>No schedule</span>
         </div>
       </div>
+
+      {/* Build-run banner — shown after coordinator selects a build, lets
+          them re-score after edits */}
+      {selectedRunId && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: '#F0F9FF',
+            border: '1px solid #BAE6FD',
+            borderRadius: 10,
+            padding: '12px 18px',
+            marginBottom: 16,
+            color: '#075985',
+          }}
+        >
+          <span style={{ fontSize: 18 }}>🚀</span>
+          <div style={{ flex: 1, fontSize: 13 }}>
+            <strong>StaffIQ score: {selectedRunScore ?? '—'}</strong>
+            <span style={{ marginLeft: 8, color: '#0369A1' }}>
+              Edit any cell, then re-score to see how your changes moved the needle.
+            </span>
+          </div>
+          <button
+            onClick={handleRescore}
+            disabled={rescoring}
+            style={{
+              padding: '8px 16px',
+              background: '#0EA5E9',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: rescoring ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {rescoring ? 'Re-scoring…' : 'Re-score'}
+          </button>
+        </div>
+      )}
+      {rescoreMessage && (
+        <div
+          style={{
+            background: rescoreMessage.kind === 'success' ? '#ECFDF5' : '#FEF2F2',
+            border: `1px solid ${rescoreMessage.kind === 'success' ? '#A7F3D0' : '#FECACA'}`,
+            color: rescoreMessage.kind === 'success' ? '#065F46' : '#991B1B',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            marginBottom: 12,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>{rescoreMessage.text}</span>
+          <button
+            onClick={() => setRescoreMessage(null)}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, opacity: 0.6 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {error && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 12, padding: '14px 18px', color: '#DC2626', marginBottom: 16 }}>
@@ -699,6 +809,23 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Schedule Builder v2 — Build the Schedule flow */}
+      {showBuildFlow && (
+        <ScheduleBuildFlow
+          year={year}
+          month={month}
+          onClose={() => setShowBuildFlow(false)}
+          onSelected={({ run, message }) => {
+            setShowBuildFlow(false)
+            setSelectedRunId(run.id)
+            setSelectedRunScore(run.staffiqScore)
+            setRescoreMessage({ kind: 'success', text: message || 'Schedule applied.' })
+            // Reload the calendar to show the new assignments
+            load()
+          }}
+        />
       )}
     </div>
   )
