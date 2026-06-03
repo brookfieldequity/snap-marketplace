@@ -488,6 +488,11 @@ model InternalRosterEntry {
   employmentCategory EmploymentCategory
   snapAccountEmail   String?
   phoneNumber        String?
+  // NPI (National Provider Identifier) — primary key for matching this
+  // roster entry to an existing ProviderProfile across the marketplace.
+  // 10-digit string; unique-per-facility because the same provider could
+  // (rarely) be on two practices' rosters as a locum.
+  npi                String?
   licenseNumber      String?
   licenseExpiration  DateTime?
   notes              String?

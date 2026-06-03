@@ -1,8 +1,21 @@
 const express = require('express');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 
 const router = express.Router();
+
+// In-memory upload for CSV/XLSX parsing — files are small (rosters are
+// 10-200 rows typically). Cap at 5MB and reject non-spreadsheet types.
+const rosterUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(csv|xlsx|xls)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Only .csv, .xlsx, or .xls files are accepted.'), ok);
+  },
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -212,6 +225,253 @@ router.post('/:id/link-check', facilityAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSV / Excel upload — bulk-import a facility's roster
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Expected column headers (case-insensitive; underscores or spaces ok):
+ *   name (required)
+ *   type (required)         CRNA | ANESTHESIOLOGIST | ANESTHESIA_ASSISTANT
+ *   employment (required)   FULL_TIME | PER_DIEM | LOCUMS
+ *   npi                     10-digit identifier; used to match the marketplace provider profile
+ *   email                   snapAccountEmail — used as a secondary link if NPI missing
+ *   phone                   phoneNumber (for SMS, when enabled)
+ *   license_number
+ *   license_expiration      YYYY-MM-DD or any Date-parseable format
+ *   hourly_rate             per-diem / locums
+ *   annual_rate             full-time
+ *   fte_hours               full-time hours/week (e.g. 40)
+ *
+ * Common synonyms accepted (case-insensitive, whitespace/_ stripped):
+ *   full_name, provider_name → name
+ *   specialty → type
+ *   employment_type, employment_category → employment
+ *   hourly, rate → hourly_rate
+ *   annual_salary, salary → annual_rate
+ */
+const HEADER_SYNONYMS = {
+  name: ['name', 'fullname', 'providername'],
+  type: ['type', 'specialty', 'providertype', 'role'],
+  employment: ['employment', 'employmenttype', 'employmentcategory'],
+  npi: ['npi', 'npinumber'],
+  email: ['email', 'snapaccountemail', 'snapemail'],
+  phone: ['phone', 'phonenumber', 'mobile'],
+  license_number: ['licensenumber', 'license'],
+  license_expiration: ['licenseexpiration', 'licenseexpiry', 'licenseexp'],
+  hourly_rate: ['hourlyrate', 'hourly', 'rate', 'perhour'],
+  annual_rate: ['annualrate', 'annualsalary', 'salary'],
+  fte_hours: ['ftehours', 'hoursperweek'],
+};
+
+function normalizeHeader(h) {
+  return String(h || '').toLowerCase().replace(/[\s_]/g, '');
+}
+
+function buildHeaderMap(headerRow) {
+  const map = {}; // canonicalKey → original column index
+  headerRow.forEach((rawHeader, idx) => {
+    const normalized = normalizeHeader(rawHeader);
+    for (const [canonical, synonyms] of Object.entries(HEADER_SYNONYMS)) {
+      if (synonyms.includes(normalized) && map[canonical] == null) {
+        map[canonical] = idx;
+      }
+    }
+  });
+  return map;
+}
+
+const VALID_SPECIALTIES = ['CRNA', 'ANESTHESIOLOGIST', 'ANESTHESIA_ASSISTANT'];
+const VALID_EMPLOYMENT = ['FULL_TIME', 'PER_DIEM', 'LOCUMS'];
+
+/**
+ * Normalize a free-form type/employment string to one of the enum values.
+ * Returns null if no match.
+ */
+function normalizeSpecialty(v) {
+  if (!v) return null;
+  const s = String(v).toUpperCase().replace(/[\s_-]/g, '');
+  if (s.includes('CRNA') || s.includes('NURSEANESTHETIST')) return 'CRNA';
+  if (s.includes('ASSISTANT') || s === 'AA') return 'ANESTHESIA_ASSISTANT';
+  if (s.includes('ANESTHESIOLOGIST') || s === 'MD' || s === 'DO') return 'ANESTHESIOLOGIST';
+  // Last resort: direct enum match
+  return VALID_SPECIALTIES.find((x) => x === s) || null;
+}
+function normalizeEmployment(v) {
+  if (!v) return null;
+  const s = String(v).toUpperCase().replace(/[\s_-]/g, '');
+  if (s.startsWith('FT') || s.includes('FULL')) return 'FULL_TIME';
+  if (s.includes('PERDIEM') || s === 'PRN' || s === 'PD') return 'PER_DIEM';
+  if (s.includes('LOCUM')) return 'LOCUMS';
+  return VALID_EMPLOYMENT.find((x) => x === s) || null;
+}
+function parseDate(v) {
+  if (!v) return null;
+  // xlsx returns Date objects directly for date-formatted cells.
+  if (v instanceof Date && !isNaN(v.getTime())) return v;
+  const s = String(v).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function parseNumber(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(/[$,]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * POST /upload — parse a CSV/XLSX, create roster entries, link by NPI.
+ *
+ * Returns { created, skipped, errors, matchedToProfiles, rows: [{ ... }] }
+ * — UI can show a summary toast + a per-row breakdown.
+ */
+router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) return res.status(400).json({ error: 'Workbook has no sheets.' });
+
+    // header: 1 → arrays-of-arrays so we can re-map columns
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    if (rows.length < 2) {
+      return res.status(400).json({ error: 'File must have a header row + at least one data row.' });
+    }
+
+    const headerMap = buildHeaderMap(rows[0]);
+    if (headerMap.name == null || headerMap.type == null || headerMap.employment == null) {
+      return res.status(400).json({
+        error:
+          'Header row must include name, type (specialty), and employment. Found columns: ' +
+          rows[0].join(', '),
+      });
+    }
+
+    const dataRows = rows.slice(1);
+    const created = [];
+    const errors = [];
+    let matchedToProfiles = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNum = i + 2; // human-readable, header is row 1
+      const get = (key) => (headerMap[key] != null ? row[headerMap[key]] : null);
+
+      const name = String(get('name') || '').trim();
+      if (!name) { skipped += 1; continue; } // blank row, skip silently
+
+      const type = normalizeSpecialty(get('type'));
+      const employment = normalizeEmployment(get('employment'));
+      if (!type) {
+        errors.push({ row: rowNum, name, error: `Unknown specialty: "${get('type')}"` });
+        continue;
+      }
+      if (!employment) {
+        errors.push({ row: rowNum, name, error: `Unknown employment type: "${get('employment')}"` });
+        continue;
+      }
+
+      const npi = String(get('npi') || '').trim() || null;
+      const email = String(get('email') || '').trim().toLowerCase() || null;
+      const phone = String(get('phone') || '').trim() || null;
+      const licenseNumber = String(get('license_number') || '').trim() || null;
+      const licenseExp = parseDate(get('license_expiration'));
+      const hourlyRate = parseNumber(get('hourly_rate'));
+      const annualRate = parseNumber(get('annual_rate'));
+      const fteHours = parseNumber(get('fte_hours'));
+
+      // Try to match an existing provider profile by NPI first, then email.
+      let linkedProviderId = null;
+      let snapAccountLinked = false;
+      if (npi) {
+        const profile = await prisma.providerProfile.findUnique({ where: { npiNumber: npi } });
+        if (profile) {
+          linkedProviderId = profile.id;
+          snapAccountLinked = true;
+          matchedToProfiles += 1;
+        }
+      } else if (email) {
+        const user = await prisma.user.findUnique({ where: { email }, include: { providerProfile: true } });
+        if (user?.providerProfile) {
+          linkedProviderId = user.providerProfile.id;
+          snapAccountLinked = true;
+          matchedToProfiles += 1;
+        }
+      }
+
+      try {
+        const entry = await prisma.internalRosterEntry.create({
+          data: {
+            facilityId: req.facility.id,
+            providerName: name,
+            providerType: type,
+            employmentCategory: employment,
+            npi,
+            snapAccountEmail: email,
+            phoneNumber: phone,
+            licenseNumber,
+            licenseExpiration: licenseExp,
+            hourlyRate,
+            annualRate,
+            fteHours,
+            snapAccountLinked,
+            linkedProviderId,
+          },
+        });
+        created.push({ id: entry.id, row: rowNum, name, linkedProfile: snapAccountLinked });
+      } catch (err) {
+        errors.push({ row: rowNum, name, error: err.message });
+      }
+    }
+
+    res.status(201).json({
+      summary: {
+        created: created.length,
+        matchedToProfiles,
+        errors: errors.length,
+        skipped,
+        totalDataRows: dataRows.length,
+      },
+      created,
+      errors,
+    });
+  } catch (err) {
+    console.error('[roster] upload failed:', err);
+    if (err.message?.includes('Only .csv')) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large (5MB max).' });
+    }
+    res.status(500).json({ error: 'Failed to import roster.' });
+  }
+});
+
+/**
+ * GET /upload/template — download a blank CSV template with the right
+ * headers so coordinators have a known-good starting point.
+ */
+router.get('/upload/template', facilityAuth, (req, res) => {
+  const headers = [
+    'name', 'type', 'employment',
+    'npi', 'email', 'phone',
+    'license_number', 'license_expiration',
+    'hourly_rate', 'annual_rate', 'fte_hours',
+  ];
+  const example = [
+    'Dr. Jane Smith', 'ANESTHESIOLOGIST', 'FULL_TIME',
+    '1234567890', 'jsmith@example.com', '555-867-5309',
+    'MA-12345', '2027-08-15',
+    '', '350000', '40',
+  ];
+  const csv = headers.join(',') + '\n' + example.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="snap-roster-template.csv"');
+  res.send(csv);
 });
 
 module.exports = router;

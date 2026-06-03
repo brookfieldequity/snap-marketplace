@@ -192,6 +192,20 @@ export const facilityAPI = {
   generateScheduleFromTemplate: (year, month, templateId) =>
     apiFetch(`${BASE}/schedule/generate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, templateId }) }),
 
+  // Internal Roster — bulk CSV/XLSX upload
+  uploadRoster: async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/roster/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
+  // Returns a CSV template URL (with auth token in URL via fetch + blob)
+  downloadRosterTemplateUrl: () => `${BASE}/roster/upload/template`,
+
   // Schedule Builder v2 — kick off one or more algorithm modes; results
   // grouped by buildBatchId. See docs/schedule-builder-v2-design.md.
   buildSchedule: (year, month, modes) =>

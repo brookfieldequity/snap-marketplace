@@ -94,6 +94,12 @@ export default function InternalRosterPage({ onNavigate }) {
   const [saving, setSaving] = useState(false)
   const [invitedIds, setInvitedIds] = useState({})
   const [deletingIds, setDeletingIds] = useState({})
+  // Bulk upload state
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState(null) // { summary, created, errors }
+  const [uploadError, setUploadError] = useState(null)
   const [locationInput, setLocationInput] = useState('')
 
   useEffect(() => { load() }, [])
@@ -115,6 +121,52 @@ export default function InternalRosterPage({ onNavigate }) {
     setForm(BLANK_FORM)
     setLocationInput('')
     setShowModal(true)
+  }
+
+  // ─── Bulk upload ──────────────────────────────────────────────────────────
+  function openUpload() {
+    setUploadFile(null)
+    setUploadResult(null)
+    setUploadError(null)
+    setShowUploadModal(true)
+  }
+
+  async function handleUpload() {
+    if (!uploadFile) return
+    setUploading(true)
+    setUploadError(null)
+    setUploadResult(null)
+    try {
+      const res = await facilityAPI.uploadRoster(uploadFile)
+      setUploadResult(res)
+      // Reload roster so the imported providers appear immediately
+      await load()
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function downloadTemplate() {
+    const token = localStorage.getItem('snapFacilityToken')
+    try {
+      const res = await fetch(facilityAPI.downloadRosterTemplateUrl(), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('Failed to download template.')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'snap-roster-template.csv'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Could not download template: ' + err.message)
+    }
   }
 
   function openEdit(p) {
@@ -243,12 +295,20 @@ export default function InternalRosterPage({ onNavigate }) {
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Internal Provider Roster</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{roster.length} provider{roster.length !== 1 ? 's' : ''} on your roster</p>
         </div>
-        <button
-          onClick={openAdd}
-          style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={openUpload}
+            style={{ padding: '11px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>📥</span> Upload Roster
+          </button>
+          <button
+            onClick={openAdd}
+            style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
+          </button>
+        </div>
       </div>
 
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading roster...</div>}
@@ -496,6 +556,116 @@ export default function InternalRosterPage({ onNavigate }) {
               {saving ? 'Saving...' : 'Save Provider'}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* Bulk roster upload modal */}
+      {showUploadModal && (
+        <Modal title="Upload Roster" onClose={() => !uploading && setShowUploadModal(false)}>
+          {!uploadResult ? (
+            <>
+              <p style={{ fontSize: 14, color: '#475569', lineHeight: 1.6, margin: '0 0 16px' }}>
+                Upload a <strong>CSV</strong> or <strong>Excel</strong> file with your current roster. Each row becomes a provider card you can edit afterward.
+                <br />
+                <span style={{ fontSize: 13, color: '#64748B' }}>
+                  Tip: include the <strong>NPI</strong> column to auto-link providers to their SNAP profile.
+                </span>
+              </p>
+
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={downloadTemplate}
+                  style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                >
+                  📄 Download blank template (.csv)
+                </button>
+              </div>
+
+              <div style={{ border: '2px dashed #CBD5E1', borderRadius: 12, padding: 24, textAlign: 'center', background: '#F8FAFC', marginBottom: 16 }}>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  style={{ display: 'block', margin: '0 auto' }}
+                  disabled={uploading}
+                />
+                {uploadFile && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#64748B' }}>
+                    Ready: <strong>{uploadFile.name}</strong> ({(uploadFile.size / 1024).toFixed(1)} KB)
+                  </div>
+                )}
+              </div>
+
+              <details style={{ marginBottom: 16, fontSize: 13, color: '#64748B' }}>
+                <summary style={{ cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
+                  Expected columns
+                </summary>
+                <div style={{ marginTop: 8, padding: 12, background: '#F8FAFC', borderRadius: 8 }}>
+                  <strong>Required:</strong>
+                  <ul style={{ marginTop: 4, marginBottom: 8 }}>
+                    <li><code>name</code> — provider full name</li>
+                    <li><code>type</code> — CRNA / ANESTHESIOLOGIST / ANESTHESIA_ASSISTANT</li>
+                    <li><code>employment</code> — FULL_TIME / PER_DIEM / LOCUMS</li>
+                  </ul>
+                  <strong>Recommended:</strong>
+                  <ul style={{ marginTop: 4 }}>
+                    <li><code>npi</code> — auto-links to existing provider profile</li>
+                    <li><code>email</code>, <code>phone</code>, <code>license_number</code>, <code>license_expiration</code></li>
+                    <li><code>hourly_rate</code> (per-diem/locums) or <code>annual_rate</code> + <code>fte_hours</code> (full-time)</li>
+                  </ul>
+                </div>
+              </details>
+
+              {uploadError && (
+                <div style={{ background: '#FEF2F2', color: '#991B1B', padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>
+                  {uploadError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowUploadModal(false)} disabled={uploading} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                  Cancel
+                </button>
+                <button onClick={handleUpload} disabled={!uploadFile || uploading} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !uploadFile || uploading ? 'not-allowed' : 'pointer', opacity: !uploadFile || uploading ? 0.6 : 1 }}>
+                  {uploading ? 'Importing…' : 'Import'}
+                </button>
+              </div>
+            </>
+          ) : (
+            // Result summary
+            <>
+              <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#065F46', marginBottom: 8 }}>
+                  ✓ Import complete
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 13, color: '#065F46' }}>
+                  <div><strong>{uploadResult.summary.created}</strong> providers created</div>
+                  <div><strong>{uploadResult.summary.matchedToProfiles}</strong> matched to existing SNAP profiles via NPI</div>
+                  {uploadResult.summary.skipped > 0 && <div><strong>{uploadResult.summary.skipped}</strong> blank rows skipped</div>}
+                  {uploadResult.summary.errors > 0 && <div><strong>{uploadResult.summary.errors}</strong> rows had errors (see below)</div>}
+                </div>
+              </div>
+
+              {uploadResult.errors && uploadResult.errors.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#991B1B', marginBottom: 6 }}>Errors</div>
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 8, maxHeight: 200, overflowY: 'auto' }}>
+                    {uploadResult.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: 12, color: '#991B1B', padding: '4px 8px', borderBottom: '1px solid #FECACA' }}>
+                        Row {e.row} ({e.name || 'no name'}): {e.error}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowUploadModal(false)} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  Done
+                </button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
     </div>
