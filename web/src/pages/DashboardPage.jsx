@@ -7,7 +7,7 @@ function fmt(n) {
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-function SavingsCard({ label, period, agencyCost, snapCost, savings }) {
+function SavingsCard({ label, period, agencyCost, snapCost, savings, isShiftsMode }) {
   const savingsPct = agencyCost > 0 ? Math.round((savings / agencyCost) * 100) : 0
 
   return (
@@ -86,7 +86,9 @@ function SavingsCard({ label, period, agencyCost, snapCost, savings }) {
         >
           <span style={{ fontSize: 16 }}>📉</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#10B981' }}>
-            {savingsPct}% below agency rates
+            {isShiftsMode
+              ? '10-20% below industry staffing standards'
+              : `${savingsPct}% below agency rates`}
           </span>
         </div>
       </div>
@@ -324,6 +326,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
             agencyCost={savings.monthAgency || MOCK.savings.monthAgency}
             snapCost={savings.monthSnap || MOCK.savings.monthSnap}
             savings={monthSavings}
+            isShiftsMode={isShiftsMode}
           />
           <SavingsCard
             label="Cost Savings"
@@ -331,6 +334,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
             agencyCost={savings.ytdAgency || MOCK.savings.ytdAgency}
             snapCost={savings.ytdSnap || MOCK.savings.ytdSnap}
             savings={ytdSavings}
+            isShiftsMode={isShiftsMode}
           />
         </div>
 
