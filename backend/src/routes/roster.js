@@ -3,6 +3,7 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
+const { logAutomationEvent } = require('../services/automationEvents');
 
 const router = express.Router();
 
@@ -426,6 +427,20 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
       } catch (err) {
         errors.push({ row: rowNum, name, error: err.message });
       }
+    }
+
+    // Time-savings tracking — only count uploads that actually saved rows.
+    // Fire-and-forget: helper never throws.
+    if (created.length > 0) {
+      logAutomationEvent({
+        facilityId: req.facility.id,
+        type: 'ROSTER_UPLOAD',
+        metadata: {
+          rowsCreated: created.length,
+          matchedToProfiles,
+          errors: errors.length,
+        },
+      });
     }
 
     res.status(201).json({

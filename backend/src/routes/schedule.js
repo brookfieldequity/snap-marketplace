@@ -3,6 +3,7 @@ const { Expo } = require('expo-server-sdk');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { sendSMS } = require('../services/notifications');
+const { logAutomationEvent } = require('../services/automationEvents');
 
 const router = express.Router();
 const expo = new Expo();
@@ -540,6 +541,21 @@ router.post('/generate', facilityAuth, async (req, res) => {
       }
     });
 
+    // Time-savings tracking — only count when the generation actually
+    // created rows. Fire-and-forget.
+    if (rowsCreated > 0) {
+      logAutomationEvent({
+        facilityId: req.facility.id,
+        type: 'COVERAGE_TEMPLATE_GENERATE',
+        metadata: {
+          rowsCreated,
+          rowsUpdated,
+          holidaysSkipped,
+          templateId: template.id,
+        },
+      });
+    }
+
     res.json({
       summary: {
         rowsCreated,
@@ -686,6 +702,24 @@ router.post('/build', facilityAuth, async (req, res) => {
         }
       })
     );
+
+    // Time-savings tracking — one AutomationEvent per BATCH (not per
+    // mode). 4-mode batches don't replace 4 manual scheduling sessions;
+    // they replace ONE. Conservative counting keeps the dollars-saved
+    // number honest for pitch-deck use.
+    const successfulRuns = runs.filter((r) => r.status !== 'FAILED');
+    if (successfulRuns.length > 0) {
+      logAutomationEvent({
+        facilityId: req.facility.id,
+        type: 'SCHEDULE_BUILD_RUN',
+        metadata: {
+          buildBatchId,
+          modesAttempted: runs.length,
+          modesSucceeded: successfulRuns.length,
+          succeededModes: successfulRuns.map((r) => r.mode),
+        },
+      });
+    }
 
     res.status(201).json({
       buildBatchId,
