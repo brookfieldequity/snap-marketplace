@@ -270,6 +270,7 @@ model Facility {
   coverageTemplates   CoverageTemplate[]
   holidays            FacilityHoliday[]
   scheduleBuildRuns   ScheduleBuildRun[]
+  automationEvents    AutomationEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -990,4 +991,49 @@ model ScheduleBuildRun {
 
   @@index([facilityId, year, month, buildBatchId])
   @@index([facilityId, selectedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Automation events — time-saved tracking for the "Cost Savings" widget on
+// the marketplace facility credentialing portal + SNAP Shifts dashboard + the
+// SNAP admin aggregate page. One row per discrete automation action that
+// would have otherwise taken coordinator/SNAP-team time. Minutes-saved is
+// fixed per event type (services/automationEvents.js MINUTES_BY_TYPE) so the
+// totals are predictable and not based on per-event guesses.
+//
+// facilityId nullable for SNAP-level events that don't belong to a facility
+// (rare for v1; mostly populated). Aggregating across all rows yields the
+// SNAP admin "total impact" number.
+//
+// $50/hour conversion happens at read time in the helper — not stored — so
+// the rate can be retuned later without a schema migration.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AutomationEvent {
+  id           String              @id @default(cuid())
+  facilityId   String?
+  facility     Facility?           @relation(fields: [facilityId], references: [id])
+  type         AutomationEventType
+  minutesSaved Int
+  metadata     Json?
+  eventAt      DateTime            @default(now())
+
+  @@index([facilityId, eventAt])
+  @@index([type, eventAt])
+}
+
+enum AutomationEventType {
+  // Marketplace + SNAP Shifts (high-time-saving coordinator-replacing flows)
+  ROSTER_UPLOAD              // 180 min — bulk roster CSV/Excel ingestion
+  COVERAGE_TEMPLATE_GENERATE // 120 min — month-of-schedule from a template
+  SCHEDULE_BUILD_RUN         // 240 min — Schedule Builder v2 4-mode build
+
+  // Credentialing portal (lower per-event, higher frequency)
+  SIGNATURE_REQUEST_SENT     // 45 min  — coordinator fires a sig request
+  PASSPORT_GRANT_REQUEST     // 30 min  — coordinator fires a grant request
+
+  // Future (wire when feature ships):
+  //   NPPES_AUTOFILL        // 30 min per credential
+  //   SEALED_PDF_SNAPSHOT   // 60 min — coordinator skips manual file assembly
+  //   FORM_READER           // 60 min — external hospital form auto-fill
 }

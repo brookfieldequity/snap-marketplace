@@ -31,6 +31,7 @@ const staffiqInputsRoutes = require('./routes/staffiqInputs');
 const credentialingRoutes = require('./routes/credentialing');
 const coverageTemplatesRoutes = require('./routes/coverageTemplates');
 const holidayRoutes = require('./routes/holidays');
+const automationEventsRoutes = require('./routes/automationEvents');
 
 const { runSurgePricing, expireOldShifts, openPreferredShifts, notifySurgeExpiring } = require('./jobs/surge');
 const { checkAllVipStatuses } = require('./jobs/vip');
@@ -102,6 +103,9 @@ app.use('/api/credentialing', credentialingRoutes);
 // docs/coverage-templates-design.md.
 app.use('/api/coverage-templates', coverageTemplatesRoutes);
 app.use('/api/facilities', holidayRoutes); // mounts /:id/holidays/* under /api/facilities
+// Cost-savings / time-saved tracking for the dashboard + credentialing
+// portal widgets. See services/automationEvents.js.
+app.use('/api/automation-events', automationEventsRoutes);
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 
