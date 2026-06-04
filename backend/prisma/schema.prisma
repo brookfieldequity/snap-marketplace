@@ -527,6 +527,16 @@ model InternalRosterEntry {
   snapAccountLinked  Boolean            @default(false)
   linkedProviderId   String?
   inviteSentAt       DateTime?
+  // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
+  // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator
+  // sends a credentialing invite; CLAIMED/COMPLETED are synced back from the
+  // passport bridge (a live grant means the provider claimed + consented).
+  credentialingStatus String            @default("NOT_INVITED") // NOT_INVITED | INVITED | CLAIMED | COMPLETED
+  // True for providers already credentialed via the manual/legacy process.
+  // Excluded from "Invite all" — their SNAP credentialing is deferred to their
+  // next license renewal so we don't disrupt active credentials. Explicitly
+  // selecting them in the invite modal overrides this.
+  externallyCredentialed Boolean         @default(false)
   createdAt          DateTime           @default(now())
 
   // Employment-specific preference fields

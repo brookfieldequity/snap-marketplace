@@ -103,13 +103,9 @@ async function getPassport(npi, facilityId) {
 /**
  * POST /api/service/passport/:npi/grant-request
  *
- * Ask the provider for access. The cred backend will fire a push
- * notification to the provider; they approve/deny in the credentialing
- * mobile app, which creates the actual PassportGrant.
- *
- * Currently a 501 stub on the cred side (Task #7). Calling this now
- * surfaces a "Not implemented" error with `plannedIn` so the marketplace
- * UI can show "feature coming soon" rather than a generic 5xx.
+ * Ask the provider for access. The cred backend fires a push notification to
+ * the provider; they approve/deny in the credentialing mobile app, which
+ * creates the actual PassportGrant.
  *
  * Optional payload:
  *   facilityName — human-friendly label shown in the push notification
@@ -121,14 +117,48 @@ async function requestGrant(npi, facilityId, { facilityName, scopes } = {}) {
     method: 'POST',
     body: JSON.stringify({
       granteeRef: facilityId,
-      facilityName,
+      granteeLabel: facilityName,
       scopes,
     }),
   });
   if (ok) return body;
   const err = new Error(body?.error || `grant request failed (HTTP ${status})`);
   err.status = status;
-  err.plannedIn = body?.plannedIn;
+  throw err;
+}
+
+/**
+ * POST /api/service/passport/invite
+ *
+ * Facility-initiated credentialing invite. Two outcomes, distinguished by
+ * `mode` in the returned body:
+ *   - INVITE_CREATED   → provider has no passport yet; body.claimToken is a
+ *                        one-time token. Build a claim link and deliver it
+ *                        (email/SMS) so the provider can register + claim.
+ *   - EXISTING_PROVIDER → provider already has a passport; the cred backend
+ *                        pushed a grant request to their app (no claim link).
+ *   - ALREADY_GRANTED  → this facility already has an active grant.
+ *
+ * Optional payload:
+ *   facilityName — shown to the provider in the invite + on the grant
+ *   firstName/lastName — pre-seed the provider's profile on claim
+ *   scopes       — scopes to auto-grant on claim (default: server default)
+ */
+async function invite(npi, facilityId, { facilityName, firstName, lastName, scopes } = {}) {
+  const { status, body, ok } = await callPassportApi('/api/service/passport/invite', {
+    method: 'POST',
+    body: JSON.stringify({
+      npi,
+      firstName,
+      lastName,
+      granteeRef: facilityId,
+      granteeLabel: facilityName,
+      scopes,
+    }),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `invite failed (HTTP ${status})`);
+  err.status = status;
   throw err;
 }
 
@@ -137,4 +167,5 @@ module.exports = {
   getGrantStatus,
   getPassport,
   requestGrant,
+  invite,
 };

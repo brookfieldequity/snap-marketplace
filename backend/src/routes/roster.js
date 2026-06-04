@@ -5,8 +5,93 @@ const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { logAutomationEvent } = require('../services/automationEvents');
 const { resolveNpi } = require('../services/nppesLookup');
+const passportClient = require('../services/passportClient');
+const { sendProviderInvitation } = require('../services/credentialEmail');
+const { sendSMS } = require('../services/notifications');
 
 const router = express.Router();
+
+// Where the provider lands to claim a credentialing invite. Served by the cred
+// backend at GET /claim (same-origin with its /api/auth/register, which accepts
+// the `claimToken` this link carries). Env-driven so it can move to a branded
+// domain without a code change.
+const CRED_CLAIM_URL =
+  process.env.CRED_CLAIM_URL ||
+  'https://snap-credentialing-backend-production.up.railway.app/claim';
+
+// Best-effort split of a single "providerName" into first/last for the passport
+// pre-seed. The provider can correct it during credentialing; this is only a
+// convenience so their claim screen isn't blank.
+function splitName(fullName) {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: null, lastName: null };
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
+/**
+ * Fire a credentialing invite for ONE roster entry: mint a passport stub +
+ * claim token on the cred backend, then deliver the claim link by email/SMS.
+ *
+ * Never throws on a per-entry problem — returns { ok:false, reason } so a bulk
+ * invite can continue past a bad row. Updates the entry's credentialingStatus.
+ */
+async function sendCredentialingInvite(entry, facility) {
+  const name = entry.providerName || 'Provider';
+  if (!entry.npi) {
+    return { id: entry.id, name, ok: false, reason: 'No NPI on file' };
+  }
+  const email = entry.snapAccountEmail;
+  const phone = entry.phoneNumber;
+  if (!email && !phone) {
+    return { id: entry.id, name, ok: false, reason: 'No email or phone on file' };
+  }
+
+  const { firstName, lastName } = splitName(entry.providerName);
+
+  let result;
+  try {
+    result = await passportClient.invite(entry.npi, facility.id, {
+      facilityName: facility.name,
+      firstName,
+      lastName,
+    });
+  } catch (err) {
+    return { id: entry.id, name, ok: false, reason: err.message || 'Passport bridge error' };
+  }
+
+  const delivered = [];
+  let status = 'INVITED';
+
+  if (result.mode === 'INVITE_CREATED') {
+    const claimLink = `${CRED_CLAIM_URL}?token=${result.claimToken}`;
+    if (email) {
+      await sendProviderInvitation(email, name, facility.name, claimLink);
+      delivered.push('email');
+    }
+    if (phone) {
+      await sendSMS(
+        phone,
+        `${facility.name} invited you to complete your SNAP credentialing passport. Get started: ${claimLink}`
+      );
+      delivered.push('sms');
+    }
+  } else if (result.mode === 'EXISTING_PROVIDER') {
+    // Already has a passport — cred backend pushed an access request to their
+    // app. No claim link to deliver.
+    delivered.push('push');
+  } else if (result.mode === 'ALREADY_GRANTED') {
+    status = 'CLAIMED';
+  }
+
+  const linkFields = await resolveLinkFields(entry.snapAccountEmail);
+  await prisma.internalRosterEntry.update({
+    where: { id: entry.id },
+    data: { inviteSentAt: new Date(), credentialingStatus: status, ...linkFields },
+  });
+
+  return { id: entry.id, name, ok: true, mode: result.mode, status, delivered };
+}
 
 // In-memory upload for CSV/XLSX parsing — files are small (rosters are
 // 10-200 rows typically). Cap at 5MB and reject non-spreadsheet types.
@@ -367,9 +452,92 @@ router.delete('/:id', facilityAuth, async (req, res) => {
   }
 });
 
-// POST /:id/invite — mark invite sent, auto-link if provider found
+// POST /bulk-invite — send credentialing invites to a set of roster entries.
+// Body: { rosterIds: string[] }. The caller (invite modal) decides the set;
+// each entry is validated (NPI + a contact method) and skipped-with-reason if
+// it can't be delivered, so one bad row never blocks the rest. Nothing is sent
+// until this is called — invites are never auto-fired on import.
+router.post('/bulk-invite', facilityAuth, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) {
+      return res.status(503).json({ error: 'Credentialing bridge is not configured.' });
+    }
+    const { rosterIds } = req.body || {};
+    if (!Array.isArray(rosterIds) || rosterIds.length === 0) {
+      return res.status(400).json({ error: 'rosterIds (non-empty array) is required.' });
+    }
+
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { id: true, name: true },
+    });
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { id: { in: rosterIds }, facilityId: req.facility.id },
+    });
+
+    // Sequential on purpose: pilot rosters are small, and this gives clean
+    // per-row error attribution without hammering the cred backend / SendGrid.
+    const results = [];
+    for (const entry of entries) {
+      // eslint-disable-next-line no-await-in-loop
+      results.push(await sendCredentialingInvite(entry, facility));
+    }
+
+    const sent = results.filter((r) => r.ok).length;
+    const skipped = results.filter((r) => !r.ok);
+    res.json({ sent, skippedCount: skipped.length, results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /sync-credentialing — refresh credentialing status for INVITED roster
+// entries by asking the passport bridge whether the facility now has an active
+// grant (a live grant means the provider claimed their invite + consented).
+// Flips INVITED → CLAIMED. Only touches INVITED rows so it stays cheap.
+router.post('/sync-credentialing', facilityAuth, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) {
+      return res.status(503).json({ error: 'Credentialing bridge is not configured.' });
+    }
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id, credentialingStatus: 'INVITED', npi: { not: null } },
+      select: { id: true, npi: true },
+    });
+
+    let updated = 0;
+    for (const entry of entries) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const status = await passportClient.getGrantStatus(entry.npi, req.facility.id);
+        if (status && status.exists) {
+          // eslint-disable-next-line no-await-in-loop
+          await prisma.internalRosterEntry.update({
+            where: { id: entry.id },
+            data: { credentialingStatus: 'CLAIMED' },
+          });
+          updated += 1;
+        }
+      } catch (err) {
+        // A bridge hiccup on one provider shouldn't fail the whole sync.
+        console.error('[sync-credentialing]', entry.id, err.message);
+      }
+    }
+
+    res.json({ checked: entries.length, updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /:id/invite — send a single credentialing invite (per-row button).
 router.post('/:id/invite', facilityAuth, async (req, res) => {
   try {
+    if (!passportClient.isConfigured()) {
+      return res.status(503).json({ error: 'Credentialing bridge is not configured.' });
+    }
     const existing = await prisma.internalRosterEntry.findUnique({
       where: { id: req.params.id },
     });
@@ -378,18 +546,16 @@ router.post('/:id/invite', facilityAuth, async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const linkFields = await resolveLinkFields(existing.snapAccountEmail);
-
-    // TODO: send SMS/email via Twilio (Phase 2)
-
-    const updated = await prisma.internalRosterEntry.update({
-      where: { id: req.params.id },
-      data: {
-        inviteSentAt: new Date(),
-        ...linkFields,
-      },
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { id: true, name: true },
     });
+    const result = await sendCredentialingInvite(existing, facility);
+    if (!result.ok) {
+      return res.status(422).json({ error: result.reason, result });
+    }
 
+    const updated = await prisma.internalRosterEntry.findUnique({ where: { id: existing.id } });
     res.json(updated);
   } catch (err) {
     console.error(err);

@@ -39,6 +39,27 @@ function isExpiringSoon(dateStr) {
   return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000
 }
 
+// Credentialing-passport lifecycle, shown as a per-card pill. Distinct from
+// the marketplace "SNAP Account Linked" dot.
+const CRED_STATUS = {
+  NOT_INVITED: { label: 'Not invited', bg: '#F1F5F9', color: '#64748B' },
+  INVITED: { label: 'Invited', bg: '#EEF2FF', color: '#4F46E5' },
+  CLAIMED: { label: 'Claimed', bg: '#ECFDF5', color: '#059669' },
+  COMPLETED: { label: 'Credentialed', bg: '#ECFDF5', color: '#047857' },
+}
+
+// Back-office / NPI-exempt staff are never credentialed. A provider is
+// invitable once they're clinical AND have an NPI to key the passport on.
+function isClinical(p) {
+  return !p.isNonClinical && !p.npiExempt
+}
+function canCredential(p) {
+  return isClinical(p) && !!p.npi
+}
+function hasContact(p) {
+  return !!(p.snapAccountEmail || p.phoneNumber)
+}
+
 function Badge({ bg, color, label }) {
   return (
     <span style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: `1px solid ${color}33` }}>
@@ -86,6 +107,10 @@ const inputStyle = {
   boxSizing: 'border-box', outline: 'none',
 }
 
+const primaryBtnStyle = { padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const ghostBtnStyle = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
+const linkBtnStyle = { background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }
+
 export default function InternalRosterPage({ onNavigate }) {
   const [roster, setRoster] = useState([])
   const [loading, setLoading] = useState(true)
@@ -108,6 +133,12 @@ export default function InternalRosterPage({ onNavigate }) {
   const [npiReviewRows, setNpiReviewRows] = useState([])
   const [showNpiReview, setShowNpiReview] = useState(false)
   const [timeOffMember, setTimeOffMember] = useState(null) // roster member whose PTO modal is open
+  // Credentialing-invite modal
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteSel, setInviteSel] = useState({}) // { [rosterId]: true }
+  const [inviting, setInviting] = useState(false)
+  const [inviteResult, setInviteResult] = useState(null) // { sent, skippedCount, results }
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => { load(); loadNpiReview() }, [])
 
@@ -266,9 +297,59 @@ export default function InternalRosterPage({ onNavigate }) {
   async function handleInvite(id) {
     try {
       await facilityAPI.inviteRosterProvider(id)
-      setInvitedIds((p) => ({ ...p, [id]: true }))
+      await load()
     } catch (e) {
-      alert('Invite failed: ' + e.message)
+      alert('Invite failed: ' + (e.message || 'Unknown error'))
+    }
+  }
+
+  function openInviteModal() {
+    // Pre-check the providers eligible by default: clinical, contactable, not
+    // yet invited, and not already credentialed (unless their license is
+    // expiring soon — then they're due to migrate to SNAP now).
+    const sel = {}
+    for (const p of roster) {
+      if (!canCredential(p) || !hasContact(p)) continue
+      const status = p.credentialingStatus || 'NOT_INVITED'
+      const expiring = isExpiringSoon(p.licenseExpiration)
+      if (status === 'NOT_INVITED' && (!p.externallyCredentialed || expiring)) sel[p.id] = true
+    }
+    setInviteSel(sel)
+    setInviteResult(null)
+    setShowInviteModal(true)
+  }
+
+  function toggleInvite(id) {
+    setInviteSel((s) => ({ ...s, [id]: !s[id] }))
+  }
+
+  async function submitInvites() {
+    const ids = Object.keys(inviteSel).filter((id) => inviteSel[id])
+    if (ids.length === 0) return
+    setInviting(true)
+    try {
+      const res = await facilityAPI.bulkInviteCredentialing(ids)
+      setInviteResult(res)
+      await load()
+    } catch (e) {
+      alert('Invite failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  async function handleSyncStatus() {
+    setSyncing(true)
+    try {
+      const res = await facilityAPI.syncCredentialingStatus()
+      await load()
+      alert(res.updated > 0
+        ? `${res.updated} provider${res.updated !== 1 ? 's' : ''} updated to Claimed.`
+        : 'No new claims yet.')
+    } catch (e) {
+      alert('Refresh failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -320,6 +401,20 @@ export default function InternalRosterPage({ onNavigate }) {
             <span style={{ fontSize: 16, lineHeight: 1 }}>📥</span> Upload Roster
           </button>
           <button
+            onClick={openInviteModal}
+            style={{ padding: '11px 18px', background: '#fff', color: '#4F46E5', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>✉️</span> Invite to Credentialing
+          </button>
+          <button
+            onClick={handleSyncStatus}
+            disabled={syncing}
+            title="Check for providers who have completed their invite"
+            style={{ padding: '11px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: syncing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: syncing ? 0.6 : 1 }}
+          >
+            <span style={{ fontSize: 15, lineHeight: 1 }}>↻</span> {syncing ? 'Refreshing…' : 'Refresh status'}
+          </button>
+          <button
             onClick={openAdd}
             style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
           >
@@ -327,6 +422,88 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* Credentialing invite modal */}
+      {showInviteModal && (
+        <Modal title="Invite to Credentialing" onClose={() => setShowInviteModal(false)}>
+          {!inviteResult ? (
+            <>
+              <p style={{ fontSize: 13, color: '#64748B', marginTop: 0, marginBottom: 18, lineHeight: 1.5 }}>
+                Send each selected provider a secure link to build their verified SNAP credentialing passport.
+                Nothing is sent until you click <strong>Send invites</strong>. Providers already credentialed are
+                unchecked by default — they’ll move to SNAP at their next license renewal. Check anyone to override.
+              </p>
+              {(() => {
+                const clinical = roster.filter(canCredential)
+                const needsNpi = roster.filter((p) => isClinical(p) && !p.npi)
+                if (clinical.length === 0) {
+                  return <div style={{ fontSize: 14, color: '#64748B', padding: '20px 0' }}>No clinical providers with an NPI are ready to invite yet.</div>
+                }
+                const selCount = Object.values(inviteSel).filter(Boolean).length
+                return (
+                  <>
+                    <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
+                      <button onClick={() => { const s = {}; clinical.forEach((p) => { if (hasContact(p)) s[p.id] = true }); setInviteSel(s) }} style={linkBtnStyle}>Select all</button>
+                      <button onClick={() => setInviteSel({})} style={linkBtnStyle}>Clear</button>
+                    </div>
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
+                      {clinical.map((p) => {
+                        const contact = hasContact(p)
+                        const status = p.credentialingStatus || 'NOT_INVITED'
+                        const expiring = isExpiringSoon(p.licenseExpiration)
+                        let note = 'Ready to invite'
+                        let noteColor = '#059669'
+                        if (!contact) { note = 'No email or phone on file'; noteColor = '#DC2626' }
+                        else if (status === 'CLAIMED') { note = 'Passport claimed'; noteColor = '#059669' }
+                        else if (status === 'COMPLETED') { note = 'Credentialed'; noteColor = '#047857' }
+                        else if (status === 'INVITED') { note = 'Already invited — re-send'; noteColor = '#6366F1' }
+                        else if (p.externallyCredentialed && !expiring) { note = `Already credentialed — defers to renewal${p.licenseExpiration ? ' (' + p.licenseExpiration.substring(0, 10) + ')' : ''}`; noteColor = '#A16207' }
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid #F1F5F9', cursor: contact ? 'pointer' : 'not-allowed', opacity: contact ? 1 : 0.6 }}>
+                            <input type="checkbox" checked={!!inviteSel[p.id]} disabled={!contact} onChange={() => toggleInvite(p.id)} style={{ width: 16, height: 16 }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{p.providerName}</div>
+                              <div style={{ fontSize: 12, color: noteColor }}>{note}</div>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    {needsNpi.length > 0 && (
+                      <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>
+                        {needsNpi.length} clinical provider{needsNpi.length !== 1 ? 's' : ''} need an NPI before they can be credentialed (resolve in NPI review).
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+                      <button onClick={() => setShowInviteModal(false)} style={ghostBtnStyle}>Cancel</button>
+                      <button onClick={submitInvites} disabled={inviting || selCount === 0} style={{ ...primaryBtnStyle, opacity: (inviting || selCount === 0) ? 0.6 : 1, cursor: (inviting || selCount === 0) ? 'default' : 'pointer' }}>
+                        {inviting ? 'Sending…' : `Send ${selCount} invite${selCount !== 1 ? 's' : ''}`}
+                      </button>
+                    </div>
+                  </>
+                )
+              })()}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
+                ✅ {inviteResult.sent} invite{inviteResult.sent !== 1 ? 's' : ''} sent
+              </div>
+              {inviteResult.skippedCount > 0 && (
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#92400E', marginBottom: 6 }}>{inviteResult.skippedCount} skipped</div>
+                  {inviteResult.results.filter((r) => !r.ok).map((r) => (
+                    <div key={r.id} style={{ fontSize: 12, color: '#92400E' }}>{r.name} — {r.reason}</div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                <button onClick={() => setShowInviteModal(false)} style={primaryBtnStyle}>Done</button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
 
       {/* NPI review nudge — gentle, dismissible by acting or ignoring */}
       {npiReviewRows.length > 0 && (
@@ -389,6 +566,11 @@ export default function InternalRosterPage({ onNavigate }) {
                   </span>
                 </div>
 
+                {isClinical(p) && (() => {
+                  const cs = CRED_STATUS[p.credentialingStatus] || CRED_STATUS.NOT_INVITED
+                  return <Badge bg={cs.bg} color={cs.color} label={`Passport: ${cs.label}`} />
+                })()}
+
                 {rateLabel && (
                   <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
                 )}
@@ -413,9 +595,14 @@ export default function InternalRosterPage({ onNavigate }) {
                   <button onClick={() => setTimeOffMember(p)} style={{ padding: '6px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#B45309' }}>
                     🌴 Time Off
                   </button>
-                  {!linked && (
-                    <button onClick={() => handleInvite(p.id)} disabled={invitedIds[p.id]} style={{ padding: '6px 14px', background: invitedIds[p.id] ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${invitedIds[p.id] ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: invitedIds[p.id] ? 'default' : 'pointer', color: invitedIds[p.id] ? '#15803D' : '#4F46E5' }}>
-                      {invitedIds[p.id] ? '✓ Invited' : '✉️ Invite'}
+                  {canCredential(p) && p.credentialingStatus !== 'CLAIMED' && p.credentialingStatus !== 'COMPLETED' && (
+                    <button
+                      onClick={() => handleInvite(p.id)}
+                      disabled={!hasContact(p)}
+                      title={!hasContact(p) ? 'Add an email or phone to send a credentialing invite' : 'Send credentialing invite'}
+                      style={{ padding: '6px 14px', background: p.credentialingStatus === 'INVITED' ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${p.credentialingStatus === 'INVITED' ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: p.credentialingStatus === 'INVITED' ? '#15803D' : '#4F46E5', opacity: hasContact(p) ? 1 : 0.5 }}
+                    >
+                      {p.credentialingStatus === 'INVITED' ? '↻ Re-invite' : '✉️ Invite'}
                     </button>
                   )}
                   <button onClick={() => handleDelete(p.id)} disabled={deletingIds[p.id]} style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626', marginLeft: 'auto' }}>
