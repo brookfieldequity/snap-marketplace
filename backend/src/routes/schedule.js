@@ -659,12 +659,13 @@ router.post('/build', facilityAuth, async (req, res) => {
       requestedModes.map(async (mode) => {
         const startedAt = new Date();
         try {
-          const { assignments, insights, warnings, score } = await scheduleBuilder.runMode({
-            mode,
-            scheduleDays,
-            roster,
-            staffiqWeights,
-          });
+          const { assignments, insights, warnings, score, staffiqRecommendations } =
+            await scheduleBuilder.runMode({
+              mode,
+              scheduleDays,
+              roster,
+              staffiqWeights,
+            });
           return prisma.scheduleBuildRun.create({
             data: {
               facilityId: req.facility.id,
@@ -678,6 +679,7 @@ router.post('/build', facilityAuth, async (req, res) => {
               staffiqScore: score,
               insights,
               warnings,
+              staffiqRecommendations,
               startedAt,
               completedAt: new Date(),
               triggeredByUserId: userId,
@@ -921,6 +923,7 @@ function serializeRun(run) {
     staffiqScore: run.staffiqScore,
     insights: run.insights,
     warnings: run.warnings,
+    staffiqRecommendations: run.staffiqRecommendations,
     assignmentCount: Array.isArray(run.assignments) ? run.assignments.length : 0,
     selectedAt: run.selectedAt,
     startedAt: run.startedAt,

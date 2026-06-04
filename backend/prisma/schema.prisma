@@ -1061,6 +1061,11 @@ model ScheduleBuildRun {
   insights     Json? // { totalCost, locumsUsed, avgSeniority, ... }
   warnings     String[] // human-readable: "Could not staff Kenmore Mon 8/4"
 
+  // StaffIQ CRNA-gap recommendations (Task #26): { gaps: [...], total... }.
+  // Each gap = a team-location-day where CRNAs were short and MDs backfilled,
+  // with the dollar penalty + the savings from incentivizing CRNAs.
+  staffiqRecommendations Json?
+
   selectedAt        DateTime? // when coordinator picked this run as active
   startedAt         DateTime  @default(now())
   completedAt       DateTime?

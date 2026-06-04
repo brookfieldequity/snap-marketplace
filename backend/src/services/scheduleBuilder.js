@@ -197,6 +197,9 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
   const assigned = new Set();
   const assignments = [];
   const warnings = [];
+  // CRNA-gap signal for the StaffIQ optimizer (Task #26): one entry per
+  // team-location-day where rooms had to be backfilled with solo MDs.
+  const crnaGaps = [];
 
   // Sort days deterministically so multiple runs of the same mode produce
   // identical output (stable demo + easier to diff).
@@ -294,12 +297,14 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
         place(pick, SUPERVISOR_ROOM_BASE + s, 'SUPERVISING_MD');
       }
       if (crnaGapRooms > 0) {
-        // Structured CRNA-gap note for StaffIQ (Task #26). Phrased as a
-        // recommendation prompt; the cost math + incentive CTA land in #26.
-        warnings.push(
-          `CRNA gap: ${day.location} on ${dateISO} filled ${crnaGapRooms} room(s) with ` +
-            `solo MDs for lack of CRNAs — incentivizing ${crnaGapRooms} CRNA(s) would cut cost.`
-        );
+        crnaGaps.push({
+          scheduleDayId: day.id,
+          location: day.location,
+          date: dateISO,
+          ratio,
+          gapRooms: crnaGapRooms,
+          filledCrnaRooms,
+        });
       }
     } else if (ratio === 0) {
       // ── MD-only: every room a solo anesthesiologist ─────────────────────
@@ -326,8 +331,71 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
 
   const insights = computeInsights({ mode, assignments, roster });
   const score = computeStaffIQScore({ mode, assignments, roster, warnings, scheduleDays });
+  const staffiqRecommendations = computeCrnaGapRecommendations(crnaGaps, roster);
 
-  return { assignments, insights, warnings, score };
+  return { assignments, insights, warnings, score, staffiqRecommendations };
+}
+
+/**
+ * StaffIQ CRNA-gap optimizer (Task #26).
+ *
+ * For each team-location-day where rooms were backfilled with solo MDs for
+ * lack of CRNAs, compute the dollar economics of instead incentivizing
+ * CRNAs to fill those rooms. An MD in a room is ~$300/hr; a CRNA ~$200/hr.
+ * Swapping a solo-MD room for a CRNA saves the rate differential, minus any
+ * extra supervising MD the new CRNA pushes you into (1 supervisor per `ratio`
+ * CRNAs). Even paying the CRNA a premium, you usually come out well ahead —
+ * and the recommendation drives an incentive shift into the marketplace.
+ *
+ * Returns { gaps: [...], totalProjectedSavings } where each gap carries the
+ * per-day MD-backfill penalty, projected savings, and the break-even CRNA
+ * rate (the coordinator's bidding ceiling).
+ */
+function computeCrnaGapRecommendations(crnaGaps, roster) {
+  if (!crnaGaps || crnaGaps.length === 0) {
+    return { gaps: [], totalProjectedSavings: 0 };
+  }
+  const HOURS = 8;
+  const ratesFor = (type) =>
+    roster
+      .filter((r) => r.providerType === type)
+      .map((r) => effectiveHourlyRate(r))
+      .filter((x) => x > 0);
+  const avg = (arr, fallback) =>
+    arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : fallback;
+  const crnaRate = avg(ratesFor('CRNA'), 200);
+  const mdRate = avg(ratesFor('ANESTHESIOLOGIST'), 300);
+
+  const gaps = crnaGaps
+    .map((g) => {
+      const removedMd = g.gapRooms * mdRate * HOURS; // solo MDs we'd remove
+      const addedCrna = g.gapRooms * crnaRate * HOURS; // CRNAs we'd add (std rate)
+      // Extra supervising MDs the new CRNAs push us into (1 per `ratio`).
+      const supervisorDelta =
+        (Math.ceil((g.filledCrnaRooms + g.gapRooms) / g.ratio) -
+          Math.ceil(g.filledCrnaRooms / g.ratio)) *
+        mdRate *
+        HOURS;
+      const projectedSavingsPerDay = Math.round(removedMd - addedCrna - supervisorDelta);
+      // The CRNA hourly rate at which the swap breaks even — how high the
+      // coordinator can bid on an incentive shift and still save money.
+      const maxCrnaRate = Math.round(crnaRate + projectedSavingsPerDay / (g.gapRooms * HOURS));
+      return {
+        scheduleDayId: g.scheduleDayId,
+        location: g.location,
+        date: g.date,
+        ratio: g.ratio,
+        crnaShortfall: g.gapRooms,
+        mdBackfillCostPerDay: Math.round(removedMd),
+        projectedSavingsPerDay,
+        recommendedCrnaRate: Math.round(crnaRate),
+        maxCrnaRate,
+      };
+    })
+    .filter((g) => g.projectedSavingsPerDay > 0);
+
+  const totalProjectedSavings = gaps.reduce((s, g) => s + g.projectedSavingsPerDay, 0);
+  return { gaps, totalProjectedSavings };
 }
 
 // ── Insights & scoring ─────────────────────────────────────────────────────
