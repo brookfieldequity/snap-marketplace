@@ -612,7 +612,7 @@ router.post('/generate', facilityAuth, async (req, res) => {
           wasExisting ? rowsUpdated++ : rowsCreated++;
         }
       }
-    });
+    }, { maxWait: 15000, timeout: 60000 });
 
     // Time-savings tracking — only count when the generation actually
     // created rows. Fire-and-forget.
