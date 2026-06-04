@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { facilityAPI } from '../../api.js'
 import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
+import StaffIQRecommendations from './StaffIQRecommendations.jsx'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
@@ -153,6 +154,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [showBuildFlow, setShowBuildFlow] = useState(false)
   const [selectedRunId, setSelectedRunId] = useState(null)
   const [selectedRunScore, setSelectedRunScore] = useState(null)
+  const [selectedRunRecs, setSelectedRunRecs] = useState(null)
   const [rescoring, setRescoring] = useState(false)
   const [rescoreMessage, setRescoreMessage] = useState(null)
 
@@ -199,6 +201,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     try {
       const res = await facilityAPI.rescoreBuildRun(selectedRunId)
       setSelectedRunScore(res.score)
+      if (res.staffiqRecommendations !== undefined) setSelectedRunRecs(res.staffiqRecommendations)
       const delta = res.delta || 0
       const sign = delta > 0 ? '+' : ''
 
@@ -327,9 +330,9 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     setExporting(true)
     try {
       const data = await facilityAPI.exportSchedule(year, month)
-      const rows = [['Date', 'Location', 'Room', 'Provider', 'Type', 'Category']]
+      const rows = [['Date', 'Location', 'Room', 'Role', 'Provider', 'Type', 'Category']]
       const exportRows = Array.isArray(data) ? data : data.rows || []
-      exportRows.forEach(r => rows.push([r.date, r.location, r.room, r.providerName || '', r.providerType || '', r.employmentCategory || '']))
+      exportRows.forEach(r => rows.push([r.date, r.location, r.room, r.role || '', r.providerName || '', r.providerType || '', r.employmentCategory || '']))
       const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
@@ -581,6 +584,11 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           >
             {rescoring ? 'Re-scoring…' : 'Re-score'}
           </button>
+        </div>
+      )}
+      {selectedRunId && selectedRunRecs?.totalProjectedSavings > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <StaffIQRecommendations recommendations={selectedRunRecs} />
         </div>
       )}
       {rescoreMessage && (
@@ -891,6 +899,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             setShowBuildFlow(false)
             setSelectedRunId(run.id)
             setSelectedRunScore(run.staffiqScore)
+            setSelectedRunRecs(run.staffiqRecommendations || null)
             setRescoreMessage({ kind: 'success', text: message || 'Schedule applied.' })
             // Reload the calendar to show the new assignments
             load()

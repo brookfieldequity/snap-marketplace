@@ -517,6 +517,33 @@ async function resolveStaffIQWeights(facilityId) {
   return { cost: 0.5, quality: 0.5 };
 }
 
+/**
+ * Derive crnaGaps from already-materialized ScheduleDay rows (with their
+ * assignments). Used by the re-score path, which works from the live edited
+ * schedule rather than a fresh build. A team-model day (supervisionRatio
+ * 3/4) is CRNA-short by the number of SOLO_MD_ROOM assignments it carries.
+ */
+function deriveCrnaGaps(days) {
+  const gaps = [];
+  for (const d of days) {
+    if (d.supervisionRatio !== 3 && d.supervisionRatio !== 4) continue;
+    const a = d.assignments || [];
+    const filledCrnaRooms = a.filter((x) => x.role === 'CRNA_ROOM' && x.rosterId).length;
+    const gapRooms = a.filter((x) => x.role === 'SOLO_MD_ROOM' && x.rosterId).length;
+    if (gapRooms > 0) {
+      gaps.push({
+        scheduleDayId: d.id,
+        location: d.location,
+        date: new Date(d.date).toISOString().slice(0, 10),
+        ratio: d.supervisionRatio,
+        gapRooms,
+        filledCrnaRooms,
+      });
+    }
+  }
+  return gaps;
+}
+
 module.exports = {
   MODES,
   runMode,
@@ -524,4 +551,6 @@ module.exports = {
   // exposed for testing / re-scoring after edits
   computeInsights,
   computeStaffIQScore,
+  computeCrnaGapRecommendations,
+  deriveCrnaGaps,
 };

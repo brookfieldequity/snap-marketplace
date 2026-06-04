@@ -300,13 +300,22 @@ router.get('/export', facilityAuth, async (req, res) => {
       orderBy: { date: 'asc' },
     });
 
+    const ROLE_LABEL = {
+      CRNA_ROOM: 'CRNA room',
+      SOLO_MD_ROOM: 'Solo MD room',
+      SUPERVISING_MD: 'Supervising MD',
+    };
     const rows = [];
     for (const day of days) {
       for (const assignment of day.assignments) {
+        const isSupervisor = assignment.role === 'SUPERVISING_MD';
         rows.push({
           date: day.date.toISOString().split('T')[0],
           location: day.location,
-          roomNumber: assignment.roomNumber,
+          // Supervising MDs are stored at roomNumber >= 900 — label them
+          // rather than printing a meaningless room number in the export.
+          room: isSupervisor ? 'Supervising' : assignment.roomNumber,
+          role: assignment.role ? ROLE_LABEL[assignment.role] || assignment.role : '',
           providerName: assignment.rosterEntry?.providerName || null,
           providerType: assignment.rosterEntry?.providerType || null,
           employmentCategory: assignment.rosterEntry?.employmentCategory || null,
@@ -887,9 +896,14 @@ router.post('/build/:runId/rescore', facilityAuth, async (req, res) => {
     const costDelta =
       previousCost != null && newCost != null ? newCost - previousCost : null;
 
+    // Recompute the CRNA-gap recommendations from the edited schedule so the
+    // StaffIQ savings reflect the coordinator's current room assignments.
+    const crnaGaps = scheduleBuilder.deriveCrnaGaps(days);
+    const staffiqRecommendations = scheduleBuilder.computeCrnaGapRecommendations(crnaGaps, roster);
+
     await prisma.scheduleBuildRun.update({
       where: { id: req.params.runId },
-      data: { staffiqScore: newScore, insights },
+      data: { staffiqScore: newScore, insights, staffiqRecommendations },
     });
 
     res.json({
@@ -900,6 +914,7 @@ router.post('/build/:runId/rescore', facilityAuth, async (req, res) => {
       newCost,
       costDelta,
       insights,
+      staffiqRecommendations,
     });
   } catch (err) {
     console.error('[schedule:build] rescore failed:', err);

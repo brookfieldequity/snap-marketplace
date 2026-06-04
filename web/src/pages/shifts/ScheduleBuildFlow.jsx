@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { facilityAPI } from '../../api.js'
+import StaffIQRecommendations from './StaffIQRecommendations.jsx'
 
 /**
  * Schedule Builder v2 flow component.
@@ -203,37 +204,6 @@ function ComparingPhase({ runs, onSelect, selecting, onBack }) {
   const sorted = [...runs].sort((a, b) => (b.staffiqScore || 0) - (a.staffiqScore || 0))
   const topScore = sorted[0]?.staffiqScore || 0
 
-  // Track incentive-shift creation per gap key (scheduleDayId).
-  const [incentiveState, setIncentiveState] = useState({}) // key → 'creating' | 'created' | 'error'
-
-  async function createIncentive(gap) {
-    const key = gap.scheduleDayId
-    setIncentiveState((s) => ({ ...s, [key]: 'creating' }))
-    try {
-      // Offer a premium between the standard CRNA rate and the break-even
-      // ceiling — gives the facility part of the savings and the CRNA a real
-      // incentive. Coordinator can adjust the rate/time in the Gaps page.
-      const offered = Math.max(
-        gap.recommendedCrnaRate,
-        Math.round((gap.recommendedCrnaRate + gap.maxCrnaRate) / 2)
-      )
-      const shiftDate = new Date(gap.date)
-      const deadline = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
-      await facilityAPI.createIncentiveShift({
-        shiftDate: gap.date,
-        startTime: '07:00',
-        durationHours: 8,
-        facilityLocation: gap.location,
-        incentiveRate: offered,
-        providerTypeRequired: 'CRNA',
-        responseDeadline: (deadline < shiftDate ? deadline : shiftDate).toISOString(),
-      })
-      setIncentiveState((s) => ({ ...s, [key]: 'created' }))
-    } catch {
-      setIncentiveState((s) => ({ ...s, [key]: 'error' }))
-    }
-  }
-
   return (
     <>
       <p style={styles.body}>
@@ -311,44 +281,7 @@ function ComparingPhase({ runs, onSelect, selecting, onBack }) {
                     </div>
                   )}
 
-                  {run.staffiqRecommendations?.totalProjectedSavings > 0 && (
-                    <div style={styles.staffiqBlock}>
-                      <div style={styles.staffiqHeader}>
-                        🧠 StaffIQ: save {fmtMoney(run.staffiqRecommendations.totalProjectedSavings)}/day
-                      </div>
-                      <div style={styles.staffiqSub}>
-                        Rooms are covered by MDs where CRNAs ran short. Incentivize CRNAs to swap in — cheaper than an MD in the room.
-                      </div>
-                      {run.staffiqRecommendations.gaps.slice(0, 4).map((gap) => {
-                        const st = incentiveState[gap.scheduleDayId]
-                        return (
-                          <div key={gap.scheduleDayId} style={styles.staffiqGapRow}>
-                            <div style={styles.staffiqGapText}>
-                              <strong>{gap.location}</strong> · {gap.date} — short {gap.crnaShortfall} CRNA
-                              {gap.crnaShortfall === 1 ? '' : 's'} (save {fmtMoney(gap.projectedSavingsPerDay)}/day,
-                              {' '}pay up to ${gap.maxCrnaRate}/hr)
-                            </div>
-                            <button
-                              style={{
-                                ...styles.incentiveBtn,
-                                ...(st === 'created' ? styles.incentiveBtnDone : {}),
-                              }}
-                              onClick={() => createIncentive(gap)}
-                              disabled={st === 'creating' || st === 'created'}
-                            >
-                              {st === 'creating'
-                                ? 'Creating…'
-                                : st === 'created'
-                                  ? '✓ Shift sent'
-                                  : st === 'error'
-                                    ? 'Retry'
-                                    : 'Create incentive shift'}
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <StaffIQRecommendations recommendations={run.staffiqRecommendations} compact />
 
                   <button
                     style={styles.useBtn}
@@ -445,13 +378,6 @@ const styles = {
   warningsBlock: { fontSize: 11, color: '#92400E', background: '#FFFBEB', padding: 8, borderRadius: 6, marginTop: 4 },
   warningsList: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 },
   warning: { fontSize: 10, color: '#92400E', lineHeight: 1.4 },
-  staffiqBlock: { marginTop: 8, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: 10 },
-  staffiqHeader: { fontSize: 13, fontWeight: 800, color: '#065F46' },
-  staffiqSub: { fontSize: 10, color: '#047857', lineHeight: 1.4, marginTop: 2, marginBottom: 6 },
-  staffiqGapRow: { display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6, borderTop: '1px solid #A7F3D0', marginTop: 6 },
-  staffiqGapText: { fontSize: 11, color: '#065F46', lineHeight: 1.4 },
-  incentiveBtn: { alignSelf: 'flex-start', padding: '6px 12px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' },
-  incentiveBtnDone: { background: '#fff', color: '#059669', border: '1px solid #059669' },
   useBtn: { marginTop: 8, padding: '10px 16px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
   compareFailed: { color: '#991B1B', fontSize: 13, fontWeight: 600 },
   compareFailedReason: { color: '#64748B', fontSize: 12, marginTop: 4, fontWeight: 400 },
