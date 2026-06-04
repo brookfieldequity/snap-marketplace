@@ -139,6 +139,8 @@ export default function InternalRosterPage({ onNavigate }) {
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState(null) // { sent, skippedCount, results }
   const [syncing, setSyncing] = useState(false)
+  const [reclassifying, setReclassifying] = useState(false)
+  const [reclassifyResult, setReclassifyResult] = useState(null)
 
   useEffect(() => { load(); loadNpiReview() }, [])
 
@@ -353,6 +355,19 @@ export default function InternalRosterPage({ onNavigate }) {
     }
   }
 
+  async function handleReclassify() {
+    setReclassifying(true)
+    try {
+      const res = await facilityAPI.reclassifyRosterTypes()
+      setReclassifyResult(res)
+      await load()
+    } catch (e) {
+      alert('Fix types failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setReclassifying(false)
+    }
+  }
+
   function setF(k, v) { setForm((p) => ({ ...p, [k]: v })) }
 
   function toggleDay(day) {
@@ -415,6 +430,14 @@ export default function InternalRosterPage({ onNavigate }) {
             <span style={{ fontSize: 15, lineHeight: 1 }}>↻</span> {syncing ? 'Refreshing…' : 'Refresh status'}
           </button>
           <button
+            onClick={handleReclassify}
+            disabled={reclassifying}
+            title="Set each provider's type (MD / CRNA / AA) from the national NPI registry"
+            style={{ padding: '11px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: reclassifying ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: reclassifying ? 0.6 : 1 }}
+          >
+            <span style={{ fontSize: 15, lineHeight: 1 }}>🩺</span> {reclassifying ? 'Fixing…' : 'Fix types'}
+          </button>
+          <button
             onClick={openAdd}
             style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
           >
@@ -422,6 +445,38 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* Provider-type re-classify result */}
+      {reclassifyResult && (
+        <Modal title="Provider types updated" onClose={() => setReclassifyResult(null)}>
+          <div style={{ fontSize: 14, color: '#0F172A', marginBottom: 14 }}>
+            Checked {reclassifyResult.checked} clinical provider{reclassifyResult.checked !== 1 ? 's' : ''} against the national registry.{' '}
+            <strong>{reclassifyResult.updated} updated.</strong>
+          </div>
+          {reclassifyResult.changes?.length > 0 ? (
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
+              {reclassifyResult.changes.map((c, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{c.name}</span>
+                  <span style={{ color: '#64748B', whiteSpace: 'nowrap' }}>
+                    {(c.from && TYPE_BADGE[c.from]?.label) || '(none)'} → <strong style={{ color: '#059669' }}>{TYPE_BADGE[c.to]?.label || c.to}</strong>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: '#64748B' }}>Everyone&apos;s type already matched the registry — nothing to change.</div>
+          )}
+          {reclassifyResult.unmatched > 0 && (
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>
+              {reclassifyResult.unmatched} couldn&apos;t be confirmed from the registry (no NPI match or a non-anesthesia taxonomy) and were left unchanged.
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+            <button onClick={() => setReclassifyResult(null)} style={primaryBtnStyle}>Done</button>
+          </div>
+        </Modal>
+      )}
 
       {/* Credentialing invite modal */}
       {showInviteModal && (

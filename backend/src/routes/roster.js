@@ -4,7 +4,7 @@ const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { logAutomationEvent } = require('../services/automationEvents');
-const { resolveNpi } = require('../services/nppesLookup');
+const { resolveNpi, lookupByNumber, specialtyFromTaxonomy } = require('../services/nppesLookup');
 const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS } = require('../services/notifications');
@@ -532,6 +532,46 @@ router.post('/sync-credentialing', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /reclassify-from-nppes — authoritatively set provider type for clinical
+// roster rows from each provider's NPPES taxonomy (MD vs CRNA vs AA), fixing
+// rows the spreadsheet importer mis-typed. Idempotent + safe to re-run. Only
+// changes a type when NPPES gives a confident anesthesia-role mapping; rows it
+// can't confirm are left untouched and counted as `unmatched`.
+router.post('/reclassify-from-nppes', facilityAuth, async (req, res) => {
+  try {
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id, isNonClinical: false, npi: { not: null } },
+      select: { id: true, providerName: true, npi: true, providerType: true },
+    });
+
+    const changes = [];
+    let unmatched = 0;
+    for (const e of entries) {
+      // Sequential to avoid hammering NPPES; rosters are small enough.
+      // eslint-disable-next-line no-await-in-loop
+      const rec = await lookupByNumber(e.npi);
+      const mapped = rec.found ? specialtyFromTaxonomy(rec.primaryTaxonomy) : null;
+      if (!mapped) {
+        unmatched += 1;
+        continue;
+      }
+      if (mapped !== e.providerType) {
+        // eslint-disable-next-line no-await-in-loop
+        await prisma.internalRosterEntry.update({
+          where: { id: e.id },
+          data: { providerType: mapped },
+        });
+        changes.push({ name: e.providerName, npi: e.npi, from: e.providerType, to: mapped });
+      }
+    }
+
+    res.json({ checked: entries.length, updated: changes.length, unmatched, changes });
+  } catch (err) {
+    console.error('[roster] reclassify failed:', err);
+    res.status(500).json({ error: 'Failed to re-classify provider types.' });
+  }
+});
+
 // POST /:id/invite — send a single credentialing invite (per-row button).
 router.post('/:id/invite', facilityAuth, async (req, res) => {
   try {
@@ -653,10 +693,12 @@ const VALID_EMPLOYMENT = ['FULL_TIME', 'PER_DIEM', 'LOCUMS'];
  */
 function normalizeSpecialty(v) {
   if (!v) return null;
-  const s = String(v).toUpperCase().replace(/[\s_-]/g, '');
+  // Strip whitespace, underscores, hyphens AND periods so "M.D." -> "MD".
+  const s = String(v).toUpperCase().replace(/[\s_.\-]/g, '');
   if (s.includes('CRNA') || s.includes('NURSEANESTHETIST')) return 'CRNA';
   if (s.includes('ASSISTANT') || s === 'AA') return 'ANESTHESIA_ASSISTANT';
-  if (s.includes('ANESTHESIOLOGIST') || s === 'MD' || s === 'DO') return 'ANESTHESIOLOGIST';
+  if (s.includes('ANESTHESIOLOGIST') || s.includes('PHYSICIAN') || s === 'MD' || s === 'DO' || s === 'MDA')
+    return 'ANESTHESIOLOGIST';
   // Last resort: direct enum match
   return VALID_SPECIALTIES.find((x) => x === s) || null;
 }

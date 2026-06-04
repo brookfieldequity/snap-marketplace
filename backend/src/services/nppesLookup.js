@@ -124,4 +124,47 @@ async function resolveNpi({ name, state = 'MA' } = {}) {
   return { decision: 'NEEDS_DISAMBIGUATION', matches: active, npi: null, searched: split };
 }
 
-module.exports = { searchByName, splitName, resolveNpi };
+/**
+ * Look up a single NPI by number and return its primary taxonomy + name.
+ * Used to authoritatively re-classify a roster row's provider type. Returns
+ * { found: false } on any miss/error so callers can skip safely.
+ */
+async function lookupByNumber(npi) {
+  if (!/^\d{10}$/.test(String(npi || ''))) return { found: false };
+  const params = new URLSearchParams({ version: '2.1', number: String(npi) });
+  try {
+    const res = await fetch(`${NPPES_API_URL}?${params}`);
+    if (!res.ok) return { found: false };
+    const data = await res.json();
+    const r = Array.isArray(data?.results) ? data.results[0] : null;
+    if (!r || !r.basic) return { found: false };
+    return {
+      found: true,
+      firstName: r.basic.first_name || null,
+      lastName: r.basic.last_name || null,
+      credential: r.basic.credential || null,
+      primaryTaxonomy:
+        (r.taxonomies || []).find((t) => t.primary)?.desc || (r.taxonomies || [])[0]?.desc || null,
+    };
+  } catch (err) {
+    console.error('[nppes] lookupByNumber failed:', err.message);
+    return { found: false };
+  }
+}
+
+/**
+ * Map an NPPES taxonomy description to a SNAP Specialty enum value. Returns
+ * null when it isn't one of our three anesthesia roles, so callers leave the
+ * existing type untouched rather than guessing. Order matters: "Anesthesiologist
+ * Assistant" also contains "anesthesiolog", so it's checked before the MD case.
+ */
+function specialtyFromTaxonomy(desc) {
+  if (!desc) return null;
+  const d = String(desc).toLowerCase();
+  if (d.includes('nurse anesthetist')) return 'CRNA';
+  if (d.includes('anesthesiologist assistant')) return 'ANESTHESIA_ASSISTANT';
+  if (d.includes('anesthesiolog')) return 'ANESTHESIOLOGIST'; // "Anesthesiology" (MD/DO)
+  return null;
+}
+
+module.exports = { searchByName, splitName, resolveNpi, lookupByNumber, specialtyFromTaxonomy };
