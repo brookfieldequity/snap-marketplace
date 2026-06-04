@@ -873,12 +873,29 @@ router.post('/build/:runId/rescore', facilityAuth, async (req, res) => {
     });
     const delta = newScore - (run.staffiqScore || 0);
 
+    // Cost delta — what most coordinators actually care about. The run's
+    // stored insights hold the cost as of the last build/score; compare to
+    // the freshly-computed cost after the coordinator's edits.
+    const previousCost =
+      run.insights && typeof run.insights === 'object' ? run.insights.totalCost ?? null : null;
+    const newCost = insights.totalCost ?? null;
+    const costDelta =
+      previousCost != null && newCost != null ? newCost - previousCost : null;
+
     await prisma.scheduleBuildRun.update({
       where: { id: req.params.runId },
       data: { staffiqScore: newScore, insights },
     });
 
-    res.json({ score: newScore, previousScore: run.staffiqScore, delta, insights });
+    res.json({
+      score: newScore,
+      previousScore: run.staffiqScore,
+      delta,
+      previousCost,
+      newCost,
+      costDelta,
+      insights,
+    });
   } catch (err) {
     console.error('[schedule:build] rescore failed:', err);
     res.status(500).json({ error: 'Failed to rescore.' });

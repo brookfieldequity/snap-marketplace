@@ -186,9 +186,23 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       setSelectedRunScore(res.score)
       const delta = res.delta || 0
       const sign = delta > 0 ? '+' : ''
+
+      // Lead with cost — it means more to coordinators than the StaffIQ score.
+      let costText = ''
+      if (res.newCost != null) {
+        const fmt = (n) => `$${Math.round(n).toLocaleString()}`
+        if (res.costDelta != null && res.costDelta !== 0) {
+          const up = res.costDelta > 0
+          // A cost increase is bad (red-ish phrasing), a decrease is a saving.
+          costText = `Estimated cost: ${fmt(res.newCost)} (${up ? '+' : '−'}${fmt(Math.abs(res.costDelta))} ${up ? 'more' : 'saved'} vs last build). `
+        } else {
+          costText = `Estimated cost: ${fmt(res.newCost)}. `
+        }
+      }
+
       setRescoreMessage({
         kind: 'success',
-        text: `New StaffIQ score: ${res.score} (${sign}${delta} from build).`,
+        text: `${costText}StaffIQ score: ${res.score} (${sign}${delta}).`,
       })
     } catch (err) {
       setRescoreMessage({ kind: 'error', text: err.message || 'Re-score failed.' })
