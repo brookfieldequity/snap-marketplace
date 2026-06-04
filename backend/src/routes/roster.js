@@ -144,7 +144,7 @@ router.get('/', facilityAuth, async (req, res) => {
 router.post('/', facilityAuth, async (req, res) => {
   try {
     const {
-      providerName, providerType, employmentCategory,
+      providerName, providerType, employmentCategory, npi,
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
@@ -157,6 +157,7 @@ router.post('/', facilityAuth, async (req, res) => {
       data: {
         facilityId: req.facility.id,
         providerName, providerType, employmentCategory,
+        npi: npi ? String(npi).replace(/\D/g, '') || null : null,
         snapAccountEmail: snapAccountEmail || null,
         phoneNumber: phoneNumber || null,
         licenseNumber: licenseNumber || null,
@@ -194,7 +195,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
     }
 
     const {
-      providerName, providerType, employmentCategory,
+      providerName, providerType, employmentCategory, npi,
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
@@ -213,6 +214,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(providerName !== undefined && { providerName }),
         ...(providerType !== undefined && { providerType }),
         ...(employmentCategory !== undefined && { employmentCategory }),
+        ...(npi !== undefined && { npi: npi ? String(npi).replace(/\D/g, '') || null : null }),
         ...(snapAccountEmail !== undefined && { snapAccountEmail }),
         ...(phoneNumber !== undefined && { phoneNumber }),
         ...(licenseNumber !== undefined && { licenseNumber }),

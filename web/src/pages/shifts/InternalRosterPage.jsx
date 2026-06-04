@@ -24,7 +24,7 @@ const SHIFT_LENGTHS = [
 ]
 
 const BLANK_FORM = {
-  providerName: '', providerType: 'CRNA', employmentCategory: 'FULL_TIME',
+  providerName: '', providerType: 'CRNA', employmentCategory: 'FULL_TIME', npi: '',
   snapEmail: '', phoneNumber: '', licenseNumber: '', licenseExpiration: '',
   // Category fields
   fteHours: '', annualRate: '', hourlyRate: '',
@@ -225,6 +225,7 @@ export default function InternalRosterPage({ onNavigate }) {
       providerName: p.providerName || '',
       providerType: p.providerType || 'CRNA',
       employmentCategory: p.employmentCategory || 'FULL_TIME',
+      npi: p.npi || '',
       snapEmail: p.snapAccountEmail || '',
       phoneNumber: p.phoneNumber || '',
       licenseNumber: p.licenseNumber || '',
@@ -254,6 +255,7 @@ export default function InternalRosterPage({ onNavigate }) {
         providerName: form.providerName,
         providerType: form.providerType,
         employmentCategory: form.employmentCategory,
+        npi: form.npi || null,
         snapAccountEmail: form.snapEmail || null,
         phoneNumber: form.phoneNumber || null,
         licenseNumber: form.licenseNumber || null,
@@ -626,6 +628,12 @@ export default function InternalRosterPage({ onNavigate }) {
                   return <Badge bg={cs.bg} color={cs.color} label={`Passport: ${cs.label}`} />
                 })()}
 
+                {isClinical(p) && (
+                  <div style={{ fontSize: 11, color: p.npi ? '#64748B' : '#DC2626', fontWeight: p.npi ? 400 : 600 }}>
+                    {p.npi ? `NPI ${p.npi}` : '⚠️ No NPI on file'}
+                  </div>
+                )}
+
                 {rateLabel && (
                   <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
                 )}
@@ -698,6 +706,9 @@ export default function InternalRosterPage({ onNavigate }) {
             </Field>
             <Field label="Phone Number">
               <input style={inputStyle} type="tel" value={form.phoneNumber} onChange={(e) => setF('phoneNumber', e.target.value)} placeholder="(555) 000-0000" />
+            </Field>
+            <Field label="NPI Number">
+              <input style={inputStyle} value={form.npi} onChange={(e) => setF('npi', e.target.value)} placeholder="10-digit NPI" inputMode="numeric" />
             </Field>
             <Field label="License Number">
               <input style={inputStyle} value={form.licenseNumber} onChange={(e) => setF('licenseNumber', e.target.value)} placeholder="LIC-12345" />
