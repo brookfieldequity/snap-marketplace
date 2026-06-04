@@ -645,11 +645,6 @@ export default function InternalRosterPage({ onNavigate }) {
                   </div>
                 )}
 
-                {p.licenseExpiration && (
-                  <div style={{ fontSize: 12, color: expiringSoon ? '#DC2626' : '#64748B', fontWeight: expiringSoon ? 700 : 400 }}>
-                    {expiringSoon ? '⚠️ ' : ''}License expires: {p.licenseExpiration.substring(0, 10)}
-                  </div>
-                )}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
