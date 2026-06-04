@@ -222,6 +222,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [coverageTemplates, setCoverageTemplates] = useState([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const [generateMessage, setGenerateMessage] = useState(null) // success or error
 
   // Schedule Builder v2 — the build flow modal. selectedRunId persists
@@ -325,11 +326,32 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     }
   }
 
+  // Clear any build the coordinator had selected — it no longer matches the
+  // schedule once the month is wiped or regenerated from a different template.
+  function resetSelectedRun() {
+    setSelectedRunId(null)
+    setSelectedRunScore(null)
+    setSelectedRunRecs(null)
+    setSelectedRunInsights(null)
+  }
+
+  function monthDays() {
+    return scheduleData ? (Array.isArray(scheduleData) ? scheduleData : scheduleData.days || []) : []
+  }
+
   async function handleGenerateFromTemplate() {
     if (!selectedTemplateId) return
+    const hasDays = monthDays().length > 0
+    // Generating onto an existing month is a full replace (the month is cleared
+    // first so a different template doesn't leave stale locations behind).
+    if (hasDays && !window.confirm(`This will replace the current ${monthName} ${year} schedule with the selected template. Continue?`)) return
     setGenerating(true)
     setGenerateMessage(null)
     try {
+      if (hasDays) {
+        await facilityAPI.clearScheduleMonth(year, month)
+        resetSelectedRun()
+      }
       const res = await facilityAPI.generateScheduleFromTemplate(year, month, selectedTemplateId)
       const s = res.summary || {}
       setGenerateMessage({
@@ -344,6 +366,25 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       setGenerateMessage({ kind: 'error', text: e.message || 'Generate failed.' })
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function handleClearMonth() {
+    if (!window.confirm(`Clear the entire ${monthName} ${year} schedule? This removes all days and assignments for the month.`)) return
+    setClearing(true)
+    setGenerateMessage(null)
+    try {
+      const res = await facilityAPI.clearScheduleMonth(year, month)
+      resetSelectedRun()
+      setGenerateMessage({
+        kind: 'success',
+        text: `Cleared ${res.daysDeleted || 0} day(s) and ${res.assignmentsDeleted || 0} assignment(s). ${monthName} is now empty.`,
+      })
+      await load()
+    } catch (e) {
+      setGenerateMessage({ kind: 'error', text: e.message || 'Clear failed.' })
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -591,20 +632,30 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           Template configured. After generation, the existing click-a-day
           editor takes over. */}
       {(() => {
-        const days = scheduleData ? (Array.isArray(scheduleData) ? scheduleData : scheduleData.days || []) : []
-        if (loading || days.length > 0 || coverageTemplates.length === 0) return null
+        if (loading || coverageTemplates.length === 0) return null
+        const hasDays = monthDays().length > 0
+        const busy = generating || clearing
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '14px 18px', marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 20 }}>🧩</span>
             <div style={{ flex: 1, fontSize: 13, color: '#064E3B', minWidth: 240 }}>
-              <strong>{monthName} {year} is empty.</strong>
-              <span style={{ color: '#047857' }}> Pre-fill it from one of your Coverage Templates — you can edit any day afterward.</span>
+              {hasDays ? (
+                <>
+                  <strong>Switch templates or rebuild {monthName} {year}.</strong>
+                  <span style={{ color: '#047857' }}> Generating replaces this month with the selected template — you can edit any day afterward.</span>
+                </>
+              ) : (
+                <>
+                  <strong>{monthName} {year} is empty.</strong>
+                  <span style={{ color: '#047857' }}> Pre-fill it from one of your Coverage Templates — you can edit any day afterward.</span>
+                </>
+              )}
             </div>
             <select
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
               style={{ padding: '8px 12px', border: '1.5px solid #A7F3D0', borderRadius: 8, fontSize: 13, background: '#fff', color: '#064E3B', minWidth: 200 }}
-              disabled={generating}
+              disabled={busy}
             >
               {coverageTemplates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -614,11 +665,20 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             </select>
             <button
               onClick={handleGenerateFromTemplate}
-              disabled={generating || !selectedTemplateId}
-              style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: generating ? 'not-allowed' : 'pointer', opacity: generating ? 0.7 : 1 }}
+              disabled={busy || !selectedTemplateId}
+              style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
             >
-              {generating ? 'Generating…' : `Generate ${monthName}`}
+              {generating ? 'Generating…' : hasDays ? `Replace ${monthName}` : `Generate ${monthName}`}
             </button>
+            {hasDays && (
+              <button
+                onClick={handleClearMonth}
+                disabled={busy}
+                style={{ padding: '10px 16px', background: '#fff', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+              >
+                {clearing ? 'Clearing…' : '🗑️ Clear month'}
+              </button>
+            )}
           </div>
         )
       })()}

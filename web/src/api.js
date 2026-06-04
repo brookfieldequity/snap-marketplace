@@ -193,6 +193,8 @@ export const facilityAPI = {
   // Skips holidays automatically (computed server-side). Idempotent.
   generateScheduleFromTemplate: (year, month, templateId) =>
     apiFetch(`${BASE}/schedule/generate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, templateId }) }),
+  clearScheduleMonth: (year, month) =>
+    apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { method: 'DELETE', headers: facilityHeaders() }),
 
   // Internal Roster — time off / PTO
   getTimeOff: (from, to) => {

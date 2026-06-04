@@ -170,6 +170,43 @@ router.delete('/days/:id', facilityAuth, async (req, res) => {
   }
 });
 
+// DELETE /month — clear a whole month's schedule (days + their assignments).
+// Lets a coordinator start a month over before generating from a different
+// Coverage Template. Assignments are deleted first (the FK is restrict, not
+// cascade), then the days, in one transaction.
+router.delete('/month', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    const month = parseInt(req.query.month, 10);
+    if (!year || !month || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+    }
+    const { start, end } = monthRange(year, month);
+
+    const days = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id, date: { gte: start, lt: end } },
+      select: { id: true },
+    });
+    const dayIds = days.map((d) => d.id);
+    if (dayIds.length === 0) {
+      return res.json({ daysDeleted: 0, assignmentsDeleted: 0 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const assignments = await tx.scheduleAssignment.deleteMany({
+        where: { scheduleDayId: { in: dayIds } },
+      });
+      const deletedDays = await tx.scheduleDay.deleteMany({ where: { id: { in: dayIds } } });
+      return { assignmentsDeleted: assignments.count, daysDeleted: deletedDays.count };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('[schedule] clear month failed:', err);
+    res.status(500).json({ error: 'Failed to clear month.' });
+  }
+});
+
 // PUT /days/:dayId/assignments/:roomNumber — assign or unassign a provider to a room
 router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res) => {
   try {
