@@ -657,7 +657,7 @@ router.post('/build', facilityAuth, async (req, res) => {
       requestedModes.map(async (mode) => {
         const startedAt = new Date();
         try {
-          const { assignments, insights, warnings, score } = scheduleBuilder.runMode({
+          const { assignments, insights, warnings, score } = await scheduleBuilder.runMode({
             mode,
             scheduleDays,
             roster,

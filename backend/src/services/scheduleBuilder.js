@@ -26,6 +26,33 @@ const MODES = ['COST_EFFICIENT', 'HIGHEST_QUALITY', 'HYBRID', 'STAFFIQ'];
 const DEFAULT_RELIABILITY = 0.85; // when roster.reliabilityScore is null
 const FULL_TIME_HOURS_PER_YEAR = 2080;
 
+// ── Location eligibility ──────────────────────────────────────────────────
+// Once ProviderLocation rows are imported (Task #18), the algorithm filters
+// candidates by "is this provider credentialed at this room's location?"
+// Back-compat: a roster entry with ZERO ProviderLocation rows is treated as
+// eligible everywhere, so rosters from before the location-import feature
+// don't break.
+
+async function loadProviderLocations(rosterIds) {
+  if (!rosterIds || rosterIds.length === 0) return new Map();
+  const rows = await prisma.providerLocation.findMany({
+    where: { rosterEntryId: { in: rosterIds } },
+    select: { rosterEntryId: true, facilityName: true },
+  });
+  const byRoster = new Map();
+  for (const row of rows) {
+    if (!byRoster.has(row.rosterEntryId)) byRoster.set(row.rosterEntryId, new Set());
+    byRoster.get(row.rosterEntryId).add(row.facilityName);
+  }
+  return byRoster;
+}
+
+function isEligibleForLocation(rosterId, locationName, locationsByRosterId) {
+  const set = locationsByRosterId.get(rosterId);
+  if (!set || set.size === 0) return true; // back-compat: no data → eligible everywhere
+  return set.has(locationName);
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /**
@@ -124,7 +151,7 @@ const MODE_SCORERS = {
  * @param {object} args.staffiqWeights   { cost, quality } summing ≤ 1 (STAFFIQ mode only)
  * @returns {object} { assignments, insights, warnings, score }
  */
-function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
+async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
   if (!MODES.includes(mode)) throw new Error(`Unknown mode: ${mode}`);
 
   // Pre-compute the cheapest rate so cost scores are normalized against the
@@ -153,15 +180,22 @@ function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
     return aKey.localeCompare(bKey);
   });
 
+  // Build a per-roster-entry set of credentialed locations from
+  // ProviderLocation rows. Empty set for a roster entry means we treat them
+  // as eligible everywhere (back-compat with rosters that pre-date the
+  // location-import feature).
+  const locationsByRosterId = await loadProviderLocations(roster.map((r) => r.id));
+
   for (const day of sortedDays) {
     const dateISO = new Date(day.date).toISOString().slice(0, 10);
     for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
-      // Candidates = roster entries that aren't already assigned to another
-      // room on this date.
+      // Candidates = roster entries that
+      //   (1) aren't already assigned to another room on this date, AND
+      //   (2) are credentialed at this room's location (or have no
+      //       ProviderLocation rows at all — back-compat).
       const candidates = roster
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
-        // Future: filter by specialty match using Coverage Templates v1.1
-        // role rules. v1 considers any roster provider eligible.
+        .filter((r) => isEligibleForLocation(r.id, day.location, locationsByRosterId))
         .map((r) => ({
           entry: r,
           score: MODE_SCORERS[mode](r, ctx),

@@ -4,6 +4,7 @@ const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { logAutomationEvent } = require('../services/automationEvents');
+const { resolveNpi } = require('../services/nppesLookup');
 
 const router = express.Router();
 
@@ -323,16 +324,347 @@ function parseNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ── Multi-sheet xlsx import (CAPA-style) ─────────────────────────────────────
+// When a workbook has both a "Staff" sheet (identity) and a "Payroll" sheet
+// (compensation), we treat it as a multi-sheet customer roster export:
+//   - Join Staff + Payroll by a NAME fingerprint (first initial + last name).
+//     Initials columns vary in format across sheets and customers; name is
+//     the reliable join key. Verified against CAPA's real export 2026-06-03:
+//     84/84 records joined cleanly via name fingerprint.
+//   - Run NPPES NPI resolution per provider since these files typically lack NPI
+//   - Read optional Facilities + Day Coverage + Call Coverage sheets → union of
+//     credentialed locations per provider → ProviderLocation rows. These
+//     sheets DO use a customer-internal Initials code as the key, which is
+//     bridged back to the Staff record's Initials field.
+// See Task #18 for the design.
+
+const MULTI_HEADER_SYNONYMS = {
+  // First column header varies across sheets within ONE workbook: Staff sheet
+  // uses "Name", Payroll uses "Staff" (which still contains the name string).
+  // Treat both as name synonyms.
+  name: ['name', 'fullname', 'providername', 'staff'],
+  initials: ['initials', 'rostercode', 'code'],
+  email: ['email', 'snapaccountemail'],
+  mobile: ['mobile', 'phone', 'phonenumber'],
+  role: ['role', 'type', 'specialty', 'providertype'],
+  employment: ['employment', 'employmentcategory', 'employmenttype'],
+  baseHrs: ['basehrs', 'basehours', 'ftehours', 'hoursperweek'],
+  hrRate: ['hrrate', 'hourly', 'hourlyrate', 'rate', 'perhour'],
+  payrollId: ['payrollid', 'payroll'],
+};
+
+/**
+ * Build a name fingerprint from a raw name string.
+ * Handles both "First Last" and "Last, First" formats.
+ * Returns lowercase first-initial + last-name, alphanumeric only.
+ *
+ * Example: "Jane Smith" → "jsmith", "Smith, Jane" → "jsmith"
+ *
+ * Returns null if the string can't be parsed into first+last.
+ */
+function buildNameKey(rawName) {
+  if (!rawName) return null;
+  const s = String(rawName).trim();
+  let firstName, lastName;
+  if (s.includes(',')) {
+    const parts = s.split(',').map((p) => p.trim());
+    lastName = parts[0];
+    firstName = parts[1] || '';
+  } else {
+    const parts = s.split(/\s+/);
+    if (parts.length < 2) return null;
+    firstName = parts[0];
+    lastName = parts[parts.length - 1];
+  }
+  if (!firstName || !lastName) return null;
+  return (firstName[0] + lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Normalize a "Last, First" or "First Last" name to display format "First Last".
+ */
+function normalizeDisplayName(rawName) {
+  if (!rawName) return null;
+  const s = String(rawName).trim();
+  if (s.includes(',')) {
+    const [last, first] = s.split(',').map((p) => p.trim());
+    return [first, last].filter(Boolean).join(' ');
+  }
+  return s;
+}
+
+function buildMultiHeaderMap(headerRow) {
+  const map = {};
+  headerRow.forEach((rawHeader, idx) => {
+    const normalized = normalizeHeader(rawHeader);
+    for (const [canonical, synonyms] of Object.entries(MULTI_HEADER_SYNONYMS)) {
+      if (synonyms.includes(normalized) && map[canonical] == null) {
+        map[canonical] = idx;
+      }
+    }
+  });
+  return map;
+}
+
+/**
+ * Extract rows from a sheet keyed by a NAME fingerprint (first-initial +
+ * last-name). Returns Map<nameKey, {requestedColumns + _rawName + _initials}>.
+ *
+ * Skips rows with no parseable name.
+ */
+function extractByNameKey(sheet, requestedColumns) {
+  if (!sheet) return new Map();
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+  if (rows.length < 2) return new Map();
+  const headerMap = buildMultiHeaderMap(rows[0]);
+  if (headerMap.name == null) return new Map();
+
+  const byNameKey = new Map();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const rawName = row[headerMap.name];
+    const key = buildNameKey(rawName);
+    if (!key) continue;
+    const data = {
+      _rawName: rawName,
+      _displayName: normalizeDisplayName(rawName),
+      _initials: headerMap.initials != null ? String(row[headerMap.initials] ?? '').trim() || null : null,
+    };
+    for (const col of requestedColumns) {
+      if (headerMap[col] != null) data[col] = row[headerMap[col]];
+    }
+    byNameKey.set(key, data);
+  }
+  return byNameKey;
+}
+
+/**
+ * Extract location credentialing rows from a sheet shaped as
+ * (Initials, Facility 1, Facility 2, ...) where each non-empty cell is a
+ * facility name the provider is credentialed at.
+ *
+ * Returns Map<initials, Set<facilityName>>.
+ */
+function extractLocationsByInitials(sheet) {
+  if (!sheet) return new Map();
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+  if (rows.length < 2) return new Map();
+  // First column must be Initials (or a synonym)
+  if (!MULTI_HEADER_SYNONYMS.initials.includes(normalizeHeader(rows[0][0]))) return new Map();
+
+  const byInitials = new Map();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const initials = String(row[0] ?? '').trim();
+    if (!initials) continue;
+    const locations = new Set();
+    for (let j = 1; j < row.length; j++) {
+      const val = row[j];
+      if (val == null || val === '') continue;
+      const trimmed = String(val).trim();
+      if (trimmed) locations.add(trimmed);
+    }
+    if (locations.size > 0) byInitials.set(initials, locations);
+  }
+  return byInitials;
+}
+
+/**
+ * Multi-sheet upload handler. Runs only when the workbook has Staff + Payroll
+ * sheets. Replaces the single-sheet flat-CSV path for CAPA-style files.
+ *
+ * Join strategy:
+ *   - Staff sheet keyed by NAME fingerprint (first-initial + last-name)
+ *   - Payroll sheet keyed by NAME fingerprint (same)
+ *   - Location sheets keyed by INITIALS (their internal customer code) →
+ *     bridged to a Staff record via the Staff record's Initials column
+ */
+async function handleMultiSheetUpload(workbook, req, res) {
+  const staffByName = extractByNameKey(workbook.Sheets['Staff'], ['email', 'mobile']);
+  const payrollByName = extractByNameKey(workbook.Sheets['Payroll'], [
+    'role', 'employment', 'baseHrs', 'hrRate', 'payrollId',
+  ]);
+
+  // Union of all NAME keys seen across Staff + Payroll
+  const allNameKeys = new Set([...staffByName.keys(), ...payrollByName.keys()]);
+
+  // Location data — keyed by Initials (the location sheets use customer's
+  // internal code). Bridge back to staff via the Staff record's Initials field.
+  const locationSheets = ['Facilities', 'Day Coverage', 'Call Coverage'];
+  const locationsByInitials = new Map(); // initials → Set<facilityName>
+  for (const sheetName of locationSheets) {
+    const lm = extractLocationsByInitials(workbook.Sheets[sheetName]);
+    for (const [initials, locations] of lm.entries()) {
+      if (!locationsByInitials.has(initials)) locationsByInitials.set(initials, new Set());
+      for (const loc of locations) locationsByInitials.get(initials).add(loc);
+    }
+  }
+
+  const created = [];
+  const errors = [];
+  const needsNpiReview = [];
+  let matchedToProfiles = 0;
+  let totalLocationsCreated = 0;
+
+  for (const nameKey of allNameKeys) {
+    const staff = staffByName.get(nameKey) || {};
+    const payroll = payrollByName.get(nameKey) || {};
+
+    // Display name: Staff sheet preferred (has the canonical contact-info row);
+    // fall back to Payroll's name if provider only appears in payroll.
+    const name = staff._displayName || payroll._displayName || null;
+    if (!name) { errors.push({ nameKey, error: 'No parseable name in Staff or Payroll sheet' }); continue; }
+
+    const type = normalizeSpecialty(payroll.role);
+    const employment = normalizeEmployment(payroll.employment);
+    if (!type) { errors.push({ nameKey, name, error: `Unknown role: "${payroll.role}"` }); continue; }
+    if (!employment) { errors.push({ nameKey, name, error: `Unknown employment: "${payroll.employment}"` }); continue; }
+
+    const email = String(staff.email ?? '').trim().toLowerCase() || null;
+    const phone = String(staff.mobile ?? '').trim() || null;
+    const hourlyRate = parseNumber(payroll.hrRate);
+    const fteHours = parseNumber(payroll.baseHrs);
+    const payrollSystemId = String(payroll.payrollId ?? '').trim() || null;
+    // Use Staff's Initials for the rosterCode (customer-internal short code)
+    // and to bridge to the location sheets. Falls back to Payroll's Initials
+    // if Staff is missing it.
+    const rosterCode = staff._initials || payroll._initials || null;
+
+    // NPI resolution via NPPES (CAPA-style files lack NPI directly)
+    let npi = null;
+    let npiLookupStatus = null;
+    let npiLookupCandidates = null;
+    const npiResult = await resolveNpi({ name, state: 'MA' });
+    if (npiResult.decision === 'AUTO_MATCHED') {
+      npi = npiResult.npi;
+    } else {
+      // NEEDS_DISAMBIGUATION | NO_MATCH | INVALID_NAME — store for the
+      // disambiguation UI to surface to the coordinator post-import.
+      npiLookupStatus = npiResult.decision;
+      npiLookupCandidates = npiResult.matches.length > 0 ? npiResult.matches : null;
+      needsNpiReview.push({
+        nameKey,
+        name,
+        decision: npiResult.decision,
+        candidates: npiResult.matches,
+      });
+    }
+
+    // Try linking to existing ProviderProfile (NPI first, email fallback)
+    let linkedProviderId = null;
+    let snapAccountLinked = false;
+    if (npi) {
+      const profile = await prisma.providerProfile.findUnique({
+        where: { npiNumber: npi },
+      }).catch(() => null);
+      if (profile) {
+        linkedProviderId = profile.id;
+        snapAccountLinked = true;
+        matchedToProfiles += 1;
+      }
+    } else if (email) {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        include: { providerProfile: true },
+      }).catch(() => null);
+      if (user?.providerProfile) {
+        linkedProviderId = user.providerProfile.id;
+        snapAccountLinked = true;
+        matchedToProfiles += 1;
+      }
+    }
+
+    try {
+      const entry = await prisma.internalRosterEntry.create({
+        data: {
+          facilityId: req.facility.id,
+          providerName: name,
+          providerType: type,
+          employmentCategory: employment,
+          npi,
+          rosterCode,
+          payrollSystemId,
+          npiLookupStatus,
+          npiLookupCandidates,
+          snapAccountEmail: email,
+          phoneNumber: phone,
+          hourlyRate,
+          fteHours,
+          snapAccountLinked,
+          linkedProviderId,
+        },
+      });
+      created.push({ id: entry.id, nameKey, name, rosterCode, linkedProfile: snapAccountLinked, npi });
+
+      // Write ProviderLocation rows. Look up the location set by the Staff
+      // record's Initials code (the bridge from name-keyed Staff to
+      // initials-keyed location sheets).
+      const locations = rosterCode ? locationsByInitials.get(rosterCode) : null;
+      if (locations && locations.size > 0) {
+        await prisma.providerLocation.createMany({
+          data: [...locations].map((facilityName) => ({
+            rosterEntryId: entry.id,
+            facilityName,
+          })),
+          skipDuplicates: true,
+        });
+        totalLocationsCreated += locations.size;
+      }
+    } catch (err) {
+      errors.push({ nameKey, name, error: err.message });
+    }
+  }
+
+  if (created.length > 0) {
+    logAutomationEvent({
+      facilityId: req.facility.id,
+      type: 'ROSTER_UPLOAD',
+      metadata: {
+        rowsCreated: created.length,
+        matchedToProfiles,
+        errors: errors.length,
+        locationsCreated: totalLocationsCreated,
+        needsNpiReview: needsNpiReview.length,
+        multiSheet: true,
+      },
+    });
+  }
+
+  return res.status(201).json({
+    summary: {
+      created: created.length,
+      matchedToProfiles,
+      errors: errors.length,
+      totalProviders: allNameKeys.size,
+      locationsCreated: totalLocationsCreated,
+      needsNpiReview: needsNpiReview.length,
+      multiSheet: true,
+    },
+    created,
+    errors,
+    needsNpiReview,
+  });
+}
+
 /**
  * POST /upload — parse a CSV/XLSX, create roster entries, link by NPI.
  *
- * Returns { created, skipped, errors, matchedToProfiles, rows: [{ ... }] }
- * — UI can show a summary toast + a per-row breakdown.
+ * Two paths:
+ *   1. Multi-sheet (CAPA-style) — workbook has Staff + Payroll sheets.
+ *      Runs handleMultiSheetUpload above (joins by Initials, NPPES lookup,
+ *      reads Facilities + Coverage sheets for ProviderLocation rows).
+ *   2. Single-sheet (flat CSV/XLSX) — original behavior.
  */
 router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+
+    // Multi-sheet detection: file has Staff + Payroll sheets
+    if (workbook.SheetNames.includes('Staff') && workbook.SheetNames.includes('Payroll')) {
+      return handleMultiSheetUpload(workbook, req, res);
+    }
+
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     if (!sheet) return res.status(400).json({ error: 'Workbook has no sheets.' });
 

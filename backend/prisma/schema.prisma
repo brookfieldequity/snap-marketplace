@@ -271,6 +271,7 @@ model Facility {
   holidays            FacilityHoliday[]
   scheduleBuildRuns   ScheduleBuildRun[]
   automationEvents    AutomationEvent[]
+  providerLocations   ProviderLocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -494,6 +495,20 @@ model InternalRosterEntry {
   // 10-digit string; unique-per-facility because the same provider could
   // (rarely) be on two practices' rosters as a locum.
   npi                String?
+  // Customer-internal provider code (e.g. CAPA's "Initials" field). Used
+  // as the join key when a multi-sheet xlsx import bundles identity,
+  // payroll, and per-location credentialing across separate tabs. NOT a
+  // SNAP-wide identifier — only meaningful within ONE facility's roster.
+  rosterCode         String?
+  // External payroll-system identifier (Gusto / ADP / Paychex / etc).
+  // Pass-through field so the SNAP Payroll tab can export weekly
+  // summaries that link back to the customer's payroll provider rows.
+  payrollSystemId    String?
+  // NPPES lookup state. Set when the import couldn't auto-attach an NPI
+  // (multiple matches or zero matches in NPPES). The disambiguation UI
+  // surfaces these for coordinator resolution. Cleared once npi is set.
+  npiLookupStatus    String?            // 'NEEDS_DISAMBIGUATION' | 'NO_MATCH' | 'INVALID_NAME'
+  npiLookupCandidates Json?             // array of NPPES match objects for the disambiguation UI
   licenseNumber      String?
   licenseExpiration  DateTime?
   notes              String?
@@ -522,6 +537,47 @@ model InternalRosterEntry {
   scheduleAssignments ScheduleAssignment[]
   incentiveResponses  InternalIncentiveShiftResponse[]
   scheduleFeedback    ScheduleFeedback[]
+  locations           ProviderLocation[]
+
+  @@index([rosterCode])
+  @@index([facilityId, npi])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ProviderLocation — per-provider × per-location credentialing matrix.
+//
+// One row per (rosterEntry, facilityName) pair. Binary: presence of the row
+// means "this provider is credentialed to work at this location." Used by:
+//   - Schedule Builder v2 eligibility filter (only assign providers to rooms
+//     at locations they're credentialed at)
+//   - Per-facility coordinator views ("show me everyone at Kenmore")
+//   - Future: non-hospital facility wedge (Task #17 — ASCs/clinics declare
+//     lighter required credential sets per location)
+//
+// facilityName is the raw string from the customer's source data (e.g. CAPA's
+// "Facility 1..41" sheet cell values). facilityId is an optional FK to a
+// Facility row if the name happens to match an existing facility. Most
+// customer-internal location names will NOT match the marketplace Facility
+// table (they're CAPA's own surgery centers), so facilityId stays null.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ProviderLocation {
+  id            String              @id @default(cuid())
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  // Raw location name from customer's source (e.g. "Atrius Kenmore",
+  // "Shields Natick"). Normalization across spelling variants is deferred
+  // to a follow-up — exact-match dedupe for v1.
+  facilityName  String
+  // Optional FK to a Facility row when the name matches one on the
+  // marketplace side. Stays null for customer-internal locations that
+  // don't exist as marketplace Facility rows.
+  facilityId    String?
+  facility      Facility?           @relation(fields: [facilityId], references: [id])
+  createdAt     DateTime            @default(now())
+
+  @@unique([rosterEntryId, facilityName])
+  @@index([facilityName])
 }
 
 model ScheduleFeedback {
