@@ -194,6 +194,9 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
       //   (2) are credentialed at this room's location (or have no
       //       ProviderLocation rows at all — back-compat).
       const candidates = roster
+        // Non-clinical / specialty-less roster members (back-office staff)
+        // are never scheduled into ORs.
+        .filter((r) => r.providerType && !r.isNonClinical)
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => isEligibleForLocation(r.id, day.location, locationsByRosterId))
         .map((r) => ({

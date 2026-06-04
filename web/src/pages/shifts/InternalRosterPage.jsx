@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../../api.js'
+import NpiReviewModal from './NpiReviewModal.jsx'
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
@@ -102,7 +103,11 @@ export default function InternalRosterPage({ onNavigate }) {
   const [uploadError, setUploadError] = useState(null)
   const [locationInput, setLocationInput] = useState('')
 
-  useEffect(() => { load() }, [])
+  // NPI review queue (from multi-sheet imports)
+  const [npiReviewRows, setNpiReviewRows] = useState([])
+  const [showNpiReview, setShowNpiReview] = useState(false)
+
+  useEffect(() => { load(); loadNpiReview() }, [])
 
   async function load() {
     setLoading(true)
@@ -113,6 +118,16 @@ export default function InternalRosterPage({ onNavigate }) {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadNpiReview() {
+    try {
+      const data = await facilityAPI.getNpiReview()
+      setNpiReviewRows(data.rows || [])
+    } catch {
+      // Non-blocking — the review queue is a nice-to-have surface; never
+      // block the roster page if it fails to load.
     }
   }
 
@@ -310,6 +325,21 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* NPI review nudge — gentle, dismissible by acting or ignoring */}
+      {npiReviewRows.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#FEFCE8', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 20px', marginBottom: 20 }}>
+          <div style={{ fontSize: 14, color: '#92400E' }}>
+            <strong>{npiReviewRows.length} provider{npiReviewRows.length !== 1 ? 's' : ''}</strong> couldn't be matched to an NPI automatically. Review them to keep your roster fully verified.
+          </div>
+          <button
+            onClick={() => setShowNpiReview(true)}
+            style={{ padding: '9px 16px', background: '#D97706', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            Review {npiReviewRows.length} →
+          </button>
+        </div>
+      )}
 
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading roster...</div>}
       {error && !loading && (
@@ -641,10 +671,22 @@ export default function InternalRosterPage({ onNavigate }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 13, color: '#065F46' }}>
                   <div><strong>{uploadResult.summary.created}</strong> providers created</div>
                   <div><strong>{uploadResult.summary.matchedToProfiles}</strong> matched to existing SNAP profiles via NPI</div>
+                  {uploadResult.summary.locationsCreated > 0 && <div><strong>{uploadResult.summary.locationsCreated}</strong> location credentialings imported</div>}
                   {uploadResult.summary.skipped > 0 && <div><strong>{uploadResult.summary.skipped}</strong> blank rows skipped</div>}
                   {uploadResult.summary.errors > 0 && <div><strong>{uploadResult.summary.errors}</strong> rows had errors (see below)</div>}
                 </div>
               </div>
+
+              {uploadResult.summary.needsNpiReview > 0 && (
+                <div style={{ background: '#FEFCE8', border: '1px solid #FDE68A', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>
+                    {uploadResult.summary.needsNpiReview} provider{uploadResult.summary.needsNpiReview !== 1 ? 's' : ''} need NPI review
+                  </div>
+                  <div style={{ fontSize: 13, color: '#92400E' }}>
+                    We couldn't auto-match these to a single NPI. You can resolve them now or anytime from the roster page — your roster works either way.
+                  </div>
+                </div>
+              )}
 
               {uploadResult.errors && uploadResult.errors.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
@@ -652,21 +694,37 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 8, maxHeight: 200, overflowY: 'auto' }}>
                     {uploadResult.errors.map((e, i) => (
                       <div key={i} style={{ fontSize: 12, color: '#991B1B', padding: '4px 8px', borderBottom: '1px solid #FECACA' }}>
-                        Row {e.row} ({e.name || 'no name'}): {e.error}
+                        {e.row ? `Row ${e.row}` : (e.name || e.nameKey || 'row')} ({e.name || 'no name'}): {e.error}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowUploadModal(false)} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                {uploadResult.summary.needsNpiReview > 0 && (
+                  <button
+                    onClick={async () => { setShowUploadModal(false); await loadNpiReview(); setShowNpiReview(true) }}
+                    style={{ padding: '9px 20px', background: '#D97706', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Review NPIs now
+                  </button>
+                )}
+                <button onClick={async () => { setShowUploadModal(false); await load(); await loadNpiReview() }} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   Done
                 </button>
               </div>
             </>
           )}
         </Modal>
+      )}
+
+      {showNpiReview && (
+        <NpiReviewModal
+          rows={npiReviewRows}
+          onClose={() => { setShowNpiReview(false); loadNpiReview() }}
+          onAllResolved={() => { setShowNpiReview(false); loadNpiReview() }}
+        />
       )}
     </div>
   )

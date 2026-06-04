@@ -155,6 +155,119 @@ router.patch('/:id', facilityAuth, async (req, res) => {
   }
 });
 
+// ── NPI disambiguation (review queue from multi-sheet imports) ───────────────
+
+/**
+ * GET /npi-review — roster entries that need coordinator NPI resolution.
+ *
+ * These are rows where NPPES auto-resolution couldn't pick a single match
+ * (multiple candidates, no match, or unparseable name) AND the row hasn't
+ * been marked NPI-exempt. Non-clinical staff and exempted rows are excluded.
+ *
+ * Returns each row with its stored candidates so the UI can render the
+ * disambiguation cards without re-querying NPPES.
+ */
+router.get('/npi-review', facilityAuth, async (req, res) => {
+  try {
+    const rows = await prisma.internalRosterEntry.findMany({
+      where: {
+        facilityId: req.facility.id,
+        npi: null,
+        npiExempt: false,
+        npiLookupStatus: { not: null },
+      },
+      select: {
+        id: true,
+        providerName: true,
+        providerType: true,
+        npiLookupStatus: true,
+        npiLookupCandidates: true,
+        rosterCode: true,
+      },
+      orderBy: { providerName: 'asc' },
+    });
+    res.json({ count: rows.length, rows });
+  } catch (err) {
+    console.error('[roster] npi-review failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /:id/resolve-npi — coordinator resolves one review-queue row.
+ *
+ * Body (one of):
+ *   { npi: "1234567890" }  — set the chosen NPI; clears the lookup flag
+ *   { exempt: true }       — mark NPI-exempt (back-office, handle out of band)
+ *
+ * Either action removes the row from the review queue.
+ */
+router.post('/:id/resolve-npi', facilityAuth, async (req, res) => {
+  try {
+    const existing = await prisma.internalRosterEntry.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!existing || existing.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { npi, exempt } = req.body || {};
+
+    if (exempt === true) {
+      const updated = await prisma.internalRosterEntry.update({
+        where: { id: req.params.id },
+        data: { npiExempt: true, npiLookupStatus: null, npiLookupCandidates: null },
+      });
+      return res.json(updated);
+    }
+
+    if (npi) {
+      const cleaned = String(npi).replace(/\D/g, '');
+      if (cleaned.length !== 10) {
+        return res.status(400).json({ error: 'NPI must be 10 digits.' });
+      }
+      // Try to link to an existing ProviderProfile by this NPI.
+      const profile = await prisma.providerProfile
+        .findUnique({ where: { npiNumber: cleaned } })
+        .catch(() => null);
+      const updated = await prisma.internalRosterEntry.update({
+        where: { id: req.params.id },
+        data: {
+          npi: cleaned,
+          npiLookupStatus: null,
+          npiLookupCandidates: null,
+          ...(profile ? { snapAccountLinked: true, linkedProviderId: profile.id } : {}),
+        },
+      });
+      return res.json(updated);
+    }
+
+    res.status(400).json({ error: 'Provide either { npi } or { exempt: true }.' });
+  } catch (err) {
+    console.error('[roster] resolve-npi failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /npi-search?name=Jane%20Smith&state=MA — re-run an NPPES lookup with a
+ * coordinator-corrected name. Used by the "search again" affordance on
+ * no-match cards (the file's name often differs from NPPES — maiden names,
+ * nicknames, middle names). Returns candidate matches; does NOT write
+ * anything — the coordinator picks one and POSTs to /:id/resolve-npi.
+ */
+router.get('/npi-search', facilityAuth, async (req, res) => {
+  try {
+    const { name, state } = req.query;
+    if (!name) return res.status(400).json({ error: 'name query param is required.' });
+    const result = await resolveNpi({ name: String(name), state: state ? String(state) : 'MA' });
+    res.json(result);
+  } catch (err) {
+    console.error('[roster] npi-search failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /:id — delete a roster entry
 router.delete('/:id', facilityAuth, async (req, res) => {
   try {
@@ -515,10 +628,12 @@ async function handleMultiSheetUpload(workbook, req, res) {
     const name = staff._displayName || payroll._displayName || null;
     if (!name) { errors.push({ nameKey, error: 'No parseable name in Staff or Payroll sheet' }); continue; }
 
+    // Role that doesn't map to a clinical specialty → non-clinical roster
+    // member (back-office staff, biller, etc). They belong on the roster for
+    // payroll but are never scheduled into ORs and don't need an NPI.
     const type = normalizeSpecialty(payroll.role);
-    const employment = normalizeEmployment(payroll.employment);
-    if (!type) { errors.push({ nameKey, name, error: `Unknown role: "${payroll.role}"` }); continue; }
-    if (!employment) { errors.push({ nameKey, name, error: `Unknown employment: "${payroll.employment}"` }); continue; }
+    const employment = normalizeEmployment(payroll.employment); // may be null; that's fine
+    const isNonClinical = !type;
 
     const email = String(staff.email ?? '').trim().toLowerCase() || null;
     const phone = String(staff.mobile ?? '').trim() || null;
@@ -530,24 +645,27 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // if Staff is missing it.
     const rosterCode = staff._initials || payroll._initials || null;
 
-    // NPI resolution via NPPES (CAPA-style files lack NPI directly)
+    // NPI resolution via NPPES — clinical providers only. Non-clinical
+    // staff are NPI-exempt and skip the lookup entirely.
     let npi = null;
     let npiLookupStatus = null;
     let npiLookupCandidates = null;
-    const npiResult = await resolveNpi({ name, state: 'MA' });
-    if (npiResult.decision === 'AUTO_MATCHED') {
-      npi = npiResult.npi;
-    } else {
-      // NEEDS_DISAMBIGUATION | NO_MATCH | INVALID_NAME — store for the
-      // disambiguation UI to surface to the coordinator post-import.
-      npiLookupStatus = npiResult.decision;
-      npiLookupCandidates = npiResult.matches.length > 0 ? npiResult.matches : null;
-      needsNpiReview.push({
-        nameKey,
-        name,
-        decision: npiResult.decision,
-        candidates: npiResult.matches,
-      });
+    if (!isNonClinical) {
+      const npiResult = await resolveNpi({ name, state: 'MA' });
+      if (npiResult.decision === 'AUTO_MATCHED') {
+        npi = npiResult.npi;
+      } else {
+        // NEEDS_DISAMBIGUATION | NO_MATCH | INVALID_NAME — store for the
+        // disambiguation UI to surface to the coordinator post-import.
+        npiLookupStatus = npiResult.decision;
+        npiLookupCandidates = npiResult.matches.length > 0 ? npiResult.matches : null;
+        needsNpiReview.push({
+          nameKey,
+          name,
+          decision: npiResult.decision,
+          candidates: npiResult.matches,
+        });
+      }
     }
 
     // Try linking to existing ProviderProfile (NPI first, email fallback)
@@ -579,8 +697,10 @@ async function handleMultiSheetUpload(workbook, req, res) {
         data: {
           facilityId: req.facility.id,
           providerName: name,
-          providerType: type,
-          employmentCategory: employment,
+          providerType: type, // null for non-clinical
+          employmentCategory: employment, // may be null
+          isNonClinical,
+          npiExempt: isNonClinical, // non-clinical staff don't need an NPI
           npi,
           rosterCode,
           payrollSystemId,
@@ -594,7 +714,7 @@ async function handleMultiSheetUpload(workbook, req, res) {
           linkedProviderId,
         },
       });
-      created.push({ id: entry.id, nameKey, name, rosterCode, linkedProfile: snapAccountLinked, npi });
+      created.push({ id: entry.id, nameKey, name, rosterCode, linkedProfile: snapAccountLinked, npi, isNonClinical });
 
       // Write ProviderLocation rows. Look up the location set by the Staff
       // record's Initials code (the bridge from name-keyed Staff to

@@ -486,8 +486,20 @@ model InternalRosterEntry {
   facilityId         String
   facility           Facility           @relation(fields: [facilityId], references: [id])
   providerName       String
-  providerType       Specialty
-  employmentCategory EmploymentCategory
+  // Nullable so non-clinical roster members (back-office staff, billers)
+  // can be on the roster for payroll without a clinical specialty. Clinical
+  // scheduling explicitly excludes rows where providerType is null OR
+  // isNonClinical is true (see scheduleBuilder.js + isNonClinical below).
+  providerType       Specialty?
+  employmentCategory EmploymentCategory?
+  // True for back-office / non-clinical staff who belong on the roster for
+  // payroll purposes but are never scheduled into ORs and don't need an NPI.
+  isNonClinical      Boolean            @default(false)
+  // True when the coordinator has explicitly marked this person as not
+  // needing an NPI (back-office staff, or a provider they'll handle out of
+  // band). Exempt rows are excluded from the NPI review queue. Auto-set true
+  // for non-clinical imports.
+  npiExempt          Boolean            @default(false)
   snapAccountEmail   String?
   phoneNumber        String?
   // NPI (National Provider Identifier) — primary key for matching this
