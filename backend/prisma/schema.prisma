@@ -640,6 +640,9 @@ model ScheduleDay {
   date          DateTime  @db.Date
   location      String
   roomsRequired Int       @default(1)
+  // Coverage model copied from the template at generation time. null =
+  // MD-only; 3 = team 1:3; 4 = team 1:4. See CoverageTemplateDay.
+  supervisionRatio Int?
   publishedAt   DateTime?
   facility      Facility  @relation(fields: [facilityId], references: [id])
 
@@ -982,9 +985,12 @@ model CoverageTemplateDay {
   dayOfWeek     Int // 0=Sunday … 6=Saturday
   roomsRequired Int              @default(1)
 
-  // v1.1 reserved (not used in v1; do not remove without checking design doc):
-  // roleMix Json?
-  // notes   String?
+  // Anesthesia care-team model. null = MD-only (every room a solo
+  // anesthesiologist). 3 = team 1:3, 4 = team 1:4 (rooms staffed by CRNAs,
+  // supervised by anesthesiologists at this ratio). Stored per location-day
+  // so a site can be team model on weekdays, MD-only on weekends. The
+  // builder's supervision-assignment logic consumes this (Task #21).
+  supervisionRatio Int?
 
   @@unique([templateId, location, dayOfWeek])
 }

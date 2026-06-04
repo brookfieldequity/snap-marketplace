@@ -531,9 +531,11 @@ router.post('/generate', facilityAuth, async (req, res) => {
               date,
               location: entry.location,
               roomsRequired: entry.roomsRequired,
+              supervisionRatio: entry.supervisionRatio ?? null,
             },
             update: {
               roomsRequired: entry.roomsRequired,
+              supervisionRatio: entry.supervisionRatio ?? null,
             },
           });
           wasExisting ? rowsUpdated++ : rowsCreated++;

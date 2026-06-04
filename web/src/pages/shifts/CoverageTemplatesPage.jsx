@@ -169,16 +169,26 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
         const t = res.template
         setName(t.name)
         setIsDefault(t.isDefault)
-        // Pivot days[] into rows by location
+        // Pivot days[] into rows by location. supervisionRatio is a
+        // per-location setting in the UI (usually consistent across days);
+        // take the first non-null value seen for the location.
         const byLocation = {}
+        const ratioByLocation = {}
         for (const d of t.days) {
           if (!byLocation[d.location]) byLocation[d.location] = Array(7).fill(0)
           byLocation[d.location][d.dayOfWeek] = d.roomsRequired
+          if (d.supervisionRatio != null && ratioByLocation[d.location] == null) {
+            ratioByLocation[d.location] = d.supervisionRatio
+          }
         }
         setRows(
           Object.keys(byLocation)
             .sort()
-            .map((loc) => ({ location: loc, counts: byLocation[loc] }))
+            .map((loc) => ({
+              location: loc,
+              counts: byLocation[loc],
+              supervisionRatio: ratioByLocation[loc] ?? null,
+            }))
         )
       })
       .catch((err) => setError(err.message || 'Failed to load.'))
@@ -187,9 +197,18 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
 
   function updateCell(rowIdx, dayIdx, value) {
     setRows((current) => {
-      const next = current.map((r) => ({ location: r.location, counts: [...r.counts] }))
+      const next = current.map((r) => ({ ...r, counts: [...r.counts] }))
       const n = Math.max(0, Math.min(99, Number(value) || 0))
       next[rowIdx].counts[dayIdx] = n
+      return next
+    })
+  }
+
+  function updateRatio(rowIdx, value) {
+    setRows((current) => {
+      const next = current.map((r) => ({ ...r, counts: [...r.counts] }))
+      // '' → MD-only (null); '3'/'4' → team ratio
+      next[rowIdx].supervisionRatio = value === '' ? null : Number(value)
       return next
     })
   }
@@ -201,7 +220,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       setError(`"${trimmed}" is already in this template.`)
       return
     }
-    setRows([...rows, { location: trimmed, counts: Array(7).fill(0) }])
+    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: null }])
     setNewLocation('')
     setError(null)
   }
@@ -216,7 +235,13 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       for (let dow = 0; dow < 7; dow++) {
         const rooms = r.counts[dow] || 0
         if (rooms > 0) {
-          days.push({ location: r.location, dayOfWeek: dow, roomsRequired: rooms })
+          days.push({
+            location: r.location,
+            dayOfWeek: dow,
+            roomsRequired: rooms,
+            // Apply the location's coverage model to every active day.
+            supervisionRatio: r.supervisionRatio ?? null,
+          })
         }
       }
     }
@@ -271,7 +296,8 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
         <table style={styles.grid}>
           <thead>
             <tr>
-              <th style={{ ...styles.gridTh, textAlign: 'left', width: '30%' }}>Location</th>
+              <th style={{ ...styles.gridTh, textAlign: 'left', width: '22%' }}>Location</th>
+              <th style={{ ...styles.gridTh, width: '130px' }}>Coverage</th>
               {DAY_LABELS.map((d) => (
                 <th key={d} style={styles.gridTh}>{d}</th>
               ))}
@@ -282,6 +308,17 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
             {rows.map((row, idx) => (
               <tr key={row.location}>
                 <td style={styles.gridLocCell}>{row.location}</td>
+                <td style={styles.gridCell}>
+                  <select
+                    value={row.supervisionRatio == null ? '' : String(row.supervisionRatio)}
+                    onChange={(e) => updateRatio(idx, e.target.value)}
+                    style={styles.coverageSelect}
+                  >
+                    <option value="">MD only</option>
+                    <option value="3">Team 1:3</option>
+                    <option value="4">Team 1:4</option>
+                  </select>
+                </td>
                 {row.counts.map((count, dow) => (
                   <td key={dow} style={styles.gridCell}>
                     <input
@@ -301,7 +338,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ ...styles.gridCell, color: '#94A3B8', textAlign: 'center', padding: 24 }}>
+                <td colSpan={10} style={{ ...styles.gridCell, color: '#94A3B8', textAlign: 'center', padding: 24 }}>
                   No locations yet. Add one below.
                 </td>
               </tr>
@@ -365,6 +402,7 @@ const styles = {
   gridLocCell: { padding: '10px 16px', fontSize: 14, fontWeight: 500, color: '#1E293B', borderBottom: '1px solid #F1F5F9' },
   gridCell: { padding: 6, textAlign: 'center', borderBottom: '1px solid #F1F5F9' },
   stepperInput: { width: 56, padding: '6px 4px', textAlign: 'center', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 14, fontWeight: 600, color: '#1E293B', outline: 'none' },
+  coverageSelect: { width: 110, padding: '6px 8px', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#1E293B', background: '#fff', outline: 'none', cursor: 'pointer' },
   addLocationRow: { display: 'flex', gap: 8, marginBottom: 24 },
   field: { flex: 1, padding: '10px 14px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 14, outline: 'none' },
   saveBar: { display: 'flex', justifyContent: 'flex-end', gap: 12 },

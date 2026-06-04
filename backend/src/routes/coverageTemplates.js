@@ -40,12 +40,24 @@ function normalizeDays(days) {
     if (!Number.isInteger(roomsRequired) || roomsRequired < 0) {
       throw new Error('roomsRequired must be a non-negative integer.');
     }
+    // supervisionRatio: null = MD-only, 3 = team 1:3, 4 = team 1:4. Anything
+    // else is rejected so the data stays clean for the builder.
+    let supervisionRatio = d?.supervisionRatio;
+    if (supervisionRatio === undefined || supervisionRatio === '' || supervisionRatio === 0) {
+      supervisionRatio = null;
+    }
+    if (supervisionRatio !== null) {
+      supervisionRatio = Number(supervisionRatio);
+      if (supervisionRatio !== 3 && supervisionRatio !== 4) {
+        throw new Error('supervisionRatio must be null (MD-only), 3, or 4.');
+      }
+    }
     const key = `${location}::${dayOfWeek}`;
     if (seen.has(key)) {
       throw new Error(`Duplicate entry for ${location} on day ${dayOfWeek}.`);
     }
     seen.add(key);
-    result.push({ location, dayOfWeek, roomsRequired });
+    result.push({ location, dayOfWeek, roomsRequired, supervisionRatio });
   }
   return result;
 }
@@ -284,6 +296,7 @@ router.post('/:id/duplicate', facilityAuth, async (req, res) => {
             location: d.location,
             dayOfWeek: d.dayOfWeek,
             roomsRequired: d.roomsRequired,
+            supervisionRatio: d.supervisionRatio,
           })),
         },
       },
