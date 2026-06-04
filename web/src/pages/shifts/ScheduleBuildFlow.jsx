@@ -51,7 +51,7 @@ function MonthName(year, month) {
   return new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })
 }
 
-export default function ScheduleBuildFlow({ year, month, onSelected, onClose }) {
+export default function ScheduleBuildFlow({ year, month, onSelected, onClose, industryRoomRate }) {
   const [phase, setPhase] = useState('picking') // 'picking' | 'building' | 'comparing'
   const [selectedModes, setSelectedModes] = useState(new Set(MODES.map((m) => m.key))) // default: all 4
   const [runs, setRuns] = useState([])
@@ -123,6 +123,7 @@ export default function ScheduleBuildFlow({ year, month, onSelected, onClose }) 
             onSelect={selectRun}
             selecting={selecting}
             onBack={() => setPhase('picking')}
+            industryRoomRate={industryRoomRate}
           />
         )}
       </div>
@@ -199,7 +200,7 @@ function BuildingPhase({ modes }) {
 
 // ─── Phase: comparing results ────────────────────────────────────────────────
 
-function ComparingPhase({ runs, onSelect, selecting, onBack }) {
+function ComparingPhase({ runs, onSelect, selecting, onBack, industryRoomRate }) {
   // Sort by score descending so the "winner" reads naturally
   const sorted = [...runs].sort((a, b) => (b.staffiqScore || 0) - (a.staffiqScore || 0))
   const topScore = sorted[0]?.staffiqScore || 0
@@ -268,6 +269,23 @@ function ComparingPhase({ runs, onSelect, selecting, onBack }) {
                       }
                     />
                   </div>
+
+                  {industryRoomRate > 0 && insights.roomDays > 0 && (() => {
+                    const baseline = industryRoomRate * insights.roomDays
+                    const savings = baseline - (insights.totalCost || 0)
+                    const pct = baseline > 0 ? Math.round((savings / baseline) * 100) : 0
+                    const good = savings >= 0
+                    return (
+                      <div style={good ? styles.savingsBlock : styles.savingsBlockBad}>
+                        <div style={{ ...styles.savingsTop, color: good ? '#065F46' : '#991B1B' }}>
+                          {good ? 'Saves ' : 'Over by '}{fmtMoney(Math.abs(savings))}/mo
+                        </div>
+                        <div style={{ ...styles.savingsSub, color: good ? '#047857' : '#B91C1C' }}>
+                          vs {fmtMoney(baseline)} your way · {Math.abs(pct)}% {good ? 'below' : 'above'}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {run.warnings && run.warnings.length > 0 && (
                     <div style={styles.warningsBlock}>
@@ -375,6 +393,10 @@ const styles = {
   insightValueWrap: { textAlign: 'right' },
   insightValue: { fontSize: 13, fontWeight: 700, color: '#1E293B' },
   insightSub: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
+  savingsBlock: { background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: '8px 10px', marginTop: 2 },
+  savingsBlockBad: { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 10px', marginTop: 2 },
+  savingsTop: { fontSize: 14, fontWeight: 800, color: '#065F46', letterSpacing: '-0.01em' },
+  savingsSub: { fontSize: 10, color: '#047857', marginTop: 1 },
   warningsBlock: { fontSize: 11, color: '#92400E', background: '#FFFBEB', padding: 8, borderRadius: 6, marginTop: 4 },
   warningsList: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 },
   warning: { fontSize: 10, color: '#92400E', lineHeight: 1.4 },

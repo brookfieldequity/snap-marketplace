@@ -58,6 +58,80 @@ function StatBox({ label, value, color = '#0F172A', poweredBy }) {
   )
 }
 
+// Baseline-vs-SNAP cost comparison. Coordinator sets their industry-standard
+// cost per room/day once (persists on the facility); once a schedule is built,
+// this shows what the month would have cost the old way vs. SNAP, and the
+// monthly savings. insights carries { roomDays, totalCost } from the build.
+function CostComparisonPanel({ rate, insights, onSaveRate, saving }) {
+  const hasRate = rate != null && rate > 0
+  const [editing, setEditing] = useState(!hasRate)
+  const [val, setVal] = useState(hasRate ? String(rate) : '')
+
+  const roomDays = insights?.roomDays || 0
+  const snapCost = insights?.totalCost || 0
+  const baseline = hasRate ? rate * roomDays : 0
+  const savings = baseline - snapCost
+  const pct = baseline > 0 ? Math.round((savings / baseline) * 100) : 0
+  const good = savings >= 0
+
+  async function save() {
+    const num = parseFloat(val)
+    if (!num || num <= 0) return
+    await onSaveRate(num)
+    setEditing(false)
+  }
+
+  const cell = (label, value, sub, color, big) => (
+    <div style={{ flex: 1, minWidth: 150, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ fontSize: big ? 26 : 22, fontWeight: 800, color, letterSpacing: '-0.02em', marginTop: 4 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+
+  return (
+    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>💵 Cost vs. your manual process</div>
+        {hasRate && !editing && (
+          <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Industry rate {fmt(rate)}/room/day · edit
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Industry cost per room, per day</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 12, top: 10, color: '#94A3B8' }}>$</span>
+              <input type="number" value={val} onChange={(e) => setVal(e.target.value)} placeholder="1500" style={{ ...inputStyle, width: 170, paddingLeft: 22 }} />
+            </div>
+            <button onClick={save} disabled={saving} style={{ padding: '10px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {hasRate && <button onClick={() => setEditing(false)} style={{ padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>}
+          </div>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, maxWidth: 580 }}>
+            Your fully-loaded cost to staff one anesthetizing location for one day under your current/agency process. SNAP compares it to what each built schedule actually costs.
+          </div>
+        </div>
+      ) : !insights ? (
+        <div style={{ fontSize: 13, color: '#64748B' }}>
+          Build a schedule to see how much SNAP saves you this month vs. {fmt(rate)}/room/day.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
+          {cell('Your manual process', fmt(baseline), `${roomDays} room-days × ${fmt(rate)}`, '#475569')}
+          {cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')}
+          {cell(good ? 'You save / month' : 'Over baseline', fmt(Math.abs(savings)), `${Math.abs(pct)}% ${good ? 'below' : 'above'} your process`, good ? '#059669' : '#DC2626', true)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Given an array of scheduleDay rows for one date, compute fill stats
 function getDayStats(dayRows) {
   let totalRooms = 0
@@ -158,20 +232,27 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [selectedRunRecs, setSelectedRunRecs] = useState(null)
   const [rescoring, setRescoring] = useState(false)
   const [rescoreMessage, setRescoreMessage] = useState(null)
+  // Facility (for the industry-baseline rate) + the selected build's insights
+  // (roomDays + totalCost) that drive the cost-comparison panel.
+  const [facility, setFacility] = useState(null)
+  const [selectedRunInsights, setSelectedRunInsights] = useState(null)
+  const [savingRate, setSavingRate] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [sched, summ, rosterData, intel, tmplRes] = await Promise.all([
+      const [sched, summ, rosterData, intel, tmplRes, me] = await Promise.all([
         facilityAPI.getScheduleMonth(year, month),
         facilityAPI.getScheduleSummary(year, month).catch(() => null),
         facilityAPI.getRoster().catch(() => []),
         facilityAPI.getScheduleIntelligence().catch(() => null),
         facilityAPI.getCoverageTemplates().catch(() => ({ templates: [] })),
+        facilityAPI.getMe().catch(() => null),
       ])
       setScheduleData(sched)
       setSummary(summ)
+      if (me) setFacility(me)
       const r = Array.isArray(rosterData) ? rosterData : rosterData.roster || []
       setRoster(r)
       setIntelligence(intel)
@@ -204,6 +285,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       const res = await facilityAPI.rescoreBuildRun(selectedRunId)
       setSelectedRunScore(res.score)
       if (res.staffiqRecommendations !== undefined) setSelectedRunRecs(res.staffiqRecommendations)
+      if (res.insights) setSelectedRunInsights(res.insights)
       const delta = res.delta || 0
       const sign = delta > 0 ? '+' : ''
 
@@ -228,6 +310,18 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       setRescoreMessage({ kind: 'error', text: err.message || 'Re-score failed.' })
     } finally {
       setRescoring(false)
+    }
+  }
+
+  async function handleSaveRate(num) {
+    setSavingRate(true)
+    try {
+      const updated = await facilityAPI.updateMe({ industryRoomRatePerDay: num })
+      setFacility(updated)
+    } catch (e) {
+      alert('Could not save the industry rate: ' + (e.message || 'Unknown error'))
+    } finally {
+      setSavingRate(false)
     }
   }
 
@@ -482,6 +576,15 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {facility && (
+        <CostComparisonPanel
+          rate={facility.industryRoomRatePerDay}
+          insights={selectedRunInsights}
+          onSaveRate={handleSaveRate}
+          saving={savingRate}
+        />
+      )}
 
       {/* Generate-from-template banner — shown only when this month has no
           schedule rows yet AND the practice has at least one Coverage
@@ -940,12 +1043,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
         <ScheduleBuildFlow
           year={year}
           month={month}
+          industryRoomRate={facility?.industryRoomRatePerDay}
           onClose={() => setShowBuildFlow(false)}
           onSelected={({ run, message }) => {
             setShowBuildFlow(false)
             setSelectedRunId(run.id)
             setSelectedRunScore(run.staffiqScore)
             setSelectedRunRecs(run.staffiqRecommendations || null)
+            setSelectedRunInsights(run.insights || null)
             setRescoreMessage({ kind: 'success', text: message || 'Schedule applied.' })
             // Reload the calendar to show the new assignments
             load()

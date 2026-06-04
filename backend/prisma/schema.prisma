@@ -247,6 +247,11 @@ model Facility {
   whatToBring  String?
   profileScore Int           @default(0)
   snapMode     SnapMode      @default(MARKETPLACE)
+  // Industry-standard fully-loaded cost to staff one anesthetizing location
+  // for one day ($/room/day), entered by the coordinator. Used as the
+  // "old manual process" baseline the SNAP-built schedule is compared against
+  // on the Schedule Builder (baseline = rate x room-days covered).
+  industryRoomRatePerDay Float?
 
   users               FacilityUser[]
   subscription        FacilitySubscription?

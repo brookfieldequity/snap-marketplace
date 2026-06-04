@@ -452,6 +452,10 @@ function computeInsights({ mode, assignments, roster }) {
     crnaRooms,
     soloMdRooms,
     supervisingMds,
+    // OR room-days actually staffed (every non-supervisor assignment is one
+    // room for one day). Drives the industry-baseline cost comparison:
+    // baseline = facility.industryRoomRatePerDay * roomDays.
+    roomDays: assignments.length - supervisingMds,
   };
 }
 

@@ -56,7 +56,7 @@ router.get('/me', facilityAuth, async (req, res) => {
 
 router.patch('/me', facilityAuth, async (req, res) => {
   try {
-    const allowed = ['name', 'facilityType', 'address', 'zipCode', 'lat', 'lng', 'photoUrls', 'description', 'caseMix', 'parking', 'whatToBring'];
+    const allowed = ['name', 'facilityType', 'address', 'zipCode', 'lat', 'lng', 'photoUrls', 'description', 'caseMix', 'parking', 'whatToBring', 'industryRoomRatePerDay'];
     const updates = {};
     allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
 
