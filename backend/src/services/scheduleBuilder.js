@@ -177,8 +177,11 @@ const MODE_SCORERS = {
  * @param {object} args.staffiqWeights   { cost, quality } summing ≤ 1 (STAFFIQ mode only)
  * @returns {object} { assignments, insights, warnings, score }
  */
-async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
+async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailableKeys }) {
   if (!MODES.includes(mode)) throw new Error(`Unknown mode: ${mode}`);
+  // Set of `${rosterId}::${YYYY-MM-DD}` for providers who are off (PTO /
+  // explicitly unavailable). Hard-excluded from assignment — never scheduled.
+  const offKeys = unavailableKeys instanceof Set ? unavailableKeys : new Set();
 
   // Pre-compute the cheapest rate so cost scores are normalized against the
   // roster's actual floor (not a hard-coded constant).
@@ -227,6 +230,7 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
         .filter((r) => r.providerType && !r.isNonClinical)
         .filter(rolePredicate)
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
+        .filter((r) => !offKeys.has(`${r.id}::${dateISO}`)) // PTO / unavailable
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
         .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) }))
         .sort((a, b) => b.score - a.score);

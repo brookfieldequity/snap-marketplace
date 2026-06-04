@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../../api.js'
 import NpiReviewModal from './NpiReviewModal.jsx'
+import TimeOffModal from './TimeOffModal.jsx'
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
@@ -106,6 +107,7 @@ export default function InternalRosterPage({ onNavigate }) {
   // NPI review queue (from multi-sheet imports)
   const [npiReviewRows, setNpiReviewRows] = useState([])
   const [showNpiReview, setShowNpiReview] = useState(false)
+  const [timeOffMember, setTimeOffMember] = useState(null) // roster member whose PTO modal is open
 
   useEffect(() => { load(); loadNpiReview() }, [])
 
@@ -407,6 +409,9 @@ export default function InternalRosterPage({ onNavigate }) {
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                     ✏️ Edit
+                  </button>
+                  <button onClick={() => setTimeOffMember(p)} style={{ padding: '6px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#B45309' }}>
+                    🌴 Time Off
                   </button>
                   {!linked && (
                     <button onClick={() => handleInvite(p.id)} disabled={invitedIds[p.id]} style={{ padding: '6px 14px', background: invitedIds[p.id] ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${invitedIds[p.id] ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: invitedIds[p.id] ? 'default' : 'pointer', color: invitedIds[p.id] ? '#15803D' : '#4F46E5' }}>
@@ -725,6 +730,10 @@ export default function InternalRosterPage({ onNavigate }) {
           onClose={() => { setShowNpiReview(false); loadNpiReview() }}
           onAllResolved={() => { setShowNpiReview(false); loadNpiReview() }}
         />
+      )}
+
+      {timeOffMember && (
+        <TimeOffModal member={timeOffMember} onClose={() => setTimeOffMember(null)} />
       )}
     </div>
   )

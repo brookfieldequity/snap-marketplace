@@ -192,6 +192,17 @@ export const facilityAPI = {
   generateScheduleFromTemplate: (year, month, templateId) =>
     apiFetch(`${BASE}/schedule/generate`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, templateId }) }),
 
+  // Internal Roster — time off / PTO
+  getTimeOff: (from, to) => {
+    const q = new URLSearchParams()
+    if (from) q.set('from', from)
+    if (to) q.set('to', to)
+    const qs = q.toString()
+    return apiFetch(`${BASE}/roster/time-off${qs ? `?${qs}` : ''}`, { headers: facilityHeaders() })
+  },
+  addTimeOff: (rosterId, data) => apiFetch(`${BASE}/roster/${rosterId}/time-off`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  deleteTimeOff: (timeOffId) => apiFetch(`${BASE}/roster/time-off/${timeOffId}`, { method: 'DELETE', headers: facilityHeaders() }),
+
   // Internal Roster — NPI disambiguation (review queue from multi-sheet imports)
   getNpiReview: () => apiFetch(`${BASE}/roster/npi-review`, { headers: facilityHeaders() }),
   resolveNpi: (id, body) => apiFetch(`${BASE}/roster/${id}/resolve-npi`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),

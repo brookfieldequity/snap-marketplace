@@ -107,7 +107,13 @@ router.get('/month', facilityAuth, async (req, res) => {
       };
     });
 
-    res.json({ days, availabilities: availabilitiesWithRoster });
+    // Time off / PTO overlapping the month — the editor grays out anyone off.
+    const timeOff = await prisma.rosterTimeOff.findMany({
+      where: { facilityId: req.facility.id, startDate: { lt: end }, endDate: { gte: start } },
+      select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
+    });
+
+    res.json({ days, availabilities: availabilitiesWithRoster, timeOff });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -648,6 +654,45 @@ router.post('/build', facilityAuth, async (req, res) => {
     }
     const staffiqWeights = await scheduleBuilder.resolveStaffIQWeights(req.facility.id);
 
+    // Unavailability: PTO/time-off (keyed on rosterEntryId) + any explicit
+    // "unavailable" availability rows (keyed on providerId). Build a Set of
+    // `${rosterId}::${YYYY-MM-DD}` keys the builder HARD-excludes — a built
+    // schedule must never place someone who's off.
+    const linkedProviderIds = roster.map((r) => r.linkedProviderId).filter(Boolean);
+    const providerIdToRosterId = Object.fromEntries(
+      roster.filter((r) => r.linkedProviderId).map((r) => [r.linkedProviderId, r.id])
+    );
+    const [timeOff, unavailRows] = await Promise.all([
+      prisma.rosterTimeOff.findMany({
+        where: {
+          facilityId: req.facility.id,
+          startDate: { lt: monthEnd },
+          endDate: { gte: monthStart },
+        },
+        select: { rosterEntryId: true, startDate: true, endDate: true },
+      }),
+      linkedProviderIds.length > 0
+        ? prisma.providerAvailability.findMany({
+            where: { available: false, date: { gte: monthStart, lt: monthEnd }, providerId: { in: linkedProviderIds } },
+            select: { providerId: true, date: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const unavailableKeys = new Set();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    for (const t of timeOff) {
+      let d = new Date(Math.max(new Date(t.startDate).getTime(), monthStart.getTime()));
+      const last = Math.min(new Date(t.endDate).getTime(), monthEnd.getTime() - DAY_MS);
+      while (d.getTime() <= last) {
+        unavailableKeys.add(`${t.rosterEntryId}::${d.toISOString().slice(0, 10)}`);
+        d = new Date(d.getTime() + DAY_MS);
+      }
+    }
+    for (const a of unavailRows) {
+      const rid = providerIdToRosterId[a.providerId];
+      if (rid) unavailableKeys.add(`${rid}::${new Date(a.date).toISOString().slice(0, 10)}`);
+    }
+
     // Shared input snapshot — lets us reproduce and explain each run later.
     const inputSnapshot = {
       generatedAt: new Date().toISOString(),
@@ -683,6 +728,7 @@ router.post('/build', facilityAuth, async (req, res) => {
               scheduleDays,
               roster,
               staffiqWeights,
+              unavailableKeys,
             });
           return prisma.scheduleBuildRun.create({
             data: {

@@ -140,6 +140,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
   const [intelligence, setIntelligence] = useState(null)
   const [availabilities, setAvailabilities] = useState([]) // from schedule month response
+  const [timeOff, setTimeOff] = useState([]) // PTO ranges from schedule month response
 
   // Coverage Templates for the "Generate from template" banner shown when
   // the current month is empty. Loaded once on mount; generation pulls the
@@ -177,6 +178,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       // Extract availabilities from schedule month response
       const av = sched?.availabilities || []
       setAvailabilities(av)
+      setTimeOff(sched?.timeOff || [])
       const templates = tmplRes?.templates || []
       setCoverageTemplates(templates)
       // Default the dropdown selection to the practice's default template, or
@@ -401,15 +403,22 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     return map
   }
 
-  // Who explicitly marked themselves unavailable (available: false) that day.
-  // Providers with no availability row are "unknown" and stay selectable.
+  // Who can't work that day → rosterId → reason label. Covers explicit
+  // unavailability (ProviderAvailability.available === false) and PTO /
+  // time-off ranges covering the date. Providers with no signal are
+  // "unknown" and stay selectable (no false positives).
   function unavailableThatDay(dateStr) {
-    const set = new Set()
+    const map = new Map()
     for (const a of availabilities) {
       const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
-      if (avDate === dateStr && a.available === false && a.rosterId) set.add(a.rosterId)
+      if (avDate === dateStr && a.available === false && a.rosterId) map.set(a.rosterId, 'unavailable')
     }
-    return set
+    for (const t of timeOff) {
+      const s = (typeof t.startDate === 'string' ? t.startDate : new Date(t.startDate).toISOString()).substring(0, 10)
+      const e = (typeof t.endDate === 'string' ? t.endDate : new Date(t.endDate).toISOString()).substring(0, 10)
+      if (dateStr >= s && dateStr <= e && t.rosterEntryId) map.set(t.rosterEntryId, 'time off')
+    }
+    return map
   }
 
   const daysInMonth = getDaysInMonth(year, month)
@@ -847,12 +856,12 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                               // unavailable. The person currently in THIS room
                               // stays selectable (it's their own slot).
                               const elsewhere = _assignedToday[p.id] && p.id !== assignedRosterId
-                              const unavailable = _unavailToday.has(p.id)
-                              const blocked = elsewhere || unavailable
+                              const offReason = _unavailToday.get(p.id)
+                              const blocked = elsewhere || !!offReason
                               const reason = elsewhere
                                 ? ` — at ${_assignedToday[p.id]}`
-                                : unavailable
-                                  ? ' — unavailable'
+                                : offReason
+                                  ? ` — ${offReason}`
                                   : ''
                               const tagStr = !blocked && tags.length > 0 ? ` · ${tags.join(', ')}` : ''
                               return (

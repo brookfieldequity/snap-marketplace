@@ -155,6 +155,86 @@ router.patch('/:id', facilityAuth, async (req, res) => {
   }
 });
 
+// ── Time off / PTO ───────────────────────────────────────────────────────────
+
+/**
+ * GET /time-off?from=YYYY-MM-DD&to=YYYY-MM-DD — all time-off entries for the
+ * facility's roster that overlap the window (defaults to no bound). Used by
+ * the schedule editor to gray out providers and by the roster UI to list
+ * each provider's upcoming time off.
+ */
+router.get('/time-off', facilityAuth, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const where = { facilityId: req.facility.id };
+    // Overlap test: entry.endDate >= from AND entry.startDate <= to
+    if (from) where.endDate = { gte: new Date(from) };
+    if (to) where.startDate = { lte: new Date(to) };
+    const rows = await prisma.rosterTimeOff.findMany({
+      where,
+      orderBy: { startDate: 'asc' },
+      select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
+    });
+    res.json({ timeOff: rows });
+  } catch (err) {
+    console.error('[roster] time-off list failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /:id/time-off — add a time-off range for one roster member.
+ * Body: { startDate, endDate, reason? } (endDate defaults to startDate for a
+ * single day). Dates inclusive.
+ */
+router.post('/:id/time-off', facilityAuth, async (req, res) => {
+  try {
+    const entry = await prisma.internalRosterEntry.findUnique({ where: { id: req.params.id } });
+    if (!entry || entry.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Roster member not found.' });
+    }
+    const { startDate, endDate, reason } = req.body || {};
+    if (!startDate) return res.status(400).json({ error: 'startDate is required.' });
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : start;
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid date.' });
+    }
+    if (end < start) return res.status(400).json({ error: 'endDate must be on or after startDate.' });
+    const created = await prisma.rosterTimeOff.create({
+      data: {
+        rosterEntryId: entry.id,
+        facilityId: req.facility.id,
+        startDate: start,
+        endDate: end,
+        reason: reason || null,
+      },
+      select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
+    });
+    res.status(201).json({ timeOff: created });
+  } catch (err) {
+    console.error('[roster] time-off create failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /time-off/:timeOffId — remove a time-off entry.
+ */
+router.delete('/time-off/:timeOffId', facilityAuth, async (req, res) => {
+  try {
+    const row = await prisma.rosterTimeOff.findUnique({ where: { id: req.params.timeOffId } });
+    if (!row || row.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Time-off entry not found.' });
+    }
+    await prisma.rosterTimeOff.delete({ where: { id: row.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[roster] time-off delete failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── NPI disambiguation (review queue from multi-sheet imports) ───────────────
 
 /**

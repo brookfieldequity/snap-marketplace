@@ -550,9 +550,31 @@ model InternalRosterEntry {
   incentiveResponses  InternalIncentiveShiftResponse[]
   scheduleFeedback    ScheduleFeedback[]
   locations           ProviderLocation[]
+  timeOff             RosterTimeOff[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
+}
+
+// Provider time off / PTO. Keyed on the roster entry (not a SNAP
+// ProviderProfile) so it works for every roster member — including the
+// many CAPA providers without a linked SNAP account. The Schedule Builder
+// HARD-excludes anyone with time off covering a date (never auto-assigns
+// them), and the day editor grays them out. Inclusive date range
+// [startDate, endDate]. v1 is coordinator-entered; provider self-request +
+// approval workflow is v1.1.
+model RosterTimeOff {
+  id            String              @id @default(cuid())
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  facilityId    String
+  startDate     DateTime            @db.Date
+  endDate       DateTime            @db.Date
+  reason        String?
+  createdAt     DateTime            @default(now())
+
+  @@index([facilityId, startDate, endDate])
+  @@index([rosterEntryId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
