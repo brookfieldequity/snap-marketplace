@@ -771,45 +771,52 @@ router.post('/build/:runId/select', facilityAuth, async (req, res) => {
 
     const assignments = Array.isArray(run.assignments) ? run.assignments : [];
 
-    await prisma.$transaction(async (tx) => {
-      // Upsert each assignment. ScheduleAssignment's unique constraint is
-      // (scheduleDayId, roomNumber) so re-running this for the same room
-      // replaces the prior pick (good — coordinator can re-select a
-      // different run).
-      for (const a of assignments) {
-        await tx.scheduleAssignment.upsert({
-          where: {
-            scheduleDayId_roomNumber: {
+    // Distinct schedule days this run touches. We clear + recreate their
+    // assignments rather than upserting one room at a time — a full month
+    // across multiple locations can be hundreds of rooms, and serial
+    // upserts inside an interactive transaction blow Prisma's 5s timeout
+    // ("Transaction not found"). deleteMany + createMany is 2 queries
+    // regardless of room count.
+    const dayIds = [...new Set(assignments.map((a) => a.scheduleDayId))];
+
+    await prisma.$transaction(
+      async (tx) => {
+        // Replace assignments for the affected days with this run's picks.
+        if (dayIds.length > 0) {
+          await tx.scheduleAssignment.deleteMany({
+            where: { scheduleDayId: { in: dayIds } },
+          });
+        }
+        if (assignments.length > 0) {
+          await tx.scheduleAssignment.createMany({
+            data: assignments.map((a) => ({
               scheduleDayId: a.scheduleDayId,
               roomNumber: a.roomNumber,
-            },
-          },
-          create: {
-            scheduleDayId: a.scheduleDayId,
-            roomNumber: a.roomNumber,
-            rosterId: a.rosterId,
-            facilityId: req.facility.id,
-          },
-          update: {
-            rosterId: a.rosterId,
-          },
+              rosterId: a.rosterId,
+              facilityId: req.facility.id,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        // Mark this run as selected, others in batch as superseded.
+        await tx.scheduleBuildRun.update({
+          where: { id: req.params.runId },
+          data: { selectedAt: new Date() },
         });
-      }
-      // Mark this run as selected, others in batch as superseded.
-      await tx.scheduleBuildRun.update({
-        where: { id: req.params.runId },
-        data: { selectedAt: new Date() },
-      });
-      await tx.scheduleBuildRun.updateMany({
-        where: {
-          buildBatchId: run.buildBatchId,
-          facilityId: req.facility.id,
-          NOT: { id: req.params.runId },
-          status: 'COMPLETE',
-        },
-        data: { status: 'SUPERSEDED' },
-      });
-    });
+        await tx.scheduleBuildRun.updateMany({
+          where: {
+            buildBatchId: run.buildBatchId,
+            facilityId: req.facility.id,
+            NOT: { id: req.params.runId },
+            status: 'COMPLETE',
+          },
+          data: { status: 'SUPERSEDED' },
+        });
+      },
+      // Safety margin over the 5s default in case createMany is large or
+      // Neon latency spikes.
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     res.json({
       assignmentsApplied: assignments.length,
