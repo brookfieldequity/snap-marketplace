@@ -252,19 +252,35 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
 
     if (ratio === 3 || ratio === 4) {
       // ── Team model: CRNAs in rooms, MDs supervising at 1:ratio ──────────
+      // CRNAs fill rooms greedily. When CRNAs run short, uncovered rooms are
+      // backfilled with SOLO MDs (the realistic scheduler move). The number
+      // of MD-backfilled rooms is the CRNA-gap signal StaffIQ uses to
+      // recommend incentivizing CRNAs (Task #26): a CRNA at a premium is
+      // cheaper than an MD in a room (~$800/day each).
       let filledCrnaRooms = 0;
+      let crnaGapRooms = 0;
       for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
-        const pick = pickBest(isCrna);
-        if (!pick) {
-          warnings.push(`No available CRNA for ${day.location} on ${dateISO} room ${roomNumber}.`);
+        const crna = pickBest(isCrna);
+        if (crna) {
+          place(crna, roomNumber, 'CRNA_ROOM');
+          filledCrnaRooms += 1;
           continue;
         }
-        place(pick, roomNumber, 'CRNA_ROOM');
-        filledCrnaRooms += 1;
+        // No CRNA available — backfill the room with a solo MD if possible.
+        const md = pickBest(isMd);
+        if (md) {
+          place(md, roomNumber, 'SOLO_MD_ROOM');
+          crnaGapRooms += 1;
+          continue;
+        }
+        warnings.push(
+          `No available CRNA or anesthesiologist for ${day.location} on ${dateISO} room ${roomNumber}.`
+        );
       }
-      // Supervising anesthesiologists = ceil(CRNA rooms / ratio), packed to
-      // the ratio for efficiency. Stored in a reserved room-number range so
-      // they don't collide with real rooms (1..roomsRequired).
+      // Supervising anesthesiologists for the CRNA rooms only = ceil(CRNA /
+      // ratio), packed for efficiency. Solo-MD backfill rooms need no
+      // supervision. Stored in a reserved room-number range so they don't
+      // collide with real rooms.
       const supervisorsNeeded = Math.ceil(filledCrnaRooms / ratio);
       for (let s = 0; s < supervisorsNeeded; s++) {
         const pick = pickBest(isMd);
@@ -276,6 +292,14 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
           break;
         }
         place(pick, SUPERVISOR_ROOM_BASE + s, 'SUPERVISING_MD');
+      }
+      if (crnaGapRooms > 0) {
+        // Structured CRNA-gap note for StaffIQ (Task #26). Phrased as a
+        // recommendation prompt; the cost math + incentive CTA land in #26.
+        warnings.push(
+          `CRNA gap: ${day.location} on ${dateISO} filled ${crnaGapRooms} room(s) with ` +
+            `solo MDs for lack of CRNAs — incentivizing ${crnaGapRooms} CRNA(s) would cut cost.`
+        );
       }
     } else if (ratio === 0) {
       // ── MD-only: every room a solo anesthesiologist ─────────────────────
