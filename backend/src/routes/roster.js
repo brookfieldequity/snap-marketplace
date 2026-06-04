@@ -4,7 +4,7 @@ const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { logAutomationEvent } = require('../services/automationEvents');
-const { resolveNpi, lookupByNumber, specialtyFromTaxonomy } = require('../services/nppesLookup');
+const { resolveNpi, lookupByNumber, specialtyFromTaxonomy, searchByName, splitName: splitNppesName } = require('../services/nppesLookup');
 const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS } = require('../services/notifications');
@@ -574,6 +574,99 @@ router.post('/reclassify-from-nppes', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /resolve-from-registry — comprehensive cleanup from NPPES. For EVERY
+// row: resolve the NPI by name when missing, set the provider type from the
+// official taxonomy, and clear the non-clinical / npi-exempt flags for
+// confirmed anesthesia providers (fixing rows the importer benched when it
+// couldn't parse a title). Ambiguous names are queued for review; rows with no
+// confident anesthesia match are left untouched. Idempotent + safe to re-run.
+router.post('/resolve-from-registry', facilityAuth, async (req, res) => {
+  try {
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { state: true },
+    });
+    const state = facility?.state || 'MA';
+
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+      select: { id: true, providerName: true, npi: true, providerType: true, isNonClinical: true, npiExempt: true },
+    });
+
+    const changes = [];
+    let needsReview = 0;
+    let unmatched = 0;
+
+    for (const e of entries) {
+      let npi = e.npi;
+      let taxonomy = null;
+
+      if (npi) {
+        // eslint-disable-next-line no-await-in-loop
+        const rec = await lookupByNumber(npi);
+        taxonomy = rec.found ? rec.primaryTaxonomy : null;
+      } else {
+        const split = splitNppesName(e.providerName);
+        if (!split) {
+          unmatched += 1;
+          continue;
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const matches = await searchByName({ firstName: split.firstName, lastName: split.lastName, state });
+        const anes = matches.filter((m) => m.status === 'A' && specialtyFromTaxonomy(m.primaryTaxonomy));
+        if (anes.length === 1) {
+          npi = anes[0].npi;
+          taxonomy = anes[0].primaryTaxonomy;
+        } else if (anes.length > 1) {
+          // eslint-disable-next-line no-await-in-loop
+          await prisma.internalRosterEntry.update({
+            where: { id: e.id },
+            data: { npiLookupStatus: 'NEEDS_DISAMBIGUATION', npiLookupCandidates: anes },
+          });
+          needsReview += 1;
+          continue;
+        } else {
+          unmatched += 1;
+          continue;
+        }
+      }
+
+      const mappedType = specialtyFromTaxonomy(taxonomy);
+      const data = {};
+      if (npi && npi !== e.npi) {
+        data.npi = npi;
+        data.npiLookupStatus = null;
+        data.npiLookupCandidates = null;
+      }
+      if (mappedType && mappedType !== e.providerType) data.providerType = mappedType;
+      // A confirmed anesthesia provider is clinical — un-bench them.
+      if (mappedType && (e.isNonClinical || e.npiExempt)) {
+        data.isNonClinical = false;
+        data.npiExempt = false;
+      }
+
+      if (Object.keys(data).length > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await prisma.internalRosterEntry.update({ where: { id: e.id }, data });
+        changes.push({
+          name: e.providerName,
+          npiAdded: data.npi || null,
+          from: e.providerType,
+          to: data.providerType || e.providerType,
+          unbenched: data.isNonClinical === false,
+        });
+      } else {
+        unmatched += 1;
+      }
+    }
+
+    res.json({ checked: entries.length, updated: changes.length, needsReview, unmatched, changes });
+  } catch (err) {
+    console.error('[roster] resolve-from-registry failed:', err);
+    res.status(500).json({ error: 'Failed to resolve roster from registry.' });
+  }
+});
+
 // POST /:id/invite — send a single credentialing invite (per-row button).
 router.post('/:id/invite', facilityAuth, async (req, res) => {
   try {
@@ -921,9 +1014,8 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // Role that doesn't map to a clinical specialty → non-clinical roster
     // member (back-office staff, biller, etc). They belong on the roster for
     // payroll but are never scheduled into ORs and don't need an NPI.
-    const type = normalizeSpecialty(payroll.role);
+    let type = normalizeSpecialty(payroll.role);
     const employment = normalizeEmployment(payroll.employment); // may be null; that's fine
-    const isNonClinical = !type;
 
     const email = String(staff.email ?? '').trim().toLowerCase() || null;
     const phone = String(staff.mobile ?? '').trim() || null;
@@ -935,28 +1027,39 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // if Staff is missing it.
     const rosterCode = staff._initials || payroll._initials || null;
 
-    // NPI resolution via NPPES — clinical providers only. Non-clinical
-    // staff are NPI-exempt and skip the lookup entirely.
+    // NPI resolution via NPPES for EVERY row. When the payroll role column
+    // didn't classify the provider, derive their type from the matched NPI's
+    // taxonomy — so a real clinician isn't benched just because their title
+    // was written unusually. Only rows we still can't establish a clinical
+    // identity for end up non-clinical.
     let npi = null;
     let npiLookupStatus = null;
     let npiLookupCandidates = null;
-    if (!isNonClinical) {
+    {
       const npiResult = await resolveNpi({ name, state: 'MA' });
       if (npiResult.decision === 'AUTO_MATCHED') {
         npi = npiResult.npi;
+        if (!type) {
+          const taxType = specialtyFromTaxonomy(npiResult.matches[0]?.primaryTaxonomy);
+          if (taxType) type = taxType;
+        }
       } else {
         // NEEDS_DISAMBIGUATION | NO_MATCH | INVALID_NAME — store for the
         // disambiguation UI to surface to the coordinator post-import.
         npiLookupStatus = npiResult.decision;
         npiLookupCandidates = npiResult.matches.length > 0 ? npiResult.matches : null;
-        needsNpiReview.push({
-          nameKey,
-          name,
-          decision: npiResult.decision,
-          candidates: npiResult.matches,
-        });
+        if (!type) {
+          needsNpiReview.push({
+            nameKey,
+            name,
+            decision: npiResult.decision,
+            candidates: npiResult.matches,
+          });
+        }
       }
     }
+
+    const isNonClinical = !type;
 
     // Try linking to existing ProviderProfile (NPI first, email fallback)
     let linkedProviderId = null;

@@ -360,11 +360,11 @@ export default function InternalRosterPage({ onNavigate }) {
   async function handleReclassify() {
     setReclassifying(true)
     try {
-      const res = await facilityAPI.reclassifyRosterTypes()
+      const res = await facilityAPI.resolveRosterFromRegistry()
       setReclassifyResult(res)
       await load()
     } catch (e) {
-      alert('Fix types failed: ' + (e.message || 'Unknown error'))
+      alert('Resolve from registry failed: ' + (e.message || 'Unknown error'))
     } finally {
       setReclassifying(false)
     }
@@ -434,10 +434,10 @@ export default function InternalRosterPage({ onNavigate }) {
           <button
             onClick={handleReclassify}
             disabled={reclassifying}
-            title="Set each provider's type (MD / CRNA / AA) from the national NPI registry"
+            title="Look up every provider in the national NPI registry — fill in NPIs, set MD/CRNA type, and activate any clinicians the import benched"
             style={{ padding: '11px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: reclassifying ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: reclassifying ? 0.6 : 1 }}
           >
-            <span style={{ fontSize: 15, lineHeight: 1 }}>🩺</span> {reclassifying ? 'Fixing…' : 'Fix types'}
+            <span style={{ fontSize: 15, lineHeight: 1 }}>🔎</span> {reclassifying ? 'Resolving…' : 'Resolve from registry'}
           </button>
           <button
             onClick={openAdd}
@@ -448,30 +448,35 @@ export default function InternalRosterPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Provider-type re-classify result */}
+      {/* Resolve-from-registry result */}
       {reclassifyResult && (
-        <Modal title="Provider types updated" onClose={() => setReclassifyResult(null)}>
+        <Modal title="Roster resolved from registry" onClose={() => setReclassifyResult(null)}>
           <div style={{ fontSize: 14, color: '#0F172A', marginBottom: 14 }}>
-            Checked {reclassifyResult.checked} clinical provider{reclassifyResult.checked !== 1 ? 's' : ''} against the national registry.{' '}
+            Checked {reclassifyResult.checked} provider{reclassifyResult.checked !== 1 ? 's' : ''} against the national registry.{' '}
             <strong>{reclassifyResult.updated} updated.</strong>
           </div>
           {reclassifyResult.changes?.length > 0 ? (
             <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
-              {reclassifyResult.changes.map((c, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{c.name}</span>
-                  <span style={{ color: '#64748B', whiteSpace: 'nowrap' }}>
-                    {(c.from && TYPE_BADGE[c.from]?.label) || '(none)'} → <strong style={{ color: '#059669' }}>{TYPE_BADGE[c.to]?.label || c.to}</strong>
-                  </span>
-                </div>
-              ))}
+              {reclassifyResult.changes.map((c, i) => {
+                const bits = []
+                if (c.npiAdded) bits.push('+ NPI')
+                if (c.to && c.to !== c.from) bits.push(`${(c.from && TYPE_BADGE[c.from]?.label) || 'untyped'} → ${TYPE_BADGE[c.to]?.label || c.to}`)
+                if (c.unbenched) bits.push('activated')
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{c.name}</span>
+                    <span style={{ color: '#059669', whiteSpace: 'nowrap', fontWeight: 600 }}>{bits.join(' · ')}</span>
+                  </div>
+                )
+              })}
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: '#64748B' }}>Everyone&apos;s type already matched the registry — nothing to change.</div>
+            <div style={{ fontSize: 13, color: '#64748B' }}>Nothing to change — everyone already matched the registry.</div>
           )}
-          {reclassifyResult.unmatched > 0 && (
+          {(reclassifyResult.needsReview > 0 || reclassifyResult.unmatched > 0) && (
             <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>
-              {reclassifyResult.unmatched} couldn&apos;t be confirmed from the registry (no NPI match or a non-anesthesia taxonomy) and were left unchanged.
+              {reclassifyResult.needsReview > 0 && <div>{reclassifyResult.needsReview} had multiple possible matches — resolve them in NPI review.</div>}
+              {reclassifyResult.unmatched > 0 && <div>{reclassifyResult.unmatched} couldn&apos;t be matched (likely back-office, or a name the registry couldn&apos;t resolve) and were left unchanged.</div>}
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>

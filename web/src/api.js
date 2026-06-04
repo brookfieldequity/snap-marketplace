@@ -170,6 +170,7 @@ export const facilityAPI = {
   bulkInviteCredentialing: (rosterIds) => apiFetch(`${BASE}/roster/bulk-invite`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ rosterIds }) }),
   syncCredentialingStatus: () => apiFetch(`${BASE}/roster/sync-credentialing`, { method: 'POST', headers: facilityHeaders() }),
   reclassifyRosterTypes: () => apiFetch(`${BASE}/roster/reclassify-from-nppes`, { method: 'POST', headers: facilityHeaders() }),
+  resolveRosterFromRegistry: () => apiFetch(`${BASE}/roster/resolve-from-registry`, { method: 'POST', headers: facilityHeaders() }),
 
   // Availability Windows
   getWindows: () => apiFetch(`${BASE}/windows`, { headers: facilityHeaders() }),
