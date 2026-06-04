@@ -109,9 +109,14 @@ async function searchByName({ firstName, lastName, state, limit = 5 }) {
  */
 function splitName(rawName) {
   if (!rawName || typeof rawName !== 'string') return null;
-  // Normalize whitespace; strip credentials suffixes (", CRNA", ", MD", "(MD)")
+  // Normalize for NPPES name search:
+  //  - drop parentheticals  "Audrey Long (O'Connor)" -> "Audrey Long"
+  //  - drop a leading title  "Dr Gary Robelen" -> "Gary Robelen"
+  //  - drop trailing credentials ", MD" / "CRNA" / "(MD)"
   const cleaned = rawName
-    .replace(/,?\s*\(?(MD|DO|CRNA|AA|PA|NP)\)?\.?$/i, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/^\s*(dr|doctor|mr|mrs|ms|prof)\.?\s+/i, '')
+    .replace(/,?\s*\(?(MD|DO|CRNA|AA|CAA|PA|NP|RN|DNP|MSN|PhD)\)?\.?$/i, '')
     .trim()
     .replace(/\s+/g, ' ');
   const parts = cleaned.split(' ').filter((p) => p.length > 0);

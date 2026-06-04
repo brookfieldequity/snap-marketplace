@@ -908,7 +908,20 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
       {/* Day Detail Modal */}
       {dayDetailModal && (
-        <Modal title={`Schedule — ${new Date(dayDetailModal + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`} onClose={() => setDayDetailModal(null)} wide>
+        <Modal title={(() => {
+          const curDay = parseInt(dayDetailModal.slice(8, 10), 10)
+          const prev = curDay > 1 ? padDate(curDay - 1) : null
+          const next = curDay < daysInMonth ? padDate(curDay + 1) : null
+          const label = new Date(dayDetailModal + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+          const arrow = (on) => ({ width: 30, height: 30, borderRadius: 8, border: '1px solid #E2E8F0', background: on ? '#F8FAFC' : '#F1F5F9', color: on ? '#374151' : '#CBD5E1', fontSize: 18, lineHeight: 1, cursor: on ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 })
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => prev && setDayDetailModal(prev)} disabled={!prev} title="Previous day" style={arrow(!!prev)}>‹</button>
+              <span>{label}</span>
+              <button onClick={() => next && setDayDetailModal(next)} disabled={!next} title="Next day" style={arrow(!!next)}>›</button>
+            </span>
+          )
+        })()} onClose={() => setDayDetailModal(null)} wide>
           {detailDayRows.length === 0 ? (
             <p style={{ color: '#94A3B8' }}>No locations scheduled for this day.</p>
           ) : (
