@@ -18,6 +18,48 @@
 
 const NPPES_API_URL = 'https://npiregistry.cms.hhs.gov/api/';
 
+// ── Throttle + retry ─────────────────────────────────────────────────────────
+// NPPES throttles rapid bursts (a resolve/import pass firing dozens of calls
+// back-to-back gets starved — empty results or 429s). Space every call out
+// globally and retry transient failures so large passes complete reliably from
+// any host (Railway, local, etc.).
+const MIN_GAP_MS = parseInt(process.env.NPPES_MIN_GAP_MS || '300', 10);
+let _nextSlot = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function throttle() {
+  const now = Date.now();
+  const wait = Math.max(0, _nextSlot - now);
+  _nextSlot = Math.max(now, _nextSlot) + MIN_GAP_MS;
+  if (wait > 0) await sleep(wait);
+}
+async function nppesGet(params, tries = 3) {
+  let lastErr = null;
+  for (let i = 0; i < tries; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await throttle();
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(`${NPPES_API_URL}?${params}`);
+      if (res.ok) return await res.json();
+      // 429 / 5xx are transient → back off and retry; other 4xx → give up.
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error('HTTP ' + res.status);
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(800 * (i + 1));
+        continue;
+      }
+      console.error('[nppes] HTTP', res.status);
+      return null;
+    } catch (err) {
+      lastErr = err;
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(800 * (i + 1));
+    }
+  }
+  if (lastErr) console.error('[nppes] gave up after retries:', lastErr.message);
+  return null;
+}
+
 /**
  * Raw search against NPPES. Returns normalized match objects.
  * Empty array on any error / no results.
@@ -34,17 +76,12 @@ async function searchByName({ firstName, lastName, state, limit = 5 }) {
   });
   if (state) params.set('state', state);
 
-  try {
-    const res = await fetch(`${NPPES_API_URL}?${params}`);
-    if (!res.ok) {
-      console.error('[nppes] HTTP', res.status, 'on', `${firstName} ${lastName}`);
-      return [];
-    }
-    const data = await res.json();
-    const results = Array.isArray(data?.results) ? data.results : [];
-    return results
-      .filter((r) => r.basic) // drop records with no basic data (rare; deactivated entries)
-      .map((r) => ({
+  const data = await nppesGet(params);
+  if (!data) return [];
+  const results = Array.isArray(data.results) ? data.results : [];
+  return results
+    .filter((r) => r.basic) // drop records with no basic data (rare; deactivated entries)
+    .map((r) => ({
         npi: r.number,
         firstName: r.basic.first_name || null,
         lastName: r.basic.last_name || null,
@@ -60,11 +97,7 @@ async function searchByName({ firstName, lastName, state, limit = 5 }) {
         primaryAddress: (r.addresses || [])
           .filter((a) => a.address_purpose === 'LOCATION' || a.address_purpose === 'MAILING')
           .map((a) => ({ city: a.city, state: a.state }))[0] || null,
-      }));
-  } catch (err) {
-    console.error('[nppes] lookup failed:', err.message);
-    return [];
-  }
+    }));
 }
 
 /**
@@ -132,24 +165,18 @@ async function resolveNpi({ name, state = 'MA' } = {}) {
 async function lookupByNumber(npi) {
   if (!/^\d{10}$/.test(String(npi || ''))) return { found: false };
   const params = new URLSearchParams({ version: '2.1', number: String(npi) });
-  try {
-    const res = await fetch(`${NPPES_API_URL}?${params}`);
-    if (!res.ok) return { found: false };
-    const data = await res.json();
-    const r = Array.isArray(data?.results) ? data.results[0] : null;
-    if (!r || !r.basic) return { found: false };
-    return {
-      found: true,
-      firstName: r.basic.first_name || null,
-      lastName: r.basic.last_name || null,
-      credential: r.basic.credential || null,
-      primaryTaxonomy:
-        (r.taxonomies || []).find((t) => t.primary)?.desc || (r.taxonomies || [])[0]?.desc || null,
-    };
-  } catch (err) {
-    console.error('[nppes] lookupByNumber failed:', err.message);
-    return { found: false };
-  }
+  const data = await nppesGet(params);
+  if (!data) return { found: false };
+  const r = Array.isArray(data.results) ? data.results[0] : null;
+  if (!r || !r.basic) return { found: false };
+  return {
+    found: true,
+    firstName: r.basic.first_name || null,
+    lastName: r.basic.last_name || null,
+    credential: r.basic.credential || null,
+    primaryTaxonomy:
+      (r.taxonomies || []).find((t) => t.primary)?.desc || (r.taxonomies || [])[0]?.desc || null,
+  };
 }
 
 /**
