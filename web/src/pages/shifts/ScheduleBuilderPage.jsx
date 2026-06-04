@@ -5,6 +5,21 @@ import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
 
+// Care-team coverage model label from a ScheduleDay.supervisionRatio.
+// null = legacy/role-agnostic (no badge); 0 = MD-only; 3/4 = team ratio.
+function coverageLabel(ratio) {
+  if (ratio === 0) return { text: 'MD only', bg: '#F5F3FF', color: '#7C3AED' }
+  if (ratio === 3) return { text: 'Team 1:3', bg: '#ECFDF5', color: '#059669' }
+  if (ratio === 4) return { text: 'Team 1:4', bg: '#ECFDF5', color: '#059669' }
+  return null
+}
+
+// Per-room role tag (from ScheduleAssignment.role).
+const ROLE_TAG = {
+  CRNA_ROOM: { text: 'CRNA', bg: '#EFF6FF', color: '#1D4ED8' },
+  SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#7C3AED' },
+}
+
 function fmt(n) {
   if (n == null) return '$0'
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -693,16 +708,28 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               const required = row.roomsRequired || 1
               const assignments = row.assignments || []
               const assignedByRoom = Object.fromEntries(assignments.map(a => [a.roomNumber, a]))
-              const filled = assignments.filter(a => a.rosterId).length
+              // Supervising MDs are stored at roomNumber >= 900 (role
+              // SUPERVISING_MD); they're not OR rooms, so exclude them from
+              // the fill count and surface them in their own section.
+              const supervisors = assignments.filter(a => a.role === 'SUPERVISING_MD' && a.rosterId)
+              const filled = assignments.filter(a => a.rosterId && a.role !== 'SUPERVISING_MD').length
               const gap = required - filled
               const colorKey = gap === 0 ? 'green' : gap === 1 ? 'yellow' : 'red'
               const sc = STATUS_COLORS[colorKey]
+              const cov = coverageLabel(row.supervisionRatio)
 
               return (
                 <div key={row.id} style={{ marginBottom: 20, border: `1px solid ${sc.border}`, borderRadius: 12, overflow: 'hidden' }}>
                   {/* Location header */}
                   <div style={{ background: sc.bg, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1 }}>{row.location}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {row.location}
+                      {cov && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: cov.bg, color: cov.color }}>
+                          {cov.text}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       {/* Room count adjuster */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -747,6 +774,11 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                           {!assignedRosterId && (
                             <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 700, flexShrink: 0 }}>⬜ Unfilled</div>
                           )}
+                          {assignment?.role && ROLE_TAG[assignment.role] && (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: ROLE_TAG[assignment.role].bg, color: ROLE_TAG[assignment.role].color, flexShrink: 0 }}>
+                              {ROLE_TAG[assignment.role].text}
+                            </span>
+                          )}
                           {assignedRosterId && assignment?.rosterEntry && (
                             <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700, flexShrink: 0 }}>
                               {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName}
@@ -788,6 +820,30 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         </div>
                       )
                     })}
+
+                    {/* Supervising anesthesiologists (team model). Auto-computed
+                        from the care-team build — 1 MD per supervisionRatio CRNAs. */}
+                    {(supervisors.length > 0 || (row.supervisionRatio === 3 || row.supervisionRatio === 4)) && (
+                      <div style={{ marginTop: 6, paddingTop: 10, borderTop: '1px dashed #CBD5E1' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                          Supervising anesthesiologists ({supervisors.length})
+                          {row.supervisionRatio ? ` · 1:${row.supervisionRatio}` : ''}
+                        </div>
+                        {supervisors.length === 0 ? (
+                          <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 600 }}>
+                            ⬜ No anesthesiologist assigned to supervise
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {supervisors.map((s) => (
+                              <span key={s.id || s.roomNumber} style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', background: '#F5F3FF', padding: '4px 10px', borderRadius: 20 }}>
+                                {EMP_PREFIX[s.rosterEntry?.employmentCategory] || ''} {s.rosterEntry?.providerName || 'MD'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
