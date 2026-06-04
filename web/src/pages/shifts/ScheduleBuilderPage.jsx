@@ -352,10 +352,10 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     let score = 0
     const tags = []
 
-    // 1. Availability on this date
+    // 1. Availability on this date (only rows explicitly marked available)
     const isAvailable = availabilities.some(a => {
       const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
-      return a.rosterId === provider.id && avDate === dateStr
+      return a.rosterId === provider.id && avDate === dateStr && a.available
     })
     if (isAvailable) { score += 40; tags.push('Available') }
 
@@ -385,6 +385,31 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     return [...roster]
       .map(p => ({ ...p, _rank: scoreProvider(p, dateStr, locationName) }))
       .sort((a, b) => b._rank.score - a._rank.score)
+  }
+
+  // Editing guardrail: who's already working somewhere that day (rosterId →
+  // location label), so the coordinator can't accidentally double-book across
+  // locations. Supervising MDs count too (they're working). Built from every
+  // location's assignments for the open day.
+  function assignedThatDay(dateStr) {
+    const map = {}
+    for (const row of (daysByDate[dateStr] || [])) {
+      for (const a of (row.assignments || [])) {
+        if (a.rosterId) map[a.rosterId] = row.location
+      }
+    }
+    return map
+  }
+
+  // Who explicitly marked themselves unavailable (available: false) that day.
+  // Providers with no availability row are "unknown" and stay selectable.
+  function unavailableThatDay(dateStr) {
+    const set = new Set()
+    for (const a of availabilities) {
+      const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
+      if (avDate === dateStr && a.available === false && a.rosterId) set.add(a.rosterId)
+    }
+    return set
   }
 
   const daysInMonth = getDaysInMonth(year, month)
@@ -712,7 +737,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           {detailDayRows.length === 0 ? (
             <p style={{ color: '#94A3B8' }}>No locations scheduled for this day.</p>
           ) : (
-            detailDayRows.map((row) => {
+            (() => { const _assignedToday = assignedThatDay(dayDetailModal); const _unavailToday = unavailableThatDay(dayDetailModal); return detailDayRows.map((row) => {
               const required = row.roomsRequired || 1
               const assignments = row.assignments || []
               const assignedByRoom = Object.fromEntries(assignments.map(a => [a.roomNumber, a]))
@@ -817,10 +842,22 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                             <option value="">— Unassigned —</option>
                             {rankedRoster(dayDetailModal, row.location).map((p, pi) => {
                               const tags = p._rank.tags
-                              const tagStr = tags.length > 0 ? ` · ${tags.join(', ')}` : ''
+                              // Disable anyone who can't actually be put here:
+                              // already working elsewhere that day, or marked
+                              // unavailable. The person currently in THIS room
+                              // stays selectable (it's their own slot).
+                              const elsewhere = _assignedToday[p.id] && p.id !== assignedRosterId
+                              const unavailable = _unavailToday.has(p.id)
+                              const blocked = elsewhere || unavailable
+                              const reason = elsewhere
+                                ? ` — at ${_assignedToday[p.id]}`
+                                : unavailable
+                                  ? ' — unavailable'
+                                  : ''
+                              const tagStr = !blocked && tags.length > 0 ? ` · ${tags.join(', ')}` : ''
                               return (
-                                <option key={p.id} value={p.id}>
-                                  {pi === 0 ? '⭐ ' : ''}{EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}{tagStr}
+                                <option key={p.id} value={p.id} disabled={blocked}>
+                                  {blocked ? '🚫 ' : pi === 0 ? '⭐ ' : ''}{EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}{reason}{tagStr}
                                 </option>
                               )
                             })}
@@ -855,7 +892,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                   </div>
                 </div>
               )
-            })
+            }) })()
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>

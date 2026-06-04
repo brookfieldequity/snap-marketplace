@@ -94,10 +94,27 @@ router.post('/', facilityAuth, async (req, res) => {
 
     setImmediate(async () => {
       try {
-        const rosterEntries = await prisma.internalRosterEntry.findMany({
-          where: { facilityId: req.facility.id, providerType: providerTypeRequired },
-          select: { linkedProviderId: true, phoneNumber: true },
+        // Providers already on the schedule that day shouldn't be offered the
+        // incentive shift — they can't be in two places at once. Find every
+        // roster entry assigned to any room on the shift date and exclude them.
+        const dayStart = new Date(new Date(shiftDate).toISOString().slice(0, 10) + 'T00:00:00.000Z');
+        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+        const sameDayAssignments = await prisma.scheduleAssignment.findMany({
+          where: {
+            facilityId: req.facility.id,
+            rosterId: { not: null },
+            scheduleDay: { date: { gte: dayStart, lt: dayEnd } },
+          },
+          select: { rosterId: true },
         });
+        const alreadyScheduled = new Set(sameDayAssignments.map((a) => a.rosterId));
+
+        const rosterEntries = (
+          await prisma.internalRosterEntry.findMany({
+            where: { facilityId: req.facility.id, providerType: providerTypeRequired },
+            select: { id: true, linkedProviderId: true, phoneNumber: true },
+          })
+        ).filter((e) => !alreadyScheduled.has(e.id));
 
         const pushMsg = `${facilityName} has a shift available on ${dateStr} at ${facilityLocation} for ${durationHours} hours. Incentive rate: $${parseFloat(incentiveRate).toFixed(0)}/hour. Tap here to respond.`;
         const smsMsg = `${facilityName} — Incentive Shift: ${dateStr} at ${facilityLocation}, ${durationHours}h @ $${parseFloat(incentiveRate).toFixed(0)}/hr. Open your SNAP app to respond.`;

@@ -86,17 +86,26 @@ router.get('/month', facilityAuth, async (req, res) => {
 
       linkedProviderIds.length > 0
         ? prisma.providerAvailability.findMany({
-            where: { date: { gte: start, lt: end }, available: true, providerId: { in: linkedProviderIds } },
-            select: { providerId: true, date: true },
+            // Both available AND unavailable rows — the editor grays out
+            // explicitly-unavailable providers (available: false), and the
+            // "Available" tag uses available: true.
+            where: { date: { gte: start, lt: end }, providerId: { in: linkedProviderIds } },
+            select: { providerId: true, date: true, available: true },
           })
         : Promise.resolve([]),
     ]);
 
-    // Attach roster info to each availability row
-    const availabilitiesWithRoster = availabilities.map((a) => ({
-      ...a,
-      rosterEntry: rosterByProviderId[a.providerId] || null,
-    }));
+    // Attach the roster entry id (what the editor keys on) + the available flag.
+    const availabilitiesWithRoster = availabilities.map((a) => {
+      const entry = rosterByProviderId[a.providerId] || null;
+      return {
+        providerId: a.providerId,
+        date: a.date,
+        available: a.available,
+        rosterId: entry?.id || null,
+        rosterEntry: entry,
+      };
+    });
 
     res.json({ days, availabilities: availabilitiesWithRoster });
   } catch (err) {
