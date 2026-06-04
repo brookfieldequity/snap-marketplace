@@ -628,11 +628,11 @@ export default function InternalRosterPage({ onNavigate }) {
                   return <Badge bg={cs.bg} color={cs.color} label={`Passport: ${cs.label}`} />
                 })()}
 
-                {isClinical(p) && (
-                  <div style={{ fontSize: 11, color: p.npi ? '#64748B' : '#DC2626', fontWeight: p.npi ? 400 : 600 }}>
-                    {p.npi ? `NPI ${p.npi}` : '⚠️ No NPI on file'}
-                  </div>
-                )}
+                {p.npi ? (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>NPI {p.npi}</div>
+                ) : isClinical(p) ? (
+                  <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No NPI on file</div>
+                ) : null}
 
                 {rateLabel && (
                   <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
@@ -704,9 +704,6 @@ export default function InternalRosterPage({ onNavigate }) {
             </Field>
             <Field label="NPI Number">
               <input style={inputStyle} value={form.npi} onChange={(e) => setF('npi', e.target.value)} placeholder="10-digit NPI" inputMode="numeric" />
-            </Field>
-            <Field label="License Number">
-              <input style={inputStyle} value={form.licenseNumber} onChange={(e) => setF('licenseNumber', e.target.value)} placeholder="LIC-12345" />
             </Field>
             <Field label="License Expiration">
               <input style={inputStyle} type="date" value={form.licenseExpiration} onChange={(e) => setF('licenseExpiration', e.target.value)} />
