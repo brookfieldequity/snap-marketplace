@@ -34,22 +34,39 @@ const FULL_TIME_HOURS_PER_YEAR = 2080;
 // don't break.
 
 async function loadProviderLocations(rosterIds) {
-  if (!rosterIds || rosterIds.length === 0) return new Map();
+  if (!rosterIds || rosterIds.length === 0) {
+    return { byRoster: new Map(), allCredentialedLocations: new Set() };
+  }
   const rows = await prisma.providerLocation.findMany({
     where: { rosterEntryId: { in: rosterIds } },
     select: { rosterEntryId: true, facilityName: true },
   });
   const byRoster = new Map();
+  const allCredentialedLocations = new Set();
   for (const row of rows) {
     if (!byRoster.has(row.rosterEntryId)) byRoster.set(row.rosterEntryId, new Set());
     byRoster.get(row.rosterEntryId).add(row.facilityName);
+    allCredentialedLocations.add(row.facilityName);
   }
-  return byRoster;
+  return { byRoster, allCredentialedLocations };
 }
 
-function isEligibleForLocation(rosterId, locationName, locationsByRosterId) {
-  const set = locationsByRosterId.get(rosterId);
-  if (!set || set.size === 0) return true; // back-compat: no data → eligible everywhere
+/**
+ * Eligibility check with a defensive fallback.
+ *
+ *   - Provider has NO location rows → eligible everywhere (back-compat with
+ *     rosters that pre-date location import).
+ *   - The day's location is credentialed by NOBODY in the roster → likely a
+ *     name mismatch ("Kenmore" vs "Atrius Kenmore") or a data gap. Fall back
+ *     to eligible, so the build still produces a real schedule rather than an
+ *     empty room. (The dress rehearsal reconciles location-name spelling.)
+ *   - Otherwise → only providers explicitly credentialed at this location.
+ */
+function isEligibleForLocation(rosterId, locationName, locationData) {
+  const { byRoster, allCredentialedLocations } = locationData;
+  const set = byRoster.get(rosterId);
+  if (!set || set.size === 0) return true;
+  if (!allCredentialedLocations.has(locationName)) return true; // no one has it → fallback
   return set.has(locationName);
 }
 
@@ -184,21 +201,21 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
   // ProviderLocation rows. Empty set for a roster entry means we treat them
   // as eligible everywhere (back-compat with rosters that pre-date the
   // location-import feature).
-  const locationsByRosterId = await loadProviderLocations(roster.map((r) => r.id));
+  const locationData = await loadProviderLocations(roster.map((r) => r.id));
 
   for (const day of sortedDays) {
     const dateISO = new Date(day.date).toISOString().slice(0, 10);
     for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
       // Candidates = roster entries that
       //   (1) aren't already assigned to another room on this date, AND
-      //   (2) are credentialed at this room's location (or have no
-      //       ProviderLocation rows at all — back-compat).
+      //   (2) are credentialed at this room's location (or fall through the
+      //       defensive fallbacks in isEligibleForLocation).
       const candidates = roster
         // Non-clinical / specialty-less roster members (back-office staff)
         // are never scheduled into ORs.
         .filter((r) => r.providerType && !r.isNonClinical)
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
-        .filter((r) => isEligibleForLocation(r.id, day.location, locationsByRosterId))
+        .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
         .map((r) => ({
           entry: r,
           score: MODE_SCORERS[mode](r, ctx),
@@ -317,7 +334,11 @@ function computeStaffIQScore({ mode, assignments, warnings, scheduleDays, roster
 async function resolveStaffIQWeights(facilityId) {
   const inputs = await prisma.staffIQInput.findMany({
     where: { facilityId },
-    orderBy: { updatedAt: 'desc' },
+    // StaffIQInput has no updatedAt column — it's calculated, not edited.
+    // calculatedAt is the "most-recent input" field. (The previous
+    // updatedAt orderBy threw PrismaClientValidationError, which crashed
+    // the entire /build flow before any mode ran — all 4 modes "failed".)
+    orderBy: { calculatedAt: 'desc' },
     take: 5,
   });
   if (inputs.length === 0) return { cost: 0.5, quality: 0.5 };
