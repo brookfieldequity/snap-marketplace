@@ -210,27 +210,37 @@ router.delete('/month', facilityAuth, async (req, res) => {
 // PUT /days/:dayId/assignments/:roomNumber — assign or unassign a provider to a room
 router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res) => {
   try {
-    const { rosterId } = req.body;
+    const { rosterId, role } = req.body;
     const dayId = req.params.dayId;
     const roomNumber = parseInt(req.params.roomNumber, 10);
+
+    const VALID_ROLES = ['CRNA_ROOM', 'SOLO_MD_ROOM', 'SUPERVISING_MD'];
+    if (role !== undefined && role !== null && !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
 
     const day = await prisma.scheduleDay.findUnique({ where: { id: dayId } });
     if (!day || day.facilityId !== req.facility.id) {
       return res.status(404).json({ error: 'Not found' });
     }
 
+    // Only touch `role` when the caller sends it (manual room edits omit it, so
+    // an existing room keeps its CRNA/Solo-MD tag; supervisor slots send
+    // role='SUPERVISING_MD').
+    const update = { rosterId: rosterId || null };
+    if (role !== undefined) update.role = role || null;
+
     const assignment = await prisma.scheduleAssignment.upsert({
       where: {
         scheduleDayId_roomNumber: { scheduleDayId: dayId, roomNumber },
       },
-      update: {
-        rosterId: rosterId || null,
-      },
+      update,
       create: {
         scheduleDayId: dayId,
         roomNumber,
         facilityId: req.facility.id,
         rosterId: rosterId || null,
+        role: role || null,
       },
     });
 

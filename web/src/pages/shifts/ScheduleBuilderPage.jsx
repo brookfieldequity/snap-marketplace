@@ -21,6 +21,9 @@ const ROLE_TAG = {
   SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#7C3AED' },
 }
 
+// Supervising MDs are stored at roomNumber >= 900 (mirrors scheduleBuilder.js).
+const SUPERVISOR_ROOM_BASE = 900
+
 function fmt(n) {
   if (n == null) return '$0'
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -436,11 +439,11 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     }
   }
 
-  async function handleAssign(dayId, roomNumber, rosterId) {
+  async function handleAssign(dayId, roomNumber, rosterId, role) {
     const key = `${dayId}-${roomNumber}`
     setAssignLoading(p => ({ ...p, [key]: true }))
     try {
-      await facilityAPI.assignProvider(dayId, roomNumber, rosterId === '' ? null : rosterId)
+      await facilityAPI.assignProvider(dayId, roomNumber, rosterId === '' ? null : rosterId, role)
       await load()
     } catch (e) {
       alert('Assignment failed: ' + e.message)
@@ -1046,19 +1049,58 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                           Supervising anesthesiologists ({supervisors.length})
                           {row.supervisionRatio ? ` · 1:${row.supervisionRatio}` : ''}
                         </div>
-                        {supervisors.length === 0 ? (
-                          <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 600 }}>
-                            ⬜ No anesthesiologist assigned to supervise
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            {supervisors.map((s) => (
-                              <span key={s.id || s.roomNumber} style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', background: '#F5F3FF', padding: '4px 10px', borderRadius: 20 }}>
-                                {EMP_PREFIX[s.rosterEntry?.employmentCategory] || ''} {s.rosterEntry?.providerName || 'MD'}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        {(() => {
+                          // Editable supervisor slots: one selector per assigned
+                          // supervising MD (change/remove), plus one empty slot to
+                          // add another. Supervisors live at roomNumber >= 900 and
+                          // carry role SUPERVISING_MD. Only anesthesiologists can
+                          // supervise. Reuse an emptied slot's room before minting a
+                          // new one so rooms don't accumulate.
+                          const filledSups = assignments.filter(a => a.role === 'SUPERVISING_MD' && a.rosterId)
+                          const allSupRooms = assignments.filter(a => a.role === 'SUPERVISING_MD').map(a => a.roomNumber)
+                          const emptySup = assignments.find(a => a.role === 'SUPERVISING_MD' && !a.rosterId)
+                          const addRoom = emptySup
+                            ? emptySup.roomNumber
+                            : (allSupRooms.length ? Math.max(...allSupRooms) + 1 : SUPERVISOR_ROOM_BASE)
+                          const mds = rankedRoster(dayDetailModal, row.location).filter(p => p.providerType === 'ANESTHESIOLOGIST')
+                          const slots = [
+                            ...filledSups.map(s => ({ roomNumber: s.roomNumber, currentId: s.rosterId, existing: true })),
+                            { roomNumber: addRoom, currentId: '', existing: false },
+                          ]
+                          if (mds.length === 0) {
+                            return <div style={{ fontSize: 11, color: '#94A3B8' }}>No anesthesiologists on your roster to assign as supervisors.</div>
+                          }
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {slots.map((slot) => {
+                                const key = `${row.id}-${slot.roomNumber}`
+                                const isLoading = assignLoading[key]
+                                return (
+                                  <select
+                                    key={slot.roomNumber}
+                                    value={slot.currentId}
+                                    disabled={isLoading}
+                                    onChange={(e) => handleAssign(row.id, slot.roomNumber, e.target.value, 'SUPERVISING_MD')}
+                                    style={{ ...inputStyle, fontSize: 13, padding: '7px 10px', borderColor: slot.currentId ? '#DDD6FE' : '#FCA5A5' }}
+                                  >
+                                    <option value="">{slot.existing ? '— Remove supervisor —' : '+ Add supervising anesthesiologist'}</option>
+                                    {mds.map((p) => {
+                                      const elsewhere = _assignedToday[p.id] && p.id !== slot.currentId
+                                      const offReason = _unavailToday.get(p.id)
+                                      const blocked = elsewhere || !!offReason
+                                      const reason = elsewhere ? ` — at ${_assignedToday[p.id]}` : offReason ? ` — ${offReason}` : ''
+                                      return (
+                                        <option key={p.id} value={p.id} disabled={blocked}>
+                                          {blocked ? '🚫 ' : ''}{EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}{reason}
+                                        </option>
+                                      )
+                                    })}
+                                  </select>
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
