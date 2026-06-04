@@ -796,6 +796,7 @@ router.post('/build/:runId/select', facilityAuth, async (req, res) => {
               roomNumber: a.roomNumber,
               rosterId: a.rosterId,
               facilityId: req.facility.id,
+              role: a.role ?? null,
             })),
             skipDuplicates: true,
           });

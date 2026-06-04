@@ -40,16 +40,18 @@ function normalizeDays(days) {
     if (!Number.isInteger(roomsRequired) || roomsRequired < 0) {
       throw new Error('roomsRequired must be a non-negative integer.');
     }
-    // supervisionRatio: null = MD-only, 3 = team 1:3, 4 = team 1:4. Anything
-    // else is rejected so the data stays clean for the builder.
+    // Coverage model via supervisionRatio:
+    //   null = unset → legacy role-agnostic (any provider any room)
+    //   0    = MD-only (every room a solo anesthesiologist)
+    //   3/4  = team 1:3 / 1:4 (CRNA rooms supervised by MDs at the ratio)
+    // Only truly-absent values map to null; an explicit 0 means MD-only.
     let supervisionRatio = d?.supervisionRatio;
-    if (supervisionRatio === undefined || supervisionRatio === '' || supervisionRatio === 0) {
+    if (supervisionRatio === undefined || supervisionRatio === null || supervisionRatio === '') {
       supervisionRatio = null;
-    }
-    if (supervisionRatio !== null) {
+    } else {
       supervisionRatio = Number(supervisionRatio);
-      if (supervisionRatio !== 3 && supervisionRatio !== 4) {
-        throw new Error('supervisionRatio must be null (MD-only), 3, or 4.');
+      if (![0, 3, 4].includes(supervisionRatio)) {
+        throw new Error('supervisionRatio must be null (unset), 0 (MD-only), 3, or 4.');
       }
     }
     const key = `${location}::${dayOfWeek}`;

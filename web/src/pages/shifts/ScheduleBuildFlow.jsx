@@ -243,9 +243,16 @@ function ComparingPhase({ runs, onSelect, selecting, onBack }) {
                     />
                     <InsightRow
                       label="Rooms filled"
-                      value={`${run.assignmentCount}`}
+                      value={`${(run.assignmentCount || 0) - (insights.supervisingMds || 0)}`}
                       sub={`${insights.uniqueProvidersUsed || 0} unique providers`}
                     />
+                    {insights.supervisingMds > 0 && (
+                      <InsightRow
+                        label="Care team"
+                        value={`${insights.crnaRooms || 0} CRNA · ${insights.supervisingMds} MD`}
+                        sub="CRNA rooms / supervising anesthesiologists"
+                      />
+                    )}
                     <InsightRow
                       label="Staff mix"
                       value={`${insights.fullTimeUsed || 0}/${insights.perDiemUsed || 0}/${insights.locumsUsed || 0}`}

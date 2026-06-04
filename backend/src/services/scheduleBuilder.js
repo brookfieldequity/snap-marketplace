@@ -14,9 +14,12 @@
  * - "StaffIQ-decide" uses practice's existing StaffIQInputs to tilt the
  *   hybrid weighting; future v1.x trains a real model on accumulated
  *   ScheduleBuildRun history
- * - No specialty-per-room constraint yet (Coverage Templates v1.1 adds
- *   per-site role rules; we currently assume any roster provider can fill
- *   any room — fixed in v1.1)
+ *
+ * Care-team model (Task #21 Phase B): each ScheduleDay carries a coverage
+ * model via supervisionRatio — null = legacy role-agnostic, 0 = MD-only,
+ * 3/4 = team (CRNAs in rooms supervised by anesthesiologists at 1:ratio).
+ * Supervising MDs are stored as assignments in a reserved room-number range
+ * (SUPERVISOR_ROOM_BASE+) with role SUPERVISING_MD.
  */
 
 const prisma = require('../config/db');
@@ -25,6 +28,12 @@ const MODES = ['COST_EFFICIENT', 'HIGHEST_QUALITY', 'HYBRID', 'STAFFIQ'];
 
 const DEFAULT_RELIABILITY = 0.85; // when roster.reliabilityScore is null
 const FULL_TIME_HOURS_PER_YEAR = 2080;
+
+// Supervising-MD assignments use room numbers in a reserved high range so
+// they never collide with real OR rooms (which are 1..roomsRequired, always
+// well below this). The role tag (SUPERVISING_MD) is the source of truth;
+// this just keeps the (scheduleDayId, roomNumber) unique constraint happy.
+const SUPERVISOR_ROOM_BASE = 900;
 
 // ── Location eligibility ──────────────────────────────────────────────────
 // Once ProviderLocation rows are imported (Task #18), the algorithm filters
@@ -205,39 +214,89 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights }) {
 
   for (const day of sortedDays) {
     const dateISO = new Date(day.date).toISOString().slice(0, 10);
-    for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
-      // Candidates = roster entries that
-      //   (1) aren't already assigned to another room on this date, AND
-      //   (2) are credentialed at this room's location (or fall through the
-      //       defensive fallbacks in isEligibleForLocation).
-      const candidates = roster
-        // Non-clinical / specialty-less roster members (back-office staff)
-        // are never scheduled into ORs.
+
+    // Pick the best-scoring available provider matching a role predicate.
+    // Honors cross-location same-day dedup (`assigned`), location
+    // credentialing, non-clinical exclusion, and the role filter. Returns
+    // the chosen entry+score or null if none qualify.
+    const pickBest = (rolePredicate) => {
+      const ranked = roster
         .filter((r) => r.providerType && !r.isNonClinical)
+        .filter(rolePredicate)
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
-        .map((r) => ({
-          entry: r,
-          score: MODE_SCORERS[mode](r, ctx),
-        }))
-        .sort((a, b) => b.score - a.score); // highest score first
-
-      if (candidates.length === 0) {
-        warnings.push(
-          `No available provider for ${day.location} on ${dateISO} room ${roomNumber}.`
-        );
-        continue;
-      }
-
-      const winner = candidates[0].entry;
-      assigned.add(`${winner.id}::${dateISO}`);
+        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) }))
+        .sort((a, b) => b.score - a.score);
+      return ranked[0] || null;
+    };
+    const place = (pick, roomNumber, role) => {
+      assigned.add(`${pick.entry.id}::${dateISO}`);
       assignments.push({
         scheduleDayId: day.id,
         roomNumber,
-        rosterId: winner.id,
-        // For audit / debugging — what the algorithm "thought" of this pick
-        scoreAtPick: Number(candidates[0].score.toFixed(3)),
+        rosterId: pick.entry.id,
+        role,
+        scoreAtPick: Number(pick.score.toFixed(3)),
       });
+    };
+
+    const isCrna = (r) => r.providerType === 'CRNA';
+    const isMd = (r) => r.providerType === 'ANESTHESIOLOGIST';
+
+    // Coverage model from the (refined) supervisionRatio semantic:
+    //   null → LEGACY role-agnostic (any clinical provider fills any room;
+    //          preserves behavior for schedules with no care-team model set)
+    //   0    → MD_ONLY (every room a solo anesthesiologist)
+    //   3/4  → TEAM (rooms staffed by CRNAs, supervised by MDs at the ratio)
+    const ratio = day.supervisionRatio;
+
+    if (ratio === 3 || ratio === 4) {
+      // ── Team model: CRNAs in rooms, MDs supervising at 1:ratio ──────────
+      let filledCrnaRooms = 0;
+      for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
+        const pick = pickBest(isCrna);
+        if (!pick) {
+          warnings.push(`No available CRNA for ${day.location} on ${dateISO} room ${roomNumber}.`);
+          continue;
+        }
+        place(pick, roomNumber, 'CRNA_ROOM');
+        filledCrnaRooms += 1;
+      }
+      // Supervising anesthesiologists = ceil(CRNA rooms / ratio), packed to
+      // the ratio for efficiency. Stored in a reserved room-number range so
+      // they don't collide with real rooms (1..roomsRequired).
+      const supervisorsNeeded = Math.ceil(filledCrnaRooms / ratio);
+      for (let s = 0; s < supervisorsNeeded; s++) {
+        const pick = pickBest(isMd);
+        if (!pick) {
+          warnings.push(
+            `No available anesthesiologist to supervise ${day.location} on ${dateISO} ` +
+              `(need ${supervisorsNeeded} for ${filledCrnaRooms} CRNA rooms at 1:${ratio}).`
+          );
+          break;
+        }
+        place(pick, SUPERVISOR_ROOM_BASE + s, 'SUPERVISING_MD');
+      }
+    } else if (ratio === 0) {
+      // ── MD-only: every room a solo anesthesiologist ─────────────────────
+      for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
+        const pick = pickBest(isMd);
+        if (!pick) {
+          warnings.push(`No available anesthesiologist for ${day.location} on ${dateISO} room ${roomNumber}.`);
+          continue;
+        }
+        place(pick, roomNumber, 'SOLO_MD_ROOM');
+      }
+    } else {
+      // ── Legacy / role-agnostic: any clinical provider fills any room ────
+      for (let roomNumber = 1; roomNumber <= day.roomsRequired; roomNumber++) {
+        const pick = pickBest(() => true);
+        if (!pick) {
+          warnings.push(`No available provider for ${day.location} on ${dateISO} room ${roomNumber}.`);
+          continue;
+        }
+        place(pick, roomNumber, null);
+      }
     }
   }
 
@@ -254,6 +313,10 @@ function computeInsights({ mode, assignments, roster }) {
   let totalCost = 0;
   let locumsUsed = 0;
   let fullTimeUsed = 0;
+  // Care-team breakdown so the cost/coverage is legible to coordinators.
+  let crnaRooms = 0;
+  let soloMdRooms = 0;
+  let supervisingMds = 0;
   const providerHours = {};
 
   for (const a of assignments) {
@@ -263,6 +326,9 @@ function computeInsights({ mode, assignments, roster }) {
     totalCost += effectiveHourlyRate(r) * hours;
     if (r.employmentCategory === 'LOCUMS') locumsUsed += 1;
     if (r.employmentCategory === 'FULL_TIME') fullTimeUsed += 1;
+    if (a.role === 'CRNA_ROOM') crnaRooms += 1;
+    else if (a.role === 'SOLO_MD_ROOM') soloMdRooms += 1;
+    else if (a.role === 'SUPERVISING_MD') supervisingMds += 1;
     providerHours[r.id] = (providerHours[r.id] || 0) + hours;
   }
 
@@ -285,6 +351,11 @@ function computeInsights({ mode, assignments, roster }) {
     perDiemUsed: assignments.length - locumsUsed - fullTimeUsed,
     avgReliability: Number(avgReliability.toFixed(3)),
     uniqueProvidersUsed: Object.keys(providerHours).length,
+    // Care-team breakdown (Task #21 Phase B). supervisingMds are paid MDs
+    // not in a room; crnaRooms + soloMdRooms = actual OR rooms staffed.
+    crnaRooms,
+    soloMdRooms,
+    supervisingMds,
   };
 }
 
@@ -296,7 +367,9 @@ function computeInsights({ mode, assignments, roster }) {
 function computeStaffIQScore({ mode, assignments, warnings, scheduleDays, roster }) {
   const totalRoomsRequired = scheduleDays.reduce((s, d) => s + d.roomsRequired, 0);
   if (totalRoomsRequired === 0) return 0;
-  const filled = assignments.length;
+  // Supervising MDs are not rooms — exclude them from the fill-rate numerator
+  // so a team-model schedule doesn't read as >100% filled.
+  const filled = assignments.filter((a) => a.role !== 'SUPERVISING_MD').length;
   const fillRate = filled / totalRoomsRequired; // 0-1
 
   const insights = computeInsights({ mode, assignments, roster });

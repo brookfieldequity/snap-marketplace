@@ -187,7 +187,10 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
             .map((loc) => ({
               location: loc,
               counts: byLocation[loc],
-              supervisionRatio: ratioByLocation[loc] ?? null,
+              // Default to MD-only (0) for locations with no coverage model
+              // set (legacy days). null in the data = legacy role-agnostic;
+              // the UI surfaces it as MD-only so saving makes it explicit.
+              supervisionRatio: ratioByLocation[loc] ?? 0,
             }))
         )
       })
@@ -207,8 +210,8 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
   function updateRatio(rowIdx, value) {
     setRows((current) => {
       const next = current.map((r) => ({ ...r, counts: [...r.counts] }))
-      // '' → MD-only (null); '3'/'4' → team ratio
-      next[rowIdx].supervisionRatio = value === '' ? null : Number(value)
+      // '0' → MD-only; '3'/'4' → team ratio
+      next[rowIdx].supervisionRatio = Number(value)
       return next
     })
   }
@@ -220,7 +223,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       setError(`"${trimmed}" is already in this template.`)
       return
     }
-    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: null }])
+    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0 }])
     setNewLocation('')
     setError(null)
   }
@@ -310,11 +313,11 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
                 <td style={styles.gridLocCell}>{row.location}</td>
                 <td style={styles.gridCell}>
                   <select
-                    value={row.supervisionRatio == null ? '' : String(row.supervisionRatio)}
+                    value={String(row.supervisionRatio ?? 0)}
                     onChange={(e) => updateRatio(idx, e.target.value)}
                     style={styles.coverageSelect}
                   >
-                    <option value="">MD only</option>
+                    <option value="0">MD only</option>
                     <option value="3">Team 1:3</option>
                     <option value="4">Team 1:4</option>
                   </select>

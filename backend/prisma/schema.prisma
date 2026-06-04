@@ -659,6 +659,10 @@ model ScheduleAssignment {
   rosterId      String?
   rosterEntry   InternalRosterEntry? @relation(fields: [rosterId], references: [id])
   facilityId    String
+  // Care-team role (Task #21 Phase B). null = legacy/role-agnostic room;
+  // CRNA_ROOM / SOLO_MD_ROOM = a real OR room; SUPERVISING_MD = an
+  // anesthesiologist supervising CRNA rooms (stored at roomNumber >= 900).
+  role          String?
   createdAt     DateTime             @default(now())
 
   @@unique([scheduleDayId, roomNumber])
