@@ -408,6 +408,67 @@ export default function InternalRosterPage({ onNavigate }) {
     }
   }
 
+  // ─── Marketplace app invites (separate from credentialing invites) ──────
+  const [invitingToApp, setInvitingToApp] = useState({})
+
+  async function handleInviteToApp(id) {
+    setInvitingToApp((p) => ({ ...p, [id]: true }))
+    try {
+      const res = await facilityAPI.inviteRosterToApp(id)
+      const channels = (res?.channels || []).join(' + ') || 'no channels'
+      alert(`Sent ${channels} invite to ${res.name || 'the provider'}.`)
+      await load()
+    } catch (e) {
+      alert('Invite failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setInvitingToApp((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  async function handleBulkInviteToApp() {
+    const eligible = [...selectedIds].filter((id) => {
+      const p = roster.find((x) => x.id === id)
+      return p && !p.snapAccountLinked && (p.snapAccountEmail || p.phoneNumber)
+    })
+    if (eligible.length === 0) {
+      alert('No eligible providers selected. Already-linked providers and rows with no contact info are skipped.')
+      return
+    }
+    if (!window.confirm(`Send marketplace-app invites to ${eligible.length} provider${eligible.length !== 1 ? 's' : ''}?`)) return
+    setBulkDeleting(true) // reuse the disable-flag so the bar locks
+    try {
+      const res = await facilityAPI.bulkInviteRosterToApp(eligible)
+      clearSelection()
+      await load()
+      const lines = [`Sent ${res.sent} invite${res.sent !== 1 ? 's' : ''}.`]
+      if (res.skippedCount > 0) {
+        lines.push(`${res.skippedCount} skipped:`)
+        for (const r of (res.results || []).filter((x) => !x.ok).slice(0, 8)) {
+          lines.push(`• ${r.name || r.id} — ${r.reason || 'unknown'}`)
+        }
+      }
+      alert(lines.join('\n'))
+    } catch (e) {
+      alert('Bulk invite failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const [relinking, setRelinking] = useState(false)
+  async function handleRelink() {
+    setRelinking(true)
+    try {
+      const res = await facilityAPI.relinkRoster()
+      await load()
+      alert(`Linked ${res.linked} of ${res.scanned} unlinked roster entr${res.scanned === 1 ? 'y' : 'ies'} to registered SNAP accounts.`)
+    } catch (e) {
+      alert('Re-link failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setRelinking(false)
+    }
+  }
+
   function openInviteModal() {
     // Pre-check the providers eligible by default: clinical, contactable, not
     // yet invited, and not already credentialed (unless their license is
@@ -532,6 +593,14 @@ export default function InternalRosterPage({ onNavigate }) {
             <span style={{ fontSize: 16, lineHeight: 1 }}>✉️</span> Invite to Credentialing
           </button>
           <button
+            onClick={handleRelink}
+            disabled={relinking}
+            title="Link any roster entries whose providers have already registered in the SNAP mobile app (matches by NPI or email)"
+            style={{ padding: '11px 16px', background: '#fff', color: '#047857', border: '1.5px solid #6EE7B7', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: relinking ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: relinking ? 0.6 : 1 }}
+          >
+            <span style={{ fontSize: 15, lineHeight: 1 }}>🔗</span> {relinking ? 'Linking…' : 'Sync app accounts'}
+          </button>
+          <button
             onClick={handleSyncStatus}
             disabled={syncing}
             title="Check for providers who have completed their invite"
@@ -582,6 +651,9 @@ export default function InternalRosterPage({ onNavigate }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={clearSelection} disabled={bulkDeleting} style={{ padding: '8px 14px', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
               Cancel
+            </button>
+            <button onClick={handleBulkInviteToApp} disabled={bulkDeleting} style={{ padding: '8px 16px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
+              📱 Invite {selectedIds.size} to App
             </button>
             <button onClick={handleBulkDelete} disabled={bulkDeleting} style={{ padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
               {bulkDeleting ? 'Deleting…' : `🗑️ Delete ${selectedIds.size} selected`}
@@ -843,6 +915,16 @@ export default function InternalRosterPage({ onNavigate }) {
                   <button onClick={() => setTimeOffMember(p)} style={{ padding: '6px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#B45309' }}>
                     🌴 Time Off
                   </button>
+                  {!p.snapAccountLinked && (
+                    <button
+                      onClick={() => handleInviteToApp(p.id)}
+                      disabled={!hasContact(p) || invitingToApp[p.id]}
+                      title={!hasContact(p) ? 'Add an email or phone before inviting' : 'Email/SMS a download link for the marketplace mobile app'}
+                      style={{ padding: '6px 14px', background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: '#047857', opacity: hasContact(p) ? 1 : 0.5 }}
+                    >
+                      {invitingToApp[p.id] ? '…' : (p.inviteSentAt ? '↻ Re-invite to App' : '📱 Invite to App')}
+                    </button>
+                  )}
                   {canCredential(p) && p.credentialingStatus !== 'CLAIMED' && p.credentialingStatus !== 'COMPLETED' && (
                     <button
                       onClick={() => handleInvite(p.id)}

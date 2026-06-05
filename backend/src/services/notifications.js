@@ -553,4 +553,5 @@ module.exports = {
   // Primitives exposed for use in route files
   sendSMS,
   sendPush,
+  sendEmail,
 };

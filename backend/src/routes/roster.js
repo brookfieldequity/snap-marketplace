@@ -7,7 +7,8 @@ const { logAutomationEvent } = require('../services/automationEvents');
 const { resolveNpi, lookupByNumber, specialtyFromTaxonomy, searchByName, splitName: splitNppesName } = require('../services/nppesLookup');
 const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
-const { sendSMS } = require('../services/notifications');
+const { sendSMS, sendEmail } = require('../services/notifications');
+const { reverseLinkAllOrphans } = require('../services/rosterLink');
 
 const router = express.Router();
 
@@ -673,6 +674,152 @@ router.post('/bulk-invite', facilityAuth, async (req, res) => {
     res.json({ sent, skippedCount: skipped.length, results });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Marketplace-app invites ─────────────────────────────────────────────────
+//
+// Separate from the credentialing invite (which lives on snap-credentialing).
+// This invites the provider to download the marketplace mobile app + register,
+// after which the reverseLink on their auth flow ties them back to this row.
+// Email always (when SendGrid is configured); SMS when Twilio is configured.
+
+const APP_INVITE_URL = process.env.APP_INVITE_URL ||
+  'https://apps.apple.com/app/snap-medical'; // safe placeholder
+
+function buildAppInviteEmail(entry, facilityName) {
+  const url = APP_INVITE_URL;
+  const greeting = entry.providerName?.split(/\s+/)[0] || 'there';
+  return {
+    subject: `Join ${facilityName} on SNAP`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #0F172A;">
+        <h1 style="font-size: 22px; font-weight: 800; margin: 0 0 8px;">Hi ${greeting},</h1>
+        <p style="font-size: 15px; line-height: 1.55; color: #334155;">
+          <strong>${facilityName}</strong> uses SNAP to manage scheduling and share your shifts with you.
+        </p>
+        <p style="font-size: 15px; line-height: 1.55; color: #334155;">
+          Download the SNAP app and sign up using this email address —
+          <strong>${entry.snapAccountEmail || '(your email)'}</strong> —
+          and your shifts will automatically appear in the My Schedule tab.
+          You can also subscribe to a calendar feed so shifts sync to your iPhone Calendar.
+        </p>
+        <p style="text-align: center; margin: 28px 0;">
+          <a href="${url}" style="display: inline-block; background: #6366F1; color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 15px;">Download SNAP</a>
+        </p>
+        <p style="font-size: 12px; color: #94A3B8; line-height: 1.6; margin-top: 24px;">
+          If the button doesn't work, copy this link: ${url}<br/>
+          Questions? Reply to this email and we'll help.
+        </p>
+      </div>
+    `,
+  };
+}
+
+function buildAppInviteSms(entry, facilityName) {
+  return `${facilityName} uses SNAP to share your schedule. Download the app: ${APP_INVITE_URL} — sign up with ${entry.snapAccountEmail || 'the email on file'} so your shifts show up automatically.`;
+}
+
+async function sendAppInvite(entry, facilityName) {
+  if (!entry.snapAccountEmail && !entry.phoneNumber) {
+    return { ok: false, id: entry.id, name: entry.providerName, reason: 'No email or phone on file' };
+  }
+  const channels = [];
+  if (entry.snapAccountEmail) {
+    const msg = buildAppInviteEmail(entry, facilityName);
+    await sendEmail(entry.snapAccountEmail, msg.subject, msg.html);
+    channels.push('email');
+  }
+  if (entry.phoneNumber) {
+    await sendSMS(entry.phoneNumber, buildAppInviteSms(entry, facilityName));
+    channels.push('sms');
+  }
+  // Stamp the row so the UI can show "Invited <date>" without a new column.
+  await prisma.internalRosterEntry.update({
+    where: { id: entry.id },
+    data: { inviteSentAt: new Date() },
+  });
+  return { ok: true, id: entry.id, name: entry.providerName, channels };
+}
+
+// POST /:id/invite-to-app — invite one provider.
+router.post('/:id/invite-to-app', facilityAuth, async (req, res) => {
+  try {
+    const entry = await prisma.internalRosterEntry.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!entry || entry.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (entry.snapAccountLinked) {
+      return res.status(409).json({ error: 'Already linked to a SNAP account' });
+    }
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { name: true },
+    });
+    const result = await sendAppInvite(entry, facility?.name || 'Your facility');
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    console.error('[roster] invite-to-app failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /bulk-invite-to-app — invite N selected providers in one click.
+// Body: { ids: ["...", "..."] } — scoped to the calling facility.
+router.post('/bulk-invite-to-app', facilityAuth, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === 'string') : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required and must be non-empty.' });
+    }
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { name: true },
+    });
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { id: { in: ids }, facilityId: req.facility.id, snapAccountLinked: false },
+    });
+    const results = [];
+    for (const entry of entries) {
+      // eslint-disable-next-line no-await-in-loop
+      results.push(await sendAppInvite(entry, facility?.name || 'Your facility'));
+    }
+    const sent = results.filter((r) => r.ok).length;
+    const skipped = results.filter((r) => !r.ok);
+    res.json({ sent, skippedCount: skipped.length, results });
+  } catch (err) {
+    console.error('[roster] bulk-invite-to-app failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /relink — reverse-link any orphan rows in THIS facility to providers
+// who have registered. Coordinator-side equivalent of admin/roster/relink-all,
+// useful right after a roster import or after a manual edit changed an email.
+router.post('/relink', facilityAuth, async (req, res) => {
+  try {
+    // We piggyback on the global helper but filter the result down to this
+    // facility for reporting. Faster than re-implementing the whole helper.
+    const before = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id, linkedProviderId: null },
+      select: { id: true },
+    });
+    if (before.length === 0) return res.json({ linked: 0, scanned: 0 });
+    await reverseLinkAllOrphans();
+    const afterStillOrphans = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id, id: { in: before.map((b) => b.id) }, linkedProviderId: null },
+      select: { id: true },
+    });
+    res.json({
+      linked: before.length - afterStillOrphans.length,
+      scanned: before.length,
+    });
+  } catch (err) {
+    console.error('[roster] relink failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

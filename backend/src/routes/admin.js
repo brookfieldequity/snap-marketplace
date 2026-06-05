@@ -701,4 +701,19 @@ router.patch('/credential-users/:id', adminAuth, async (req, res) => {
   }
 })
 
+// POST /roster/relink-all — retroactive sweep across every facility's
+// roster. Links any InternalRosterEntry whose linkedProviderId is null but
+// whose NPI or email matches a registered marketplace ProviderProfile.
+// Idempotent. Returns counts.
+const { reverseLinkAllOrphans } = require('../services/rosterLink');
+router.post('/roster/relink-all', adminAuth, async (req, res) => {
+  try {
+    const result = await reverseLinkAllOrphans();
+    res.json(result);
+  } catch (err) {
+    console.error('[admin] relink-all failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

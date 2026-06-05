@@ -177,6 +177,9 @@ export const facilityAPI = {
   syncCredentialingStatus: () => apiFetch(`${BASE}/roster/sync-credentialing`, { method: 'POST', headers: facilityHeaders() }),
   reclassifyRosterTypes: () => apiFetch(`${BASE}/roster/reclassify-from-nppes`, { method: 'POST', headers: facilityHeaders() }),
   resolveRosterFromRegistry: () => apiFetch(`${BASE}/roster/resolve-from-registry`, { method: 'POST', headers: facilityHeaders() }),
+  inviteRosterToApp: (id) => apiFetch(`${BASE}/roster/${id}/invite-to-app`, { method: 'POST', headers: facilityHeaders() }),
+  bulkInviteRosterToApp: (ids) => apiFetch(`${BASE}/roster/bulk-invite-to-app`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ ids }) }),
+  relinkRoster: () => apiFetch(`${BASE}/roster/relink`, { method: 'POST', headers: facilityHeaders() }),
 
   // Availability Windows
   getWindows: () => apiFetch(`${BASE}/windows`, { headers: facilityHeaders() }),

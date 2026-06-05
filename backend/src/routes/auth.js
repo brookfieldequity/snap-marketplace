@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
+const { reverseLinkForProvider } = require('../services/rosterLink');
 
 const router = express.Router();
 
@@ -76,6 +77,15 @@ router.post('/provider/register', async (req, res) => {
       data: { profileCompletePct: pct },
     });
 
+    // Stitch this newly-registered provider to any roster row a facility
+    // already imported for them (matched by NPI or email). Idempotent +
+    // non-fatal — never block registration if it errors.
+    reverseLinkForProvider({
+      id: user.providerProfile.id,
+      userEmail: user.email,
+      npiNumber: user.providerProfile.npiNumber || null,
+    }).catch((e) => console.error('[auth] reverse-link on register failed:', e.message));
+
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile.id },
       process.env.JWT_SECRET,
@@ -120,6 +130,17 @@ router.post('/provider/login', async (req, res) => {
           data: { providerId: user.providerProfile.id, points: 1, reason: 'DAILY_LOGIN' },
         });
       }
+    }
+
+    // Stitch this provider to any roster row a facility added (or updated
+    // NPI on) since the last login. Idempotent + non-fatal — never block
+    // login if it errors.
+    if (user.providerProfile) {
+      reverseLinkForProvider({
+        id: user.providerProfile.id,
+        userEmail: user.email,
+        npiNumber: user.providerProfile.npiNumber || null,
+      }).catch((e) => console.error('[auth] reverse-link on login failed:', e.message));
     }
 
     const token = jwt.sign(
