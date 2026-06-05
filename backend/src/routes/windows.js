@@ -60,6 +60,10 @@ router.post('/', facilityAuth, async (req, res) => {
   try {
     const { windowName, openDate, closeDate, message, notifyAll } = req.body;
 
+    if (!windowName?.trim() || !openDate || !closeDate) {
+      return res.status(400).json({ error: 'windowName, openDate, and closeDate are required' });
+    }
+
     const open = new Date(openDate);
     const status = open <= new Date() ? 'ACTIVE' : 'DRAFT';
 

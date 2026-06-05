@@ -125,6 +125,10 @@ router.post('/days', facilityAuth, async (req, res) => {
   try {
     const { date, location, roomsRequired } = req.body;
 
+    if (!date || !location?.trim()) {
+      return res.status(400).json({ error: 'date and location are required' });
+    }
+
     const day = await prisma.scheduleDay.upsert({
       where: {
         facilityId_date_location: {
