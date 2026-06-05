@@ -18,6 +18,7 @@ import SnapShiftsDashboard from './pages/shifts/SnapShiftsDashboard.jsx'
 import InternalRosterPage from './pages/shifts/InternalRosterPage.jsx'
 import AvailabilityWindowsPage from './pages/shifts/AvailabilityWindowsPage.jsx'
 import ScheduleBuilderPage from './pages/shifts/ScheduleBuilderPage.jsx'
+import DailyViewPage from './pages/shifts/DailyViewPage.jsx'
 import GapsPage from './pages/shifts/GapsPage.jsx'
 import StaffIQInsightsPage from './pages/shifts/StaffIQInsightsPage.jsx'
 import StaffIQCalculatorPage from './pages/shifts/StaffIQCalculatorPage.jsx'
@@ -235,6 +236,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'schedule' && (
               <ScheduleBuilderPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && facilityPage === 'daily' && (
+              <DailyViewPage onNavigate={setFacilityPage} />
             )}
             {isShiftsMode && facilityPage === 'coverage-templates' && (
               <CoverageTemplatesPage />

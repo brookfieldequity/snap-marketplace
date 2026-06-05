@@ -9,6 +9,7 @@ const SHARED_ITEMS = [
 const SHIFTS_ITEMS = [
   { key: 'shifts-dashboard',  label: 'Dashboard',           icon: '📊' },
   { key: 'schedule',          label: 'Schedule Builder',    icon: '📅' },
+  { key: 'daily',             label: 'Daily View',          icon: '📍' },
   { key: 'coverage-templates',label: 'Coverage Templates',  icon: '🧩' },
   { key: 'roster',            label: 'Internal Roster',     icon: '👥' },
   { key: 'windows',           label: 'Availability Windows',icon: '🗓' },
