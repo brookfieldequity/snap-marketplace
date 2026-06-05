@@ -426,6 +426,12 @@ router.get('/summary', facilityAuth, async (req, res) => {
     let filled = 0;
 
     let estimatedCost = 0;
+    // Unique providers in this month's filled assignments who have no
+    // explicit rate on the roster row. The Schedule Builder substitutes a
+    // specialty/employment default for them, so the SNAP labor cost is an
+    // estimate until rates are entered. Surface the count so the cost panel
+    // can flag the savings number as approximate.
+    const defaultRateProviderIds = new Set();
 
     for (const day of days) {
       totalShifts += day.roomsRequired;
@@ -436,6 +442,9 @@ router.get('/summary', facilityAuth, async (req, res) => {
           // consistent SNAP cost: each provider's actual rate x shift hours.
           if (assignment.rosterEntry) {
             estimatedCost += scheduleBuilder.SHIFT_HOURS_PER_DAY * scheduleBuilder.effectiveHourlyRate(assignment.rosterEntry);
+            const r = assignment.rosterEntry;
+            const hasRate = (r.hourlyRate && r.hourlyRate > 0) || (r.annualRate && r.annualRate > 0);
+            if (!hasRate) defaultRateProviderIds.add(assignment.rosterId);
           }
         }
       }
@@ -443,7 +452,13 @@ router.get('/summary', facilityAuth, async (req, res) => {
 
     const unfilled = totalShifts - filled;
 
-    res.json({ totalShifts, filled, unfilled, estimatedCost });
+    res.json({
+      totalShifts,
+      filled,
+      unfilled,
+      estimatedCost,
+      defaultRateProviders: defaultRateProviderIds.size,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });

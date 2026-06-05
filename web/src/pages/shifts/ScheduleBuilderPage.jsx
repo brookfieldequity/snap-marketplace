@@ -61,21 +61,29 @@ function StatBox({ label, value, color = '#0F172A', poweredBy }) {
   )
 }
 
-// Baseline-vs-SNAP cost comparison. Coordinator sets their industry-standard
-// cost per room/day once (persists on the facility); once a schedule is built,
-// this shows what the month would have cost the old way vs. SNAP, and the
-// monthly savings. insights carries { roomDays, totalCost } from the build.
-function CostComparisonPanel({ rate, insights, onSaveRate, saving }) {
+// Baseline-vs-SNAP cost comparison. Coordinator sets the industry-standard
+// cost per room/day once (persists on the facility). The panel then renders
+// in three progressive stages keyed off the LIVE summary endpoint — not a
+// build snapshot — so every room add/remove and every assignment edit moves
+// the numbers:
+//   1. Rooms exist, no assignments → show the baseline only
+//   2. Rooms + assignments         → show baseline + SNAP labor cost + delta
+//   3. No rooms yet                → "Add rooms to see…" copy
+// summary is { totalShifts, estimatedCost, defaultRateProviders } from
+// GET /api/schedule/summary.
+function CostComparisonPanel({ rate, summary, onSaveRate, saving }) {
   const hasRate = rate != null && rate > 0
   const [editing, setEditing] = useState(!hasRate)
   const [val, setVal] = useState(hasRate ? String(rate) : '')
 
-  const roomDays = insights?.roomDays || 0
-  const snapCost = insights?.totalCost || 0
+  const roomDays = summary?.totalShifts || 0
+  const snapCost = summary?.estimatedCost || 0
   const baseline = hasRate ? rate * roomDays : 0
   const savings = baseline - snapCost
   const pct = baseline > 0 ? Math.round((savings / baseline) * 100) : 0
   const good = savings >= 0
+  const hasAssignments = snapCost > 0
+  const defaultRateCount = summary?.defaultRateProviders || 0
 
   async function save() {
     const num = parseFloat(val)
@@ -120,20 +128,26 @@ function CostComparisonPanel({ rate, insights, onSaveRate, saving }) {
             Your fully-loaded cost to staff one anesthetizing location for one day under your current/agency process. SNAP compares it to what each built schedule actually costs.
           </div>
         </div>
-      ) : !insights ? (
+      ) : roomDays === 0 ? (
         <div style={{ fontSize: 13, color: '#64748B' }}>
-          Build a schedule to see how much SNAP saves you this month vs. {fmt(rate)}/room/day.
+          Add rooms to this month (via a coverage template or the day editor) to see your manual-process cost{hasRate ? ` at ${fmt(rate)}/room/day` : ''}.
         </div>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {cell('Your manual process', fmt(baseline), `${roomDays} room-days × ${fmt(rate)}`, '#475569')}
-            {cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')}
-            {cell(good ? 'You save / month' : 'Over baseline', fmt(Math.abs(savings)), `${Math.abs(pct)}% ${good ? 'below' : 'above'} your process`, good ? '#059669' : '#DC2626', true)}
+            {hasAssignments
+              ? cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')
+              : cell('SNAP schedule', '—', 'build the schedule to compute', '#94A3B8')
+            }
+            {hasAssignments
+              ? cell(good ? 'You save / month' : 'Over baseline', fmt(Math.abs(savings)), `${Math.abs(pct)}% ${good ? 'below' : 'above'} your process`, good ? '#059669' : '#DC2626', true)
+              : cell('Savings', '—', 'available after build', '#94A3B8', true)
+            }
           </div>
-          {insights?.defaultRateProviders > 0 && (
+          {hasAssignments && defaultRateCount > 0 && (
             <div style={{ marginTop: 12, fontSize: 12, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 12px' }}>
-              ⚠️ <strong>{insights.defaultRateProviders} provider{insights.defaultRateProviders !== 1 ? 's' : ''}</strong> in this schedule {insights.defaultRateProviders !== 1 ? 'are' : 'is'} using estimated rates — enter their real pay in the roster to refine this savings number.
+              ⚠️ <strong>{defaultRateCount} provider{defaultRateCount !== 1 ? 's' : ''}</strong> in this schedule {defaultRateCount !== 1 ? 'are' : 'is'} using estimated rates — enter their real pay in the roster to refine this savings number.
             </div>
           )}
         </>
@@ -601,7 +615,19 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           <StatBox label="Total Shifts" value={summary?.totalShifts ?? '—'} />
           <StatBox label="Filled" value={summary?.filled ?? '—'} color="#10B981" />
           <StatBox label="Remaining" value={summary?.remaining ?? '—'} color="#EF4444" />
-          <StatBox label="Est. Cost" value={summary?.estimatedCost != null ? fmt(summary.estimatedCost) : '—'} color="#6366F1" poweredBy />
+          {/* "Est. Cost" = your industry baseline (rate × room-days). Lights
+              up as soon as rooms exist on the calendar, regardless of whether
+              a build has been run. The post-build SNAP labor cost lives in
+              the Cost-vs-manual-process panel below. */}
+          <StatBox
+            label="Est. Cost"
+            value={
+              facility?.industryRoomRatePerDay > 0 && summary?.totalShifts > 0
+                ? fmt(facility.industryRoomRatePerDay * summary.totalShifts)
+                : '—'
+            }
+            color="#6366F1"
+          />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
@@ -631,7 +657,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       {facility && (
         <CostComparisonPanel
           rate={facility.industryRoomRatePerDay}
-          insights={selectedRunInsights}
+          summary={summary}
           onSaveRate={handleSaveRate}
           saving={savingRate}
         />
