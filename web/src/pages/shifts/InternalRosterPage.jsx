@@ -233,7 +233,11 @@ export default function InternalRosterPage({ onNavigate }) {
     setEditTarget(p)
     const sc = {}
     ;(p.locations || []).forEach((l) => {
-      sc[l.facilityName] = { on: true, pct: l.shiftSharePct != null ? String(l.shiftSharePct) : '' }
+      // Only carry over credentialing for sites in the (coverage-template-driven)
+      // list — ignore stale/garbage import location names so they don't reappear.
+      if (siteList.includes(l.facilityName)) {
+        sc[l.facilityName] = { on: true, pct: l.shiftSharePct != null ? String(l.shiftSharePct) : '' }
+      }
     })
     setSiteCred(sc)
     setForm({

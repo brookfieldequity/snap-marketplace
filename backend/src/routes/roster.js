@@ -150,21 +150,20 @@ router.get('/', facilityAuth, async (req, res) => {
   }
 });
 
-// GET /locations — distinct set of sites this facility covers (from provider
-// credentialing rows + coverage templates + materialized schedule days).
-// Powers the credentialed-sites checklist on the provider form.
+// GET /locations — the sites this facility covers, taken from the COVERAGE
+// TEMPLATES only (the coordinator's curated, canonical site list). Powers the
+// credentialed-sites checklist on the provider form. Deliberately excludes
+// raw provider-import location rows + schedule-day strings, which carry messy
+// coded variants ("BOSS (G)", "Natick (90%)", trailing spaces).
 router.get('/locations', facilityAuth, async (req, res) => {
   try {
-    const fid = req.facility.id;
-    const [provLocs, tmplDays, schedDays] = await Promise.all([
-      prisma.providerLocation.findMany({ where: { rosterEntry: { facilityId: fid } }, select: { facilityName: true }, distinct: ['facilityName'] }),
-      prisma.coverageTemplateDay.findMany({ where: { template: { facilityId: fid } }, select: { location: true }, distinct: ['location'] }),
-      prisma.scheduleDay.findMany({ where: { facilityId: fid }, select: { location: true }, distinct: ['location'] }),
-    ]);
+    const tmplDays = await prisma.coverageTemplateDay.findMany({
+      where: { template: { facilityId: req.facility.id } },
+      select: { location: true },
+      distinct: ['location'],
+    });
     const set = new Set();
-    provLocs.forEach((r) => r.facilityName && set.add(r.facilityName));
-    tmplDays.forEach((r) => r.location && set.add(r.location));
-    schedDays.forEach((r) => r.location && set.add(r.location));
+    tmplDays.forEach((r) => r.location && set.add(r.location.trim()));
     res.json({ locations: [...set].sort((a, b) => a.localeCompare(b)) });
   } catch (err) {
     console.error('[roster/locations] error:', err);
