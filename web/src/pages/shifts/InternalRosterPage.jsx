@@ -1139,6 +1139,7 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div><strong>{uploadResult.summary.matchedToProfiles}</strong> matched to existing SNAP profiles via NPI</div>
                   {uploadResult.summary.locationsCreated > 0 && <div><strong>{uploadResult.summary.locationsCreated}</strong> location credentialings imported</div>}
                   {uploadResult.summary.skipped > 0 && <div><strong>{uploadResult.summary.skipped}</strong> blank rows skipped</div>}
+                  {uploadResult.summary.skippedDuplicates > 0 && <div><strong>{uploadResult.summary.skippedDuplicates}</strong> already on roster — skipped</div>}
                   {uploadResult.summary.errors > 0 && <div><strong>{uploadResult.summary.errors}</strong> rows had errors (see below)</div>}
                 </div>
               </div>

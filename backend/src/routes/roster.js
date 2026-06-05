@@ -1105,21 +1105,55 @@ const MULTI_HEADER_SYNONYMS = {
  *
  * Returns null if the string can't be parsed into first+last.
  */
+// Suffixes commonly trailing a provider's surname. Stripped before picking
+// "last name" so "Jane Smith Jr" → key("jsmith"), matching "Smith, Jane".
+const NAME_SUFFIXES = new Set([
+  'jr', 'sr', 'ii', 'iii', 'iv', 'v',
+  'md', 'do', 'crna', 'aa', 'phd', 'rn', 'pa', 'np',
+  'esq', 'esquire',
+]);
+
+function stripSuffix(token) {
+  // Strip trailing punctuation and lowercase for the comparison.
+  return token.replace(/[.,]/g, '').toLowerCase();
+}
+
 function buildNameKey(rawName) {
   if (!rawName) return null;
   const s = String(rawName).trim();
   let firstName, lastName;
   if (s.includes(',')) {
-    const parts = s.split(',').map((p) => p.trim());
-    lastName = parts[0];
-    firstName = parts[1] || '';
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean);
+    // "FullName, Credential" (e.g. "Jane Smith, MD") rather than "Last, First":
+    // detect when the post-comma fragment is just a suffix and treat the
+    // whole pre-comma piece as the name in First-Last order.
+    if (parts.length === 2 && parts[1].split(/\s+/).every((t) => NAME_SUFFIXES.has(stripSuffix(t)))) {
+      const tokens = parts[0].split(/\s+/).filter(Boolean);
+      if (tokens.length >= 2) {
+        firstName = tokens[0];
+        lastName = tokens[tokens.length - 1];
+      }
+    } else {
+      lastName = parts[0];
+      firstName = parts[1] || '';
+    }
   } else {
-    const parts = s.split(/\s+/);
+    let parts = s.split(/\s+/).filter(Boolean);
     if (parts.length < 2) return null;
+    // Strip trailing suffix tokens (Jr / Sr / III / MD / etc.) so they
+    // don't get treated as the last name.
+    while (parts.length > 2 && NAME_SUFFIXES.has(stripSuffix(parts[parts.length - 1]))) {
+      parts = parts.slice(0, -1);
+    }
     firstName = parts[0];
     lastName = parts[parts.length - 1];
   }
   if (!firstName || !lastName) return null;
+  // Also strip a trailing suffix from a comma-form last name (e.g. "Smith Jr, Jane").
+  const lastTokens = lastName.split(/\s+/).filter(Boolean);
+  if (lastTokens.length > 1 && NAME_SUFFIXES.has(stripSuffix(lastTokens[lastTokens.length - 1]))) {
+    lastName = lastTokens.slice(0, -1).join(' ');
+  }
   return (firstName[0] + lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
@@ -1246,8 +1280,25 @@ async function handleMultiSheetUpload(workbook, req, res) {
   const created = [];
   const errors = [];
   const needsNpiReview = [];
+  const skippedDuplicates = [];
   let matchedToProfiles = 0;
   let totalLocationsCreated = 0;
+
+  // Build a Set of name-fingerprints already on this facility's roster so a
+  // re-upload (or a double-submit) doesn't duplicate every provider. Also
+  // collect lowercased exact-display-name as a belt-and-braces check for
+  // names buildNameKey can't fingerprint.
+  const existingRows = await prisma.internalRosterEntry.findMany({
+    where: { facilityId: req.facility.id },
+    select: { providerName: true },
+  });
+  const existingFingerprints = new Set();
+  const existingDisplayNames = new Set();
+  for (const row of existingRows) {
+    const fp = buildNameKey(row.providerName);
+    if (fp) existingFingerprints.add(fp);
+    existingDisplayNames.add(String(row.providerName || '').trim().toLowerCase());
+  }
 
   for (const nameKey of allNameKeys) {
     const staff = staffByName.get(nameKey) || {};
@@ -1257,6 +1308,18 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // fall back to Payroll's name if provider only appears in payroll.
     const name = staff._displayName || payroll._displayName || null;
     if (!name) { errors.push({ nameKey, error: 'No parseable name in Staff or Payroll sheet' }); continue; }
+
+    // Skip if the provider is already on this facility's roster — protects
+    // against same-file re-uploads, double-submits, and the rare case where
+    // two name spellings in the workbook collide with an existing entry.
+    if (existingFingerprints.has(nameKey) || existingDisplayNames.has(name.trim().toLowerCase())) {
+      skippedDuplicates.push({ nameKey, name });
+      continue;
+    }
+    // Reserve this name so a duplicate row WITHIN the upload doesn't slip
+    // through after the first one creates.
+    existingFingerprints.add(nameKey);
+    existingDisplayNames.add(name.trim().toLowerCase());
 
     // Role that doesn't map to a clinical specialty → non-clinical roster
     // member (back-office staff, biller, etc). They belong on the roster for
@@ -1407,11 +1470,13 @@ async function handleMultiSheetUpload(workbook, req, res) {
       totalProviders: allNameKeys.size,
       locationsCreated: totalLocationsCreated,
       needsNpiReview: needsNpiReview.length,
+      skippedDuplicates: skippedDuplicates.length,
       multiSheet: true,
     },
     created,
     errors,
     needsNpiReview,
+    skippedDuplicates,
   });
 }
 
@@ -1455,8 +1520,23 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
     const dataRows = rows.slice(1);
     const created = [];
     const errors = [];
+    const skippedDuplicates = [];
     let matchedToProfiles = 0;
     let skipped = 0;
+
+    // Pre-load existing roster names so a re-upload / double-submit doesn't
+    // duplicate every provider. Same defense the multi-sheet path uses.
+    const existingRows = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+      select: { providerName: true },
+    });
+    const existingFingerprints = new Set();
+    const existingDisplayNames = new Set();
+    for (const row of existingRows) {
+      const fp = buildNameKey(row.providerName);
+      if (fp) existingFingerprints.add(fp);
+      existingDisplayNames.add(String(row.providerName || '').trim().toLowerCase());
+    }
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1465,6 +1545,16 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
 
       const name = String(get('name') || '').trim();
       if (!name) { skipped += 1; continue; } // blank row, skip silently
+
+      // Dedup against existing roster + earlier rows in this upload.
+      const fp = buildNameKey(name);
+      const displayKey = name.toLowerCase();
+      if ((fp && existingFingerprints.has(fp)) || existingDisplayNames.has(displayKey)) {
+        skippedDuplicates.push({ row: rowNum, name });
+        continue;
+      }
+      if (fp) existingFingerprints.add(fp);
+      existingDisplayNames.add(displayKey);
 
       const type = normalizeSpecialty(get('type'));
       const { employmentCategory: employment, is1099, isFullTime } =
@@ -1555,10 +1645,12 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
         matchedToProfiles,
         errors: errors.length,
         skipped,
+        skippedDuplicates: skippedDuplicates.length,
         totalDataRows: dataRows.length,
       },
       created,
       errors,
+      skippedDuplicates,
     });
   } catch (err) {
     console.error('[roster] upload failed:', err);
