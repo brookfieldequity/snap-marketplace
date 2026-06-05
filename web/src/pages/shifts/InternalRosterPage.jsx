@@ -416,7 +416,10 @@ export default function InternalRosterPage({ onNavigate }) {
     try {
       const res = await facilityAPI.inviteRosterToApp(id)
       const channels = (res?.channels || []).join(' + ') || 'no channels'
-      alert(`Sent ${channels} invite to ${res.name || 'the provider'}.`)
+      const linkedNote = res?.linkedNow
+        ? `\n\n✓ This provider was already registered in SNAP — linked instantly. Their next pull-to-refresh will show your schedule.`
+        : ''
+      alert(`Sent ${channels} invite to ${res.name || 'the provider'}.${linkedNote}`)
       await load()
     } catch (e) {
       alert('Invite failed: ' + (e.message || 'Unknown error'))

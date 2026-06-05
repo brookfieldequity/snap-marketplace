@@ -8,7 +8,7 @@ const { resolveNpi, lookupByNumber, specialtyFromTaxonomy, searchByName, splitNa
 const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS, sendEmail } = require('../services/notifications');
-const { reverseLinkAllOrphans } = require('../services/rosterLink');
+const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
 
 const router = express.Router();
 
@@ -85,7 +85,7 @@ async function sendCredentialingInvite(entry, facility) {
     status = 'CLAIMED';
   }
 
-  const linkFields = await resolveLinkFields(entry.snapAccountEmail);
+  const linkFields = await resolveLinkFields({ npi: entry.npi, email: entry.snapAccountEmail });
   await prisma.internalRosterEntry.update({
     where: { id: entry.id },
     data: { inviteSentAt: new Date(), credentialingStatus: status, ...linkFields },
@@ -111,16 +111,18 @@ const rosterUpload = multer({
  * Resolve whether a snapAccountEmail is linked to a registered SNAP provider.
  * Returns { snapAccountLinked, linkedProviderId } ready to merge into a update.
  */
-async function resolveLinkFields(email) {
-  if (!email) return { snapAccountLinked: false, linkedProviderId: null };
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { providerProfile: { select: { id: true } } },
-  });
-
-  if (user?.providerProfile) {
-    return { snapAccountLinked: true, linkedProviderId: user.providerProfile.id };
+// Look up a matching ProviderProfile by NPI first, email second. Used in
+// the manual create/edit + sync paths so a coordinator typing an NPI or
+// email links the row in real time. Pulls from the shared rosterLink
+// helper so a single matching rule covers every create/edit/import path.
+async function resolveLinkFields(emailOrFields) {
+  // Backwards-compat: callers that pass a bare email string still work.
+  const npi = typeof emailOrFields === 'object' ? emailOrFields?.npi : null;
+  const email = typeof emailOrFields === 'object' ? emailOrFields?.email : emailOrFields;
+  const { findProviderForRosterEntry } = require('../services/rosterLink');
+  const providerId = await findProviderForRosterEntry({ npi, email });
+  if (providerId) {
+    return { snapAccountLinked: true, linkedProviderId: providerId };
   }
   return { snapAccountLinked: false, linkedProviderId: null };
 }
@@ -184,7 +186,7 @@ router.post('/', facilityAuth, async (req, res) => {
       employer, is1099, isFullTime,
     } = req.body;
 
-    const linkFields = await resolveLinkFields(snapAccountEmail);
+    const linkFields = await resolveLinkFields({ npi, email: snapAccountEmail });
     // "Staff" is a UI label for a non-clinical / back-office roster member.
     // Map it to the existing non-clinical flags (scheduling + credentialing
     // already exclude these) rather than to the anesthesia-only Specialty enum.
@@ -250,10 +252,16 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       employer, is1099, isFullTime,
     } = req.body;
 
-    // Re-check linkage if email is being changed
+    // Re-check linkage if email OR NPI is being changed. Either change
+    // can newly match an existing ProviderProfile, so a coordinator
+    // correcting a typo on a roster row can stitch the provider live.
     let linkFields = {};
-    if (snapAccountEmail !== undefined) {
-      linkFields = await resolveLinkFields(snapAccountEmail);
+    if (snapAccountEmail !== undefined || npi !== undefined) {
+      const effectiveNpi = npi !== undefined
+        ? (npi ? String(npi).replace(/\D/g, '') || null : null)
+        : existing.npi;
+      const effectiveEmail = snapAccountEmail !== undefined ? snapAccountEmail : existing.snapAccountEmail;
+      linkFields = await resolveLinkFields({ npi: effectiveNpi, email: effectiveEmail });
     }
 
     const updated = await prisma.internalRosterEntry.update({
@@ -725,6 +733,17 @@ async function sendAppInvite(entry, facilityName) {
   if (!entry.snapAccountEmail && !entry.phoneNumber) {
     return { ok: false, id: entry.id, name: entry.providerName, reason: 'No email or phone on file' };
   }
+  // If the provider is ALREADY registered in marketplace, link them right
+  // now — they don't need to wait for their next login, and the email below
+  // will read as confirmation rather than a fresh sign-up ask.
+  let linkedNow = false;
+  if (!entry.snapAccountLinked) {
+    const r = await linkOneRosterEntryIfMatched(entry.id, {
+      npi: entry.npi,
+      email: entry.snapAccountEmail,
+    });
+    if (r.linked) linkedNow = true;
+  }
   const channels = [];
   if (entry.snapAccountEmail) {
     const msg = buildAppInviteEmail(entry, facilityName);
@@ -740,7 +759,7 @@ async function sendAppInvite(entry, facilityName) {
     where: { id: entry.id },
     data: { inviteSentAt: new Date() },
   });
-  return { ok: true, id: entry.id, name: entry.providerName, channels };
+  return { ok: true, id: entry.id, name: entry.providerName, channels, linkedNow };
 }
 
 // POST /:id/invite-to-app — invite one provider.
@@ -1039,7 +1058,7 @@ router.post('/:id/link-check', facilityAuth, async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const linkFields = await resolveLinkFields(existing.snapAccountEmail);
+    const linkFields = await resolveLinkFields({ npi: existing.npi, email: existing.snapAccountEmail });
 
     const updated = await prisma.internalRosterEntry.update({
       where: { id: req.params.id },

@@ -130,4 +130,69 @@ async function reverseLinkAllOrphans() {
   return { linked, scanned: orphans.length };
 }
 
-module.exports = { reverseLinkForProvider, reverseLinkAllOrphans };
+/**
+ * Forward lookup — given a single roster entry's identifying fields, find a
+ * matching marketplace ProviderProfile and return its id, or null if none.
+ *
+ * Caller decides whether to actually write the link (we leave that to the
+ * caller because POST and PATCH need to set the field via the same data
+ * object they're already constructing).
+ *
+ * Matches by NPI first (unambiguous), then case-insensitive email.
+ *
+ * @param {object} fields - { npi, email }
+ * @returns {Promise<string|null>}
+ */
+async function findProviderForRosterEntry({ npi, email }) {
+  if (npi) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { npiNumber: npi },
+      select: { id: true },
+    });
+    if (profile) return profile.id;
+  }
+  if (email) {
+    const user = await prisma.user.findFirst({
+      where: { email: email.toLowerCase(), role: 'PROVIDER' },
+      select: { providerProfile: { select: { id: true } } },
+    });
+    if (user?.providerProfile) return user.providerProfile.id;
+  }
+  return null;
+}
+
+/**
+ * Look up + write the link for a single roster-entry row. Used by the
+ * invite-to-app flow so already-registered providers stitch up instantly,
+ * and by manual edit/create routes so a coordinator typing in an NPI or
+ * email links the provider in real time.
+ *
+ * No-op when no match is found or the row is already linked.
+ *
+ * @param {string} rosterEntryId
+ * @param {object} fields - { npi, email }
+ * @returns {Promise<{linked: boolean, providerId: string|null}>}
+ */
+async function linkOneRosterEntryIfMatched(rosterEntryId, { npi, email }) {
+  const providerId = await findProviderForRosterEntry({ npi, email });
+  if (!providerId) return { linked: false, providerId: null };
+  const existing = await prisma.internalRosterEntry.findUnique({
+    where: { id: rosterEntryId },
+    select: { linkedProviderId: true },
+  });
+  if (existing?.linkedProviderId === providerId) {
+    return { linked: false, providerId }; // already linked to the same provider
+  }
+  await prisma.internalRosterEntry.update({
+    where: { id: rosterEntryId },
+    data: { linkedProviderId: providerId, snapAccountLinked: true },
+  });
+  return { linked: true, providerId };
+}
+
+module.exports = {
+  reverseLinkForProvider,
+  reverseLinkAllOrphans,
+  findProviderForRosterEntry,
+  linkOneRosterEntryIfMatched,
+};
