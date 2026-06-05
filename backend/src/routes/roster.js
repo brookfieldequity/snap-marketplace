@@ -124,6 +124,15 @@ async function resolveLinkFields(email) {
   return { snapAccountLinked: false, linkedProviderId: null };
 }
 
+// Normalize a { facilityName, shiftSharePct } from the client into a
+// ProviderLocation create row (rosterEntryId comes from the nested write).
+function toProviderLocation(l) {
+  return {
+    facilityName: l.facilityName,
+    shiftSharePct: l && l.shiftSharePct != null && l.shiftSharePct !== '' ? Number(l.shiftSharePct) : null,
+  };
+}
+
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
 // GET / — list all roster entries for the facility
@@ -131,11 +140,34 @@ router.get('/', facilityAuth, async (req, res) => {
   try {
     const entries = await prisma.internalRosterEntry.findMany({
       where: { facilityId: req.facility.id },
+      include: { locations: { select: { facilityName: true, shiftSharePct: true } } },
       orderBy: { providerName: 'asc' },
     });
     res.json(entries);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /locations — distinct set of sites this facility covers (from provider
+// credentialing rows + coverage templates + materialized schedule days).
+// Powers the credentialed-sites checklist on the provider form.
+router.get('/locations', facilityAuth, async (req, res) => {
+  try {
+    const fid = req.facility.id;
+    const [provLocs, tmplDays, schedDays] = await Promise.all([
+      prisma.providerLocation.findMany({ where: { rosterEntry: { facilityId: fid } }, select: { facilityName: true }, distinct: ['facilityName'] }),
+      prisma.coverageTemplateDay.findMany({ where: { template: { facilityId: fid } }, select: { location: true }, distinct: ['location'] }),
+      prisma.scheduleDay.findMany({ where: { facilityId: fid }, select: { location: true }, distinct: ['location'] }),
+    ]);
+    const set = new Set();
+    provLocs.forEach((r) => r.facilityName && set.add(r.facilityName));
+    tmplDays.forEach((r) => r.location && set.add(r.location));
+    schedDays.forEach((r) => r.location && set.add(r.location));
+    res.json({ locations: [...set].sort((a, b) => a.localeCompare(b)) });
+  } catch (err) {
+    console.error('[roster/locations] error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -148,7 +180,7 @@ router.post('/', facilityAuth, async (req, res) => {
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
-      contractStart, contractEnd,
+      contractStart, contractEnd, locations,
     } = req.body;
 
     const linkFields = await resolveLinkFields(snapAccountEmail);
@@ -181,6 +213,9 @@ router.post('/', facilityAuth, async (req, res) => {
         contractStart: contractStart ? new Date(contractStart) : null,
         contractEnd: contractEnd ? new Date(contractEnd) : null,
         ...linkFields,
+        ...(Array.isArray(locations)
+          ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
+          : {}),
       },
     });
 
@@ -207,7 +242,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
-      contractStart, contractEnd,
+      contractStart, contractEnd, locations,
     } = req.body;
 
     // Re-check linkage if email is being changed
@@ -242,6 +277,9 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(contractStart !== undefined && { contractStart: contractStart ? new Date(contractStart) : null }),
         ...(contractEnd !== undefined && { contractEnd: contractEnd ? new Date(contractEnd) : null }),
         ...linkFields,
+        ...(Array.isArray(locations)
+          ? { locations: { deleteMany: {}, create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
+          : {}),
       },
     });
 

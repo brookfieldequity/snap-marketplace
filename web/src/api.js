@@ -163,6 +163,7 @@ export const facilityAPI = {
 
   // Internal Roster
   getRoster: () => apiFetch(`${BASE}/roster`, { headers: facilityHeaders() }),
+  getRosterLocations: () => apiFetch(`${BASE}/roster/locations`, { headers: facilityHeaders() }),
   createRosterEntry: (data) => apiFetch(`${BASE}/roster`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   updateRosterEntry: (id, data) => apiFetch(`${BASE}/roster/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
   deleteRosterEntry: (id) => apiFetch(`${BASE}/roster/${id}`, { method: 'DELETE', headers: facilityHeaders() }),

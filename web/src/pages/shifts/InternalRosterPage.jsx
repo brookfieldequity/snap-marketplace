@@ -120,6 +120,10 @@ export default function InternalRosterPage({ onNavigate }) {
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(BLANK_FORM)
   const [saving, setSaving] = useState(false)
+  // Credentialed sites + shift-share. siteList = all facility sites; siteCred =
+  // per-site { on, pct } for the provider being edited.
+  const [siteList, setSiteList] = useState([])
+  const [siteCred, setSiteCred] = useState({})
   const [invitedIds, setInvitedIds] = useState({})
   const [deletingIds, setDeletingIds] = useState({})
   // Bulk upload state
@@ -148,8 +152,12 @@ export default function InternalRosterPage({ onNavigate }) {
   async function load() {
     setLoading(true)
     try {
-      const data = await facilityAPI.getRoster()
+      const [data, sites] = await Promise.all([
+        facilityAPI.getRoster(),
+        facilityAPI.getRosterLocations().catch(() => ({ locations: [] })),
+      ])
       setRoster(Array.isArray(data) ? data : data.roster || [])
+      setSiteList(sites.locations || [])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -170,6 +178,7 @@ export default function InternalRosterPage({ onNavigate }) {
   function openAdd() {
     setEditTarget(null)
     setForm(BLANK_FORM)
+    setSiteCred({})
     setLocationInput('')
     setShowModal(true)
   }
@@ -222,6 +231,11 @@ export default function InternalRosterPage({ onNavigate }) {
 
   function openEdit(p) {
     setEditTarget(p)
+    const sc = {}
+    ;(p.locations || []).forEach((l) => {
+      sc[l.facilityName] = { on: true, pct: l.shiftSharePct != null ? String(l.shiftSharePct) : '' }
+    })
+    setSiteCred(sc)
     setForm({
       providerName: p.providerName || '',
       providerType: p.isNonClinical ? 'STAFF' : (p.providerType || 'CRNA'),
@@ -267,6 +281,9 @@ export default function InternalRosterPage({ onNavigate }) {
         preferredShiftLength: form.preferredShiftLength !== 'none' ? form.preferredShiftLength : null,
         preferredDays: form.preferredDays.length > 0 ? form.preferredDays : null,
         locationRankings: form.locationRankings.length > 0 ? form.locationRankings : null,
+        locations: Object.entries(siteCred)
+          .filter(([, v]) => v.on)
+          .map(([facilityName, v]) => ({ facilityName, shiftSharePct: v.pct !== '' && v.pct != null ? parseFloat(v.pct) : null })),
         maxShiftsPerMonth: form.maxShiftsPerMonth !== '' ? parseInt(form.maxShiftsPerMonth) : null,
         contractStart: form.contractStart || null,
         contractEnd: form.contractEnd || null,
@@ -372,6 +389,13 @@ export default function InternalRosterPage({ onNavigate }) {
   }
 
   function setF(k, v) { setForm((p) => ({ ...p, [k]: v })) }
+
+  function toggleSite(name) {
+    setSiteCred((s) => ({ ...s, [name]: { on: !s[name]?.on, pct: s[name]?.pct || '' } }))
+  }
+  function setSitePct(name, pct) {
+    setSiteCred((s) => ({ ...s, [name]: { on: true, pct } }))
+  }
 
   function toggleDay(day) {
     setForm(p => ({
@@ -640,6 +664,12 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No NPI on file</div>
                 ) : null}
 
+                {Array.isArray(p.locations) && p.locations.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                    📍 {p.locations.map((l) => l.facilityName + (l.shiftSharePct != null ? ` ${l.shiftSharePct}%` : '')).join(' · ')}
+                  </div>
+                )}
+
                 {rateLabel && (
                   <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
                 )}
@@ -799,36 +829,44 @@ export default function InternalRosterPage({ onNavigate }) {
             </div>
           </Field>
 
-          <Field label="Location Preference Ranking">
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <input
-                style={{ ...inputStyle, flex: 1 }}
-                value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLocation() } }}
-                placeholder="e.g. Kenmore, Weymouth…"
-              />
-              <button
-                type="button"
-                onClick={addLocation}
-                style={{ padding: '9px 16px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: '#4F46E5', whiteSpace: 'nowrap' }}
-              >
-                Add
-              </button>
-            </div>
-            {form.locationRankings.length > 0 && (
-              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' }}>
-                {form.locationRankings.map((loc, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < form.locationRankings.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', minWidth: 20 }}>#{i + 1}</span>
-                    <span style={{ flex: 1, fontSize: 13, color: '#374151' }}>{loc}</span>
-                    <button onClick={() => moveLocation(i, -1)} disabled={i === 0} style={{ padding: '2px 7px', background: 'none', border: '1px solid #E2E8F0', borderRadius: 4, cursor: i === 0 ? 'not-allowed' : 'pointer', color: '#64748B', opacity: i === 0 ? 0.35 : 1, fontSize: 12 }}>↑</button>
-                    <button onClick={() => moveLocation(i, 1)} disabled={i === form.locationRankings.length - 1} style={{ padding: '2px 7px', background: 'none', border: '1px solid #E2E8F0', borderRadius: 4, cursor: i === form.locationRankings.length - 1 ? 'not-allowed' : 'pointer', color: '#64748B', opacity: i === form.locationRankings.length - 1 ? 0.35 : 1, fontSize: 12 }}>↓</button>
-                    <button onClick={() => removeLocation(i)} style={{ padding: '2px 7px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 4, cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>✕</button>
+          <Field label="Credentialed Sites & Shift Share">
+            {(() => {
+              const sites = Array.from(new Set([...siteList, ...Object.keys(siteCred)])).sort((a, b) => a.localeCompare(b))
+              if (sites.length === 0) {
+                return <div style={{ fontSize: 13, color: '#94A3B8', padding: '8px 0' }}>No sites yet — they appear here once you have a coverage template or schedule.</div>
+              }
+              const total = Object.values(siteCred).filter((v) => v.on).reduce((s, v) => s + (parseFloat(v.pct) || 0), 0)
+              const anyOn = Object.values(siteCred).some((v) => v.on)
+              return (
+                <>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
+                    {sites.map((name, i) => {
+                      const v = siteCred[name] || {}
+                      return (
+                        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < sites.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={!!v.on} onChange={() => toggleSite(name)} style={{ width: 16, height: 16 }} />
+                            <span style={{ fontSize: 13, color: '#0F172A' }}>{name}</span>
+                          </label>
+                          {v.on && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input type="number" min="0" max="100" value={v.pct || ''} onChange={(e) => setSitePct(name, e.target.value)} placeholder="—" style={{ ...inputStyle, width: 62, padding: '6px 8px', textAlign: 'right' }} />
+                              <span style={{ fontSize: 12, color: '#64748B' }}>%</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
-                ))}
-              </div>
-            )}
+                  {anyOn && (
+                    <div style={{ fontSize: 12, color: total === 100 ? '#059669' : '#94A3B8', marginTop: 6 }}>
+                      Shift share totals {total}%{total === 100 ? ' ✓' : ' — aim for 100% across sites (StaffIQ normalizes either way)'}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </Field>
 
           <Field label="Additional Notes">

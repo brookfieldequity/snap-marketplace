@@ -623,6 +623,10 @@ model ProviderLocation {
   // don't exist as marketplace Facility rows.
   facilityId    String?
   facility      Facility?           @relation(fields: [facilityId], references: [id])
+  // Share (0-100) of this provider's shifts that should fall at this site.
+  // Feeds StaffIQ scoring so providers are favored for their primary sites.
+  // Null = credentialed but no share preference set.
+  shiftSharePct Float?
   createdAt     DateTime            @default(now())
 
   @@unique([rosterEntryId, facilityName])
