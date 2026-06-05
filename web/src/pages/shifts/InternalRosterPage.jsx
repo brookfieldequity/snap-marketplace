@@ -32,6 +32,9 @@ const BLANK_FORM = {
   preferredShiftLength: 'none', preferredDays: [],
   locationRankings: [], maxShiftsPerMonth: '',
   contractStart: '', contractEnd: '', notes: '',
+  // Employer / tax status / hours status. Empty string here means "unknown"
+  // — submitted to the backend as null, which is the correct tri-state.
+  employer: '', taxStatus: '', hoursStatus: '',
 }
 
 function isExpiringSoon(dateStr) {
@@ -153,6 +156,10 @@ export default function InternalRosterPage({ onNavigate }) {
   const [syncing, setSyncing] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
   const [reclassifyResult, setReclassifyResult] = useState(null)
+  // Multi-select for bulk delete. `selectedIds` is a Set of roster-entry IDs
+  // ticked by the coordinator. When non-empty a sticky action bar appears.
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => { load(); loadNpiReview() }, [])
 
@@ -266,6 +273,9 @@ export default function InternalRosterPage({ onNavigate }) {
       contractStart: p.contractStart ? p.contractStart.substring(0, 10) : '',
       contractEnd: p.contractEnd ? p.contractEnd.substring(0, 10) : '',
       notes: p.notes || '',
+      employer: p.employer || '',
+      taxStatus: p.is1099 == null ? '' : (p.is1099 ? '1099' : 'W2'),
+      hoursStatus: p.isFullTime == null ? '' : (p.isFullTime ? 'FT' : 'PT'),
     })
     setLocationInput('')
     setShowModal(true)
@@ -299,6 +309,11 @@ export default function InternalRosterPage({ onNavigate }) {
         contractStart: form.contractStart || null,
         contractEnd: form.contractEnd || null,
         notes: form.notes || null,
+        employer: form.employer.trim() || null,
+        // taxStatus/hoursStatus are tri-state strings in form land; map to
+        // booleans for the API. Empty string → null (unknown).
+        is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
+        isFullTime: form.hoursStatus === '' ? null : form.hoursStatus === 'FT',
       }
       if (editTarget) {
         await facilityAPI.updateRosterEntry(editTarget.id, payload)
@@ -324,6 +339,63 @@ export default function InternalRosterPage({ onNavigate }) {
       alert('Delete failed: ' + e.message)
     } finally {
       setDeletingIds((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  // ─── Multi-select bulk delete ───────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function clearSelection() { setSelectedIds(new Set()) }
+  function selectAllVisible() {
+    setSelectedIds(new Set(roster.map((p) => p.id)))
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const msg = `Permanently remove ${ids.length} provider${ids.length !== 1 ? 's' : ''} from the roster?\n\n` +
+      'Schedule rooms they were assigned to will become empty. ' +
+      'Their time-off, location credentialing, and incentive responses will be deleted.'
+    if (!window.confirm(msg)) return
+    setBulkDeleting(true)
+    try {
+      const res = await facilityAPI.bulkDeleteRoster(ids)
+      clearSelection()
+      await load()
+      alert(`Removed ${res.rosterDeleted} provider${res.rosterDeleted !== 1 ? 's' : ''}. ` +
+        `${res.assignmentsUnassigned} schedule assignment${res.assignmentsUnassigned !== 1 ? 's' : ''} unassigned.`)
+    } catch (e) {
+      alert('Bulk delete failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  async function handleClearAll() {
+    const total = roster.length
+    if (total === 0) return
+    const phrase = window.prompt(
+      `This will delete ALL ${total} providers on this facility's roster and unassign every schedule room they staff.\n\n` +
+      'Type DELETE ALL (caps) to confirm.'
+    )
+    if (phrase !== 'DELETE ALL') return
+    setBulkDeleting(true)
+    try {
+      const res = await facilityAPI.clearAllRoster()
+      clearSelection()
+      await load()
+      alert(`Cleared ${res.rosterDeleted} provider${res.rosterDeleted !== 1 ? 's' : ''}. ` +
+        `${res.assignmentsUnassigned} schedule assignment${res.assignmentsUnassigned !== 1 ? 's' : ''} unassigned.`)
+    } catch (e) {
+      alert('Clear all failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setBulkDeleting(false)
     }
   }
 
@@ -481,8 +553,42 @@ export default function InternalRosterPage({ onNavigate }) {
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
           </button>
+          {roster.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              disabled={bulkDeleting}
+              title="Delete every provider on this facility's roster — typed-confirmation required"
+              style={{ padding: '11px 16px', background: '#fff', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: bulkDeleting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: bulkDeleting ? 0.6 : 1 }}
+            >
+              <span style={{ fontSize: 15, lineHeight: 1 }}>🗑️</span> Clear all
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Sticky selection bar — only shown when one or more cards are ticked.
+          Stays in view as the coordinator scrolls a long roster so the bulk
+          action stays one click away. */}
+      {selectedIds.size > 0 && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#0F172A', color: '#fff', borderRadius: 12, padding: '12px 18px', marginBottom: 16, boxShadow: '0 4px 14px rgba(15,23,42,0.18)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>
+            {selectedIds.size} selected
+            {selectedIds.size < roster.length && (
+              <button onClick={selectAllVisible} style={{ marginLeft: 14, background: 'none', border: 'none', color: '#A5B4FC', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                Select all {roster.length}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={clearSelection} disabled={bulkDeleting} style={{ padding: '8px 14px', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
+              Cancel
+            </button>
+            <button onClick={handleBulkDelete} disabled={bulkDeleting} style={{ padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
+              {bulkDeleting ? 'Deleting…' : `🗑️ Delete ${selectedIds.size} selected`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Resolve-from-registry result */}
       {reclassifyResult && (
@@ -662,13 +768,33 @@ export default function InternalRosterPage({ onNavigate }) {
               ? (p.annualRate ? `$${Number(p.annualRate).toLocaleString()}/yr` : null)
               : (p.hourlyRate ? `$${p.hourlyRate}/hr` : null)
 
+            const isSelected = selectedIds.has(p.id)
             return (
-              <div key={p.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div>
+              <div key={p.id} style={{ position: 'relative', background: '#fff', borderRadius: 14, border: `1px solid ${isSelected ? '#6366F1' : '#E2E8F0'}`, padding: '20px 22px', boxShadow: isSelected ? '0 0 0 3px rgba(99,102,241,0.15)' : '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSelect(p.id)}
+                  title={isSelected ? 'Deselect' : 'Select for bulk action'}
+                  style={{ position: 'absolute', top: 14, right: 14, width: 18, height: 18, cursor: 'pointer', accentColor: '#6366F1' }}
+                />
+                <div style={{ paddingRight: 28 }}>
                   <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', marginBottom: 8 }}>{p.providerName}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <Badge bg={typeBadge.bg} color={typeBadge.color} label={typeBadge.label} />
                     <Badge bg={empBadge.bg} color={empBadge.color} label={empBadge.label} />
+                    {(() => {
+                      // Compact "1099 · FT" / "W-2 · PT" chip — only render
+                      // when we know at least one of the two axes.
+                      if (p.is1099 == null && p.isFullTime == null) return null
+                      const tax = p.is1099 == null ? null : (p.is1099 ? '1099' : 'W-2')
+                      const hrs = p.isFullTime == null ? null : (p.isFullTime ? 'FT' : 'PT')
+                      const label = [tax, hrs].filter(Boolean).join(' · ')
+                      return <Badge bg="#F1F5F9" color="#475569" label={label} />
+                    })()}
+                    {p.employer && (
+                      <Badge bg="#FEF3C7" color="#92400E" label={`🏢 ${p.employer}`} />
+                    )}
                   </div>
                 </div>
 
@@ -759,6 +885,23 @@ export default function InternalRosterPage({ onNavigate }) {
                 <option value="FULL_TIME">Full Time</option>
                 <option value="PER_DIEM">Per Diem</option>
                 <option value="LOCUMS">Locums</option>
+              </select>
+            </Field>
+            <Field label="Employer">
+              <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="APNE / CAPA / JJM" />
+            </Field>
+            <Field label="Tax Status">
+              <select style={inputStyle} value={form.taxStatus} onChange={(e) => setF('taxStatus', e.target.value)}>
+                <option value="">— Unknown —</option>
+                <option value="W2">W-2 (employee)</option>
+                <option value="1099">1099 (contractor)</option>
+              </select>
+            </Field>
+            <Field label="Hours">
+              <select style={inputStyle} value={form.hoursStatus} onChange={(e) => setF('hoursStatus', e.target.value)}>
+                <option value="">— Unknown —</option>
+                <option value="FT">Full-time</option>
+                <option value="PT">Part-time</option>
               </select>
             </Field>
             <Field label="SNAP Account Email">

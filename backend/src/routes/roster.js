@@ -180,6 +180,7 @@ router.post('/', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
+      employer, is1099, isFullTime,
     } = req.body;
 
     const linkFields = await resolveLinkFields(snapAccountEmail);
@@ -211,6 +212,9 @@ router.post('/', facilityAuth, async (req, res) => {
         maxShiftsPerMonth: maxShiftsPerMonth != null ? parseInt(maxShiftsPerMonth) : null,
         contractStart: contractStart ? new Date(contractStart) : null,
         contractEnd: contractEnd ? new Date(contractEnd) : null,
+        employer: employer || null,
+        is1099: typeof is1099 === 'boolean' ? is1099 : null,
+        isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null,
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -242,6 +246,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
+      employer, is1099, isFullTime,
     } = req.body;
 
     // Re-check linkage if email is being changed
@@ -275,6 +280,9 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(maxShiftsPerMonth !== undefined && { maxShiftsPerMonth: maxShiftsPerMonth != null ? parseInt(maxShiftsPerMonth) : null }),
         ...(contractStart !== undefined && { contractStart: contractStart ? new Date(contractStart) : null }),
         ...(contractEnd !== undefined && { contractEnd: contractEnd ? new Date(contractEnd) : null }),
+        ...(employer !== undefined && { employer: employer || null }),
+        ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
+        ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { deleteMany: {}, create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -478,6 +486,134 @@ router.get('/npi-search', facilityAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[roster] npi-search failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /clear-all — nuke the entire internal roster for the calling facility.
+// Dress-rehearsal / fresh-upload helper: deletes every InternalRosterEntry,
+// cascades RosterTimeOff + ProviderLocation, nulls out ScheduleAssignment
+// rosterId (preserves the day shells so the coordinator's calendar layout
+// survives), and deletes ScheduleFeedback + IncentiveShiftResponses tied to
+// the wiped providers.
+//
+// Guarded by a confirmation phrase in the body — the UI must echo back
+// `confirm: "DELETE ALL"` so this can't fire from a stray POST. Returns
+// counts so the coordinator sees what was removed.
+router.post('/clear-all', facilityAuth, async (req, res) => {
+  try {
+    if (req.body?.confirm !== 'DELETE ALL') {
+      return res.status(400).json({
+        error: 'Confirmation phrase missing. POST { "confirm": "DELETE ALL" } to proceed.',
+      });
+    }
+    const facilityId = req.facility.id;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Get the set of roster IDs scoped to this facility so we don't touch
+      // anyone else's data on accident.
+      const roster = await tx.internalRosterEntry.findMany({
+        where: { facilityId },
+        select: { id: true },
+      });
+      const rosterIds = roster.map((r) => r.id);
+      if (rosterIds.length === 0) {
+        return { rosterDeleted: 0, assignmentsUnassigned: 0, feedbackDeleted: 0, incentiveResponsesDeleted: 0 };
+      }
+
+      // 1. Null out schedule assignments — the schedule shell stays, rooms
+      //    just become empty again so the coordinator can re-staff.
+      const assignmentsUnassigned = await tx.scheduleAssignment.updateMany({
+        where: { facilityId, rosterId: { in: rosterIds } },
+        data: { rosterId: null },
+      });
+
+      // 2. Drop schedule feedback rows tied to these providers.
+      const feedbackDeleted = await tx.scheduleFeedback.deleteMany({
+        where: { facilityId, rosterId: { in: rosterIds } },
+      });
+
+      // 3. Drop incentive-shift responses tied to these providers.
+      const incentiveResponsesDeleted = await tx.internalIncentiveShiftResponse.deleteMany({
+        where: { rosterId: { in: rosterIds } },
+      });
+
+      // 4. Finally the roster itself — RosterTimeOff and ProviderLocation
+      //    cascade automatically.
+      const rosterDeleted = await tx.internalRosterEntry.deleteMany({
+        where: { facilityId },
+      });
+
+      return {
+        rosterDeleted: rosterDeleted.count,
+        assignmentsUnassigned: assignmentsUnassigned.count,
+        feedbackDeleted: feedbackDeleted.count,
+        incentiveResponsesDeleted: incentiveResponsesDeleted.count,
+      };
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[roster] clear-all failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /bulk-delete — delete a selected subset of the roster.
+// Body: { ids: ["...", "..."], confirm: "DELETE SELECTED" }
+// Same cleanup as clear-all but scoped to the provided IDs (intersected with
+// the facility's own roster so a malicious or stale ID can't reach cross-tenant
+// data). Returns counts so the UI can confirm what was removed.
+router.post('/bulk-delete', facilityAuth, async (req, res) => {
+  try {
+    if (req.body?.confirm !== 'DELETE SELECTED') {
+      return res.status(400).json({
+        error: 'Confirmation phrase missing. POST { "confirm": "DELETE SELECTED", "ids": [...] } to proceed.',
+      });
+    }
+    const requestedIds = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === 'string') : [];
+    if (requestedIds.length === 0) {
+      return res.status(400).json({ error: 'ids array is required and must be non-empty.' });
+    }
+    const facilityId = req.facility.id;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Intersect with facility-owned rows — never trust the client list.
+      const owned = await tx.internalRosterEntry.findMany({
+        where: { facilityId, id: { in: requestedIds } },
+        select: { id: true },
+      });
+      const rosterIds = owned.map((r) => r.id);
+      if (rosterIds.length === 0) {
+        return { rosterDeleted: 0, assignmentsUnassigned: 0, feedbackDeleted: 0, incentiveResponsesDeleted: 0, requested: requestedIds.length };
+      }
+
+      const assignmentsUnassigned = await tx.scheduleAssignment.updateMany({
+        where: { facilityId, rosterId: { in: rosterIds } },
+        data: { rosterId: null },
+      });
+      const feedbackDeleted = await tx.scheduleFeedback.deleteMany({
+        where: { facilityId, rosterId: { in: rosterIds } },
+      });
+      const incentiveResponsesDeleted = await tx.internalIncentiveShiftResponse.deleteMany({
+        where: { rosterId: { in: rosterIds } },
+      });
+      const rosterDeleted = await tx.internalRosterEntry.deleteMany({
+        where: { facilityId, id: { in: rosterIds } },
+      });
+
+      return {
+        rosterDeleted: rosterDeleted.count,
+        assignmentsUnassigned: assignmentsUnassigned.count,
+        feedbackDeleted: feedbackDeleted.count,
+        incentiveResponsesDeleted: incentiveResponsesDeleted.count,
+        requested: requestedIds.length,
+      };
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[roster] bulk-delete failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -807,6 +943,7 @@ const HEADER_SYNONYMS = {
   hourly_rate: ['hourlyrate', 'hourly', 'rate', 'perhour'],
   annual_rate: ['annualrate', 'annualsalary', 'salary'],
   fte_hours: ['ftehours', 'hoursperweek'],
+  employer: ['employer', 'employedby', 'agency', 'group', 'staffinggroup', 'practice'],
 };
 
 function normalizeHeader(h) {
@@ -839,7 +976,8 @@ function normalizeSpecialty(v) {
   const s = String(v).toUpperCase().replace(/[\s_.\-]/g, '');
   if (s.includes('CRNA') || s.includes('NURSEANESTHETIST')) return 'CRNA';
   if (s.includes('ASSISTANT') || s === 'AA') return 'ANESTHESIA_ASSISTANT';
-  if (s.includes('ANESTHESIOLOGIST') || s.includes('PHYSICIAN') || s === 'MD' || s === 'DO' || s === 'MDA')
+  // ANES is the CAPA-export shorthand for Anesthesiologist (column B).
+  if (s.includes('ANESTHESIOLOGIST') || s.includes('PHYSICIAN') || s === 'MD' || s === 'DO' || s === 'MDA' || s === 'ANES')
     return 'ANESTHESIOLOGIST';
   // Last resort: direct enum match
   return VALID_SPECIALTIES.find((x) => x === s) || null;
@@ -851,6 +989,65 @@ function normalizeEmployment(v) {
   if (s.includes('PERDIEM') || s === 'PRN' || s === 'PD') return 'PER_DIEM';
   if (s.includes('LOCUM')) return 'LOCUMS';
   return VALID_EMPLOYMENT.find((x) => x === s) || null;
+}
+
+/**
+ * Parse a free-form employment label into the three orthogonal fields we
+ * actually track:
+ *   - employmentCategory (the scheduler-side enum)
+ *   - is1099 (tax/contract status)
+ *   - isFullTime (hours status)
+ *
+ * Recognized inputs (case/whitespace-insensitive):
+ *   "1099 full time" | "1099 ft"   → { PER_DIEM, true,  true  }
+ *   "1099 part time" | "1099 pt"   → { PER_DIEM, true,  false }
+ *   "employee full time" | "w2 ft" → { FULL_TIME, false, true }
+ *   "employee part time" | "w2 pt" → { PER_DIEM,  false, false }
+ *   bare "full time" / "FT"        → { FULL_TIME, null, true }  (legacy)
+ *   bare "per diem" / "PRN" / "PD" → { PER_DIEM,  null, null }  (legacy)
+ *   bare "locums"                  → { LOCUMS,    null, null }  (legacy)
+ *
+ * Returns { employmentCategory, is1099, isFullTime } — any field may be null
+ * when the label is ambiguous. The scheduler only needs employmentCategory
+ * to be set for cost math; is1099/isFullTime are purely descriptive.
+ */
+function parseEmploymentLabel(v) {
+  if (!v) return { employmentCategory: null, is1099: null, isFullTime: null };
+  const raw = String(v).toUpperCase();
+  // Strip ()/[]/punctuation but keep word-boundaries so "1099 (full time)"
+  // parses the same as "1099 full time".
+  const s = raw.replace(/[()_\-.,\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const has1099 = /\b1099\b/.test(s);
+  const hasW2 = /\b(W ?2|EMPLOYEE|EMP)\b/.test(s);
+  const hasFT = /\b(FULL TIME|FULL ?TIME|FT)\b/.test(s);
+  const hasPT = /\b(PART TIME|PART ?TIME|PT)\b/.test(s);
+
+  let is1099 = null;
+  if (has1099) is1099 = true;
+  else if (hasW2) is1099 = false;
+
+  let isFullTime = null;
+  if (hasFT) isFullTime = true;
+  else if (hasPT) isFullTime = false;
+
+  // Derive scheduler-side category per the matrix Matthew confirmed:
+  //   employee + FT → FULL_TIME (only true W-2 full-timers)
+  //   everything else with a known shape → PER_DIEM
+  //   bare "locums" → LOCUMS (legacy single-sheet path)
+  let employmentCategory = null;
+  if (is1099 === false && isFullTime === true) {
+    employmentCategory = 'FULL_TIME';
+  } else if (is1099 != null || isFullTime != null) {
+    employmentCategory = 'PER_DIEM';
+  } else {
+    // No 1099/W2/PT/FT signal — fall back to legacy single-token parsing.
+    employmentCategory = normalizeEmployment(v);
+    if (employmentCategory === 'FULL_TIME') isFullTime = true;
+    else if (employmentCategory === 'PER_DIEM') isFullTime = false;
+  }
+
+  return { employmentCategory, is1099, isFullTime };
 }
 function parseDate(v) {
   if (!v) return null;
@@ -890,10 +1087,13 @@ const MULTI_HEADER_SYNONYMS = {
   email: ['email', 'snapaccountemail'],
   mobile: ['mobile', 'phone', 'phonenumber'],
   role: ['role', 'type', 'specialty', 'providertype'],
-  employment: ['employment', 'employmentcategory', 'employmenttype'],
+  employment: ['employment', 'employmentcategory', 'employmenttype', 'status', 'employmentstatus'],
   baseHrs: ['basehrs', 'basehours', 'ftehours', 'hoursperweek'],
   hrRate: ['hrrate', 'hourly', 'hourlyrate', 'rate', 'perhour'],
   payrollId: ['payrollid', 'payroll'],
+  // Who staffs this provider into the facility (APNE / CAPA / JJM / etc).
+  // The pay rate column is what the facility pays THIS employer per hour.
+  employer: ['employer', 'employedby', 'agency', 'group', 'staffinggroup', 'practice'],
 };
 
 /**
@@ -1025,7 +1225,7 @@ function extractLocationsByInitials(sheet) {
 async function handleMultiSheetUpload(workbook, req, res) {
   const staffByName = extractByNameKey(workbook.Sheets['Staff'], ['email', 'mobile']);
   const payrollByName = extractByNameKey(workbook.Sheets['Payroll'], [
-    'role', 'employment', 'baseHrs', 'hrRate', 'payrollId',
+    'role', 'employment', 'baseHrs', 'hrRate', 'payrollId', 'employer',
   ]);
 
   // Union of all NAME keys seen across Staff + Payroll
@@ -1062,13 +1262,19 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // member (back-office staff, biller, etc). They belong on the roster for
     // payroll but are never scheduled into ORs and don't need an NPI.
     let type = normalizeSpecialty(payroll.role);
-    const employment = normalizeEmployment(payroll.employment); // may be null; that's fine
+    // Parse the employment label into three orthogonal fields. CAPA exports
+    // "1099 part time" / "employee full time" style labels — we keep
+    // employmentCategory for the scheduler and surface is1099 + isFullTime
+    // for cost attribution on the roster card.
+    const { employmentCategory: employment, is1099, isFullTime } =
+      parseEmploymentLabel(payroll.employment);
 
     const email = String(staff.email ?? '').trim().toLowerCase() || null;
     const phone = String(staff.mobile ?? '').trim() || null;
     const hourlyRate = parseNumber(payroll.hrRate);
     const fteHours = parseNumber(payroll.baseHrs);
     const payrollSystemId = String(payroll.payrollId ?? '').trim() || null;
+    const employer = String(payroll.employer ?? '').trim() || null;
     // Use Staff's Initials for the rosterCode (customer-internal short code)
     // and to bridge to the location sheets. Falls back to Payroll's Initials
     // if Staff is missing it.
@@ -1144,6 +1350,9 @@ async function handleMultiSheetUpload(workbook, req, res) {
           npi,
           rosterCode,
           payrollSystemId,
+          employer,
+          is1099,
+          isFullTime,
           npiLookupStatus,
           npiLookupCandidates,
           snapAccountEmail: email,
@@ -1258,7 +1467,8 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
       if (!name) { skipped += 1; continue; } // blank row, skip silently
 
       const type = normalizeSpecialty(get('type'));
-      const employment = normalizeEmployment(get('employment'));
+      const { employmentCategory: employment, is1099, isFullTime } =
+        parseEmploymentLabel(get('employment'));
       if (!type) {
         errors.push({ row: rowNum, name, error: `Unknown specialty: "${get('type')}"` });
         continue;
@@ -1276,6 +1486,7 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
       const hourlyRate = parseNumber(get('hourly_rate'));
       const annualRate = parseNumber(get('annual_rate'));
       const fteHours = parseNumber(get('fte_hours'));
+      const employer = String(get('employer') || '').trim() || null;
 
       // Try to match an existing provider profile by NPI first, then email.
       let linkedProviderId = null;
@@ -1303,6 +1514,9 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
             providerName: name,
             providerType: type,
             employmentCategory: employment,
+            employer,
+            is1099,
+            isFullTime,
             npi,
             snapAccountEmail: email,
             phoneNumber: phone,

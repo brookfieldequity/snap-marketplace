@@ -521,6 +521,21 @@ model InternalRosterEntry {
   // Pass-through field so the SNAP Payroll tab can export weekly
   // summaries that link back to the customer's payroll provider rows.
   payrollSystemId    String?
+  // Who employs / staffs this provider into the facility. For CAPA this is
+  // typically one of: "APNE" (Matt's anesthesia practice — staffs CAPA),
+  // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). The pay rate
+  // in `hourlyRate` is what the facility pays THIS employer per hour — not
+  // what the underlying provider earns. Free-form so customers don't have to
+  // wait for an enum edit when they onboard a new staffing group.
+  employer           String?
+  // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
+  // false = W-2 employee, null = unknown. Surfaced on the roster card so the
+  // coordinator can see "1099 · FT" at a glance for cost attribution.
+  is1099             Boolean?
+  // Hours-status flag, orthogonal to employmentCategory. true = full-time,
+  // false = part-time, null = unknown. The scheduler still keys off
+  // employmentCategory (FULL_TIME/PER_DIEM/LOCUMS); this is descriptive only.
+  isFullTime         Boolean?
   // NPPES lookup state. Set when the import couldn't auto-attach an NPI
   // (multiple matches or zero matches in NPPES). The disambiguation UI
   // surfaces these for coordinator resolution. Cleared once npi is set.
