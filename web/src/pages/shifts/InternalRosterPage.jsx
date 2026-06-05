@@ -7,6 +7,7 @@ const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
   ANESTHESIOLOGIST: { bg: '#F5F3FF', color: '#7C3AED', label: 'Anesthesiologist' },
   ANESTHESIA_ASSISTANT: { bg: '#F0FDFA', color: '#0F766E', label: 'Anesthesia Asst.' },
+  STAFF: { bg: '#F1F5F9', color: '#475569', label: 'Staff' },
 }
 
 const EMPLOY_BADGE = {
@@ -223,7 +224,7 @@ export default function InternalRosterPage({ onNavigate }) {
     setEditTarget(p)
     setForm({
       providerName: p.providerName || '',
-      providerType: p.providerType || 'CRNA',
+      providerType: p.isNonClinical ? 'STAFF' : (p.providerType || 'CRNA'),
       employmentCategory: p.employmentCategory || 'FULL_TIME',
       npi: p.npi || '',
       snapEmail: p.snapAccountEmail || '',
@@ -603,7 +604,7 @@ export default function InternalRosterPage({ onNavigate }) {
       {!loading && roster.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
           {roster.map((p) => {
-            const typeBadge = TYPE_BADGE[p.providerType] || TYPE_BADGE.CRNA
+            const typeBadge = p.isNonClinical ? TYPE_BADGE.STAFF : (TYPE_BADGE[p.providerType] || TYPE_BADGE.CRNA)
             const empBadge = EMPLOY_BADGE[p.employmentCategory] || EMPLOY_BADGE.FULL_TIME
             const linked = !!p.snapAccountLinked
             const expiringSoon = isExpiringSoon(p.licenseExpiration)
@@ -692,6 +693,7 @@ export default function InternalRosterPage({ onNavigate }) {
                 <option value="CRNA">CRNA</option>
                 <option value="ANESTHESIOLOGIST">Anesthesiologist</option>
                 <option value="ANESTHESIA_ASSISTANT">Anesthesia Assistant</option>
+                <option value="STAFF">Staff (non-clinical)</option>
               </select>
             </Field>
             <Field label="Employment Category">

@@ -152,11 +152,19 @@ router.post('/', facilityAuth, async (req, res) => {
     } = req.body;
 
     const linkFields = await resolveLinkFields(snapAccountEmail);
+    // "Staff" is a UI label for a non-clinical / back-office roster member.
+    // Map it to the existing non-clinical flags (scheduling + credentialing
+    // already exclude these) rather than to the anesthesia-only Specialty enum.
+    const isStaff = providerType === 'STAFF';
 
     const entry = await prisma.internalRosterEntry.create({
       data: {
         facilityId: req.facility.id,
-        providerName, providerType, employmentCategory,
+        providerName,
+        providerType: isStaff ? null : providerType,
+        isNonClinical: isStaff,
+        npiExempt: isStaff,
+        employmentCategory,
         npi: npi ? String(npi).replace(/\D/g, '') || null : null,
         snapAccountEmail: snapAccountEmail || null,
         phoneNumber: phoneNumber || null,
@@ -212,7 +220,9 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       where: { id: req.params.id },
       data: {
         ...(providerName !== undefined && { providerName }),
-        ...(providerType !== undefined && { providerType }),
+        ...(providerType !== undefined && (providerType === 'STAFF'
+          ? { providerType: null, isNonClinical: true, npiExempt: true }
+          : { providerType, isNonClinical: false, npiExempt: false })),
         ...(employmentCategory !== undefined && { employmentCategory }),
         ...(npi !== undefined && { npi: npi ? String(npi).replace(/\D/g, '') || null : null }),
         ...(snapAccountEmail !== undefined && { snapAccountEmail }),
