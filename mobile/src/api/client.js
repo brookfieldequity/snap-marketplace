@@ -111,6 +111,28 @@ export const shiftAPI = {
 };
 
 // ---------------------------------------------------------------------------
+// Schedule API — provider-facing reads against the SNAP Shifts module.
+// "My Schedule" and "Today" tabs both pull from here. iCal subscription
+// returns one URL per facility the provider is on; Apple/Google Calendar
+// polls those URLs to keep the provider's local calendar in sync.
+// ---------------------------------------------------------------------------
+
+export const scheduleAPI = {
+  /** Provider's own assignments for a month across every facility roster. */
+  getMyMonth: (year, month) => api.get('/schedule/my-month', { params: { year, month } }),
+
+  /** Full daily schedule for a facility the provider is on (read-only). */
+  getDailyAtFacility: (facilityId, date) =>
+    api.get(`/schedule/today-at/${facilityId}`, { params: date ? { date } : {} }),
+
+  /** Return iCal subscription URLs (mints a token on first call). */
+  getIcalSubscriptions: () => api.post('/schedule/ical-subscribe', {}),
+
+  /** Regenerate tokens — invalidates any previously-distributed URLs. */
+  rotateIcalSubscriptions: () => api.post('/schedule/ical-subscribe', { rotate: true }),
+};
+
+// ---------------------------------------------------------------------------
 // Provider API
 // ---------------------------------------------------------------------------
 

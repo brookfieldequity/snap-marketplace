@@ -4,19 +4,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import FeedScreen from '../screens/FeedScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import MyScheduleScreen from '../screens/MyScheduleScreen';
+import TodayScreen from '../screens/TodayScreen';
 
+// Tab order is deliberate: the two read-only Shifts views come first
+// because they're the daily-driver views for staff on a SNAP-Shifts roster
+// (CAPA pilot). Availability and Marketplace stay in the middle as they're
+// less frequently used. Profile anchors the right edge.
 const TABS = [
-  { key: 'calendar', label: 'Calendar', icon: '📅' },
+  { key: 'mySchedule', label: 'My Schedule', icon: '🗓️' },
+  { key: 'today', label: 'Today', icon: '🏥' },
+  { key: 'calendar', label: 'Availability', icon: '✅' },
   { key: 'marketplace', label: 'Marketplace', icon: '🧭' },
   { key: 'profile', label: 'Profile', icon: '👤' },
 ];
 
 export default function MainTabs({ navigation }) {
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeTab, setActiveTab] = useState('mySchedule');
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
       <View style={{ flex: 1 }}>
+        {activeTab === 'mySchedule' && <MyScheduleScreen navigation={navigation} />}
+        {activeTab === 'today' && <TodayScreen navigation={navigation} />}
         {activeTab === 'calendar' && <AvailabilityScreen navigation={navigation} />}
         {activeTab === 'marketplace' && <FeedScreen navigation={navigation} />}
         {activeTab === 'profile' && <ProfileScreen navigation={navigation} />}
