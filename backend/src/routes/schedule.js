@@ -412,7 +412,7 @@ router.get('/summary', facilityAuth, async (req, res) => {
       include: {
         assignments: {
           include: {
-            rosterEntry: { select: { providerType: true } },
+            rosterEntry: { select: { providerType: true, employmentCategory: true, annualRate: true, hourlyRate: true } },
           },
         },
       },
@@ -421,8 +421,6 @@ router.get('/summary', facilityAuth, async (req, res) => {
     let totalShifts = 0;
     let filled = 0;
 
-    // Estimate 10-hour shifts per room per day as default duration
-    const SHIFT_HOURS = 10;
     let estimatedCost = 0;
 
     for (const day of days) {
@@ -430,9 +428,11 @@ router.get('/summary', facilityAuth, async (req, res) => {
       for (const assignment of day.assignments) {
         if (assignment.rosterId) {
           filled += 1;
-          const providerType = assignment.rosterEntry?.providerType;
-          const rate = HOURLY_RATE[providerType] || HOURLY_RATE.CRNA;
-          estimatedCost += SHIFT_HOURS * rate;
+          // Same real-rate math as the schedule builder so the page shows ONE
+          // consistent SNAP cost: each provider's actual rate x shift hours.
+          if (assignment.rosterEntry) {
+            estimatedCost += scheduleBuilder.SHIFT_HOURS_PER_DAY * scheduleBuilder.effectiveHourlyRate(assignment.rosterEntry);
+          }
         }
       }
     }

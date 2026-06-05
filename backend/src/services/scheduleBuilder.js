@@ -28,6 +28,10 @@ const MODES = ['COST_EFFICIENT', 'HIGHEST_QUALITY', 'HYBRID', 'STAFFIQ'];
 
 const DEFAULT_RELIABILITY = 0.85; // when roster.reliabilityScore is null
 const FULL_TIME_HOURS_PER_YEAR = 2080;
+// Assumed hours per staffed room per day. Used for every cost figure so the
+// builder, re-score, and the month "Est. Cost" summary all agree. v1 constant;
+// future: read per-day shift length from ScheduleDay.
+const SHIFT_HOURS_PER_DAY = 8;
 
 // Supervising-MD assignments use room numbers in a reserved high range so
 // they never collide with real OR rooms (which are 1..roomsRequired, always
@@ -418,7 +422,7 @@ function computeInsights({ mode, assignments, roster }) {
   for (const a of assignments) {
     const r = rosterById[a.rosterId];
     if (!r) continue;
-    const hours = 8; // v1 assumes 8-hour days; future: read from ScheduleDay
+    const hours = SHIFT_HOURS_PER_DAY;
     totalCost += effectiveHourlyRate(r) * hours;
     if (r.employmentCategory === 'LOCUMS') locumsUsed += 1;
     if (r.employmentCategory === 'FULL_TIME') fullTimeUsed += 1;
@@ -561,4 +565,8 @@ module.exports = {
   computeStaffIQScore,
   computeCrnaGapRecommendations,
   deriveCrnaGaps,
+  // exposed so the month "Est. Cost" summary uses the SAME real-rate math as
+  // the builder (one consistent SNAP cost number across the page).
+  effectiveHourlyRate,
+  SHIFT_HOURS_PER_DAY,
 };
