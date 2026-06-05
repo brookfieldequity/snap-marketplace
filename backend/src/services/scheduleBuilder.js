@@ -32,6 +32,10 @@ const FULL_TIME_HOURS_PER_YEAR = 2080;
 // builder, re-score, and the month "Est. Cost" summary all agree. v1 constant;
 // future: read per-day shift length from ScheduleDay.
 const SHIFT_HOURS_PER_DAY = 8;
+// How strongly a provider's site shift-share preference influences candidate
+// ranking, on top of the mode's cost/quality score (both ~0-1). Strong enough
+// to steer people toward their home sites, not so strong it ignores cost.
+const SITE_SHARE_WEIGHT = 0.6;
 
 // Supervising-MD assignments use room numbers in a reserved high range so
 // they never collide with real OR rooms (which are 1..roomsRequired, always
@@ -52,16 +56,22 @@ async function loadProviderLocations(rosterIds) {
   }
   const rows = await prisma.providerLocation.findMany({
     where: { rosterEntryId: { in: rosterIds } },
-    select: { rosterEntryId: true, facilityName: true },
+    select: { rosterEntryId: true, facilityName: true, shiftSharePct: true },
   });
   const byRoster = new Map();
   const allCredentialedLocations = new Set();
+  // rosterId → Map<location, targetSharePct> for providers with a share set.
+  const shareByRoster = new Map();
   for (const row of rows) {
     if (!byRoster.has(row.rosterEntryId)) byRoster.set(row.rosterEntryId, new Set());
     byRoster.get(row.rosterEntryId).add(row.facilityName);
     allCredentialedLocations.add(row.facilityName);
+    if (row.shiftSharePct != null) {
+      if (!shareByRoster.has(row.rosterEntryId)) shareByRoster.set(row.rosterEntryId, new Map());
+      shareByRoster.get(row.rosterEntryId).set(row.facilityName, row.shiftSharePct);
+    }
   }
-  return { byRoster, allCredentialedLocations };
+  return { byRoster, allCredentialedLocations, shareByRoster };
 }
 
 /**
@@ -221,6 +231,26 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailable
   // as eligible everywhere (back-compat with rosters that pre-date the
   // location-import feature).
   const locationData = await loadProviderLocations(roster.map((r) => r.id));
+  const { shareByRoster } = locationData;
+
+  // Running per-provider site distribution, so StaffIQ steers each provider
+  // toward their target shift-share mix. The bonus is the provider's remaining
+  // "deficit" at this site (target share − share assigned so far): it starts at
+  // the target (favoring home sites) and shrinks to 0 as they fill their share,
+  // which also prevents over-concentrating anyone at one site.
+  const locCount = new Map(); // `${rosterId}::${location}` → count
+  const totCount = new Map(); // rosterId → total shifts assigned this run
+  const siteShareBonus = (rosterId, location) => {
+    const shares = shareByRoster.get(rosterId);
+    if (!shares) return 0;
+    const pct = shares.get(location);
+    if (pct == null) return 0;
+    const target = pct / 100;
+    const tot = totCount.get(rosterId) || 0;
+    const loc = locCount.get(`${rosterId}::${location}`) || 0;
+    const actual = tot > 0 ? loc / tot : 0;
+    return Math.max(0, target - actual); // 0..1
+  };
 
   for (const day of sortedDays) {
     const dateISO = new Date(day.date).toISOString().slice(0, 10);
@@ -236,12 +266,16 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailable
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => !offKeys.has(`${r.id}::${dateISO}`)) // PTO / unavailable
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
-        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) }))
+        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) }))
         .sort((a, b) => b.score - a.score);
       return ranked[0] || null;
     };
     const place = (pick, roomNumber, role) => {
       assigned.add(`${pick.entry.id}::${dateISO}`);
+      // Track the site distribution so siteShareBonus self-corrects toward each
+      // provider's target mix. Supervisor placements count too (same site).
+      locCount.set(`${pick.entry.id}::${day.location}`, (locCount.get(`${pick.entry.id}::${day.location}`) || 0) + 1);
+      totCount.set(pick.entry.id, (totCount.get(pick.entry.id) || 0) + 1);
       assignments.push({
         scheduleDayId: day.id,
         roomNumber,
