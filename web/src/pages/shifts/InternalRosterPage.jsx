@@ -60,6 +60,13 @@ function canCredential(p) {
 function hasContact(p) {
   return !!(p.snapAccountEmail || p.phoneNumber)
 }
+// A clinical provider whose pay rate hasn't been entered. The Schedule Builder
+// falls back to defaults when this is true, which makes the savings number an
+// estimate rather than a real comparison — so the coordinator needs to see it.
+function needsRate(p) {
+  if (!isClinical(p)) return false
+  return p.employmentCategory === 'FULL_TIME' ? !p.annualRate : !p.hourlyRate
+}
 
 function Badge({ bg, color, label }) {
   return (
@@ -596,6 +603,21 @@ export default function InternalRosterPage({ onNavigate }) {
         </Modal>
       )}
 
+      {/* Missing-rate nudge — the savings demo assumes real per-provider rates.
+          Without them, the Schedule Builder silently falls back to defaults and
+          the dollar comparison is approximate. Surface the count up front. */}
+      {(() => {
+        const missing = roster.filter(needsRate)
+        if (missing.length === 0) return null
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 12, padding: '14px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 14, color: '#3730A3' }}>
+              <strong>{missing.length} clinical provider{missing.length !== 1 ? 's' : ''}</strong> {missing.length !== 1 ? 'are' : 'is'} missing a pay rate. Enter their rates so the Schedule Builder's savings number reflects real labor cost instead of estimates.
+            </div>
+          </div>
+        )
+      })()}
+
       {/* NPI review nudge — gentle, dismissible by acting or ignoring */}
       {npiReviewRows.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#FEFCE8', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 20px', marginBottom: 20 }}>
@@ -674,9 +696,11 @@ export default function InternalRosterPage({ onNavigate }) {
                   </div>
                 )}
 
-                {rateLabel && (
+                {rateLabel ? (
                   <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
-                )}
+                ) : needsRate(p) ? (
+                  <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No rate — savings demo uses default</div>
+                ) : null}
 
                 {p.preferredDays && Array.isArray(p.preferredDays) && p.preferredDays.length > 0 && (
                   <div style={{ fontSize: 11, color: '#64748B' }}>

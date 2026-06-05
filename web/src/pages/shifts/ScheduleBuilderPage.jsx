@@ -125,11 +125,18 @@ function CostComparisonPanel({ rate, insights, onSaveRate, saving }) {
           Build a schedule to see how much SNAP saves you this month vs. {fmt(rate)}/room/day.
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
-          {cell('Your manual process', fmt(baseline), `${roomDays} room-days × ${fmt(rate)}`, '#475569')}
-          {cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')}
-          {cell(good ? 'You save / month' : 'Over baseline', fmt(Math.abs(savings)), `${Math.abs(pct)}% ${good ? 'below' : 'above'} your process`, good ? '#059669' : '#DC2626', true)}
-        </div>
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
+            {cell('Your manual process', fmt(baseline), `${roomDays} room-days × ${fmt(rate)}`, '#475569')}
+            {cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')}
+            {cell(good ? 'You save / month' : 'Over baseline', fmt(Math.abs(savings)), `${Math.abs(pct)}% ${good ? 'below' : 'above'} your process`, good ? '#059669' : '#DC2626', true)}
+          </div>
+          {insights?.defaultRateProviders > 0 && (
+            <div style={{ marginTop: 12, fontSize: 12, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 12px' }}>
+              ⚠️ <strong>{insights.defaultRateProviders} provider{insights.defaultRateProviders !== 1 ? 's' : ''}</strong> in this schedule {insights.defaultRateProviders !== 1 ? 'are' : 'is'} using estimated rates — enter their real pay in the roster to refine this savings number.
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -275,6 +275,7 @@ function ComparingPhase({ runs, onSelect, selecting, onBack, industryRoomRate })
                     const savings = baseline - (insights.totalCost || 0)
                     const pct = baseline > 0 ? Math.round((savings / baseline) * 100) : 0
                     const good = savings >= 0
+                    const defaulted = insights.defaultRateProviders || 0
                     return (
                       <div style={good ? styles.savingsBlock : styles.savingsBlockBad}>
                         <div style={{ ...styles.savingsTop, color: good ? '#065F46' : '#991B1B' }}>
@@ -283,6 +284,11 @@ function ComparingPhase({ runs, onSelect, selecting, onBack, industryRoomRate })
                         <div style={{ ...styles.savingsSub, color: good ? '#047857' : '#B91C1C' }}>
                           vs {fmtMoney(baseline)} your way · {Math.abs(pct)}% {good ? 'below' : 'above'}
                         </div>
+                        {defaulted > 0 && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#92400E', fontWeight: 600 }}>
+                            ⚠️ {defaulted} provider{defaulted !== 1 ? 's' : ''} on estimated rates — approximate
+                          </div>
+                        )}
                       </div>
                     )
                   })()}

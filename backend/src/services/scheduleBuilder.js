@@ -442,6 +442,10 @@ function computeCrnaGapRecommendations(crnaGaps, roster) {
 
 // ── Insights & scoring ─────────────────────────────────────────────────────
 
+function hasExplicitRate(r) {
+  return (r.hourlyRate && r.hourlyRate > 0) || (r.annualRate && r.annualRate > 0);
+}
+
 function computeInsights({ mode, assignments, roster }) {
   const rosterById = Object.fromEntries(roster.map((r) => [r.id, r]));
   let totalCost = 0;
@@ -452,12 +456,16 @@ function computeInsights({ mode, assignments, roster }) {
   let soloMdRooms = 0;
   let supervisingMds = 0;
   const providerHours = {};
+  // Providers in this schedule whose rate had to be defaulted. The cost story
+  // is only as honest as the rate inputs; surface this so the UI can warn.
+  const defaultRateProviders = new Set();
 
   for (const a of assignments) {
     const r = rosterById[a.rosterId];
     if (!r) continue;
     const hours = SHIFT_HOURS_PER_DAY;
     totalCost += effectiveHourlyRate(r) * hours;
+    if (!hasExplicitRate(r)) defaultRateProviders.add(r.id);
     if (r.employmentCategory === 'LOCUMS') locumsUsed += 1;
     if (r.employmentCategory === 'FULL_TIME') fullTimeUsed += 1;
     if (a.role === 'CRNA_ROOM') crnaRooms += 1;
@@ -494,6 +502,10 @@ function computeInsights({ mode, assignments, roster }) {
     // room for one day). Drives the industry-baseline cost comparison:
     // baseline = facility.industryRoomRatePerDay * roomDays.
     roomDays: assignments.length - supervisingMds,
+    // Count of unique providers in this schedule whose rate had to be
+    // defaulted (no hourlyRate / annualRate on file). The UI surfaces this
+    // so the savings number is presented as "approximate" until rates land.
+    defaultRateProviders: defaultRateProviders.size,
   };
 }
 
