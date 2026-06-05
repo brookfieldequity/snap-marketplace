@@ -277,9 +277,28 @@ model Facility {
   scheduleBuildRuns   ScheduleBuildRun[]
   automationEvents    AutomationEvent[]
   providerLocations   ProviderLocation[]
+  siteRates           FacilitySiteRate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Per-site override of Facility.industryRoomRatePerDay. Customers like CAPA
+// staff multiple ASCs at meaningfully different baselines (Matt's ASC at
+// $3,450, others at different numbers). When a site has a row here, the
+// cost panel + summary use it. When it doesn't, it falls back to the
+// facility-level default. siteName matches the location strings used on
+// ScheduleDay / coverage templates verbatim (e.g. "Atrius Kenmore").
+model FacilitySiteRate {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  siteName   String
+  ratePerDay Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([facilityId, siteName])
 }
 
 model FacilityUser {
@@ -521,6 +540,11 @@ model InternalRosterEntry {
   // Pass-through field so the SNAP Payroll tab can export weekly
   // summaries that link back to the customer's payroll provider rows.
   payrollSystemId    String?
+  // Secret token for the provider's personal iCal subscription URL
+  // (/api/schedule/ical/:rosterEntryId/:icalToken.ics). Generated on first
+  // request, regenerated when the provider rotates the URL. Anyone with the
+  // URL can read this provider's schedule, so treat it like a password.
+  icalToken          String?
   // Who employs / staffs this provider into the facility. For CAPA this is
   // typically one of: "APNE" (Matt's anesthesia practice — staffs CAPA),
   // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). The pay rate

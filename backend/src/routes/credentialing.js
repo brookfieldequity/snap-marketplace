@@ -1047,13 +1047,33 @@ router.get('/providers/:providerId/documents/:type/token', credentialAuth, requi
   }
 })
 
-// Rate-limited document serving endpoint
+// Rate-limited document serving endpoint.
+// The in-memory Map could grow unbounded in long-running processes if a wide
+// IP range hits this — sweep stale entries every minute (anything older than
+// 2× the window). Also hard-cap the Map size at 5000 entries as a backstop
+// for sudden bursts; oldest gets evicted via the natural Map iteration order.
 const docRequestCounts = new Map()
+const DOC_RATE_LIMIT_WINDOW_MS = 60000
+const DOC_RATE_LIMIT_MAP_CAP = 5000
+setInterval(() => {
+  const cutoff = Date.now() - 2 * DOC_RATE_LIMIT_WINDOW_MS
+  for (const [ip, record] of docRequestCounts) {
+    if (record.start < cutoff) docRequestCounts.delete(ip)
+  }
+}, DOC_RATE_LIMIT_WINDOW_MS).unref()
+
 router.get('/doc/:token', async (req, res) => {
   const ip = req.ip
   const now = Date.now()
-  const window = 60000
+  const window = DOC_RATE_LIMIT_WINDOW_MS
   const limit = 20
+
+  // Backstop: if the Map ever grows past the cap (DoS-style flood), evict
+  // the oldest insertion. Map iteration order is insertion order.
+  if (docRequestCounts.size > DOC_RATE_LIMIT_MAP_CAP) {
+    const oldestKey = docRequestCounts.keys().next().value
+    if (oldestKey != null) docRequestCounts.delete(oldestKey)
+  }
 
   const record = docRequestCounts.get(ip) || { count: 0, start: now }
   if (now - record.start > window) {

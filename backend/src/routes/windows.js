@@ -125,6 +125,18 @@ router.patch('/:id', facilityAuth, async (req, res) => {
 
     const { windowName, openDate, closeDate, message, notifyAll, status } = req.body;
 
+    // Reject malformed date strings up front so Prisma sees a real Date.
+    const VALID_STATUS = ['DRAFT', 'ACTIVE', 'CLOSED'];
+    if (openDate !== undefined && isNaN(new Date(openDate).getTime())) {
+      return res.status(400).json({ error: 'openDate is not a valid date' });
+    }
+    if (closeDate !== undefined && isNaN(new Date(closeDate).getTime())) {
+      return res.status(400).json({ error: 'closeDate is not a valid date' });
+    }
+    if (status !== undefined && !VALID_STATUS.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${VALID_STATUS.join(', ')}` });
+    }
+
     const updated = await prisma.availabilityWindow.update({
       where: { id: req.params.id },
       data: {

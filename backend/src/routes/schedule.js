@@ -1,7 +1,9 @@
 const express = require('express');
+const crypto = require('crypto');
 const { Expo } = require('expo-server-sdk');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
+const auth = require('../middleware/auth');
 const { sendSMS } = require('../services/notifications');
 const { logAutomationEvent } = require('../services/automationEvents');
 
@@ -218,6 +220,10 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
     const dayId = req.params.dayId;
     const roomNumber = parseInt(req.params.roomNumber, 10);
 
+    if (!Number.isFinite(roomNumber)) {
+      return res.status(400).json({ error: 'roomNumber must be a valid integer' });
+    }
+
     const VALID_ROLES = ['CRNA_ROOM', 'SOLO_MD_ROOM', 'SUPERVISING_MD'];
     if (role !== undefined && role !== null && !VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
@@ -408,22 +414,42 @@ router.get('/summary', facilityAuth, async (req, res) => {
 
     const { start, end } = monthRange(year, month);
 
-    const days = await prisma.scheduleDay.findMany({
-      where: {
-        facilityId: req.facility.id,
-        date: { gte: start, lt: end },
-      },
-      include: {
-        assignments: {
-          include: {
-            rosterEntry: { select: { providerType: true, employmentCategory: true, annualRate: true, hourlyRate: true } },
+    const [days, facility, siteRates] = await Promise.all([
+      prisma.scheduleDay.findMany({
+        where: {
+          facilityId: req.facility.id,
+          date: { gte: start, lt: end },
+        },
+        include: {
+          assignments: {
+            include: {
+              rosterEntry: { select: { providerType: true, employmentCategory: true, annualRate: true, hourlyRate: true } },
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.facility.findUnique({
+        where: { id: req.facility.id },
+        select: { industryRoomRatePerDay: true },
+      }),
+      prisma.facilitySiteRate.findMany({
+        where: { facilityId: req.facility.id },
+        select: { siteName: true, ratePerDay: true },
+      }),
+    ]);
+
+    const defaultRate = facility?.industryRoomRatePerDay || 0;
+    const rateBySite = new Map(siteRates.map((r) => [r.siteName, r.ratePerDay]));
 
     let totalShifts = 0;
     let filled = 0;
+    // Industry-baseline cost summed per-site so multi-ASC customers (CAPA)
+    // see an accurate "your manual process" number when different sites are
+    // priced differently. Falls back to Facility.industryRoomRatePerDay for
+    // any site without an override.
+    let baselineCost = 0;
+    // Per-site rollup of room-days, for the cost-panel breakdown row.
+    const siteRollup = new Map(); // siteName → { roomDays, baselineCost, rateUsed, hasOverride }
 
     let estimatedCost = 0;
     // Unique providers in this month's filled assignments who have no
@@ -435,6 +461,15 @@ router.get('/summary', facilityAuth, async (req, res) => {
 
     for (const day of days) {
       totalShifts += day.roomsRequired;
+      const siteName = day.location;
+      const hasOverride = rateBySite.has(siteName);
+      const siteRate = hasOverride ? rateBySite.get(siteName) : defaultRate;
+      baselineCost += siteRate * day.roomsRequired;
+      const r = siteRollup.get(siteName) || { roomDays: 0, baselineCost: 0, rateUsed: siteRate, hasOverride };
+      r.roomDays += day.roomsRequired;
+      r.baselineCost += siteRate * day.roomsRequired;
+      siteRollup.set(siteName, r);
+
       for (const assignment of day.assignments) {
         if (assignment.rosterId) {
           filled += 1;
@@ -442,8 +477,8 @@ router.get('/summary', facilityAuth, async (req, res) => {
           // consistent SNAP cost: each provider's actual rate x shift hours.
           if (assignment.rosterEntry) {
             estimatedCost += scheduleBuilder.SHIFT_HOURS_PER_DAY * scheduleBuilder.effectiveHourlyRate(assignment.rosterEntry);
-            const r = assignment.rosterEntry;
-            const hasRate = (r.hourlyRate && r.hourlyRate > 0) || (r.annualRate && r.annualRate > 0);
+            const re = assignment.rosterEntry;
+            const hasRate = (re.hourlyRate && re.hourlyRate > 0) || (re.annualRate && re.annualRate > 0);
             if (!hasRate) defaultRateProviderIds.add(assignment.rosterId);
           }
         }
@@ -457,7 +492,9 @@ router.get('/summary', facilityAuth, async (req, res) => {
       filled,
       unfilled,
       estimatedCost,
+      baselineCost,
       defaultRateProviders: defaultRateProviderIds.size,
+      siteBreakdown: [...siteRollup.entries()].map(([siteName, v]) => ({ siteName, ...v })),
     });
   } catch (err) {
     console.error(err);
@@ -669,7 +706,6 @@ router.post('/generate', facilityAuth, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const scheduleBuilder = require('../services/scheduleBuilder');
-const crypto = require('crypto');
 
 /**
  * POST /build
@@ -1066,5 +1102,284 @@ function serializeRun(run) {
     completedAt: run.completedAt,
   };
 }
+
+// ─── Provider-facing schedule reads ────────────────────────────────────────
+//
+// Marketplace mobile (provider JWT) consumes these for:
+//   - "My Schedule" — the provider's own monthly shifts across all rosters
+//     they're on (a locum could be on two facilities).
+//   - "Today" — the full daily schedule at a facility they're credentialed at
+//     (read-only window into the coordinator's schedule).
+//   - iCal subscription — an Apple/Google Calendar feed that auto-syncs.
+//
+// Cross-facility model: a marketplace ProviderProfile can be linked from
+// multiple InternalRosterEntry rows (one per facility). All endpoints below
+// pull the union, scoped to the calling provider.
+
+async function rosterEntriesForProvider(userId) {
+  const provider = await prisma.providerProfile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!provider) return [];
+  return prisma.internalRosterEntry.findMany({
+    where: { linkedProviderId: provider.id },
+    select: { id: true, facilityId: true, providerName: true, facility: { select: { id: true, name: true } } },
+  });
+}
+
+// GET /my-month?year=&month= — provider's own assignments for the month.
+router.get('/my-month', auth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    const month = parseInt(req.query.month, 10);
+    if (!year || !month || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+    }
+    const memberships = await rosterEntriesForProvider(req.user.userId);
+    if (memberships.length === 0) return res.json({ assignments: [], memberships: [] });
+    const rosterIds = memberships.map((m) => m.id);
+    const { start, end } = monthRange(year, month);
+
+    const assignments = await prisma.scheduleAssignment.findMany({
+      where: {
+        rosterId: { in: rosterIds },
+        scheduleDay: { date: { gte: start, lt: end } },
+      },
+      include: {
+        scheduleDay: { select: { id: true, date: true, location: true, supervisionRatio: true } },
+      },
+      orderBy: [{ scheduleDay: { date: 'asc' } }, { roomNumber: 'asc' }],
+    });
+
+    // ScheduleAssignment carries facilityId only; resolve to {id,name} via
+    // the membership map (which we already have in memory).
+    const facilityById = new Map(memberships.map((m) => [m.facilityId, m.facility]));
+
+    res.json({
+      memberships,
+      assignments: assignments.map((a) => ({
+        date: a.scheduleDay.date,
+        location: a.scheduleDay.location,
+        roomNumber: a.roomNumber,
+        role: a.role,
+        facility: facilityById.get(a.facilityId) || { id: a.facilityId, name: null },
+        supervisionRatio: a.scheduleDay.supervisionRatio,
+      })),
+    });
+  } catch (err) {
+    console.error('[schedule] my-month failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /today-at/:facilityId?date=YYYY-MM-DD — full daily schedule for a facility
+// the provider is credentialed at. Provider sees colleagues' assignments
+// (rooms + roles) but NOT pay rates / contact info. Date defaults to today.
+router.get('/today-at/:facilityId', auth, async (req, res) => {
+  try {
+    const facilityId = req.params.facilityId;
+    const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    }
+
+    // Authorize: provider must be on this facility's roster (covers CAPA
+    // pilot's internal-staff model). Cross-facility marketplace providers
+    // who aren't on the roster can't see this — fine for v1.
+    const memberships = await rosterEntriesForProvider(req.user.userId);
+    if (!memberships.some((m) => m.facilityId === facilityId)) {
+      return res.status(403).json({ error: 'Not on this facility roster' });
+    }
+
+    const dayStart = new Date(dateStr + 'T00:00:00.000Z');
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const days = await prisma.scheduleDay.findMany({
+      where: {
+        facilityId,
+        date: { gte: dayStart, lt: dayEnd },
+      },
+      include: {
+        assignments: {
+          include: {
+            rosterEntry: { select: { id: true, providerName: true, providerType: true } },
+          },
+          orderBy: { roomNumber: 'asc' },
+        },
+      },
+      orderBy: { location: 'asc' },
+    });
+
+    res.json({
+      date: dateStr,
+      sites: days.map((d) => ({
+        location: d.location,
+        roomsRequired: d.roomsRequired,
+        supervisionRatio: d.supervisionRatio,
+        assignments: d.assignments.map((a) => ({
+          roomNumber: a.roomNumber,
+          role: a.role,
+          provider: a.rosterEntry
+            ? { id: a.rosterEntry.id, name: a.rosterEntry.providerName, type: a.rosterEntry.providerType }
+            : null,
+        })),
+      })),
+    });
+  } catch (err) {
+    console.error('[schedule] today-at failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /ical-subscribe — return the provider's personal iCal URL(s),
+// minting an icalToken on the roster entries that don't have one yet.
+// Body: { rotate?: true } regenerates the token (invalidates old URLs).
+// One URL per facility membership — Apple Calendar can subscribe to all.
+router.post('/ical-subscribe', auth, async (req, res) => {
+  try {
+    const rotate = req.body?.rotate === true;
+    const memberships = await rosterEntriesForProvider(req.user.userId);
+    if (memberships.length === 0) return res.json({ subscriptions: [] });
+
+    const updated = [];
+    for (const m of memberships) {
+      const full = await prisma.internalRosterEntry.findUnique({
+        where: { id: m.id },
+        select: { id: true, icalToken: true },
+      });
+      let token = full?.icalToken;
+      if (!token || rotate) {
+        token = crypto.randomBytes(24).toString('hex');
+        await prisma.internalRosterEntry.update({
+          where: { id: m.id },
+          data: { icalToken: token },
+        });
+      }
+      updated.push({
+        rosterEntryId: m.id,
+        facility: m.facility,
+        url: `${publicBaseUrl(req)}/api/schedule/ical/${m.id}/${token}.ics`,
+      });
+    }
+    res.json({ subscriptions: updated, rotated: rotate });
+  } catch (err) {
+    console.error('[schedule] ical-subscribe failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+function publicBaseUrl(req) {
+  // Prefer an explicit PUBLIC_BASE_URL env var (e.g. https://api.snapmedical.app)
+  // so reverse-proxy headers can't be spoofed into our URLs. Falls back to the
+  // request's host header for local dev.
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`;
+}
+
+function icsEscape(s) {
+  // RFC 5545 §3.3.11 — escape commas, semicolons, backslashes, and newlines.
+  return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+
+function icsUtc(d) {
+  // 2026-06-09T16:30:00 → 20260609T163000Z (RFC 5545 §3.3.5).
+  const dt = new Date(d);
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    dt.getUTCFullYear() +
+    pad(dt.getUTCMonth() + 1) +
+    pad(dt.getUTCDate()) +
+    'T' +
+    pad(dt.getUTCHours()) +
+    pad(dt.getUTCMinutes()) +
+    pad(dt.getUTCSeconds()) +
+    'Z'
+  );
+}
+
+// GET /ical/:rosterEntryId/:icalToken.ics — UNAUTHENTICATED iCalendar feed.
+// Apple Calendar / Google Calendar / Outlook subscribe by URL and poll
+// periodically; the URL token is the only credential. Rotating it (via
+// /ical-subscribe?rotate=true) invalidates the old URL.
+router.get('/ical/:rosterEntryId/:rest', async (req, res) => {
+  try {
+    // Strip the optional ".ics" suffix from the last path segment.
+    const tokenWithExt = String(req.params.rest || '');
+    const icalToken = tokenWithExt.endsWith('.ics') ? tokenWithExt.slice(0, -4) : tokenWithExt;
+    const rosterEntryId = req.params.rosterEntryId;
+    if (!icalToken || icalToken.length < 16) {
+      return res.status(400).send('Invalid subscription URL');
+    }
+    const rosterEntry = await prisma.internalRosterEntry.findUnique({
+      where: { id: rosterEntryId },
+      select: { id: true, providerName: true, icalToken: true, facility: { select: { name: true } } },
+    });
+    if (!rosterEntry || !rosterEntry.icalToken || rosterEntry.icalToken !== icalToken) {
+      return res.status(404).send('Subscription not found');
+    }
+
+    // Pull a ±60-day window of assignments — enough for Apple Calendar to
+    // show the past month and the next two without an unbounded query.
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const assignments = await prisma.scheduleAssignment.findMany({
+      where: {
+        rosterId: rosterEntryId,
+        scheduleDay: { date: { gte: windowStart, lt: windowEnd } },
+      },
+      include: {
+        scheduleDay: { select: { date: true, location: true } },
+      },
+      orderBy: { scheduleDay: { date: 'asc' } },
+    });
+
+    // Build the .ics body. Shift hours default to a single 8-hour block
+    // 07:00–15:00 local — v1 doesn't store per-room times; future work.
+    const facilityName = rosterEntry.facility?.name || 'SNAP Shifts';
+    const calName = `${facilityName} — ${rosterEntry.providerName}`;
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SNAP Medical//SNAP Shifts iCal v1//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      `X-WR-CALNAME:${icsEscape(calName)}`,
+      'X-WR-TIMEZONE:UTC',
+    ];
+    for (const a of assignments) {
+      // Anchor shift to 07:00–15:00 ET (≈11:00–19:00 UTC); the calendar
+      // surfaces this as an 8-hour block on the right day regardless of
+      // the client's timezone.
+      const date = new Date(a.scheduleDay.date);
+      const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 11, 0, 0));
+      const end = new Date(start.getTime() + 8 * 60 * 60 * 1000);
+      const room = a.roomNumber >= 900 ? `Supervisor` : `Room ${a.roomNumber}`;
+      const summary = `${a.scheduleDay.location} · ${room}`;
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:snap-shift-${a.id}@snapmedical.app`);
+      lines.push(`DTSTAMP:${icsUtc(now)}`);
+      lines.push(`DTSTART:${icsUtc(start)}`);
+      lines.push(`DTEND:${icsUtc(end)}`);
+      lines.push(`SUMMARY:${icsEscape(summary)}`);
+      lines.push(`LOCATION:${icsEscape(a.scheduleDay.location)}`);
+      lines.push(`DESCRIPTION:${icsEscape(`Role: ${a.role || 'unspecified'}\nFacility: ${facilityName}`)}`);
+      lines.push('END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+
+    res.set({
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `inline; filename="snap-shifts-${rosterEntry.id}.ics"`,
+      // Apple Calendar typically polls every 5–60 min; let it cache 5 min.
+      'Cache-Control': 'private, max-age=300',
+    });
+    res.send(lines.join('\r\n') + '\r\n');
+  } catch (err) {
+    console.error('[schedule] ical feed failed:', err);
+    res.status(500).send('Internal server error');
+  }
+});
 
 module.exports = router;

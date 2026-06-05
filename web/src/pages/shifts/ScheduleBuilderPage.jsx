@@ -71,19 +71,27 @@ function StatBox({ label, value, color = '#0F172A', poweredBy }) {
 //   3. No rooms yet                → "Add rooms to see…" copy
 // summary is { totalShifts, estimatedCost, defaultRateProviders } from
 // GET /api/schedule/summary.
-function CostComparisonPanel({ rate, summary, onSaveRate, saving }) {
+function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRates }) {
   const hasRate = rate != null && rate > 0
   const [editing, setEditing] = useState(!hasRate)
   const [val, setVal] = useState(hasRate ? String(rate) : '')
 
   const roomDays = summary?.totalShifts || 0
   const snapCost = summary?.estimatedCost || 0
-  const baseline = hasRate ? rate * roomDays : 0
+  // The backend now sums baseline per-site (applying overrides from
+  // FacilitySiteRate). Fall back to rate × roomDays when the summary is
+  // missing the field (older response shape).
+  const baseline = summary?.baselineCost != null
+    ? summary.baselineCost
+    : (hasRate ? rate * roomDays : 0)
   const savings = baseline - snapCost
   const pct = baseline > 0 ? Math.round((savings / baseline) * 100) : 0
   const good = savings >= 0
   const hasAssignments = snapCost > 0
   const defaultRateCount = summary?.defaultRateProviders || 0
+  const siteBreakdown = summary?.siteBreakdown || []
+  const overrideCount = siteBreakdown.filter((s) => s.hasOverride).length
+  const multiSite = siteBreakdown.length > 1
 
   async function save() {
     const num = parseFloat(val)
@@ -105,9 +113,16 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>💵 Cost vs. your manual process</div>
         {hasRate && !editing && (
-          <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            Industry rate {fmt(rate)}/room/day · edit
-          </button>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              Default {fmt(rate)}/room/day · edit
+            </button>
+            {onEditSiteRates && (
+              <button onClick={onEditSiteRates} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Per-site rates{overrideCount > 0 ? ` (${overrideCount})` : ''}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -135,7 +150,14 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving }) {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
-            {cell('Your manual process', fmt(baseline), `${roomDays} room-days × ${fmt(rate)}`, '#475569')}
+            {cell(
+              'Your manual process',
+              fmt(baseline),
+              multiSite
+                ? `${roomDays} room-days across ${siteBreakdown.length} sites`
+                : `${roomDays} room-days × ${fmt(rate)}`,
+              '#475569'
+            )}
             {hasAssignments
               ? cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')
               : cell('SNAP schedule', '—', 'build the schedule to compute', '#94A3B8')
@@ -145,6 +167,15 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving }) {
               : cell('Savings', '—', 'available after build', '#94A3B8', true)
             }
           </div>
+          {multiSite && siteBreakdown.length > 0 && (
+            <div style={{ marginTop: 10, fontSize: 11, color: '#64748B', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              {siteBreakdown.map((s) => (
+                <span key={s.siteName}>
+                  <strong style={{ color: '#0F172A' }}>{s.siteName}</strong> · {s.roomDays} rd × {fmt(s.rateUsed)}{!s.hasOverride && <span style={{ color: '#94A3B8' }}> (default)</span>}
+                </span>
+              ))}
+            </div>
+          )}
           {hasAssignments && defaultRateCount > 0 && (
             <div style={{ marginTop: 12, fontSize: 12, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 12px' }}>
               ⚠️ <strong>{defaultRateCount} provider{defaultRateCount !== 1 ? 's' : ''}</strong> in this schedule {defaultRateCount !== 1 ? 'are' : 'is'} using estimated rates — enter their real pay in the roster to refine this savings number.
@@ -214,6 +245,124 @@ const STATUS_COLORS = {
   blue:   { border: '#93C5FD', bg: '#EFF6FF', text: '#2563EB', label: 'Review Coverage' },
 }
 
+// Modal for setting/clearing per-site baseline rates. Lists every site
+// the current schedule touches (sourced from summary.siteBreakdown) plus
+// any other sites that already have an override on file.
+function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [savingKey, setSavingKey] = useState(null)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { rates } = await facilityAPI.getSiteRates()
+        // Union: every site on the current schedule + every site with an
+        // existing override (so older overrides for retired sites stay
+        // editable instead of silently lingering).
+        const overrideMap = new Map(rates.map((r) => [r.siteName, r.ratePerDay]))
+        const sched = new Map((siteBreakdown || []).map((s) => [s.siteName, s]))
+        const allNames = new Set([...overrideMap.keys(), ...sched.keys()])
+        const seeded = [...allNames].sort().map((siteName) => ({
+          siteName,
+          val: overrideMap.has(siteName) ? String(overrideMap.get(siteName)) : '',
+          hasOverride: overrideMap.has(siteName),
+          roomDays: sched.get(siteName)?.roomDays || 0,
+        }))
+        setRows(seeded)
+      } catch (e) {
+        alert('Failed to load site rates: ' + (e.message || 'Unknown'))
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [siteBreakdown])
+
+  function updateVal(siteName, v) {
+    setRows((rs) => rs.map((r) => (r.siteName === siteName ? { ...r, val: v } : r)))
+  }
+
+  async function saveRow(row) {
+    const num = parseFloat(row.val)
+    if (!Number.isFinite(num) || num < 0) {
+      alert('Enter a positive number, or click Clear to revert to the default.')
+      return
+    }
+    setSavingKey(row.siteName)
+    try {
+      await facilityAPI.setSiteRate(row.siteName, num)
+      setRows((rs) => rs.map((r) => (r.siteName === row.siteName ? { ...r, hasOverride: true } : r)))
+      onDirty && onDirty()
+    } catch (e) {
+      alert('Save failed: ' + (e.message || 'Unknown'))
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  async function clearRow(row) {
+    setSavingKey(row.siteName)
+    try {
+      await facilityAPI.deleteSiteRate(row.siteName)
+      setRows((rs) => rs.map((r) => (r.siteName === row.siteName ? { ...r, val: '', hasOverride: false } : r)))
+      onDirty && onDirty()
+    } catch (e) {
+      alert('Clear failed: ' + (e.message || 'Unknown'))
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  return (
+    <Modal title="Per-site baseline rates" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#64748B', marginTop: 0, marginBottom: 12, lineHeight: 1.5 }}>
+        Override the default ${defaultRate || 0}/room/day for individual sites. The "manual process" baseline in the cost
+        panel sums each site's room-days × its rate. Leave blank or click <strong>Clear</strong> to fall back to the default.
+      </p>
+      {loading ? (
+        <div style={{ fontSize: 13, color: '#94A3B8' }}>Loading…</div>
+      ) : rows.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#64748B' }}>No sites yet. Generate a schedule or add rooms to populate this list.</div>
+      ) : (
+        <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+          {rows.map((row) => (
+            <div key={row.siteName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #F1F5F9' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{row.siteName}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                  {row.roomDays > 0 ? `${row.roomDays} room-days this month` : 'not on current schedule'}
+                  {row.hasOverride ? ' · override active' : ' · using default'}
+                </div>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 10, top: 8, color: '#94A3B8' }}>$</span>
+                <input
+                  type="number"
+                  value={row.val}
+                  onChange={(e) => updateVal(row.siteName, e.target.value)}
+                  placeholder={String(defaultRate || '1500')}
+                  style={{ ...inputStyle, width: 110, paddingLeft: 20 }}
+                />
+              </div>
+              <button onClick={() => saveRow(row)} disabled={savingKey === row.siteName} style={{ padding: '8px 14px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingKey === row.siteName ? 'default' : 'pointer', opacity: savingKey === row.siteName ? 0.6 : 1 }}>
+                {savingKey === row.siteName ? '…' : 'Save'}
+              </button>
+              <button onClick={() => clearRow(row)} disabled={!row.hasOverride || savingKey === row.siteName} style={{ padding: '8px 12px', background: '#fff', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: (!row.hasOverride || savingKey === row.siteName) ? 'not-allowed' : 'pointer', opacity: !row.hasOverride ? 0.4 : 1 }}>
+                Clear
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <button onClick={onClose} style={{ padding: '9px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          Done
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export default function ScheduleBuilderPage({ onNavigate }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -262,6 +411,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [facility, setFacility] = useState(null)
   const [selectedRunInsights, setSelectedRunInsights] = useState(null)
   const [savingRate, setSavingRate] = useState(false)
+  const [showSiteRates, setShowSiteRates] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -660,6 +810,15 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           summary={summary}
           onSaveRate={handleSaveRate}
           saving={savingRate}
+          onEditSiteRates={() => setShowSiteRates(true)}
+        />
+      )}
+      {showSiteRates && (
+        <SiteRatesModal
+          siteBreakdown={summary?.siteBreakdown || []}
+          defaultRate={facility?.industryRoomRatePerDay}
+          onClose={() => setShowSiteRates(false)}
+          onDirty={() => load()}
         />
       )}
 

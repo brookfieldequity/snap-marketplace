@@ -75,6 +75,66 @@ router.patch('/me', facilityAuth, async (req, res) => {
   }
 });
 
+// ── Per-site industry-baseline rate overrides ────────────────────────────
+//
+// CAPA staffs multiple ASCs at different fully-loaded room/day rates (Matt's
+// ASC at $3,450, others elsewhere). One global facility rate is fine as a
+// default but smears the savings demo across heterogeneous sites. These
+// routes let the coordinator set a per-site override; the schedule summary
+// picks per-site when present, else falls back to industryRoomRatePerDay.
+
+router.get('/me/site-rates', facilityAuth, async (req, res) => {
+  try {
+    const rates = await prisma.facilitySiteRate.findMany({
+      where: { facilityId: req.facility.id },
+      orderBy: { siteName: 'asc' },
+      select: { id: true, siteName: true, ratePerDay: true, updatedAt: true },
+    });
+    res.json({ rates });
+  } catch (err) {
+    console.error('[facilities] get site-rates failed:', err);
+    res.status(500).json({ error: 'Failed to load site rates' });
+  }
+});
+
+// PUT /me/site-rates/:siteName — upsert one site override. siteName must
+// match the location strings used on ScheduleDay verbatim. Pass ratePerDay
+// to set, or DELETE the same path to clear (revert to facility default).
+router.put('/me/site-rates/:siteName', facilityAuth, async (req, res) => {
+  try {
+    const siteName = String(req.params.siteName || '').trim();
+    if (!siteName) return res.status(400).json({ error: 'siteName is required' });
+    const rate = parseFloat(req.body?.ratePerDay);
+    if (!Number.isFinite(rate) || rate < 0) {
+      return res.status(400).json({ error: 'ratePerDay must be a non-negative number' });
+    }
+    const row = await prisma.facilitySiteRate.upsert({
+      where: { facilityId_siteName: { facilityId: req.facility.id, siteName } },
+      update: { ratePerDay: rate },
+      create: { facilityId: req.facility.id, siteName, ratePerDay: rate },
+      select: { id: true, siteName: true, ratePerDay: true, updatedAt: true },
+    });
+    res.json(row);
+  } catch (err) {
+    console.error('[facilities] put site-rate failed:', err);
+    res.status(500).json({ error: 'Failed to save site rate' });
+  }
+});
+
+router.delete('/me/site-rates/:siteName', facilityAuth, async (req, res) => {
+  try {
+    const siteName = String(req.params.siteName || '').trim();
+    if (!siteName) return res.status(400).json({ error: 'siteName is required' });
+    await prisma.facilitySiteRate.deleteMany({
+      where: { facilityId: req.facility.id, siteName },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[facilities] delete site-rate failed:', err);
+    res.status(500).json({ error: 'Failed to delete site rate' });
+  }
+});
+
 // ── Set snap mode ─────────────────────────────────────────────────────────────
 
 router.patch('/me/mode', facilityAuth, async (req, res) => {
