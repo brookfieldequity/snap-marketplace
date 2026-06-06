@@ -511,4 +511,18 @@ export const adminAPI = {
   createCredentialUser: (data) => apiFetch(`${BASE}/admin/credential-users`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),
   resetCredentialUserPassword: (id) => apiFetch(`${BASE}/admin/credential-users/${id}/reset-password`, { method: 'POST', headers: adminHeaders() }),
   updateCredentialUser: (id, data) => apiFetch(`${BASE}/admin/credential-users/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(data) }),
+
+  // ROI Tracker
+  getRoiFacilities: () => apiFetch(`${BASE}/admin/roi/facilities`, { headers: adminHeaders() }),
+  getRoiRollup: () => apiFetch(`${BASE}/admin/roi/rollup`, { headers: adminHeaders() }),
+  getRoiForFacility: (facilityId, month) => apiFetch(`${BASE}/admin/roi/${facilityId}${month ? `?month=${month}` : ''}`, { headers: adminHeaders() }),
+  saveRoiBaseline: (facilityId, data) => apiFetch(`${BASE}/admin/roi/${facilityId}/baseline`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(data) }),
+  saveRoiSnapshot: (facilityId, data) => apiFetch(`${BASE}/admin/roi/${facilityId}/snapshot`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(data) }),
+  autoPullRoi: (facilityId, month) => apiFetch(`${BASE}/admin/roi/${facilityId}/auto-pull?month=${month}`, { headers: adminHeaders() }),
+  projectRoi: ({ providerCount, monthlyProviderCost, sourceFacilityId }) => {
+    const qs = new URLSearchParams({ providerCount: String(providerCount) })
+    if (monthlyProviderCost != null) qs.set('monthlyProviderCost', String(monthlyProviderCost))
+    if (sourceFacilityId) qs.set('sourceFacilityId', sourceFacilityId)
+    return apiFetch(`${BASE}/admin/roi/projection/run?${qs.toString()}`, { headers: adminHeaders() })
+  },
 }

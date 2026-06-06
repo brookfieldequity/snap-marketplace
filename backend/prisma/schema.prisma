@@ -278,9 +278,73 @@ model Facility {
   automationEvents    AutomationEvent[]
   providerLocations   ProviderLocation[]
   siteRates           FacilitySiteRate[]
+  roiBaseline         FacilityRoiBaseline?
+  roiSnapshots        FacilityRoiSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Per-facility ROI baseline — the "before SNAP" numbers that drive every
+// savings calculation. One row per Facility. Admin-editable. Fields mirror
+// the CAPA-pilot ROI tracker constants so existing customers + prospects
+// share one math model. Reasonable defaults pre-populate at upsert time.
+model FacilityRoiBaseline {
+  id                       String   @id @default(cuid())
+  facilityId               String   @unique
+  facility                 Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  // Workforce + headline cost
+  providerCount            Int      @default(83)
+  monthlyProviderCost      Float    @default(1150000)
+  providerHourlyRate       Float    @default(295)
+  // Backup-staffing baseline
+  backupPremium            Float    @default(0.15) // 15% premium for backup
+  backupShiftsPerDay       Float    @default(5)
+  shiftHours               Float    @default(8)
+  annualBackupStaffing     Float    @default(287500)
+  // Admin overhead baseline
+  adminSchedulingStaff     Float    @default(2)
+  adminSchedulingHours     Float    @default(25)   // per-staff weekly
+  adminSchedulingRate      Float    @default(100)
+  credentialingStaff       Float    @default(1)
+  credentialingHours       Float    @default(20)   // per-staff weekly
+  credentialingRate        Float    @default(75)
+  // KPI baselines
+  credentialingTurnaround  Int      @default(21)   // days
+  schedulingGapRate        Float    @default(18)   // %
+  providerSatisfaction     Float    @default(6.2)  // /10
+  // Free-form notes (e.g. "Numbers from CAPA July 2026 sourcing call")
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+// Per-facility, per-month ROI snapshot. Captures the actuals the admin
+// would otherwise overwrite. Drives the "month 3 vs month 1" comparison
+// during renewals + the SNAP-wide rollup. `month` is the first day of the
+// snapshot month (YYYY-MM-01 UTC) so a (facilityId, month) unique key
+// works. Some fields can be auto-pulled from live data — `autoPulled`
+// records which ones so the UI can flag them.
+model FacilityRoiSnapshot {
+  id                       String   @id @default(cuid())
+  facilityId               String
+  facility                 Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  month                    DateTime @db.Date
+  backupShiftsPerDay       Float?
+  adminSchedulingHours     Float?
+  credentialingHours       Float?
+  credentialingTurnaround  Int?
+  schedulingGapRate        Float?
+  providerSatisfaction     Float?
+  // Which of the above were auto-pulled vs entered. Free-form JSON keyed
+  // by metric name → boolean. UI uses this to mark fields as "(auto)".
+  autoPulled               Json?
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([facilityId, month])
+  @@index([facilityId, month])
 }
 
 // Per-site override of Facility.industryRoomRatePerDay. Customers like CAPA

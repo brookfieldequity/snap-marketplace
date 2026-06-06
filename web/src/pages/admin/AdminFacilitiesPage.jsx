@@ -19,7 +19,7 @@ const MOCK_FACILITIES = [
 
 const TIER_PRICES = { BASIC: '$750', PROFESSIONAL: '$2,000', ENTERPRISE: '$5,000' }
 
-export default function AdminFacilitiesPage() {
+export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
   const [facilities, setFacilities] = useState([])
   const [loading, setLoading]       = useState(true)
   const [updating, setUpdating]     = useState({})
@@ -110,8 +110,8 @@ export default function AdminFacilitiesPage() {
 
       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-          {['Facility Name', 'City', 'Tier', 'Shifts', 'Update Tier'].map((h) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px 100px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+          {['Facility Name', 'City', 'Tier', 'Shifts', 'Update Tier', 'ROI'].map((h) => (
             <div key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
             </div>
@@ -127,7 +127,7 @@ export default function AdminFacilitiesPage() {
               key={f.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px',
+                gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px 100px',
                 borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
                 background: i % 2 === 0 ? '#fff' : '#FAFAFA',
                 alignItems: 'center',
@@ -186,6 +186,19 @@ export default function AdminFacilitiesPage() {
                     <option key={t} value={t}>{t} — {TIER_PRICES[t]}/mo</option>
                   ))}
                 </select>
+              </div>
+
+              {/* ROI link */}
+              <div style={{ padding: '14px 16px' }}>
+                {onOpenRoi && (
+                  <button
+                    onClick={() => onOpenRoi(f.id)}
+                    title="Open this facility's ROI tracker"
+                    style={{ padding: '7px 12px', background: '#fff', color: '#059669', border: '1.5px solid #6EE7B7', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    💰 ROI →
+                  </button>
+                )}
               </div>
             </div>
           )

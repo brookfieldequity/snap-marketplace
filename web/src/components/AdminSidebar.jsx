@@ -13,6 +13,7 @@ const NAV_ITEMS = [
 
 const SNAP_SHIFTS_ITEMS = [
   { key: 'staffiq-analytics', label: 'StaffIQ Analytics', icon: '🧠' },
+  { key: 'roi',               label: 'ROI Tracker',        icon: '💰' },
   { key: 'leads',             label: 'Leads',              icon: '📬' },
   { key: 'admin-windows',     label: 'Availability Windows', icon: '🗓' },
   { key: 'admin-incentives',  label: 'Incentive Shifts',   icon: '⚡' },

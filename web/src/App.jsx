@@ -40,6 +40,7 @@ import AdminWindowsPage from './pages/admin/AdminWindowsPage.jsx'
 import AdminIncentivesPage from './pages/admin/AdminIncentivesPage.jsx'
 import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
 import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx'
+import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 
 export default function App() {
@@ -58,6 +59,9 @@ export default function App() {
 
   // Admin-side state
   const [adminPage, setAdminPage] = useState('overview')
+  // When AdminFacilitiesPage links into AdminRoiPage with a pre-selected
+  // facility, this carries the id through the page switch.
+  const [adminRoiFacilityId, setAdminRoiFacilityId] = useState(null)
 
   // Portal selection state (when not yet logged in)
   // null | 'facility' | 'admin' | 'credential'
@@ -300,11 +304,19 @@ export default function App() {
         <main style={{ flex: 1, marginLeft: 240, minHeight: '100vh', background: '#F8FAFC' }}>
           {adminPage === 'overview'          && <AdminOverviewPage />}
           {adminPage === 'providers'         && <AdminProvidersPage />}
-          {adminPage === 'facilities'        && <AdminFacilitiesPage />}
+          {adminPage === 'facilities'        && (
+            <AdminFacilitiesPage
+              onOpenRoi={(facilityId) => {
+                setAdminRoiFacilityId(facilityId)
+                setAdminPage('roi')
+              }}
+            />
+          )}
           {adminPage === 'shifts'            && <AdminShiftsPage />}
           {adminPage === 'disputes'          && <AdminDisputesPage />}
           {adminPage === 'messages'          && <AdminMessagesPage />}
           {adminPage === 'staffiq-analytics' && <AdminStaffIQPage />}
+          {adminPage === 'roi'               && <AdminRoiPage preselectedFacilityId={adminRoiFacilityId} />}
           {adminPage === 'leads'             && <AdminLeadsPage />}
           {adminPage === 'admin-windows'     && <AdminWindowsPage />}
           {adminPage === 'admin-incentives'  && <AdminIncentivesPage />}
