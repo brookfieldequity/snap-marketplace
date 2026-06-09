@@ -1014,6 +1014,64 @@ router.post('/roster/relink-all', adminAuth, async (req, res) => {
   }
 });
 
+// ── Recovery: attach an orphan User to a new Facility ─────────────────────────
+// The /auth/facility/register endpoint creates User + Facility in two non-
+// transactional steps. If the Facility create throws, the User row is left
+// orphaned: login succeeds but no FacilityUser row exists, so the dashboard
+// shows the null-fallback "your facility" text. This endpoint recovers that
+// state by creating the Facility and attaching the existing User as ADMIN.
+//
+// Added 2026-06-09 to unblock Ryan's live demo. Body:
+//   { facilityName, userEmail, facilityType?, address?, zipCode?, tier? }
+router.post('/facility/create-and-attach', adminAuth, async (req, res) => {
+  try {
+    const { facilityName, userEmail, facilityType, address, zipCode, tier } = req.body || {};
+    if (!facilityName || !userEmail) {
+      return res.status(400).json({ error: 'facilityName and userEmail are both required' });
+    }
+    const user = await prisma.user.findUnique({ where: { email: userEmail.toLowerCase().trim() } });
+    if (!user) {
+      return res.status(404).json({ error: `No user found with email ${userEmail}` });
+    }
+    const existing = await prisma.facilityUser.findFirst({
+      where: { userId: user.id },
+      include: { facility: { select: { id: true, name: true } } },
+    });
+    if (existing) {
+      return res.status(409).json({
+        error: 'User already attached to a facility',
+        existingFacility: existing.facility,
+      });
+    }
+    const facility = await prisma.facility.create({
+      data: {
+        name: facilityName,
+        facilityType: facilityType || null,
+        address: address || null,
+        zipCode: zipCode || null,
+        state: 'MA',
+        users: { create: { userId: user.id, facilityRole: 'ADMIN' } },
+        subscription: { create: { tier: tier || 'BASIC' } },
+      },
+      include: { subscription: true, users: true },
+    });
+    // Make sure the user's role is FACILITY_USER (it should be already, but
+    // belt-and-suspenders in case some prior orphan came from a different path).
+    if (user.role !== 'FACILITY_USER') {
+      await prisma.user.update({ where: { id: user.id }, data: { role: 'FACILITY_USER' } });
+    }
+    res.json({
+      ok: true,
+      message: 'User attached to new facility. Have them log out and back in.',
+      facility: { id: facility.id, name: facility.name, tier: facility.subscription?.tier },
+      user: { id: user.id, email: user.email },
+    });
+  } catch (err) {
+    console.error('[admin] create-and-attach failed:', err);
+    res.status(500).json({ error: 'Failed to create + attach', details: err.message });
+  }
+});
+
 // ── Diagnostic: SendGrid email test ────────────────────────────────────────────
 // Temporary endpoint added 2026-06-08 to debug "emails not arriving" during the
 // CAPA soft-launch prep. Returns the raw SendGrid response so we can see exactly
