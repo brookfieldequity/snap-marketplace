@@ -37,7 +37,9 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
     try {
       await adminAPI.updateSubscription(facilityId, newTier)
       setFacilities((prev) =>
-        prev.map((f) => f.id === facilityId ? { ...f, subscriptionTier: newTier } : f)
+        prev.map((f) => f.id === facilityId
+          ? { ...f, subscription: { ...(f.subscription || {}), tier: newTier } }
+          : f)
       )
     } catch {
       alert('Failed to update subscription.')
@@ -46,10 +48,21 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
     }
   }
 
-  const filtered = facilities.filter((f) =>
+  // Normalize so a single name/tier/shifts path works regardless of whether
+  // the row came from the API (nested) or the MOCK fallback (flat).
+  const normalize = (f) => ({
+    ...f,
+    _name: f.name || f.facilityName || '',
+    _tier: f.subscription?.tier || f.subscriptionTier || 'BASIC',
+    _shifts: f._count?.shifts ?? f.totalShifts ?? 0,
+    _location: [f.address, f.state, f.zipCode].filter(Boolean).join(', ') || (f.zipCode || '—'),
+  })
+
+  const filtered = facilities.map(normalize).filter((f) =>
     !search ||
-    f.facilityName.toLowerCase().includes(search.toLowerCase()) ||
-    f.zipCode.toLowerCase().includes(search.toLowerCase())
+    f._name.toLowerCase().includes(search.toLowerCase()) ||
+    (f.zipCode || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.address || '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -66,7 +79,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
       <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
         {['BASIC', 'PROFESSIONAL', 'ENTERPRISE'].map((tier) => {
           const cfg = TIER_COLORS[tier]
-          const count = facilities.filter((f) => f.subscriptionTier === tier).length
+          const count = facilities.filter((f) => (f.subscription?.tier || f.subscriptionTier) === tier).length
           return (
             <div
               key={tier}
@@ -110,8 +123,8 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
 
       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px 100px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-          {['Facility Name', 'City', 'Tier', 'Shifts', 'Update Tier', 'ROI'].map((h) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1.6fr 1.5fr 80px 180px 100px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+          {['Facility', 'Location', 'Tier', 'Shifts', 'Update Tier', 'ROI'].map((h) => (
             <div key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
             </div>
@@ -120,27 +133,35 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
 
         {loading && <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Loading...</div>}
 
+        {!loading && filtered.length === 0 && (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
+            No facilities yet. Create one to get started.
+          </div>
+        )}
+
         {filtered.map((f, i) => {
-          const cfg = TIER_COLORS[f.subscriptionTier] || TIER_COLORS.BASIC
+          const cfg = TIER_COLORS[f._tier] || TIER_COLORS.BASIC
           return (
             <div
               key={f.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '2.5fr 1fr 1.5fr 80px 180px 100px',
+                gridTemplateColumns: '2.5fr 1.6fr 1.5fr 80px 180px 100px',
                 borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
                 background: i % 2 === 0 ? '#fff' : '#FAFAFA',
                 alignItems: 'center',
               }}
             >
-              {/* Name */}
+              {/* Name + facility type */}
               <div style={{ padding: '14px 16px' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{f.facilityName}</div>
-                <div style={{ fontSize: 12, color: '#94A3B8' }}>{f.email}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>
+                  {f._name || <span style={{ color: '#CBD5E1', fontStyle: 'italic' }}>Unnamed facility</span>}
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8' }}>{f.facilityType || '—'}</div>
               </div>
 
-              {/* City */}
-              <div style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{f.zipCode}</div>
+              {/* Location */}
+              <div style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{f._location}</div>
 
               {/* Tier badge */}
               <div style={{ padding: '14px 16px' }}>
@@ -155,19 +176,19 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                     fontWeight: 700,
                   }}
                 >
-                  {f.subscriptionTier}
+                  {f._tier}
                 </span>
               </div>
 
               {/* Shifts */}
               <div style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-                {f.totalShifts}
+                {f._shifts}
               </div>
 
               {/* Update tier */}
               <div style={{ padding: '14px 16px' }}>
                 <select
-                  value={f.subscriptionTier}
+                  value={f._tier}
                   onChange={(e) => handleTierChange(f.id, e.target.value)}
                   disabled={updating[f.id]}
                   style={{
