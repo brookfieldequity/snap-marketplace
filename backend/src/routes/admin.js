@@ -1014,4 +1014,90 @@ router.post('/roster/relink-all', adminAuth, async (req, res) => {
   }
 });
 
+// ── Diagnostic: SendGrid email test ────────────────────────────────────────────
+// Temporary endpoint added 2026-06-08 to debug "emails not arriving" during the
+// CAPA soft-launch prep. Returns the raw SendGrid response so we can see exactly
+// what the provider is rejecting (or accepting). Safe to remove once email is
+// confirmed working in production.
+//
+// Body: { to: "email@example.com", subject?: string }
+// Returns: { ok, config, request, sendgrid: { statusCode, messageId } | error: {...} }
+router.post('/email-test', adminAuth, async (req, res) => {
+  const sgMail = require('@sendgrid/mail');
+  const to = (req.body?.to || '').trim();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({ error: 'Valid `to` email required in request body.' });
+  }
+
+  // Surface exactly what the backend is reading from env so we can confirm
+  // Railway env vars are being picked up.
+  const FROM = process.env.SENDGRID_FROM || 'noreply@snapmedical.com';
+  const FROM_EMAIL_ALT = process.env.SENDGRID_FROM_EMAIL || null;
+  const apiKey = process.env.SENDGRID_API_KEY || '';
+
+  const config = {
+    sendgridFrom: FROM,
+    sendgridFromEmailAlt: FROM_EMAIL_ALT,
+    sendgridApiKeySet: !!apiKey,
+    sendgridApiKeyPrefix: apiKey ? `${apiKey.substring(0, 6)}…(len=${apiKey.length})` : null,
+    nodeEnv: process.env.NODE_ENV || null,
+  };
+
+  if (!apiKey) {
+    return res.status(500).json({
+      ok: false,
+      stage: 'precondition',
+      error: 'SENDGRID_API_KEY is not set on the backend.',
+      config,
+    });
+  }
+
+  sgMail.setApiKey(apiKey);
+
+  const stamp = new Date().toISOString();
+  const subject = (req.body?.subject || '').trim() || `SNAP Medical diagnostic test · ${stamp}`;
+  const msg = {
+    to,
+    from: FROM,
+    subject,
+    text:
+      `This is a diagnostic test email triggered from /api/admin/email-test at ${stamp}.\n` +
+      `If you received this in your inbox, SendGrid is configured correctly and the ` +
+      `marketplace backend can send mail.\n\n— SNAP Medical`,
+    html:
+      `<p>This is a diagnostic test email triggered from <code>/api/admin/email-test</code> at <strong>${stamp}</strong>.</p>` +
+      `<p>If you received this in your inbox, SendGrid is configured correctly and the ` +
+      `marketplace backend can send mail.</p><p>— SNAP Medical</p>`,
+  };
+
+  try {
+    const [response] = await sgMail.send(msg);
+    return res.json({
+      ok: true,
+      stage: 'sent',
+      config,
+      request: { from: msg.from, to: msg.to, subject: msg.subject },
+      sendgrid: {
+        statusCode: response.statusCode,
+        messageId: response.headers?.['x-message-id'] || null,
+      },
+    });
+  } catch (err) {
+    // sg returns rich error body; capture the whole thing so we can see
+    // the exact rejection reason in the HTTP response.
+    return res.status(502).json({
+      ok: false,
+      stage: 'sendgrid',
+      config,
+      request: { from: msg.from, to: msg.to, subject: msg.subject },
+      error: {
+        message: err.message,
+        code: err.code || null,
+        responseStatus: err.response?.statusCode || null,
+        responseBody: err.response?.body || null,
+      },
+    });
+  }
+});
+
 module.exports = router;
