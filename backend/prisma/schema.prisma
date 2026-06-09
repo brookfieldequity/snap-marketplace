@@ -172,6 +172,8 @@ model User {
   providerProfile           ProviderProfile?
   facilityMemberships       FacilityUser[]
   scheduleBuildRunsTriggered ScheduleBuildRun[]
+  facilityInvitesSent       FacilityInvite[]   @relation("FacilityInviteSentBy")
+  facilityInvitesClaimed    FacilityInvite[]   @relation("FacilityInviteClaimedBy")
 }
 
 model ProviderProfile {
@@ -280,9 +282,53 @@ model Facility {
   siteRates           FacilitySiteRate[]
   roiBaseline         FacilityRoiBaseline?
   roiSnapshots        FacilityRoiSnapshot[]
+  facilityInvites     FacilityInvite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Facility coordinator/admin invite — the "front door" for new customers.
+// Replaces the broken /auth/facility/register self-serve flow with a SNAP-
+// admin-initiated invite. Mirrors the ProviderInvite pattern on the cred
+// backend: admin sends invite, recipient receives email with a tokenized
+// claim link, recipient sets password → account is created + linked to the
+// pre-existing Facility in a single transaction. No orphan rows, no
+// "your facility" null-fallback states.
+//
+// See snap-applications/capa-pilot/facility-invite-spec.md for the full
+// design + UX trade-offs. Locked 2026-06-09.
+model FacilityInvite {
+  id                String   @id @default(cuid())
+  facilityId        String
+  facility          Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  // The email we sent the invite to. Lowercased + trimmed at send time.
+  email             String
+  // Role the invited user will have within the facility once they claim.
+  // ADMIN / COORDINATOR / VIEWER — string so it's flexible without a new enum.
+  facilityRole      String
+  // sha256 of the raw token. We never store the raw token itself, so a DB
+  // leak doesn't compromise active invites.
+  tokenHash         String   @unique
+  // First 8 chars of the raw token, for logs/debug only. Never enough to
+  // reconstruct, but enough to correlate "I sent this invite" with logs.
+  rawTokenPrefix    String?
+  expiresAt         DateTime
+  // The admin User who sent the invite. Captured at send-time so we can
+  // surface "Matt Haverkamp invited you" in the email + claim page even
+  // if the admin's account is renamed/deleted later.
+  invitedByAdminId  String?
+  invitedByAdmin    User?    @relation("FacilityInviteSentBy", fields: [invitedByAdminId], references: [id])
+  invitedByName     String?
+  // Set when the recipient successfully claims the invite. nullable means
+  // "still pending."
+  claimedAt         DateTime?
+  claimedByUserId   String?
+  claimedByUser     User?    @relation("FacilityInviteClaimedBy", fields: [claimedByUserId], references: [id])
+  createdAt         DateTime @default(now())
+
+  @@index([facilityId])
+  @@index([email])
 }
 
 // Per-facility ROI baseline — the "before SNAP" numbers that drive every

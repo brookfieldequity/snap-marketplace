@@ -170,10 +170,51 @@ async function sendPasswordResetEmail(toEmail, name, resetLink) {
   })
 }
 
+// Facility-coordinator invite email — the warm peer-to-peer onboarding
+// flow that replaces the broken /auth/facility/register self-serve form.
+// Inviter is named explicitly ("Matt Haverkamp at SNAP Medical invited you")
+// because every customer comes through a real conversation, not a cold signup.
+// Reply-To is matt@snapmedical.app so replies land directly with him.
+async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, roleLabel, inviterName, claimLink, expiryDate) {
+  await send({
+    to: toEmail,
+    from: FROM,
+    replyTo: 'matt@snapmedical.app',
+    subject: `${inviterName} invited you to manage ${facilityName} on SNAP Medical`,
+    html: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:14px;border:1px solid #E2E8F0;overflow:hidden">
+        <div style="background:#6366F1;padding:24px 32px">
+          <span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em">SNAP Medical</span>
+        </div>
+        <div style="padding:32px">
+          <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">Hi ${recipientFirstName || 'there'},</h2>
+          <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 16px">
+            <strong>${inviterName}</strong> at SNAP Medical invited you to manage
+            <strong>${facilityName}</strong> as ${roleLabel}.
+          </p>
+          <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px">
+            SNAP Medical is the staffing + credentialing platform for anesthesia providers and the surgical centers they work in. <strong>${facilityName}</strong> is being set up for you — when you log in, you'll see your sites and providers already in place.
+          </p>
+          <p style="text-align:center;margin:32px 0">
+            <a href="${claimLink}" style="background:#6366F1;color:#fff;padding:14px 32px;text-decoration:none;border-radius:10px;display:inline-block;font-weight:700;font-size:15px">Set up your account →</a>
+          </p>
+          <p style="font-size:13px;color:#64748B;line-height:1.6;margin:24px 0 8px">
+            This invite expires on <strong>${expiryDate}</strong>. If you have any questions, just reply to this email — it goes directly to Matt.
+          </p>
+          <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #F1F5F9;font-size:11px;color:#94A3B8">
+            — The SNAP Medical team
+          </p>
+        </div>
+      </div>
+    `,
+  })
+}
+
 module.exports = {
   sendExpirationAlertToFacility,
   sendExpirationReminderToProvider,
   sendProviderInvitation,
+  sendFacilityInvite,
   sendDocumentRequest,
   sendCredentialReminder,
   sendWelcomeEmail,

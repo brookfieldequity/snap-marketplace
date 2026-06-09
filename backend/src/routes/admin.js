@@ -1,8 +1,26 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
-const { sendWelcomeEmail, sendPasswordResetEmail } = require('../services/credentialEmail');
+const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
+
+// Where claim links land. The web app deploys separately from the backend
+// (per CLAUDE.md), so this points at the web service URL. Override via
+// FACILITY_CLAIM_BASE env var on Railway.
+const FACILITY_CLAIM_BASE = process.env.FACILITY_CLAIM_BASE
+  || 'https://sublime-flexibility-production-4f52.up.railway.app';
+
+// Default invite TTL — 14 days is conservative enough that "I'll get to it
+// next week" still works, short enough that abandoned invites don't pile up.
+const DEFAULT_INVITE_TTL_DAYS = parseInt(process.env.FACILITY_INVITE_TTL_DAYS || '14', 10);
+
+// Role labels for the invite email (human-readable per role).
+const ROLE_LABELS = {
+  ADMIN: 'an administrator',
+  COORDINATOR: 'a coordinator',
+  VIEWER: 'a viewer',
+};
 
 const router = express.Router();
 
@@ -1044,6 +1062,190 @@ router.post('/roster/relink-all', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[admin] relink-all failed:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Facility creation + invite (the proper enterprise onboarding flow) ────────
+// Replaces /auth/facility/register. SNAP Admin creates the Facility in
+// advance, then invites the coordinator(s). Full spec:
+// snap-applications/capa-pilot/facility-invite-spec.md (locked 2026-06-09).
+
+// POST /admin/facilities — create a new facility (and its subscription).
+// Atomic via $transaction so we can never produce orphan-facility-without-
+// subscription states like the old /auth/facility/register could.
+router.post('/facilities', adminAuth, async (req, res) => {
+  try {
+    const { name, facilityType, address, zipCode, state, tier } = req.body || {};
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Facility name is required.' });
+    }
+    const facility = await prisma.$transaction(async (tx) => {
+      return tx.facility.create({
+        data: {
+          name: name.trim(),
+          facilityType: facilityType || null,
+          address: address || null,
+          zipCode: zipCode || null,
+          state: state || 'MA',
+          subscription: { create: { tier: tier || 'BASIC' } },
+        },
+        include: { subscription: true },
+      });
+    });
+    res.status(201).json({
+      ok: true,
+      facility: {
+        id: facility.id,
+        name: facility.name,
+        facilityType: facility.facilityType,
+        address: facility.address,
+        zipCode: facility.zipCode,
+        state: facility.state,
+        tier: facility.subscription?.tier || 'BASIC',
+        createdAt: facility.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[admin] create facility failed:', err);
+    res.status(500).json({ error: 'Failed to create facility', details: err.message });
+  }
+});
+
+// POST /admin/facilities/:id/invite — mint a FacilityInvite + send the email.
+// Idempotent: if there's already an unclaimed, unexpired invite for the same
+// email + facility, returns it instead of creating a duplicate. "Resend"
+// uses the same path — the email gets re-fired for the existing token.
+router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
+  try {
+    const facilityId = req.params.id;
+    const { email, facilityRole = 'ADMIN', expiresInDays = DEFAULT_INVITE_TTL_DAYS } = req.body || {};
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'email is required' });
+    }
+    if (!ROLE_LABELS[facilityRole]) {
+      return res.status(400).json({ error: `facilityRole must be one of ${Object.keys(ROLE_LABELS).join(', ')}` });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const facility = await prisma.facility.findUnique({
+      where: { id: facilityId },
+      select: { id: true, name: true },
+    });
+    if (!facility) return res.status(404).json({ error: 'Facility not found' });
+
+    // Capture inviter identity at send-time so it persists in the email even
+    // if the admin record is renamed later.
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { id: true, email: true },
+    });
+    const inviterName = inviter?.email?.split('@')[0] || 'The SNAP Medical team';
+
+    // Existing unclaimed invite for this email+facility? Reuse it (idempotent
+    // resend).
+    const existing = await prisma.facilityInvite.findFirst({
+      where: {
+        facilityId,
+        email: normalizedEmail,
+        claimedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let invite, rawToken;
+    if (existing) {
+      // Reuse the existing invite. But we don't have the raw token — it was
+      // never stored. Mint a new token + replace hash so the email still works.
+      // (Alternative would be to keep the raw token in a separate secret store;
+      // for now we treat "resend" as "issue fresh credentials.")
+      rawToken = crypto.randomBytes(32).toString('base64url');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      invite = await prisma.facilityInvite.update({
+        where: { id: existing.id },
+        data: {
+          tokenHash,
+          rawTokenPrefix: rawToken.substring(0, 8),
+          expiresAt: new Date(Date.now() + expiresInDays * 86400000),
+          invitedByAdminId: inviter?.id || null,
+          invitedByName: inviterName,
+        },
+      });
+    } else {
+      rawToken = crypto.randomBytes(32).toString('base64url');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      invite = await prisma.facilityInvite.create({
+        data: {
+          facilityId,
+          email: normalizedEmail,
+          facilityRole,
+          tokenHash,
+          rawTokenPrefix: rawToken.substring(0, 8),
+          expiresAt: new Date(Date.now() + expiresInDays * 86400000),
+          invitedByAdminId: inviter?.id || null,
+          invitedByName: inviterName,
+        },
+      });
+    }
+
+    // Send the email. Fire-and-forget; we don't want a SendGrid hiccup to
+    // block the response — the invite already exists in the DB.
+    const claimLink = `${FACILITY_CLAIM_BASE}/facility-claim/${rawToken}`;
+    const recipientFirstName = normalizedEmail.split('@')[0].split(/[._-]/)[0];
+    const expiryDate = invite.expiresAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    sendFacilityInvite(
+      normalizedEmail,
+      recipientFirstName.charAt(0).toUpperCase() + recipientFirstName.slice(1),
+      facility.name,
+      ROLE_LABELS[facilityRole],
+      inviterName,
+      claimLink,
+      expiryDate,
+    ).catch((e) => console.error('[admin] facility invite email failed:', e.message));
+
+    res.status(201).json({
+      ok: true,
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        facilityRole: invite.facilityRole,
+        expiresAt: invite.expiresAt,
+        resent: !!existing,
+      },
+    });
+  } catch (err) {
+    console.error('[admin] send facility invite failed:', err);
+    res.status(500).json({ error: 'Failed to send invite', details: err.message });
+  }
+});
+
+// GET /admin/facilities/:id/invites — list pending + claimed invites for a
+// facility. Used by the admin UI to show "Pending invites" with resend/view.
+router.get('/facilities/:id/invites', adminAuth, async (req, res) => {
+  try {
+    const invites = await prisma.facilityInvite.findMany({
+      where: { facilityId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        facilityRole: true,
+        expiresAt: true,
+        invitedByName: true,
+        claimedAt: true,
+        claimedByUserId: true,
+        createdAt: true,
+      },
+    });
+    const now = new Date();
+    res.json(invites.map((i) => ({
+      ...i,
+      status: i.claimedAt ? 'CLAIMED' : (i.expiresAt < now ? 'EXPIRED' : 'PENDING'),
+    })));
+  } catch (err) {
+    console.error('[admin] list invites failed:', err);
+    res.status(500).json({ error: 'Failed to load invites' });
   }
 });
 

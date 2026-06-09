@@ -99,6 +99,9 @@ app.use('/api/calculator', calculatorRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/staffiq-inputs', staffiqInputsRoutes);
 app.use('/api/credentialing', credentialingRoutes);
+// Facility-coordinator invite + claim. Replaces /auth/facility/register
+// per snap-applications/capa-pilot/facility-invite-spec.md (2026-06-09).
+app.use('/api/facility-claim', require('./routes/facilityClaim'));
 // Coverage Templates + holiday overrides (per-facility). See
 // docs/coverage-templates-design.md.
 app.use('/api/coverage-templates', coverageTemplatesRoutes);
