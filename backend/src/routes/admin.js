@@ -78,6 +78,39 @@ router.get('/facilities', adminAuth, async (req, res) => {
   }
 });
 
+// DELETE /admin/facility/:id — remove a facility and its direct dependents.
+// Used to clean up orphan / duplicate facility rows left over from the
+// pre-invite-flow self-register era. Wrapped in a transaction so a partial
+// delete can't leave the DB in a stranger state than we started.
+//
+// Deliberately conservative: only deletes the rows we know exist for a
+// freshly-created or barely-used facility (FacilityUser links, Subscription).
+// If a facility has substantive dependents (rosters, schedules, shifts), the
+// transaction throws and the row is preserved — Prisma's FK protection acts
+// as the safety net.
+router.delete('/facility/:id', adminAuth, async (req, res) => {
+  try {
+    const facilityId = req.params.id;
+    const result = await prisma.$transaction(async (tx) => {
+      const fu = await tx.facilityUser.deleteMany({ where: { facilityId } });
+      const sub = await tx.facilitySubscription.deleteMany({ where: { facilityId } });
+      const fac = await tx.facility.delete({ where: { id: facilityId } });
+      return {
+        facilityUsersDeleted: fu.count,
+        subscriptionsDeleted: sub.count,
+        facility: { id: fac.id, name: fac.name },
+      };
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[admin] delete facility failed:', err);
+    res.status(500).json({
+      error: 'Failed to delete facility — likely has dependent rows.',
+      details: err.message,
+    });
+  }
+});
+
 router.patch('/facilities/:id/subscription', adminAuth, async (req, res) => {
   try {
     const { tier } = req.body;
