@@ -473,11 +473,11 @@ export const adminAPI = {
       headers: adminHeaders(),
     }),
 
-  inviteFacilityUser: (facilityId, email, facilityRole = 'ADMIN', invitedByName) =>
+  inviteFacilityUser: (facilityId, email, facilityRole = 'ADMIN', recipientName) =>
     apiFetch(`${BASE}/admin/facilities/${facilityId}/invite`, {
       method: 'POST',
       headers: adminHeaders(),
-      body: JSON.stringify({ email, facilityRole, invitedByName }),
+      body: JSON.stringify({ email, facilityRole, recipientName }),
     }),
 
   listFacilityInvites: (facilityId) =>

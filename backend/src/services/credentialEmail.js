@@ -175,15 +175,17 @@ async function sendPasswordResetEmail(toEmail, name, resetLink) {
 // Inviter is named explicitly ("Matt Haverkamp at SNAP Medical invited you")
 // because every customer comes through a real conversation, not a cold signup.
 // Reply-To is matt@snapmedical.app so replies land directly with him.
-async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, roleLabel, inviterName, claimLink, expiryDate) {
-  // Subject: lead with the inviter, name the facility. "from a person at a
-  // company" reads more like outreach than the SaaS "[App] - invite" pattern.
-  const subject = `${inviterName} invited you to manage ${facilityName} on SNAP Medical`
+// Sends the facility-coordinator invite email. Naming convention chosen
+// 2026-06-09 after dry-run feedback: no per-admin name in the body (no
+// "Matt at SNAP Medical invited you…" hand-waving). Just "SNAP Medical
+// invited you…". The recipient name greets them by first name, sourced
+// from what the admin typed in the modal or derived from the email.
+async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, roleLabel, claimLink, expiryDate) {
+  const greeting = recipientFirstName && recipientFirstName !== 'there'
+    ? `Hi ${recipientFirstName},`
+    : 'Hi there,'
+  const subject = `You've been invited to manage ${facilityName} on SNAP Medical`
 
-  // Body copy — never says "your sites and providers are already in place" since
-  // we don't yet pre-load those. Sets the expectation that the coordinator will
-  // set them up together, which is exactly what happens via the dashboard
-  // checklist.
   await send({
     to: toEmail,
     from: FROM,
@@ -195,9 +197,9 @@ async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, rol
           <span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em">SNAP Medical</span>
         </div>
         <div style="padding:32px">
-          <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">Hi ${recipientFirstName || 'there'},</h2>
+          <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">${greeting}</h2>
           <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 16px">
-            <strong>${inviterName}</strong> invited you to manage <strong>${facilityName}</strong> as ${roleLabel} on SNAP Medical.
+            SNAP Medical invited you to manage <strong>${facilityName}</strong> as ${roleLabel}.
           </p>
           <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px">
             SNAP Medical is the staffing + credentialing platform built for anesthesia providers and the surgical centers they work in. When you sign in, your dashboard will walk you through adding your sites and roster — most coordinators are up and running in under 15 minutes.

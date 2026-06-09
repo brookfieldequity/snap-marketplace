@@ -418,31 +418,24 @@ function NewFacilityModal({ onClose, onCreated }) {
 }
 
 function InviteUserModal({ facility, onClose, onSent }) {
-  const [email, setEmail]           = useState('')
-  const [role, setRole]             = useState('ADMIN')
-  // The name that appears in the invite email body ("___ invited you…").
-  // Persisted across modal opens so Matt doesn't re-type it every time.
-  const [inviterName, setInviterName] = useState(
-    () => localStorage.getItem('snapInviterName') || ''
-  )
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError]           = useState(null)
-  const [result, setResult]         = useState(null)
+  const [recipientName, setRecipientName] = useState('')
+  const [email, setEmail]                 = useState('')
+  const [role, setRole]                   = useState('ADMIN')
+  const [submitting, setSubmitting]       = useState(false)
+  const [error, setError]                 = useState(null)
+  const [result, setResult]               = useState(null)
 
   async function submit(e) {
     e?.preventDefault()
     setError(null)
     if (!email.trim()) { setError('Email is required.'); return }
-    if (!inviterName.trim()) { setError('Add your name so the email reads as a real person.'); return }
     setSubmitting(true)
     try {
-      // Remember the inviter name across sessions so future invites pre-fill it.
-      try { localStorage.setItem('snapInviterName', inviterName.trim()) } catch {}
       const r = await adminAPI.inviteFacilityUser(
         facility.id,
         email.trim().toLowerCase(),
         role,
-        inviterName.trim(),
+        recipientName.trim() || undefined,
       )
       setResult(r.invite || { email: email.trim().toLowerCase() })
     } catch (err) {
@@ -460,11 +453,11 @@ function InviteUserModal({ facility, onClose, onSent }) {
     >
       {!result && (
         <form onSubmit={submit}>
-          <Field label="Your name *" hint="Appears in the email as “___ invited you to manage ___”. Saved for future invites.">
+          <Field label="Their first name" hint="Greets them by name in the email (“Hi Ryan,”). We’ll derive it from the email if you skip.">
             <input
-              type="text" value={inviterName} onChange={(e) => setInviterName(e.target.value)}
-              placeholder="Matthew Haverkamp"
-              autoFocus={!inviterName}
+              type="text" value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
+              placeholder="Ryan"
+              autoFocus
               style={inputStyle}
             />
           </Field>
@@ -472,7 +465,6 @@ function InviteUserModal({ facility, onClose, onSent }) {
           <Field label="Their email address *">
             <input
               type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              autoFocus={!!inviterName}
               placeholder="ryan@example.com"
               style={inputStyle}
             />

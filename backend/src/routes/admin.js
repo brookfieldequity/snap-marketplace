@@ -1122,7 +1122,7 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
       email,
       facilityRole = 'ADMIN',
       expiresInDays = DEFAULT_INVITE_TTL_DAYS,
-      invitedByName: clientInviterName,
+      recipientName: clientRecipientName,
     } = req.body || {};
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'email is required' });
@@ -1139,28 +1139,29 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
     });
     if (!facility) return res.status(404).json({ error: 'Facility not found' });
 
-    // Capture inviter identity at send-time so it persists in the email even
-    // if the admin record is renamed later. Priority order:
-    //   1. clientInviterName from the modal (what Matt typed)
-    //   2. derived from admin's email prefix, capitalized
-    //   3. generic fallback — NEVER let "admin" leak into the email body
+    // Resolve the recipient's first name for the email greeting ("Hi Ryan,").
+    // Priority: explicit `recipientName` from the modal, falling back to the
+    // email-prefix split on common separators ("ryan.smith@..." → "ryan").
+    // No name is preferable to a wrong name — fall through to "there" if both
+    // sources are empty.
+    function deriveFromEmail(addr) {
+      const prefix = (addr || '').split('@')[0];
+      const first = (prefix || '').split(/[._-]/)[0];
+      if (!first) return null;
+      return first.charAt(0).toUpperCase() + first.slice(1);
+    }
+    const recipientFirstName = (clientRecipientName && clientRecipientName.trim())
+      ? clientRecipientName.trim().split(/\s+/)[0]
+      : (deriveFromEmail(normalizedEmail) || 'there');
+
+    // The inviter line in the email body simply names SNAP Medical — no per-
+    // admin name surfaces ("SNAP Medical invited you…"). Keep `invitedByName`
+    // populated on the DB row though, so the audit log knows who clicked.
     const inviter = await prisma.user.findUnique({
       where: { id: req.user.userId },
       select: { id: true, email: true },
     });
-    const inviterName = (() => {
-      if (clientInviterName && clientInviterName.trim()) return clientInviterName.trim();
-      const emailPrefix = inviter?.email?.split('@')[0] || '';
-      // Avoid leaking generic accounts ("admin", "info", etc.) into the body —
-      // those make the email read like spam. Fall through to a real name or
-      // a clean team signature.
-      const looksGeneric = /^(admin|info|noreply|hello|support|team)$/i.test(emailPrefix);
-      if (!looksGeneric && emailPrefix) {
-        // Capitalize first letter for "matt" → "Matt", leave alone if already cased.
-        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-      }
-      return 'The SNAP Medical team';
-    })();
+    const inviterName = inviter?.email || 'SNAP Medical admin';
 
     // Existing unclaimed invite for this email+facility? Reuse it (idempotent
     // resend).
@@ -1212,14 +1213,12 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
     // Send the email. Fire-and-forget; we don't want a SendGrid hiccup to
     // block the response — the invite already exists in the DB.
     const claimLink = `${FACILITY_CLAIM_BASE}/facility-claim/${rawToken}`;
-    const recipientFirstName = normalizedEmail.split('@')[0].split(/[._-]/)[0];
     const expiryDate = invite.expiresAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     sendFacilityInvite(
       normalizedEmail,
-      recipientFirstName.charAt(0).toUpperCase() + recipientFirstName.slice(1),
+      recipientFirstName,  // resolved at top of handler: modal input || email derive || "there"
       facility.name,
       ROLE_LABELS[facilityRole],
-      inviterName,
       claimLink,
       expiryDate,
     ).catch((e) => console.error('[admin] facility invite email failed:', e.message));
