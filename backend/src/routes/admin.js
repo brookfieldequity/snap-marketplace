@@ -1118,7 +1118,12 @@ router.post('/facilities', adminAuth, async (req, res) => {
 router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
   try {
     const facilityId = req.params.id;
-    const { email, facilityRole = 'ADMIN', expiresInDays = DEFAULT_INVITE_TTL_DAYS } = req.body || {};
+    const {
+      email,
+      facilityRole = 'ADMIN',
+      expiresInDays = DEFAULT_INVITE_TTL_DAYS,
+      invitedByName: clientInviterName,
+    } = req.body || {};
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'email is required' });
     }
@@ -1135,12 +1140,27 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
     if (!facility) return res.status(404).json({ error: 'Facility not found' });
 
     // Capture inviter identity at send-time so it persists in the email even
-    // if the admin record is renamed later.
+    // if the admin record is renamed later. Priority order:
+    //   1. clientInviterName from the modal (what Matt typed)
+    //   2. derived from admin's email prefix, capitalized
+    //   3. generic fallback — NEVER let "admin" leak into the email body
     const inviter = await prisma.user.findUnique({
       where: { id: req.user.userId },
       select: { id: true, email: true },
     });
-    const inviterName = inviter?.email?.split('@')[0] || 'The SNAP Medical team';
+    const inviterName = (() => {
+      if (clientInviterName && clientInviterName.trim()) return clientInviterName.trim();
+      const emailPrefix = inviter?.email?.split('@')[0] || '';
+      // Avoid leaking generic accounts ("admin", "info", etc.) into the body —
+      // those make the email read like spam. Fall through to a real name or
+      // a clean team signature.
+      const looksGeneric = /^(admin|info|noreply|hello|support|team)$/i.test(emailPrefix);
+      if (!looksGeneric && emailPrefix) {
+        // Capitalize first letter for "matt" → "Matt", leave alone if already cased.
+        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+      }
+      return 'The SNAP Medical team';
+    })();
 
     // Existing unclaimed invite for this email+facility? Reuse it (idempotent
     // resend).

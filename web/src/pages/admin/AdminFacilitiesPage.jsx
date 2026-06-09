@@ -420,6 +420,11 @@ function NewFacilityModal({ onClose, onCreated }) {
 function InviteUserModal({ facility, onClose, onSent }) {
   const [email, setEmail]           = useState('')
   const [role, setRole]             = useState('ADMIN')
+  // The name that appears in the invite email body ("___ invited you…").
+  // Persisted across modal opens so Matt doesn't re-type it every time.
+  const [inviterName, setInviterName] = useState(
+    () => localStorage.getItem('snapInviterName') || ''
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState(null)
   const [result, setResult]         = useState(null)
@@ -428,9 +433,17 @@ function InviteUserModal({ facility, onClose, onSent }) {
     e?.preventDefault()
     setError(null)
     if (!email.trim()) { setError('Email is required.'); return }
+    if (!inviterName.trim()) { setError('Add your name so the email reads as a real person.'); return }
     setSubmitting(true)
     try {
-      const r = await adminAPI.inviteFacilityUser(facility.id, email.trim().toLowerCase(), role)
+      // Remember the inviter name across sessions so future invites pre-fill it.
+      try { localStorage.setItem('snapInviterName', inviterName.trim()) } catch {}
+      const r = await adminAPI.inviteFacilityUser(
+        facility.id,
+        email.trim().toLowerCase(),
+        role,
+        inviterName.trim(),
+      )
       setResult(r.invite || { email: email.trim().toLowerCase() })
     } catch (err) {
       setError(err.message || 'Could not send invite.')
@@ -447,15 +460,25 @@ function InviteUserModal({ facility, onClose, onSent }) {
     >
       {!result && (
         <form onSubmit={submit}>
-          <Field label="Email address *">
+          <Field label="Your name *" hint="Appears in the email as “___ invited you to manage ___”. Saved for future invites.">
             <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
+              type="text" value={inviterName} onChange={(e) => setInviterName(e.target.value)}
+              placeholder="Matthew Haverkamp"
+              autoFocus={!inviterName}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field label="Their email address *">
+            <input
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              autoFocus={!!inviterName}
               placeholder="ryan@example.com"
               style={inputStyle}
             />
           </Field>
 
-          <Field label="Role" hint="What they’ll be able to do once they log in.">
+          <Field label="Their role" hint="What they’ll be able to do once they log in.">
             <select value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle}>
               {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
