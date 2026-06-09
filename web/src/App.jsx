@@ -6,6 +6,7 @@ import { facilityAPI } from './api.js'
 // Facility pages
 import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
 import FacilityRegisterPage from './pages/FacilityRegisterPage.jsx'
+import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import PostShiftPage from './pages/PostShiftPage.jsx'
 import ShiftsPage from './pages/ShiftsPage.jsx'
@@ -44,6 +45,17 @@ import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 
 export default function App() {
+  // Public claim route — short-circuits all portal / auth logic. When the
+  // URL is /facility-claim/{token}, render the claim page exclusively. This
+  // is what the recipient sees first after clicking the invite email link.
+  // After successful claim, FacilityClaimPage stores snapFacilityToken and
+  // hard-redirects to "/" so the normal facility-portal flow takes over.
+  const claimMatch = typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/facility-claim\/([^/?#]+)/)
+  if (claimMatch) {
+    return <FacilityClaimPage token={decodeURIComponent(claimMatch[1])} />
+  }
+
   const [facilityToken, setFacilityToken] = useState(
     () => localStorage.getItem('snapFacilityToken')
   )

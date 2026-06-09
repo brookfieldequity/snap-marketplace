@@ -552,3 +552,19 @@ export const adminAPI = {
     return apiFetch(`${BASE}/admin/roi/projection/run?${qs.toString()}`, { headers: adminHeaders() })
   },
 }
+
+// ─── Public facility-claim API ────────────────────────────────────────────────
+// No auth required — the invite token IS the auth. Used by the public claim
+// page rendered at /facility-claim/:token.
+export const facilityClaimAPI = {
+  getInfo: (token) =>
+    apiFetch(`${BASE}/facility-claim/info/${token}`, {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  claim: (token, password) =>
+    apiFetch(`${BASE}/facility-claim/${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }),
+}
