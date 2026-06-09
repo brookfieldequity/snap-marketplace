@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../api.js'
 import StatusBadge from '../components/StatusBadge.jsx'
+import FacilitySetupChecklist from '../components/FacilitySetupChecklist.jsx'
 
 function fmt(n) {
   if (n == null) return '$0'
@@ -194,21 +195,27 @@ const MOCK = {
 
 export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMode }) {
   const [data, setData] = useState(null)
+  const [facility, setFacility] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState({})
 
   useEffect(() => {
-    facilityAPI.getDashboard()
-      .then((d) => {
+    Promise.allSettled([
+      facilityAPI.getDashboard(),
+      facilityAPI.getMe(),
+    ]).then(([dRes, fRes]) => {
+      if (dRes.status === 'fulfilled') {
+        const d = dRes.value
         setData(d)
         if (d.facilityName && onFacilityNameLoaded) onFacilityNameLoaded(d.facilityName)
-      })
-      .catch(() => {
+      } else {
         // Fall back to mock data for development
         setData(MOCK)
         if (onFacilityNameLoaded) onFacilityNameLoaded(MOCK.facilityName)
-      })
-      .finally(() => setLoading(false))
+      }
+      if (fRes.status === 'fulfilled') setFacility(fRes.value)
+      setLoading(false)
+    })
   }, [])
 
   async function handleApplication(shiftId, applicationId, action) {
@@ -295,6 +302,11 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           Post a Shift
         </button>
       </div>
+
+      {/* ── First-impression setup checklist — guides Ryan / new coordinators
+            through the "Matt set this up for me" moment. Self-hides once
+            everything is configured. ──────────────────────────────────────── */}
+      <FacilitySetupChecklist facility={facility || data} onNavigate={onNavigate} />
 
       {/* ── COST SAVINGS — most important section ──────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
