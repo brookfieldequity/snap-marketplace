@@ -459,6 +459,32 @@ export const adminAPI = {
       body: JSON.stringify({ tier }),
     }),
 
+  // Facility invite + claim flow — see capa-pilot/facility-invite-spec.md
+  createFacility: (data) =>
+    apiFetch(`${BASE}/admin/facilities`, {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify(data),
+    }),
+
+  deleteFacility: (facilityId) =>
+    apiFetch(`${BASE}/admin/facility/${facilityId}`, {
+      method: 'DELETE',
+      headers: adminHeaders(),
+    }),
+
+  inviteFacilityUser: (facilityId, email, facilityRole = 'ADMIN') =>
+    apiFetch(`${BASE}/admin/facilities/${facilityId}/invite`, {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ email, facilityRole }),
+    }),
+
+  listFacilityInvites: (facilityId) =>
+    apiFetch(`${BASE}/admin/facilities/${facilityId}/invites`, {
+      headers: adminHeaders(),
+    }),
+
   getShifts: (filters = {}) => {
     const params = new URLSearchParams(filters).toString()
     return apiFetch(`${BASE}/admin/shifts${params ? `?${params}` : ''}`, {
