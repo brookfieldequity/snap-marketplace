@@ -31,6 +31,30 @@ const COLORS = {
   warn: '#F59E0B',
 };
 
+// Per-facility color palette for the multi-facility unified calendar.
+// First entry matches the existing primary so single-facility providers
+// see no visual change. Stable hash → palette index means the same
+// facility always shows the same color across app launches.
+const FACILITY_COLORS = [
+  '#6366F1', // indigo (default / first)
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#EC4899', // pink
+  '#8B5CF6', // violet
+  '#06B6D4', // cyan
+  '#F43F5E', // rose
+  '#84CC16', // lime
+];
+
+function facilityColorFor(facilityId) {
+  if (!facilityId) return FACILITY_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < facilityId.length; i++) {
+    hash = ((hash << 5) - hash + facilityId.charCodeAt(i)) | 0;
+  }
+  return FACILITY_COLORS[Math.abs(hash) % FACILITY_COLORS.length];
+}
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -193,12 +217,25 @@ export default function MyScheduleScreen() {
           </TouchableOpacity>
         </View>
 
-        {memberships.length > 0 && (
+        {memberships.length === 1 && (
           <Text style={styles.sub}>
-            {memberships.length === 1
-              ? `${memberships[0].facility?.name || 'Facility'}`
-              : `${memberships.length} facility memberships`}
+            {memberships[0].facility?.name || 'Facility'}
           </Text>
+        )}
+        {memberships.length > 1 && (
+          <View style={styles.legend}>
+            {memberships.map((m) => {
+              const fid = m.facility?.id || m.facilityId;
+              return (
+                <View key={m.id} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: facilityColorFor(fid) }]} />
+                  <Text style={styles.legendText} numberOfLines={1}>
+                    {m.facility?.name || 'Facility'}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         )}
 
         <View style={styles.monthNav}>
@@ -241,7 +278,36 @@ export default function MyScheduleScreen() {
                       has && styles.cellNumActive,
                       isTodayCell(d) && styles.cellNumToday,
                     ]}>{d}</Text>
-                    {has && <View style={styles.dot} />}
+                    {has && (() => {
+                      // One small dot per unique facility on this day, in
+                      // that facility's color. Caps at 3; "+N" indicator if
+                      // somehow more. Realistic case is 1-2.
+                      const uniqueFids = Array.from(new Set(
+                        list.map((a) => a.facility?.id).filter(Boolean)
+                      ));
+                      const shown = uniqueFids.slice(0, 3);
+                      const extra = uniqueFids.length - shown.length;
+                      return (
+                        <View style={styles.dotRow}>
+                          {shown.length === 0 ? (
+                            // Defensive: assignments without facility info
+                            // (shouldn't happen post-backend update) — fall
+                            // back to a single primary-colored dot.
+                            <View style={[styles.dot, { backgroundColor: COLORS.primary }]} />
+                          ) : (
+                            shown.map((fid) => (
+                              <View
+                                key={fid}
+                                style={[styles.dot, { backgroundColor: facilityColorFor(fid) }]}
+                              />
+                            ))
+                          )}
+                          {extra > 0 && (
+                            <Text style={styles.dotExtra}>+{extra}</Text>
+                          )}
+                        </View>
+                      );
+                    })()}
                   </TouchableOpacity>
                 );
               })}
@@ -348,7 +414,13 @@ const styles = StyleSheet.create({
   cellToday: { borderWidth: 2, borderColor: COLORS.primary, borderRadius: 12 },
   cellNumToday: { color: COLORS.primary },
   cellSelected: { backgroundColor: '#EEF2FF', borderRadius: 12 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.primary, marginTop: 2 },
+  dotRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 2 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotExtra: { fontSize: 9, color: COLORS.textMuted, fontWeight: '700', marginLeft: 1 },
+  legend: { paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '48%' },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
   detailCard: { backgroundColor: COLORS.card, marginHorizontal: 16, marginTop: 18, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: COLORS.border },
   detailDate: { fontSize: 15, fontWeight: '700', color: COLORS.textDark, marginBottom: 10 },
   assignmentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },

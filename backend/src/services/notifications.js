@@ -493,7 +493,11 @@ async function notifySchedulePublished(facilityId, year, month) {
         select: { expoPushToken: true },
       });
       const tokens = profiles.filter((p) => p.expoPushToken).map((p) => p.expoPushToken);
-      await sendPush(tokens, `Schedule Posted — ${monthName}`, msgBody, { type: 'SCHEDULE_PUBLISHED' });
+      // Title leads with facility name so a multi-facility provider can
+      // tell at a glance from the iOS lock screen which facility just
+      // published. Body still carries the month + facility for full context.
+      const pushTitle = `Schedule Posted — ${facility?.name || 'your facility'}`;
+      await sendPush(tokens, pushTitle, msgBody, { type: 'SCHEDULE_PUBLISHED', facilityId, monthName });
     }
 
     const seenPhone = new Set();
