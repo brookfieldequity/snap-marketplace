@@ -8,7 +8,7 @@ datasource db {
   // `prisma db push` works fine on the pooler. (If we ever switch to
   // `prisma migrate deploy`, we'll need to add `directUrl = env("DIRECT_URL")`
   // and ensure Neon's direct endpoint is reachable.)
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -169,11 +169,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  providerProfile           ProviderProfile?
-  facilityMemberships       FacilityUser[]
+  providerProfile            ProviderProfile?
+  facilityMemberships        FacilityUser[]
   scheduleBuildRunsTriggered ScheduleBuildRun[]
-  facilityInvitesSent       FacilityInvite[]   @relation("FacilityInviteSentBy")
-  facilityInvitesClaimed    FacilityInvite[]   @relation("FacilityInviteClaimedBy")
+  facilityInvitesSent        FacilityInvite[]   @relation("FacilityInviteSentBy")
+  facilityInvitesClaimed     FacilityInvite[]   @relation("FacilityInviteClaimedBy")
 }
 
 model ProviderProfile {
@@ -228,27 +228,28 @@ model ProviderProfile {
   availabilitySubmissions AvailabilitySubmission[]
   credentials             ProviderCredential[]
   rosterEntries           FacilityRosterEntry[]
+  notifications           Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Facility {
-  id           String        @id @default(cuid())
-  name         String
-  facilityType FacilityType?
-  address      String?
-  zipCode      String?
-  state        String        @default("MA")
-  lat          Float?
-  lng          Float?
-  photoUrls    String[]
-  description  String?
-  caseMix      String?
-  parking      String?
-  whatToBring  String?
-  profileScore Int           @default(0)
-  snapMode     SnapMode      @default(MARKETPLACE)
+  id                     String        @id @default(cuid())
+  name                   String
+  facilityType           FacilityType?
+  address                String?
+  zipCode                String?
+  state                  String        @default("MA")
+  lat                    Float?
+  lng                    Float?
+  photoUrls              String[]
+  description            String?
+  caseMix                String?
+  parking                String?
+  whatToBring            String?
+  profileScore           Int           @default(0)
+  snapMode               SnapMode      @default(MARKETPLACE)
   // Industry-standard fully-loaded cost to staff one anesthetizing location
   // for one day ($/room/day), entered by the coordinator. Used as the
   // "old manual process" baseline the SNAP-built schedule is compared against
@@ -283,6 +284,7 @@ model Facility {
   roiBaseline         FacilityRoiBaseline?
   roiSnapshots        FacilityRoiSnapshot[]
   facilityInvites     FacilityInvite[]
+  scheduleRequests    ScheduleRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -299,33 +301,33 @@ model Facility {
 // See snap-applications/capa-pilot/facility-invite-spec.md for the full
 // design + UX trade-offs. Locked 2026-06-09.
 model FacilityInvite {
-  id                String   @id @default(cuid())
-  facilityId        String
-  facility          Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  facilityId       String
+  facility         Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   // The email we sent the invite to. Lowercased + trimmed at send time.
-  email             String
+  email            String
   // Role the invited user will have within the facility once they claim.
   // ADMIN / COORDINATOR / VIEWER — string so it's flexible without a new enum.
-  facilityRole      String
+  facilityRole     String
   // sha256 of the raw token. We never store the raw token itself, so a DB
   // leak doesn't compromise active invites.
-  tokenHash         String   @unique
+  tokenHash        String    @unique
   // First 8 chars of the raw token, for logs/debug only. Never enough to
   // reconstruct, but enough to correlate "I sent this invite" with logs.
-  rawTokenPrefix    String?
-  expiresAt         DateTime
+  rawTokenPrefix   String?
+  expiresAt        DateTime
   // The admin User who sent the invite. Captured at send-time so we can
   // surface "Matt Haverkamp invited you" in the email + claim page even
   // if the admin's account is renamed/deleted later.
-  invitedByAdminId  String?
-  invitedByAdmin    User?    @relation("FacilityInviteSentBy", fields: [invitedByAdminId], references: [id])
-  invitedByName     String?
+  invitedByAdminId String?
+  invitedByAdmin   User?     @relation("FacilityInviteSentBy", fields: [invitedByAdminId], references: [id])
+  invitedByName    String?
   // Set when the recipient successfully claims the invite. nullable means
   // "still pending."
-  claimedAt         DateTime?
-  claimedByUserId   String?
-  claimedByUser     User?    @relation("FacilityInviteClaimedBy", fields: [claimedByUserId], references: [id])
-  createdAt         DateTime @default(now())
+  claimedAt        DateTime?
+  claimedByUserId  String?
+  claimedByUser    User?     @relation("FacilityInviteClaimedBy", fields: [claimedByUserId], references: [id])
+  createdAt        DateTime  @default(now())
 
   @@index([facilityId])
   @@index([email])
@@ -336,33 +338,33 @@ model FacilityInvite {
 // the CAPA-pilot ROI tracker constants so existing customers + prospects
 // share one math model. Reasonable defaults pre-populate at upsert time.
 model FacilityRoiBaseline {
-  id                       String   @id @default(cuid())
-  facilityId               String   @unique
-  facility                 Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  id                      String   @id @default(cuid())
+  facilityId              String   @unique
+  facility                Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   // Workforce + headline cost
-  providerCount            Int      @default(83)
-  monthlyProviderCost      Float    @default(1150000)
-  providerHourlyRate       Float    @default(295)
+  providerCount           Int      @default(83)
+  monthlyProviderCost     Float    @default(1150000)
+  providerHourlyRate      Float    @default(295)
   // Backup-staffing baseline
-  backupPremium            Float    @default(0.15) // 15% premium for backup
-  backupShiftsPerDay       Float    @default(5)
-  shiftHours               Float    @default(8)
-  annualBackupStaffing     Float    @default(287500)
+  backupPremium           Float    @default(0.15) // 15% premium for backup
+  backupShiftsPerDay      Float    @default(5)
+  shiftHours              Float    @default(8)
+  annualBackupStaffing    Float    @default(287500)
   // Admin overhead baseline
-  adminSchedulingStaff     Float    @default(2)
-  adminSchedulingHours     Float    @default(25)   // per-staff weekly
-  adminSchedulingRate      Float    @default(100)
-  credentialingStaff       Float    @default(1)
-  credentialingHours       Float    @default(20)   // per-staff weekly
-  credentialingRate        Float    @default(75)
+  adminSchedulingStaff    Float    @default(2)
+  adminSchedulingHours    Float    @default(25) // per-staff weekly
+  adminSchedulingRate     Float    @default(100)
+  credentialingStaff      Float    @default(1)
+  credentialingHours      Float    @default(20) // per-staff weekly
+  credentialingRate       Float    @default(75)
   // KPI baselines
-  credentialingTurnaround  Int      @default(21)   // days
-  schedulingGapRate        Float    @default(18)   // %
-  providerSatisfaction     Float    @default(6.2)  // /10
+  credentialingTurnaround Int      @default(21) // days
+  schedulingGapRate       Float    @default(18) // %
+  providerSatisfaction    Float    @default(6.2) // /10
   // Free-form notes (e.g. "Numbers from CAPA July 2026 sourcing call")
-  notes                    String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  notes                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
 // Per-facility, per-month ROI snapshot. Captures the actuals the admin
@@ -372,22 +374,22 @@ model FacilityRoiBaseline {
 // works. Some fields can be auto-pulled from live data — `autoPulled`
 // records which ones so the UI can flag them.
 model FacilityRoiSnapshot {
-  id                       String   @id @default(cuid())
-  facilityId               String
-  facility                 Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  month                    DateTime @db.Date
-  backupShiftsPerDay       Float?
-  adminSchedulingHours     Float?
-  credentialingHours       Float?
-  credentialingTurnaround  Int?
-  schedulingGapRate        Float?
-  providerSatisfaction     Float?
+  id                      String   @id @default(cuid())
+  facilityId              String
+  facility                Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  month                   DateTime @db.Date
+  backupShiftsPerDay      Float?
+  adminSchedulingHours    Float?
+  credentialingHours      Float?
+  credentialingTurnaround Int?
+  schedulingGapRate       Float?
+  providerSatisfaction    Float?
   // Which of the above were auto-pulled vs entered. Free-form JSON keyed
   // by metric name → boolean. UI uses this to mark fields as "(auto)".
-  autoPulled               Json?
-  notes                    String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  autoPulled              Json?
+  notes                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   @@unique([facilityId, month])
   @@index([facilityId, month])
@@ -547,6 +549,11 @@ model ProviderAvailability {
   providerId String
   date       DateTime        @db.Date
   available  Boolean
+  // Free-text note the provider attaches to a specific date — e.g.
+  // "can work after 10am", "Natick only this day". Surfaced to the
+  // coordinator in the schedule-builder day editor so it informs
+  // assignments. Task #20.
+  note       String?
   provider   ProviderProfile @relation(fields: [providerId], references: [id])
   createdAt  DateTime        @default(now())
 
@@ -616,82 +623,82 @@ model Message {
 // ── SNAP Shifts models ────────────────────────────────────────────────────────
 
 model InternalRosterEntry {
-  id                 String             @id @default(cuid())
-  facilityId         String
-  facility           Facility           @relation(fields: [facilityId], references: [id])
-  providerName       String
+  id                     String              @id @default(cuid())
+  facilityId             String
+  facility               Facility            @relation(fields: [facilityId], references: [id])
+  providerName           String
   // Nullable so non-clinical roster members (back-office staff, billers)
   // can be on the roster for payroll without a clinical specialty. Clinical
   // scheduling explicitly excludes rows where providerType is null OR
   // isNonClinical is true (see scheduleBuilder.js + isNonClinical below).
-  providerType       Specialty?
-  employmentCategory EmploymentCategory?
+  providerType           Specialty?
+  employmentCategory     EmploymentCategory?
   // True for back-office / non-clinical staff who belong on the roster for
   // payroll purposes but are never scheduled into ORs and don't need an NPI.
-  isNonClinical      Boolean            @default(false)
+  isNonClinical          Boolean             @default(false)
   // True when the coordinator has explicitly marked this person as not
   // needing an NPI (back-office staff, or a provider they'll handle out of
   // band). Exempt rows are excluded from the NPI review queue. Auto-set true
   // for non-clinical imports.
-  npiExempt          Boolean            @default(false)
-  snapAccountEmail   String?
-  phoneNumber        String?
+  npiExempt              Boolean             @default(false)
+  snapAccountEmail       String?
+  phoneNumber            String?
   // NPI (National Provider Identifier) — primary key for matching this
   // roster entry to an existing ProviderProfile across the marketplace.
   // 10-digit string; unique-per-facility because the same provider could
   // (rarely) be on two practices' rosters as a locum.
-  npi                String?
+  npi                    String?
   // Customer-internal provider code (e.g. CAPA's "Initials" field). Used
   // as the join key when a multi-sheet xlsx import bundles identity,
   // payroll, and per-location credentialing across separate tabs. NOT a
   // SNAP-wide identifier — only meaningful within ONE facility's roster.
-  rosterCode         String?
+  rosterCode             String?
   // External payroll-system identifier (Gusto / ADP / Paychex / etc).
   // Pass-through field so the SNAP Payroll tab can export weekly
   // summaries that link back to the customer's payroll provider rows.
-  payrollSystemId    String?
+  payrollSystemId        String?
   // Secret token for the provider's personal iCal subscription URL
   // (/api/schedule/ical/:rosterEntryId/:icalToken.ics). Generated on first
   // request, regenerated when the provider rotates the URL. Anyone with the
   // URL can read this provider's schedule, so treat it like a password.
-  icalToken          String?
+  icalToken              String?
   // Who employs / staffs this provider into the facility. For CAPA this is
   // typically one of: "APNE" (Matt's anesthesia practice — staffs CAPA),
   // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). The pay rate
   // in `hourlyRate` is what the facility pays THIS employer per hour — not
   // what the underlying provider earns. Free-form so customers don't have to
   // wait for an enum edit when they onboard a new staffing group.
-  employer           String?
+  employer               String?
   // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
   // false = W-2 employee, null = unknown. Surfaced on the roster card so the
   // coordinator can see "1099 · FT" at a glance for cost attribution.
-  is1099             Boolean?
+  is1099                 Boolean?
   // Hours-status flag, orthogonal to employmentCategory. true = full-time,
   // false = part-time, null = unknown. The scheduler still keys off
   // employmentCategory (FULL_TIME/PER_DIEM/LOCUMS); this is descriptive only.
-  isFullTime         Boolean?
+  isFullTime             Boolean?
   // NPPES lookup state. Set when the import couldn't auto-attach an NPI
   // (multiple matches or zero matches in NPPES). The disambiguation UI
   // surfaces these for coordinator resolution. Cleared once npi is set.
-  npiLookupStatus    String?            // 'NEEDS_DISAMBIGUATION' | 'NO_MATCH' | 'INVALID_NAME'
-  npiLookupCandidates Json?             // array of NPPES match objects for the disambiguation UI
-  licenseNumber      String?
-  licenseExpiration  DateTime?
-  notes              String?
-  snapAccountLinked  Boolean            @default(false)
-  linkedProviderId   String?
-  inviteSentAt       DateTime?
+  npiLookupStatus        String? // 'NEEDS_DISAMBIGUATION' | 'NO_MATCH' | 'INVALID_NAME'
+  npiLookupCandidates    Json? // array of NPPES match objects for the disambiguation UI
+  licenseNumber          String?
+  licenseExpiration      DateTime?
+  notes                  String?
+  snapAccountLinked      Boolean             @default(false)
+  linkedProviderId       String?
+  inviteSentAt           DateTime?
   // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
   // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator
   // sends a credentialing invite; CLAIMED/COMPLETED are synced back from the
   // passport bridge (a live grant means the provider claimed + consented).
-  credentialingStatus String            @default("NOT_INVITED") // NOT_INVITED | INVITED | CLAIMED | COMPLETED
+  credentialingStatus    String              @default("NOT_INVITED") // NOT_INVITED | INVITED | CLAIMED | COMPLETED
   // True for providers already credentialed via the manual/legacy process.
   // Excluded from "Invite all" — their SNAP credentialing is deferred to their
   // next license renewal so we don't disrupt active credentials. Explicitly
   // selecting them in the invite modal overrides this.
-  externallyCredentialed Boolean         @default(false)
-  createdAt          DateTime           @default(now())
+  externallyCredentialed Boolean             @default(false)
+  createdAt              DateTime            @default(now())
 
   // Employment-specific preference fields
   fteHours             Float? // FULL_TIME: hours per week
@@ -708,13 +715,14 @@ model InternalRosterEntry {
   // Computed by a future background job from ShiftCompletion history (no-shows,
   // late arrivals, cancellations). null = not yet computed; algorithm treats
   // null as the practice's average (currently 0.85 as a sensible default).
-  reliabilityScore     Float?
+  reliabilityScore Float?
 
   scheduleAssignments ScheduleAssignment[]
   incentiveResponses  InternalIncentiveShiftResponse[]
   scheduleFeedback    ScheduleFeedback[]
   locations           ProviderLocation[]
   timeOff             RosterTimeOff[]
+  scheduleRequests    ScheduleRequest[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
@@ -825,16 +833,16 @@ model AvailabilitySubmission {
 }
 
 model ScheduleDay {
-  id            String    @id @default(cuid())
-  facilityId    String
-  date          DateTime  @db.Date
-  location      String
-  roomsRequired Int       @default(1)
+  id               String    @id @default(cuid())
+  facilityId       String
+  date             DateTime  @db.Date
+  location         String
+  roomsRequired    Int       @default(1)
   // Coverage model copied from the template at generation time. null =
   // MD-only; 3 = team 1:3; 4 = team 1:4. See CoverageTemplateDay.
   supervisionRatio Int?
-  publishedAt   DateTime?
-  facility      Facility  @relation(fields: [facilityId], references: [id])
+  publishedAt      DateTime?
+  facility         Facility  @relation(fields: [facilityId], references: [id])
 
   assignments ScheduleAssignment[]
 
@@ -910,6 +918,13 @@ model InternalIncentiveShift {
   durationHours          Float
   facilityLocation       String
   incentiveRate          Float
+  // Two shift types offered to the internal roster (Task #19):
+  //   true  = INCENTIVE shift — premium rate above standard, the StaffIQ
+  //           "incentivize N CRNAs, save $X" flow.
+  //   false = AVAILABLE shift — open coverage at the standard rate, no premium.
+  // incentiveRate holds the offered rate in both cases (premium vs standard);
+  // the UI labels it based on this flag.
+  isIncentive            Boolean              @default(true)
   providerTypeRequired   Specialty
   responseDeadline       DateTime
   status                 IncentiveShiftStatus @default(OPEN)
@@ -1297,16 +1312,66 @@ model AutomationEvent {
 
 enum AutomationEventType {
   // Marketplace + SNAP Shifts (high-time-saving coordinator-replacing flows)
-  ROSTER_UPLOAD              // 180 min — bulk roster CSV/Excel ingestion
+  ROSTER_UPLOAD // 180 min — bulk roster CSV/Excel ingestion
   COVERAGE_TEMPLATE_GENERATE // 120 min — month-of-schedule from a template
-  SCHEDULE_BUILD_RUN         // 240 min — Schedule Builder v2 4-mode build
+  SCHEDULE_BUILD_RUN // 240 min — Schedule Builder v2 4-mode build
 
   // Credentialing portal (lower per-event, higher frequency)
-  SIGNATURE_REQUEST_SENT     // 45 min  — coordinator fires a sig request
-  PASSPORT_GRANT_REQUEST     // 30 min  — coordinator fires a grant request
+  SIGNATURE_REQUEST_SENT // 45 min  — coordinator fires a sig request
+  PASSPORT_GRANT_REQUEST // 30 min  — coordinator fires a grant request
 
   // Future (wire when feature ships):
   //   NPPES_AUTOFILL        // 30 min per credential
   //   SEALED_PDF_SNAPSHOT   // 60 min — coordinator skips manual file assembly
   //   FORM_READER           // 60 min — external hospital form auto-fill
+}
+
+// ── Provider notification inbox (Task #16) ─────────────────────────────────────
+// Durable per-provider record of every alert. Push remains the wake-up channel;
+// this is the inbox the provider opens to see what happened. Written everywhere
+// we currently fire a push/SMS (schedule published, shift offered, request
+// answered, etc.). Read on the provider mobile home screen with an unread badge.
+model Notification {
+  id         String          @id @default(cuid())
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  // Coarse category drives the icon + tap target on the client.
+  type       String // SCHEDULE_PUBLISHED | SHIFT_OFFERED | REQUEST_ANSWERED | GENERAL | ...
+  title      String
+  body       String
+  // Optional structured payload for deep-linking (shiftId, date, facilityId…).
+  data       Json?
+  readAt     DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@index([providerId, createdAt])
+  @@index([providerId, readAt])
+}
+
+// ── Provider schedule requests (Task #21) ──────────────────────────────────────
+// A provider asks the coordinator for something about a specific date — a day
+// off, or to work a particular date/site. The coordinator accepts or declines;
+// accepted requests become constraints the schedule builder honors (hard
+// exclude for DAY_OFF, strong preference for WORK). Mirrors RosterTimeOff's
+// facility+roster scoping so the builder can join on rosterId.
+model ScheduleRequest {
+  id            String              @id @default(cuid())
+  facilityId    String
+  facility      Facility            @relation(fields: [facilityId], references: [id])
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  // DAY_OFF = don't schedule me this date. WORK = please schedule me this date.
+  type          String // "DAY_OFF" | "WORK"
+  date          DateTime            @db.Date
+  // For WORK requests, the site the provider wants (optional; null = any site).
+  siteName      String?
+  note          String?
+  status        String              @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  decidedAt     DateTime?
+  decidedBy     String?
+  createdAt     DateTime            @default(now())
+
+  @@index([facilityId, status])
+  @@index([rosterEntryId, date])
+  @@index([facilityId, date])
 }

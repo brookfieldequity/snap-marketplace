@@ -498,6 +498,13 @@ async function notifySchedulePublished(facilityId, year, month) {
       // published. Body still carries the month + facility for full context.
       const pushTitle = `Schedule Posted — ${facility?.name || 'your facility'}`;
       await sendPush(tokens, pushTitle, msgBody, { type: 'SCHEDULE_PUBLISHED', facilityId, monthName });
+      // Durable inbox row (Task #16) for every assigned provider.
+      await recordNotifications(linkedIds, {
+        type: 'SCHEDULE_PUBLISHED',
+        title: pushTitle,
+        body: msgBody,
+        data: { facilityId, monthName },
+      });
     }
 
     const seenPhone = new Set();
@@ -541,6 +548,42 @@ async function checkExpiredIncentiveShifts() {
   }
 }
 
+// ── Notification inbox (Task #16) ──────────────────────────────────────────────
+// Persist a durable inbox row for one or more providers. Push is the wake-up
+// channel; this is what the provider opens to see what happened. Fire-and-forget
+// safe — never throws, so callers can `await` it without try/catch.
+//
+//   recordNotification(providerId, { type, title, body, data })
+//   recordNotifications([id1, id2], { type, title, body, data })
+async function recordNotification(providerId, { type, title, body, data = null }) {
+  if (!providerId) return;
+  try {
+    await prisma.notification.create({
+      data: { providerId, type, title, body, data: data || undefined },
+    });
+  } catch (err) {
+    console.error('recordNotification error:', err.message);
+  }
+}
+
+async function recordNotifications(providerIds, payload) {
+  const ids = [...new Set((providerIds || []).filter(Boolean))];
+  if (ids.length === 0) return;
+  try {
+    await prisma.notification.createMany({
+      data: ids.map((providerId) => ({
+        providerId,
+        type: payload.type,
+        title: payload.title,
+        body: payload.body,
+        data: payload.data || undefined,
+      })),
+    });
+  } catch (err) {
+    console.error('recordNotifications error:', err.message);
+  }
+}
+
 module.exports = {
   notifyShiftPosted,
   notifyBooking,
@@ -554,6 +597,9 @@ module.exports = {
   notifyIncentiveShiftPosted,
   notifySchedulePublished,
   checkExpiredIncentiveShifts,
+  // Inbox (Task #16)
+  recordNotification,
+  recordNotifications,
   // Primitives exposed for use in route files
   sendSMS,
   sendPush,

@@ -102,6 +102,9 @@ app.use('/api/credentialing', credentialingRoutes);
 // Facility-coordinator invite + claim. Replaces /auth/facility/register
 // per snap-applications/capa-pilot/facility-invite-spec.md (2026-06-09).
 app.use('/api/facility-claim', require('./routes/facilityClaim'));
+// Provider notification inbox (Task #16) + provider schedule requests (Task #21).
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/schedule-requests', require('./routes/scheduleRequests'));
 // Coverage Templates + holiday overrides (per-facility). See
 // docs/coverage-templates-design.md.
 app.use('/api/coverage-templates', coverageTemplatesRoutes);

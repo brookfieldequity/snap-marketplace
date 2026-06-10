@@ -36,6 +36,12 @@ const SHIFT_HOURS_PER_DAY = 8;
 // ranking, on top of the mode's cost/quality score (both ~0-1). Strong enough
 // to steer people toward their home sites, not so strong it ignores cost.
 const SITE_SHARE_WEIGHT = 0.6;
+// Task #21: an admin-ACCEPTED "request to work" is a strong preference — bias
+// the provider into the schedule that day well above cost/quality/site-share,
+// but still below the hard constraints (off-keys, eligibility, role) which are
+// filters, not scores. Site match on the request gets the full weight; a
+// day-only request (no site) still gets most of it.
+const WORK_REQUEST_WEIGHT = 3.0;
 
 // Supervising-MD assignments use room numbers in a reserved high range so
 // they never collide with real OR rooms (which are 1..roomsRequired, always
@@ -191,11 +197,25 @@ const MODE_SCORERS = {
  * @param {object} args.staffiqWeights   { cost, quality } summing ≤ 1 (STAFFIQ mode only)
  * @returns {object} { assignments, insights, warnings, score }
  */
-async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailableKeys }) {
+async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailableKeys, workRequestKeys }) {
   if (!MODES.includes(mode)) throw new Error(`Unknown mode: ${mode}`);
   // Set of `${rosterId}::${YYYY-MM-DD}` for providers who are off (PTO /
   // explicitly unavailable). Hard-excluded from assignment — never scheduled.
   const offKeys = unavailableKeys instanceof Set ? unavailableKeys : new Set();
+  // Task #21: accepted "request to work" preferences. Map of
+  // `${rosterId}::${YYYY-MM-DD}` → requested siteName (or null = any site).
+  // A provider with an accepted WORK request for the day gets a strong score
+  // bonus toward being placed (full weight when the request's site matches).
+  const workReqMap = workRequestKeys instanceof Map ? workRequestKeys : new Map();
+  const workRequestBonus = (rosterId, dateISO, location) => {
+    if (!workReqMap.has(`${rosterId}::${dateISO}`)) return 0;
+    const wantSite = workReqMap.get(`${rosterId}::${dateISO}`);
+    // Full weight when no specific site was requested or it matches this
+    // location; a partial bonus when they asked for a different site (still
+    // want to work that day, just preferred elsewhere).
+    if (!wantSite || wantSite === location) return WORK_REQUEST_WEIGHT;
+    return WORK_REQUEST_WEIGHT * 0.4;
+  };
 
   // Pre-compute the cheapest rate so cost scores are normalized against the
   // roster's actual floor (not a hard-coded constant).
@@ -266,7 +286,7 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailable
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => !offKeys.has(`${r.id}::${dateISO}`)) // PTO / unavailable
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
-        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) }))
+        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) + workRequestBonus(r.id, dateISO, day.location) }))
         .sort((a, b) => b.score - a.score);
       return ranked[0] || null;
     };

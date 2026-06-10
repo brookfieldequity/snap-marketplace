@@ -92,7 +92,7 @@ router.get('/month', facilityAuth, async (req, res) => {
             // explicitly-unavailable providers (available: false), and the
             // "Available" tag uses available: true.
             where: { date: { gte: start, lt: end }, providerId: { in: linkedProviderIds } },
-            select: { providerId: true, date: true, available: true },
+            select: { providerId: true, date: true, available: true, note: true },
           })
         : Promise.resolve([]),
     ]);
@@ -104,6 +104,7 @@ router.get('/month', facilityAuth, async (req, res) => {
         providerId: a.providerId,
         date: a.date,
         available: a.available,
+        note: a.note || null, // Task #20 — surfaced in the day editor
         rosterId: entry?.id || null,
         rosterEntry: entry,
       };
@@ -795,6 +796,26 @@ router.post('/build', facilityAuth, async (req, res) => {
       if (rid) unavailableKeys.add(`${rid}::${new Date(a.date).toISOString().slice(0, 10)}`);
     }
 
+    // Task #21: accepted "request to work" preferences for the build month.
+    // Map of `${rosterId}::${YYYY-MM-DD}` → requested siteName (null = any).
+    // The builder biases these providers into the schedule on those dates.
+    const workRequests = await prisma.scheduleRequest.findMany({
+      where: {
+        facilityId: req.facility.id,
+        type: 'WORK',
+        status: 'ACCEPTED',
+        date: { gte: monthStart, lt: monthEnd },
+      },
+      select: { rosterEntryId: true, date: true, siteName: true },
+    });
+    const workRequestKeys = new Map();
+    for (const w of workRequests) {
+      workRequestKeys.set(
+        `${w.rosterEntryId}::${new Date(w.date).toISOString().slice(0, 10)}`,
+        w.siteName || null
+      );
+    }
+
     // Shared input snapshot — lets us reproduce and explain each run later.
     const inputSnapshot = {
       generatedAt: new Date().toISOString(),
@@ -831,6 +852,7 @@ router.post('/build', facilityAuth, async (req, res) => {
               roster,
               staffiqWeights,
               unavailableKeys,
+              workRequestKeys,
             });
           return prisma.scheduleBuildRun.create({
             data: {

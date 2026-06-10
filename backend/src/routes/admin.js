@@ -36,15 +36,41 @@ router.get('/providers', adminAuth, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Task #14: a provider's facility affiliations come from the internal
+    // roster (InternalRosterEntry.linkedProviderId), NOT from owning the
+    // provider — providers stay global identities (locked multi-facility
+    // design). Resolve all memberships in one query, group by provider.
+    const profileIds = providers.map((p) => p.id);
+    const memberships = profileIds.length
+      ? await prisma.internalRosterEntry.findMany({
+          where: { linkedProviderId: { in: profileIds } },
+          select: {
+            linkedProviderId: true,
+            facility: { select: { id: true, name: true } },
+          },
+        })
+      : [];
+    const affiliationsByProvider = {};
+    for (const m of memberships) {
+      const arr = (affiliationsByProvider[m.linkedProviderId] ||= []);
+      if (m.facility && !arr.some((f) => f.id === m.facility.id)) {
+        arr.push({ id: m.facility.id, name: m.facility.name });
+      }
+    }
+
     const now = new Date();
     const in90Days = new Date(now.getTime() + 90 * 86400000);
     const enriched = providers.map((p) => ({
       ...p,
       licenseExpiringSoon: p.maLicenseExpiry && new Date(p.maLicenseExpiry) <= in90Days,
+      // Facilities whose roster this provider is linked to. Empty = marketplace-
+      // only (no facility roster membership yet).
+      affiliations: affiliationsByProvider[p.id] || [],
     }));
 
     res.json(enriched);
   } catch (err) {
+    console.error('[admin] providers list failed:', err);
     res.status(500).json({ error: 'Failed to load providers' });
   }
 });

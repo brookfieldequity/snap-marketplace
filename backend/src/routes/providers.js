@@ -96,15 +96,17 @@ router.get('/me/availability', auth, async (req, res) => {
 router.post('/me/availability', auth, async (req, res) => {
   try {
     const { dates = [], clearDates = [] } = req.body;
-    // dates:       [{ date: "2026-06-01", available: true }, ...]
+    // dates:       [{ date: "2026-06-01", available: true, note: "after 10am" }, ...]
     // clearDates:  ["2026-06-02", ...]  — dates the provider cycled back to neutral
+    // `note` (Task #20) is optional free text attached to that specific date,
+    // surfaced to the coordinator in the schedule-builder day editor.
     const profile = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
 
-    const ops = dates.map(({ date, available }) =>
+    const ops = dates.map(({ date, available, note }) =>
       prisma.providerAvailability.upsert({
         where: { providerId_date: { providerId: profile.id, date: new Date(date) } },
-        create: { providerId: profile.id, date: new Date(date), available },
-        update: { available },
+        create: { providerId: profile.id, date: new Date(date), available, note: note ?? null },
+        update: { available, ...(note !== undefined ? { note: note || null } : {}) },
       })
     );
     if (clearDates.length > 0) {

@@ -3,7 +3,7 @@ const { Expo } = require('expo-server-sdk');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const auth = require('../middleware/auth');
-const { sendSMS } = require('../services/notifications');
+const { sendSMS, recordNotifications } = require('../services/notifications');
 
 const router = express.Router();
 const expo = new Expo();
@@ -62,6 +62,9 @@ router.post('/', facilityAuth, async (req, res) => {
       incentiveRate,
       providerTypeRequired,
       responseDeadline,
+      // Task #19: false = AVAILABLE shift (standard rate), true = INCENTIVE
+      // shift (premium). Defaults to incentive for backward compatibility.
+      isIncentive = true,
     } = req.body;
 
     if (
@@ -81,6 +84,7 @@ router.post('/', facilityAuth, async (req, res) => {
         durationHours: parseFloat(durationHours),
         facilityLocation,
         incentiveRate: parseFloat(incentiveRate),
+        isIncentive: !!isIncentive,
         providerTypeRequired,
         responseDeadline: new Date(responseDeadline),
       },
@@ -94,11 +98,15 @@ router.post('/', facilityAuth, async (req, res) => {
 
     setImmediate(async () => {
       try {
-        // Providers already on the schedule that day shouldn't be offered the
-        // incentive shift — they can't be in two places at once. Find every
-        // roster entry assigned to any room on the shift date and exclude them.
+        // Task #19 targeting rule: alert ONLY providers who are NOT working
+        // that day — i.e. those who are off or on PTO. Two exclusions:
+        //   1. Already assigned to a room that day (can't be two places).
+        //   2. (PTO providers are intentionally INCLUDED — they may give up
+        //      time off for the offer, per Matt's spec.)
         const dayStart = new Date(new Date(shiftDate).toISOString().slice(0, 10) + 'T00:00:00.000Z');
         const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+        const dayDate = new Date(new Date(shiftDate).toISOString().slice(0, 10)); // @db.Date compare
+
         const sameDayAssignments = await prisma.scheduleAssignment.findMany({
           where: {
             facilityId: req.facility.id,
@@ -109,15 +117,33 @@ router.post('/', facilityAuth, async (req, res) => {
         });
         const alreadyScheduled = new Set(sameDayAssignments.map((a) => a.rosterId));
 
+        // Roster entries on PTO that date — surfaced so we can label them in
+        // the offer ("you're on PTO — still want it?") and confirm they're
+        // included by design.
+        const ptoRows = await prisma.rosterTimeOff.findMany({
+          where: {
+            facilityId: req.facility.id,
+            startDate: { lte: dayDate },
+            endDate: { gte: dayDate },
+          },
+          select: { rosterEntryId: true },
+        });
+        const onPto = new Set(ptoRows.map((r) => r.rosterEntryId));
+
         const rosterEntries = (
           await prisma.internalRosterEntry.findMany({
             where: { facilityId: req.facility.id, providerType: providerTypeRequired },
             select: { id: true, linkedProviderId: true, phoneNumber: true },
           })
-        ).filter((e) => !alreadyScheduled.has(e.id));
+        ).filter((e) => !alreadyScheduled.has(e.id)); // off OR on PTO (not working)
 
-        const pushMsg = `${facilityName} has a shift available on ${dateStr} at ${facilityLocation} for ${durationHours} hours. Incentive rate: $${parseFloat(incentiveRate).toFixed(0)}/hour. Tap here to respond.`;
-        const smsMsg = `${facilityName} — Incentive Shift: ${dateStr} at ${facilityLocation}, ${durationHours}h @ $${parseFloat(incentiveRate).toFixed(0)}/hr. Open your SNAP app to respond.`;
+        const rateLabel = isIncentive
+          ? `Incentive rate: $${parseFloat(incentiveRate).toFixed(0)}/hour`
+          : `Rate: $${parseFloat(incentiveRate).toFixed(0)}/hour`;
+        const kindWord = isIncentive ? 'Incentive Shift' : 'Available Shift';
+        const pushMsg = `${facilityName} has a shift available on ${dateStr} at ${facilityLocation} for ${durationHours} hours. ${rateLabel}. Tap here to respond.`;
+        const smsMsg = `${facilityName} — ${kindWord}: ${dateStr} at ${facilityLocation}, ${durationHours}h @ $${parseFloat(incentiveRate).toFixed(0)}/hr. Open your SNAP app to respond.`;
+        const pushTitle = `${facilityName} — ${kindWord} Available`;
 
         // Push to linked SNAP providers
         const providerIds = rosterEntries.map((e) => e.linkedProviderId).filter(Boolean);
@@ -127,11 +153,23 @@ router.post('/', facilityAuth, async (req, res) => {
             select: { expoPushToken: true },
           });
           const tokens = profiles.map((p) => p.expoPushToken).filter(Boolean);
-          await sendPush(tokens, `${facilityName} — Incentive Shift Available`, pushMsg, { shiftId: shift.id, type: 'INCENTIVE_SHIFT' });
+          await sendPush(tokens, pushTitle, pushMsg, { shiftId: shift.id, type: 'SHIFT_OFFERED', isIncentive });
         }
+
+        // Durable inbox row (Task #16) for every linked provider offered the shift.
+        await recordNotifications(providerIds, {
+          type: 'SHIFT_OFFERED',
+          title: pushTitle,
+          body: pushMsg,
+          data: { shiftId: shift.id, isIncentive, onPto: providerIds.length },
+        });
 
         // SMS to all matching roster members with phone numbers
         await Promise.all(rosterEntries.map((e) => sendSMS(e.phoneNumber, smsMsg)));
+
+        if (onPto.size) {
+          console.log(`[incentive] ${kindWord} ${shift.id}: offered to ${rosterEntries.length} providers (${onPto.size} on PTO, included by design)`);
+        }
       } catch (err) {
         console.error('Incentive shift push/SMS error:', err.message);
       }
