@@ -16,6 +16,7 @@ export default function SnappyWidget() {
   const [messages, setMessages] = useState([GREETING])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [launcherHover, setLauncherHover] = useState(false)
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -47,10 +48,17 @@ export default function SnappyWidget() {
 
   return (
     <>
-      {/* Launcher bubble */}
+      {/* Launcher — the mascot floating in the corner (no container) */}
       {!open && (
-        <button onClick={() => setOpen(true)} style={styles.bubble} title="Ask Snappy" aria-label="Open Snappy assistant">
-          <span style={styles.bubbleMark}>Snappy</span>
+        <button
+          onClick={() => setOpen(true)}
+          onMouseEnter={() => setLauncherHover(true)}
+          onMouseLeave={() => setLauncherHover(false)}
+          style={{ ...styles.launcher, transform: launcherHover ? 'scale(1.06)' : 'scale(1)' }}
+          title="Ask Snappy"
+          aria-label="Open Snappy assistant"
+        >
+          <img src="/snappy-mascot.png" alt="Snappy" style={styles.launcherImg} />
         </button>
       )}
 
@@ -59,7 +67,7 @@ export default function SnappyWidget() {
         <div style={styles.panel}>
           <div style={styles.header}>
             <div style={styles.headerLeft}>
-              <span style={styles.headerMark}>S</span>
+              <img src="/snappy-mascot.png" alt="" style={styles.headerMark} />
               <div>
                 <div style={styles.headerTitle}>Snappy</div>
                 <div style={styles.headerSub}>SNAP assistant</div>
@@ -103,13 +111,13 @@ export default function SnappyWidget() {
 }
 
 const styles = {
-  bubble: {
-    position: 'fixed', bottom: 24, right: 24, height: 52, padding: '0 24px', borderRadius: 26,
-    background: 'linear-gradient(135deg, #2563EB, #1E3A8A)', border: 'none', cursor: 'pointer',
-    boxShadow: '0 8px 24px rgba(37,99,235,0.4)', zIndex: 900,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  launcher: {
+    position: 'fixed', bottom: 24, right: 24, background: 'transparent', border: 'none',
+    padding: 0, cursor: 'pointer', zIndex: 900, lineHeight: 0,
+    filter: 'drop-shadow(0 6px 14px rgba(15,23,42,0.30))',
+    transition: 'transform 0.15s ease',
   },
-  bubbleMark: { color: '#fff', fontSize: 26, fontWeight: 700, fontFamily: "'Dancing Script', cursive", lineHeight: 1, paddingBottom: 2 },
+  launcherImg: { width: 76, height: 'auto', display: 'block' },
   panel: {
     position: 'fixed', bottom: 24, right: 24, width: 380, maxWidth: 'calc(100vw - 32px)',
     height: 560, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 18,
@@ -118,7 +126,7 @@ const styles = {
   },
   header: { background: '#2563EB', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
-  headerMark: { width: 32, height: 32, borderRadius: 16, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: "'Dancing Script', cursive", display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 2 },
+  headerMark: { width: 38, height: 38, objectFit: 'contain', display: 'block' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 700, lineHeight: 1.1, fontFamily: "'Dancing Script', cursive" },
   headerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11 },
   close: { background: 'transparent', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 },
