@@ -174,7 +174,20 @@ router.delete('/facility/:id', adminAuth, async (req, res) => {
         await tx.providerRating.deleteMany({ where: { facilityId } });
         await tx.facilityRating.deleteMany({ where: { facilityId } });
 
-        // ── Credentialing-portal rows ─────────────────────────────────────
+        // ── Credentialing-portal rows (children first) ────────────────────
+        // Leaf tables all carry facilityId directly. ProviderCredential does
+        // NOT — resolve those via the facility's FacilityRosterEntry ids.
+        await tx.credentialAccessLog.deleteMany({ where: { facilityId } });
+        await tx.credentialReminder.deleteMany({ where: { facilityId } });
+        await tx.credentialFlag.deleteMany({ where: { facilityId } });
+        await tx.facilityCredentialNote.deleteMany({ where: { facilityId } });
+        await tx.credentialVerification.deleteMany({ where: { facilityId } });
+        const credRosterIds = (await tx.facilityRosterEntry.findMany({
+          where: { facilityId }, select: { id: true },
+        })).map((r) => r.id);
+        if (credRosterIds.length) {
+          await tx.providerCredential.deleteMany({ where: { rosterId: { in: credRosterIds } } });
+        }
         await tx.facilityRosterEntry.deleteMany({ where: { facilityId } });
         await tx.credentialUser.deleteMany({ where: { facilityId } });
       }
