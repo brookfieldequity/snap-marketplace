@@ -7,6 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { providerAPI } from '../api/client';
@@ -67,6 +69,10 @@ export default function AvailabilityScreen() {
   const [month, setMonth] = useState(now.getMonth());
   // availability: { 'YYYY-MM-DD': true | false }  (absent key = unmarked/neutral)
   const [availability, setAvailability] = useState({});
+  // Task #20: per-date free-text notes { 'YYYY-MM-DD': string }
+  const [notes, setNotes] = useState({});
+  // Note editor modal: { key, text } or null
+  const [noteModal, setNoteModal] = useState(null);
   // Dates the user cycled back to neutral that previously had a server value —
   // sent to the backend on save so it can delete those rows.
   const [clearedDates, setClearedDates] = useState(new Set());
@@ -94,12 +100,17 @@ export default function AvailabilityScreen() {
     setLoading(true);
     try {
       const res = await providerAPI.getAvailability({ month: month + 1, year });
-      // Expect: { availability: [{ date: 'YYYY-MM-DD', available: bool }] }
+      // Backend returns the array directly; tolerate either shape.
+      const rows = Array.isArray(res.data) ? res.data : (res.data?.availability || []);
       const map = {};
-      (res.data?.availability || []).forEach((a) => {
-        map[a.date] = a.available;
+      const noteMap = {};
+      rows.forEach((a) => {
+        const key = String(a.date).slice(0, 10);
+        map[key] = a.available;
+        if (a.note) noteMap[key] = a.note;
       });
       setAvailability(map);
+      setNotes(noteMap);
       setClearedDates(new Set());
       setDirty(false);
     } catch {
@@ -179,6 +190,33 @@ export default function AvailabilityScreen() {
     }
   };
 
+  // Task #20: long-press a (non-past) day to attach a note ("after 10am",
+  // "Natick only", etc.). Doesn't disturb the tap-to-cycle availability state.
+  const handleDayLongPress = (day) => {
+    if (isPast(year, month, day)) return;
+    const key = toDateKey(year, month, day);
+    setNoteModal({ key, text: notes[key] || '' });
+  };
+
+  const saveNote = () => {
+    if (!noteModal) return;
+    const { key, text } = noteModal;
+    const trimmed = text.trim();
+    setNotes((prev) => {
+      const next = { ...prev };
+      if (trimmed) next[key] = trimmed;
+      else delete next[key];
+      return next;
+    });
+    // A note implies some availability intent — if the day is unmarked, mark
+    // it available so the saved row is valid (backend requires `available`).
+    if (trimmed && availability[key] === undefined) {
+      setAvailability((prev) => ({ ...prev, [key]: true }));
+    }
+    setDirty(true);
+    setNoteModal(null);
+  };
+
   const handleDayPress = (day) => {
     const key = toDateKey(year, month, day);
 
@@ -230,7 +268,11 @@ export default function AvailabilityScreen() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = Object.entries(availability).map(([date, available]) => ({ date, available }));
+      const payload = Object.entries(availability).map(([date, available]) => ({
+        date,
+        available,
+        note: notes[date] || null, // Task #20
+      }));
       const clearList = Array.from(clearedDates);
       await providerAPI.setAvailability({ dates: payload, clearDates: clearList });
       setClearedDates(new Set());
@@ -418,17 +460,23 @@ export default function AvailabilityScreen() {
                 const past = isPast(year, month, day);
                 const dateKey = toDateKey(year, month, day);
                 const hasIncentive = incentiveDates.has(dateKey);
+                const hasNote = !!notes[dateKey];
                 return (
                   <TouchableOpacity
                     key={day}
                     style={[styles.dayCell, cell]}
                     onPress={() => handleDayPress(day)}
+                    onLongPress={() => handleDayLongPress(day)}
+                    delayLongPress={300}
                     disabled={past && !hasIncentive}
                     activeOpacity={past && !hasIncentive ? 1 : 0.7}
                   >
                     <Text style={[styles.dayText, text]}>{day}</Text>
                     {hasIncentive && (
                       <Text style={styles.incentiveBadge}>💰</Text>
+                    )}
+                    {hasNote && !hasIncentive && (
+                      <Text style={styles.noteBadge}>📝</Text>
                     )}
                   </TouchableOpacity>
                 );
@@ -484,6 +532,35 @@ export default function AvailabilityScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Note editor (Task #20) */}
+      <Modal visible={!!noteModal} animationType="fade" transparent onRequestClose={() => setNoteModal(null)}>
+        <View style={styles.noteOverlay}>
+          <View style={styles.noteCard}>
+            <Text style={styles.noteTitle}>
+              Note for {noteModal ? new Date(noteModal.key + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''}
+            </Text>
+            <Text style={styles.noteHint}>Visible to your coordinator (e.g. “can work after 10am”, “Natick only”).</Text>
+            <TextInput
+              style={styles.noteInput}
+              value={noteModal?.text || ''}
+              onChangeText={(t) => setNoteModal((m) => (m ? { ...m, text: t } : m))}
+              placeholder="Add a note for this day"
+              placeholderTextColor="#94A3B8"
+              multiline
+              autoFocus
+            />
+            <View style={styles.noteBtnRow}>
+              <TouchableOpacity style={styles.noteCancel} onPress={() => setNoteModal(null)}>
+                <Text style={styles.noteCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.noteSave} onPress={saveNote}>
+                <Text style={styles.noteSaveText}>Save Note</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -894,4 +971,23 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 12,
   },
+  // Note badge (Task #20)
+  noteBadge: {
+    position: 'absolute',
+    bottom: 1,
+    right: 2,
+    fontSize: 8,
+    lineHeight: 10,
+  },
+  // Note editor modal (Task #20)
+  noteOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', padding: 24 },
+  noteCard: { backgroundColor: '#fff', borderRadius: 16, padding: 22 },
+  noteTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  noteHint: { fontSize: 12, color: '#64748B', marginTop: 4, marginBottom: 12, lineHeight: 16 },
+  noteInput: { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 15, color: '#0F172A', height: 80, textAlignVertical: 'top' },
+  noteBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
+  noteCancel: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 9, borderWidth: 1, borderColor: '#E2E8F0' },
+  noteCancelText: { color: '#374151', fontWeight: '600', fontSize: 14 },
+  noteSave: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 9, backgroundColor: '#6366F1' },
+  noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

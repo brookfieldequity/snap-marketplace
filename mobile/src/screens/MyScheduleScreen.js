@@ -13,7 +13,9 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { scheduleAPI } from '../api/client';
+import { scheduleAPI, scheduleRequestAPI } from '../api/client';
+import NotificationsInbox from '../components/NotificationsInbox';
+import RequestModal from '../components/RequestModal';
 
 // "My Schedule" — read-only monthly calendar of the provider's own SNAP
 // Shifts assignments. Doubles as the entry point for the Apple/Google
@@ -81,6 +83,9 @@ export default function MyScheduleScreen() {
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [subs, setSubs] = useState([]);
   const [subLoading, setSubLoading] = useState(false);
+  // Request modal (Task #21) + inbox refresh trigger (Task #16)
+  const [showRequest, setShowRequest] = useState(false);
+  const [inboxKey, setInboxKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -104,6 +109,7 @@ export default function MyScheduleScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setInboxKey((k) => k + 1); // reload the inbox too
     await load();
     setRefreshing(false);
   };
@@ -212,10 +218,18 @@ export default function MyScheduleScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>My Schedule</Text>
-          <TouchableOpacity onPress={openSubscribe} style={styles.subscribeBtn} activeOpacity={0.8}>
-            <Text style={styles.subscribeBtnText}>📅 Subscribe</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={() => setShowRequest(true)} style={styles.requestBtn} activeOpacity={0.8}>
+              <Text style={styles.requestBtnText}>＋ Request</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openSubscribe} style={styles.subscribeBtn} activeOpacity={0.8}>
+              <Text style={styles.subscribeBtnText}>📅</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Notification inbox (Task #16) — front and center on app open */}
+        <NotificationsInbox refreshKey={inboxKey} />
 
         {memberships.length === 1 && (
           <Text style={styles.sub}>
@@ -382,6 +396,14 @@ export default function MyScheduleScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Provider request modal (Task #21) */}
+      <RequestModal
+        visible={showRequest}
+        onClose={() => setShowRequest(false)}
+        memberships={memberships}
+        onSubmitted={() => setInboxKey((k) => k + 1)}
+      />
     </SafeAreaView>
   );
 }
@@ -398,8 +420,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
   title: { fontSize: 26, fontWeight: '800', color: COLORS.textDark, letterSpacing: -0.5 },
   sub: { paddingHorizontal: 20, fontSize: 13, color: COLORS.textMuted, marginBottom: 12 },
-  subscribeBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  subscribeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  subscribeBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  subscribeBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  requestBtn: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  requestBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 8, marginBottom: 12 },
   navBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border },
   navBtnText: { fontSize: 18, color: COLORS.textDark },

@@ -224,4 +224,32 @@ export const messageAPI = {
   getForShift: (shiftId) => api.get(`/messages/shift/${shiftId}`),
 };
 
+// ---------------------------------------------------------------------------
+// Notification inbox API (Task #16)
+// ---------------------------------------------------------------------------
+
+export const notificationAPI = {
+  /** List inbox notifications (newest first) + unread count. */
+  list: (params = {}) => api.get('/notifications', { params }),
+  /** Unread badge count only. */
+  unreadCount: () => api.get('/notifications/unread-count'),
+  /** Mark one notification read. */
+  markRead: (id) => api.post(`/notifications/${id}/read`, {}),
+  /** Mark all read. */
+  markAllRead: () => api.post('/notifications/read-all', {}),
+};
+
+// ---------------------------------------------------------------------------
+// Schedule requests API (Task #21)
+// ---------------------------------------------------------------------------
+
+export const scheduleRequestAPI = {
+  /** Create a request. { facilityId, type: 'DAY_OFF'|'WORK', date, siteName?, note? } */
+  create: (data) => api.post('/schedule-requests', data),
+  /** My requests across facilities. */
+  mine: () => api.get('/schedule-requests/mine'),
+  /** Cancel my own pending request. */
+  cancel: (id) => api.delete(`/schedule-requests/${id}`),
+};
+
 export default api;
