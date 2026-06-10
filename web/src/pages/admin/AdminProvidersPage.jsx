@@ -22,11 +22,12 @@ export default function AdminProvidersPage() {
   const [toggling, setToggling]   = useState({})
   const [search, setSearch]       = useState('')
   const [filterCred, setFilterCred] = useState('all')
+  const [filterFacility, setFilterFacility] = useState('all')
 
   useEffect(() => {
     adminAPI.getProviders()
       .then(setProviders)
-      .catch(() => setProviders(MOCK_PROVIDERS))
+      .catch(() => setProviders([]))
       .finally(() => setLoading(false))
   }, [])
 
@@ -44,12 +45,26 @@ export default function AdminProvidersPage() {
     }
   }
 
+  // Unique facilities across all providers' affiliations, for the filter.
+  const allFacilities = (() => {
+    const map = new Map()
+    for (const p of providers) {
+      for (const f of (p.affiliations || [])) {
+        if (f?.id) map.set(f.id, f.name)
+      }
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  })()
+
   const filtered = providers.filter((p) => {
     const fullName = p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()
     const email = p.email || p.user?.email || ''
     const matchSearch = !search || fullName.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase())
     const matchCred = filterCred === 'all' || (filterCred === 'yes' ? p.credentialed : !p.credentialed)
-    return matchSearch && matchCred
+    const affs = p.affiliations || []
+    const matchFacility = filterFacility === 'all'
+      || (filterFacility === 'none' ? affs.length === 0 : affs.some((f) => f.id === filterFacility))
+    return matchSearch && matchCred && matchFacility
   })
 
   return (
@@ -89,12 +104,23 @@ export default function AdminProvidersPage() {
           <option value="yes">Credentialed</option>
           <option value="no">Pending</option>
         </select>
+        <select
+          value={filterFacility}
+          onChange={(e) => setFilterFacility(e.target.value)}
+          style={{ padding: '10px 14px', background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', cursor: 'pointer' }}
+        >
+          <option value="all">All facilities</option>
+          {allFacilities.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+          <option value="none">Marketplace only</option>
+        </select>
       </div>
 
       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 100px 80px 100px 90px 100px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-          {['Name', 'Email', 'Specialty', 'Credentialed', 'VIP', 'VIP Pts', 'License', 'Shifts'].map((h) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1.6fr 1.1fr 1.5fr 90px 70px 80px 85px 80px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+          {['Name', 'Email', 'Specialty', 'Affiliations', 'Credentialed', 'VIP', 'VIP Pts', 'License', 'Shifts'].map((h) => (
             <div key={h} style={{ padding: '12px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
             </div>
@@ -125,7 +151,7 @@ export default function AdminProvidersPage() {
               key={p.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 2fr 1.5fr 100px 80px 100px 90px 100px',
+                gridTemplateColumns: '1.7fr 1.6fr 1.1fr 1.5fr 90px 70px 80px 85px 80px',
                 borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
                 background: i % 2 === 0 ? '#fff' : '#FAFAFA',
               }}
@@ -148,6 +174,19 @@ export default function AdminProvidersPage() {
               {/* Specialty */}
               <div style={{ padding: '14px 14px', fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center' }}>
                 {p.specialty}
+              </div>
+
+              {/* Affiliations (Task #14) */}
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                {(p.affiliations || []).length === 0 ? (
+                  <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Marketplace only</span>
+                ) : (
+                  (p.affiliations || []).map((f) => (
+                    <span key={f.id} title={f.name} style={{ background: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 600, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.name}
+                    </span>
+                  ))
+                )}
               </div>
 
               {/* Credentialed toggle */}

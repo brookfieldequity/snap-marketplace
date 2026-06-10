@@ -173,6 +173,10 @@ export const facilityAPI = {
   setSiteRate: (siteName, ratePerDay) => apiFetch(`${BASE}/facilities/me/site-rates/${encodeURIComponent(siteName)}`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ ratePerDay }) }),
   deleteSiteRate: (siteName) => apiFetch(`${BASE}/facilities/me/site-rates/${encodeURIComponent(siteName)}`, { method: 'DELETE', headers: facilityHeaders() }),
   inviteRosterProvider: (id) => apiFetch(`${BASE}/roster/${id}/invite`, { method: 'POST', headers: facilityHeaders() }),
+
+  // Provider schedule requests (Task #21) — facility side
+  getScheduleRequests: (status) => apiFetch(`${BASE}/schedule-requests${status ? `?status=${status}` : ''}`, { headers: facilityHeaders() }),
+  decideScheduleRequest: (id, decision) => apiFetch(`${BASE}/schedule-requests/${id}/decide`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ decision }) }),
   bulkInviteCredentialing: (rosterIds) => apiFetch(`${BASE}/roster/bulk-invite`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ rosterIds }) }),
   syncCredentialingStatus: () => apiFetch(`${BASE}/roster/sync-credentialing`, { method: 'POST', headers: facilityHeaders() }),
   reclassifyRosterTypes: () => apiFetch(`${BASE}/roster/reclassify-from-nppes`, { method: 'POST', headers: facilityHeaders() }),

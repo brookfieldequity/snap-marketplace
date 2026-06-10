@@ -730,6 +730,21 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     return map
   }
 
+  // Task #20: provider availability notes for a date → [{ name, note }].
+  // Surfaced at the top of the day editor so the coordinator sees context
+  // like "can work after 10am" or "Natick only" before assigning.
+  function notesThatDay(dateStr) {
+    const out = []
+    for (const a of availabilities) {
+      if (!a.note) continue
+      const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
+      if (avDate === dateStr) {
+        out.push({ name: a.rosterEntry?.providerName || 'A provider', note: a.note })
+      }
+    }
+    return out
+  }
+
   const daysInMonth = getDaysInMonth(year, month)
   const firstDow = getFirstDayOfWeek(year, month)
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
@@ -1114,6 +1129,23 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             </span>
           )
         })()} onClose={() => setDayDetailModal(null)} wide>
+          {/* Task #20: provider availability notes for this date */}
+          {(() => {
+            const notes = notesThatDay(dayDetailModal)
+            if (notes.length === 0) return null
+            return (
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  📝 Provider notes for this day
+                </div>
+                {notes.map((n, i) => (
+                  <div key={i} style={{ fontSize: 13, color: '#78350F', marginTop: i === 0 ? 0 : 4 }}>
+                    <strong>{n.name}:</strong> {n.note}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
           {detailDayRows.length === 0 ? (
             <p style={{ color: '#94A3B8' }}>No locations scheduled for this day.</p>
           ) : (

@@ -16,6 +16,8 @@ const BLANK_SHIFT = {
   incentiveRate: '',
   providerTypeRequired: 'CRNA',
   responseDeadline: '',
+  // Task #19: true = incentive (premium rate), false = available (standard rate).
+  isIncentive: true,
 }
 
 const inputStyle = {
@@ -99,23 +101,30 @@ export default function GapsPage({ onNavigate }) {
 
   useEffect(() => { load() }, [])
 
+  // Scan a rolling window of future months (this month + next 5) so gaps in
+  // schedules built well ahead of time are visible. The old code only scanned
+  // this month + next, so an Aug schedule built in June showed no gaps.
+  const SCAN_MONTHS = 6
+
   async function load() {
     setLoading(true)
     setError(null)
     try {
       const today = new Date()
-      const y = today.getFullYear()
-      const m = today.getMonth() + 1
-      const nextM = m === 12 ? 1 : m + 1
-      const nextY = m === 12 ? y + 1 : y
+      const months = []
+      for (let i = 0; i < SCAN_MONTHS; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1)
+        months.push({ y: d.getFullYear(), m: d.getMonth() + 1 })
+      }
 
-      const [thisMonth, nextMonth, incentives] = await Promise.all([
-        facilityAPI.getScheduleMonth(y, m).catch(() => []),
-        facilityAPI.getScheduleMonth(nextY, nextM).catch(() => []),
+      const [incentives, ...monthData] = await Promise.all([
         facilityAPI.getIncentiveShifts().catch(() => []),
+        ...months.map(({ y, m }) => facilityAPI.getScheduleMonth(y, m).catch(() => [])),
       ])
 
-      const allGaps = [...detectGaps(thisMonth), ...detectGaps(nextMonth)]
+      const allGaps = monthData.flatMap((md) => detectGaps(md))
+      // De-dupe (a day can appear once per location) and sort by date.
+      allGaps.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       setGaps(allGaps)
       setIncentiveShifts(Array.isArray(incentives) ? incentives : incentives.shifts || [])
     } catch (e) {
@@ -126,17 +135,35 @@ export default function GapsPage({ onNavigate }) {
   }
 
   function openCreateShift(gap) {
-    setShiftModal(gap)
-    setShiftForm({ ...BLANK_SHIFT, shiftDate: gap.date, location: gap.location })
+    // gap may be a detected gap (prefill date+location) or null (standalone).
+    setShiftModal(gap || { standalone: true })
+    setShiftForm({
+      ...BLANK_SHIFT,
+      shiftDate: gap?.date || '',
+      location: gap?.location || '',
+    })
   }
 
   async function handleCreateShift() {
     if (!shiftForm.shiftDate || !shiftForm.startTime || !shiftForm.incentiveRate) {
-      return alert('Shift date, start time, and incentive rate are required.')
+      return alert('Shift date, start time, and rate are required.')
     }
     setSaving(true)
     try {
-      await facilityAPI.createIncentiveShift(shiftForm)
+      // Map the form field names to what the backend expects
+      // (durationHours / facilityLocation), and pass the shift type.
+      const responseDeadline = shiftForm.responseDeadline
+        || new Date(new Date(shiftForm.shiftDate).getTime() - 86400000).toISOString() // default: day before
+      await facilityAPI.createIncentiveShift({
+        shiftDate: shiftForm.shiftDate,
+        startTime: shiftForm.startTime,
+        durationHours: parseFloat(shiftForm.duration) || 8,
+        facilityLocation: shiftForm.location || 'Any location',
+        incentiveRate: parseFloat(shiftForm.incentiveRate),
+        providerTypeRequired: shiftForm.providerTypeRequired,
+        responseDeadline,
+        isIncentive: shiftForm.isIncentive,
+      })
       setShiftModal(null)
       await load()
     } catch (e) {
@@ -166,9 +193,17 @@ export default function GapsPage({ onNavigate }) {
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Gaps & Internal Incentive Shifts</h1>
-        <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Detect unfilled schedule gaps and offer internal incentive shifts to your roster</p>
+      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Gaps & Internal Shifts</h1>
+          <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Detect unfilled gaps and offer available or incentive shifts to your roster. Only providers who are off or on PTO that day are alerted.</p>
+        </div>
+        <button
+          onClick={() => openCreateShift(null)}
+          style={{ padding: '10px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          + Create Shift
+        </button>
       </div>
 
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8' }}>Loading...</div>}
@@ -193,7 +228,7 @@ export default function GapsPage({ onNavigate }) {
               <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 14, padding: '40px 24px', textAlign: 'center' }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#15803D' }}>No gaps detected!</div>
-                <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Your schedule is fully covered for the next two months.</div>
+                <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Your schedule is fully covered for the next 6 months.</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -249,7 +284,7 @@ export default function GapsPage({ onNavigate }) {
             {incentiveShifts.length === 0 ? (
               <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '40px 24px', textAlign: 'center' }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
-                <div style={{ fontSize: 14, color: '#64748B' }}>No incentive shifts yet. Create one from a gap.</div>
+                <div style={{ fontSize: 14, color: '#64748B' }}>No shifts offered yet. Click <strong>+ Create Shift</strong> above, or create one from a gap.</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -263,6 +298,14 @@ export default function GapsPage({ onNavigate }) {
                           <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{shift.location}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{
+                            background: shift.isIncentive === false ? '#EFF6FF' : '#FFFBEB',
+                            color: shift.isIncentive === false ? '#1D4ED8' : '#D97706',
+                            border: `1px solid ${shift.isIncentive === false ? '#93C5FD' : '#FDE68A'}`,
+                            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                          }}>
+                            {shift.isIncentive === false ? 'AVAILABLE' : 'INCENTIVE'}
+                          </span>
                           {shift.incentiveRate && (
                             <span style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
                               ${shift.incentiveRate}/hr
@@ -297,9 +340,35 @@ export default function GapsPage({ onNavigate }) {
         </div>
       )}
 
-      {/* Create Incentive Shift Modal */}
+      {/* Create Shift Modal */}
       {shiftModal && (
-        <Modal title="Create Incentive Shift" onClose={() => setShiftModal(null)}>
+        <Modal title={shiftForm.isIncentive ? 'Create Incentive Shift' : 'Create Available Shift'} onClose={() => setShiftModal(null)}>
+          {/* Shift type toggle (Task #19) */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {[
+              { v: false, label: 'Available', sub: 'Standard rate' },
+              { v: true, label: 'Incentive', sub: 'Premium rate' },
+            ].map(({ v, label, sub }) => {
+              const active = shiftForm.isIncentive === v
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setF('isIncentive', v)}
+                  style={{
+                    flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                    background: active ? (v ? '#FFFBEB' : '#EFF6FF') : '#fff',
+                    border: `1.5px solid ${active ? (v ? '#F59E0B' : '#3B82F6') : '#E2E8F0'}`,
+                    color: active ? (v ? '#B45309' : '#1D4ED8') : '#64748B',
+                    fontWeight: 700, fontSize: 14,
+                  }}
+                >
+                  {label}<br/>
+                  <span style={{ fontWeight: 500, fontSize: 12, opacity: 0.8 }}>{sub}</span>
+                </button>
+              )
+            })}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
             <Field label="Shift Date">
               <input style={inputStyle} type="date" value={shiftForm.shiftDate} onChange={(e) => setF('shiftDate', e.target.value)} />
@@ -310,8 +379,8 @@ export default function GapsPage({ onNavigate }) {
             <Field label="Duration (hours)">
               <input style={inputStyle} type="number" min="1" max="24" value={shiftForm.duration} onChange={(e) => setF('duration', e.target.value)} />
             </Field>
-            <Field label="Incentive Rate ($/hr)">
-              <input style={inputStyle} type="number" min="0" value={shiftForm.incentiveRate} onChange={(e) => setF('incentiveRate', e.target.value)} placeholder="e.g. 325" />
+            <Field label={shiftForm.isIncentive ? 'Incentive Rate ($/hr)' : 'Rate ($/hr)'}>
+              <input style={inputStyle} type="number" min="0" value={shiftForm.incentiveRate} onChange={(e) => setF('incentiveRate', e.target.value)} placeholder={shiftForm.isIncentive ? 'e.g. 325 (premium)' : 'e.g. 250 (standard)'} />
             </Field>
             <div style={{ gridColumn: '1 / -1' }}>
               <Field label="Location">
@@ -336,7 +405,7 @@ export default function GapsPage({ onNavigate }) {
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setShiftModal(null)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
             <button onClick={handleCreateShift} disabled={saving} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Creating...' : 'Create Incentive Shift'}
+              {saving ? 'Creating...' : (shiftForm.isIncentive ? 'Create Incentive Shift' : 'Create Available Shift')}
             </button>
           </div>
         </Modal>
