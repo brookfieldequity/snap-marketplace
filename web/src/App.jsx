@@ -156,10 +156,10 @@ export default function App() {
             padding: '0 24px',
           }}
         >
-          {/* Left: SNAP + Snappy logo lockup */}
+          {/* Left: SNAP wordmark + mascot (no "Snappy" name — that's the assistant only) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 200 }}>
             <span style={{ fontSize: 22, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em', lineHeight: 1 }}>SNAP</span>
-            <img src="/snappy-logo.png" alt="Snappy — AI Efficiency Assistant" style={{ height: 46, width: 'auto', display: 'block' }} />
+            <img src="/snappy-mascot.png" alt="" style={{ height: 42, width: 'auto', display: 'block' }} />
           </div>
 
           {/* Center: mode toggle pills */}

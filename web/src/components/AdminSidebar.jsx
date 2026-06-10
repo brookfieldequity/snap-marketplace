@@ -44,16 +44,19 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
           borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
-        <div
-          style={{
-            fontSize: 26,
-            fontWeight: 900,
-            color: '#2563EB',
-            letterSpacing: '-0.04em',
-            lineHeight: 1,
-          }}
-        >
-          SNAP
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 900,
+              color: '#2563EB',
+              letterSpacing: '-0.04em',
+              lineHeight: 1,
+            }}
+          >
+            SNAP
+          </div>
+          <img src="/snappy-mascot.png" alt="" style={{ height: 40, width: 'auto', display: 'block' }} />
         </div>
         <div
           style={{

@@ -37,7 +37,10 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
     }}>
       {/* Logo */}
       <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div style={{ fontSize: 20, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
+          <img src="/snappy-mascot.png" alt="" style={{ height: 34, width: 'auto', display: 'block' }} />
+        </div>
         <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginTop: 2 }}>Credentialing</div>
         <div style={{ marginTop: 8, fontSize: 11, background: 'rgba(37,99,235,0.15)', color: '#60A5FA', borderRadius: 4, padding: '2px 8px', display: 'inline-block', fontWeight: 600 }}>
           {user?.facilityName || ''}
