@@ -86,7 +86,7 @@ export default function NotificationsInbox({ refreshKey }) {
         </View>
       </TouchableOpacity>
 
-      {loading && <ActivityIndicator color="#6366F1" style={{ paddingVertical: 14 }} />}
+      {loading && <ActivityIndicator color="#2563EB" style={{ paddingVertical: 14 }} />}
 
       {!loading && (
         // Collapsed: show only the most recent unread (or most recent) row.
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
   badge: { backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, alignItems: 'center' },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  markAll: { color: '#6366F1', fontSize: 12, fontWeight: '700' },
+  markAll: { color: '#2563EB', fontSize: 12, fontWeight: '700' },
   chevron: { color: '#94A3B8', fontSize: 14 },
   row: {
     flexDirection: 'row',
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   rowTitleUnread: { fontWeight: '800' },
   rowBody: { fontSize: 12, color: '#64748B', marginTop: 2, lineHeight: 16 },
   rowTime: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366F1', marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB', marginTop: 4 },
   viewAll: { paddingVertical: 11, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  viewAllText: { color: '#6366F1', fontSize: 12, fontWeight: '700' },
+  viewAllText: { color: '#2563EB', fontSize: 12, fontWeight: '700' },
 });

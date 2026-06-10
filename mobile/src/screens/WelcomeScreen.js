@@ -12,8 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width, height } = Dimensions.get('window');
 
 const COLORS = {
-  primary: '#6366F1',
-  primaryDark: '#4F46E5',
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',

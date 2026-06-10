@@ -16,8 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from '../api/client';
 
 const COLORS = {
-  primary: '#6366F1',
-  primaryDark: '#4F46E5',
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',

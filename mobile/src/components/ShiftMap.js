@@ -4,9 +4,9 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   surge: '#F59E0B',
-  vip: '#7C3AED',
+  vip: '#1E3A8A',
   card: '#FFFFFF',
   textDark: '#0F172A',
   textMuted: '#64748B',

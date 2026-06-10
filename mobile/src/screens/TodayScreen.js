@@ -18,7 +18,7 @@ import { scheduleAPI } from '../api/client';
 // renders if the provider is on multiple rosters (locums case).
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
@@ -50,7 +50,7 @@ function prettyRole(r) {
 function typeBadge(t) {
   if (t === 'CRNA') return { label: 'CRNA', bg: '#DBEAFE', color: '#1D4ED8' };
   if (t === 'ANESTHESIOLOGIST') return { label: 'MD', bg: '#FCE7F3', color: '#9D174D' };
-  if (t === 'ANESTHESIA_ASSISTANT') return { label: 'AA', bg: '#E0E7FF', color: '#3730A3' };
+  if (t === 'ANESTHESIA_ASSISTANT') return { label: 'AA', bg: '#DBEAFE', color: '#3730A3' };
   return { label: 'Staff', bg: '#F1F5F9', color: '#475569' };
 }
 

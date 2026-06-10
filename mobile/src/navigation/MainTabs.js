@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   tabLabelActive: {
-    color: '#6366F1',
+    color: '#2563EB',
     fontWeight: '700',
   },
   tabIndicator: {
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     left: '25%',
     right: '25%',
     height: 2,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#2563EB',
     borderRadius: 1,
   },
 });

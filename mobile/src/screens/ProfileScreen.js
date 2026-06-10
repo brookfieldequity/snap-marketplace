@@ -20,11 +20,11 @@ import * as Notifications from 'expo-notifications';
 import { providerAPI } from '../api/client';
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
-  vip: '#7C3AED',
+  vip: '#1E3A8A',
   success: '#10B981',
   card: '#FFFFFF',
   border: '#E2E8F0',

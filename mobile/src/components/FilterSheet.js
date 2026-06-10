@@ -12,7 +12,7 @@ import Slider from '@react-native-community/slider';
 import { shiftAPI } from '../api/client';
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',

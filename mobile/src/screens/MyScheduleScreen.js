@@ -23,7 +23,7 @@ import RequestModal from '../components/RequestModal';
 // to the provider's local calendar without app pushes.
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
@@ -38,11 +38,11 @@ const COLORS = {
 // see no visual change. Stable hash → palette index means the same
 // facility always shows the same color across app launches.
 const FACILITY_COLORS = [
-  '#6366F1', // indigo (default / first)
+  '#2563EB', // indigo (default / first)
   '#10B981', // emerald
   '#F59E0B', // amber
   '#EC4899', // pink
-  '#8B5CF6', // violet
+  '#1E40AF', // violet
   '#06B6D4', // cyan
   '#F43F5E', // rose
   '#84CC16', // lime
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   cellNumActive: { fontWeight: '800', color: COLORS.primary },
   cellToday: { borderWidth: 2, borderColor: COLORS.primary, borderRadius: 12 },
   cellNumToday: { color: COLORS.primary },
-  cellSelected: { backgroundColor: '#EEF2FF', borderRadius: 12 },
+  cellSelected: { backgroundColor: '#EFF6FF', borderRadius: 12 },
   dotRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 2 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotExtra: { fontSize: 9, color: COLORS.textMuted, fontWeight: '700', marginLeft: 1 },

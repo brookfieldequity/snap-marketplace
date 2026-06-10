@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { providerAPI } from '../api/client';
 
 const COLORS = {
-  primary: '#6366F1',
+  primary: '#2563EB',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
 
   // Availability window banner
   windowBanner: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#A5B4FC',
     borderRadius: 12,
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
   },
   windowBannerSub: {
     fontSize: 12,
-    color: '#6366F1',
+    color: '#2563EB',
     fontWeight: '500',
   },
   windowDismiss: {
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
   },
   windowDismissText: {
     fontSize: 20,
-    color: '#6366F1',
+    color: '#2563EB',
     fontWeight: '700',
     lineHeight: 24,
   },
@@ -988,6 +988,6 @@ const styles = StyleSheet.create({
   noteBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   noteCancel: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 9, borderWidth: 1, borderColor: '#E2E8F0' },
   noteCancelText: { color: '#374151', fontWeight: '600', fontSize: 14 },
-  noteSave: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 9, backgroundColor: '#6366F1' },
+  noteSave: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 9, backgroundColor: '#2563EB' },
   noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
