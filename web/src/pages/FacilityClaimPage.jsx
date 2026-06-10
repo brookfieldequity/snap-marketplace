@@ -135,7 +135,7 @@ function ErrorState({ title, body }) {
         {body}
       </p>
       <div style={{ marginTop: 24, padding: '12px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#64748B' }}>
-        Email <a href="mailto:matt@snapmedical.app" style={{ color: '#6366F1', fontWeight: 700 }}>matt@snapmedical.app</a> if you need help — he’ll sort it out fast.
+        Email <a href="mailto:matt@snapmedical.app" style={{ color: '#2563EB', fontWeight: 700 }}>matt@snapmedical.app</a> if you need help — he’ll sort it out fast.
       </div>
     </div>
   )
@@ -223,7 +223,7 @@ function Success({ info }) {
 const styles = {
   page: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #EEF2FF 0%, #FAFAFA 70%)',
+    background: 'linear-gradient(135deg, #EFF6FF 0%, #FAFAFA 70%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -233,14 +233,14 @@ const styles = {
   shell: {
     background: '#fff',
     borderRadius: 18,
-    boxShadow: '0 25px 50px -12px rgba(99,102,241,0.18)',
+    boxShadow: '0 25px 50px -12px rgba(37,99,235,0.18)',
     border: '1px solid #E2E8F0',
     maxWidth: 460,
     width: '100%',
     overflow: 'hidden',
   },
   header: {
-    background: '#6366F1',
+    background: '#2563EB',
     padding: '20px 28px',
   },
   brand: {
@@ -299,7 +299,7 @@ const styles = {
     transform: 'translateY(-50%)',
     background: 'transparent',
     border: 'none',
-    color: '#6366F1',
+    color: '#2563EB',
     fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
@@ -316,7 +316,7 @@ const styles = {
   },
   submit: {
     width: '100%',
-    background: '#6366F1',
+    background: '#2563EB',
     color: '#fff',
     border: 'none',
     padding: '13px 20px',
@@ -324,7 +324,7 @@ const styles = {
     fontSize: 15,
     fontWeight: 800,
     letterSpacing: '0.01em',
-    boxShadow: '0 2px 6px rgba(99,102,241,0.35)',
+    boxShadow: '0 2px 6px rgba(37,99,235,0.35)',
   },
   footer: {
     background: '#FAFAFA',
@@ -339,7 +339,7 @@ const styles = {
     width: 28,
     height: 28,
     border: '3px solid #E2E8F0',
-    borderTopColor: '#6366F1',
+    borderTopColor: '#2563EB',
     borderRadius: '50%',
     animation: 'fcSpin 0.9s linear infinite',
   },

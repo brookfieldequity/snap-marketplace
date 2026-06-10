@@ -62,7 +62,7 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
             onClick={() => onPeriodChange(p)}
             style={{
               flex: 1, padding: '5px 0', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              background: period === p ? '#6366F1' : 'transparent',
+              background: period === p ? '#2563EB' : 'transparent',
               color: period === p ? '#fff' : '#64748B',
             }}
           >
@@ -114,7 +114,7 @@ function SavingsCard({ label, monthValue, ytdValue, loading, size = 'normal' }) 
         boxShadow: isTotal
           ? '0 24px 64px rgba(15,23,42,0.4), 0 0 0 2px rgba(251,191,36,0.25)'
           : '0 16px 48px rgba(15,23,42,0.25)',
-        border: isTotal ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(99,102,241,0.2)',
+        border: isTotal ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(37,99,235,0.2)',
       }}
     >
       {/* Glow decorations */}
@@ -127,7 +127,7 @@ function SavingsCard({ label, monthValue, ytdValue, loading, size = 'normal' }) 
           height: 240,
           background: isTotal
             ? 'radial-gradient(circle, rgba(251,191,36,0.18) 0%, transparent 70%)'
-            : 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)',
+            : 'radial-gradient(circle, rgba(37,99,235,0.2) 0%, transparent 70%)',
           pointerEvents: 'none',
         }}
       />
@@ -223,7 +223,7 @@ function SavingsCard({ label, monthValue, ytdValue, loading, size = 'normal' }) 
 }
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, color = '#6366F1', sub, loading, accent }) {
+function StatCard({ label, value, icon, color = '#2563EB', sub, loading, accent }) {
   return (
     <div
       style={{
@@ -429,8 +429,8 @@ export default function SnapShiftsDashboard({ onNavigate }) {
             style={{
               padding: '11px 20px',
               background: '#fff',
-              color: '#6366F1',
-              border: '1.5px solid #6366F1',
+              color: '#2563EB',
+              border: '1.5px solid #2563EB',
               borderRadius: 10,
               fontSize: 14,
               fontWeight: 600,
@@ -441,7 +441,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#EEF2FF'
+              e.currentTarget.style.background = '#EFF6FF'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = '#fff'
@@ -454,7 +454,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
             disabled={analyzing}
             style={{
               padding: '11px 20px',
-              background: analyzing ? '#A5B4FC' : '#6366F1',
+              background: analyzing ? '#A5B4FC' : '#2563EB',
               color: '#fff',
               border: 'none',
               borderRadius: 10,
@@ -464,7 +464,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
               display: 'flex',
               alignItems: 'center',
               gap: 7,
-              boxShadow: analyzing ? 'none' : '0 4px 14px rgba(99,102,241,0.4)',
+              boxShadow: analyzing ? 'none' : '0 4px 14px rgba(37,99,235,0.4)',
               transition: 'all 0.15s ease',
             }}
           >
@@ -633,7 +633,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
                   } open`
             }
             icon="📅"
-            color="#6366F1"
+            color="#2563EB"
             loading={loading}
           />
 
@@ -701,7 +701,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
             value={loading ? '—' : stats.escalatedToMarketplace ?? 0}
             sub={loading ? undefined : 'shifts sent to SNAP Marketplace'}
             icon="🌐"
-            color="#6366F1"
+            color="#2563EB"
             loading={loading}
           />
         </div>
@@ -714,7 +714,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
           padding: '24px 28px',
           background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
           borderRadius: 16,
-          border: '1px solid rgba(99,102,241,0.2)',
+          border: '1px solid rgba(37,99,235,0.2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -741,8 +741,8 @@ export default function SnapShiftsDashboard({ onNavigate }) {
               onClick={() => onNavigate(link.key)}
               style={{
                 padding: '9px 16px',
-                background: 'rgba(99,102,241,0.15)',
-                border: '1px solid rgba(99,102,241,0.3)',
+                background: 'rgba(37,99,235,0.15)',
+                border: '1px solid rgba(37,99,235,0.3)',
                 borderRadius: 8,
                 color: '#A5B4FC',
                 fontSize: 13,
@@ -751,11 +751,11 @@ export default function SnapShiftsDashboard({ onNavigate }) {
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(99,102,241,0.28)'
+                e.currentTarget.style.background = 'rgba(37,99,235,0.28)'
                 e.currentTarget.style.color = '#fff'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(99,102,241,0.15)'
+                e.currentTarget.style.background = 'rgba(37,99,235,0.15)'
                 e.currentTarget.style.color = '#A5B4FC'
               }}
             >

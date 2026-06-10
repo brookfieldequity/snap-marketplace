@@ -125,7 +125,7 @@ export default function AdminMessagesPage() {
                         width: 36,
                         height: 36,
                         borderRadius: '50%',
-                        background: isProvider ? 'linear-gradient(135deg, #7C3AED, #6366F1)' : 'linear-gradient(135deg, #0F172A, #334155)',
+                        background: isProvider ? 'linear-gradient(135deg, #1E3A8A, #2563EB)' : 'linear-gradient(135deg, #0F172A, #334155)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -145,7 +145,7 @@ export default function AdminMessagesPage() {
                         <span
                           style={{
                             background: isProvider ? '#F3E8FF' : '#F8FAFC',
-                            color: isProvider ? '#7C3AED' : '#475569',
+                            color: isProvider ? '#1E3A8A' : '#475569',
                             border: `1px solid ${isProvider ? '#DDD6FE' : '#E2E8F0'}`,
                             borderRadius: 4,
                             padding: '1px 6px',

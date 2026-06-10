@@ -38,10 +38,10 @@ function NavItem({ item, isActive, onNavigate }) {
         width: '100%',
         padding: '11px 24px',
         background: isActive
-          ? 'linear-gradient(90deg, rgba(99,102,241,0.2) 0%, rgba(99,102,241,0.05) 100%)'
+          ? 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(37,99,235,0.05) 100%)'
           : 'transparent',
         border: 'none',
-        borderLeft: isActive ? '3px solid #6366F1' : '3px solid transparent',
+        borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
         color: isActive ? '#A5B4FC' : '#64748B',
         fontSize: 14,
         fontWeight: isActive ? 600 : 400,

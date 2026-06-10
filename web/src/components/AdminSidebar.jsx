@@ -48,7 +48,7 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
           style={{
             fontSize: 26,
             fontWeight: 900,
-            color: '#6366F1',
+            color: '#2563EB',
             letterSpacing: '-0.04em',
             lineHeight: 1,
           }}
@@ -61,8 +61,8 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
             alignItems: 'center',
             gap: 5,
             marginTop: 6,
-            background: 'rgba(99,102,241,0.15)',
-            border: '1px solid rgba(99,102,241,0.3)',
+            background: 'rgba(37,99,235,0.15)',
+            border: '1px solid rgba(37,99,235,0.3)',
             borderRadius: 6,
             padding: '2px 8px',
           }}
@@ -89,10 +89,10 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
                 width: '100%',
                 padding: '11px 24px',
                 background: isActive
-                  ? 'linear-gradient(90deg, rgba(99,102,241,0.2) 0%, rgba(99,102,241,0.05) 100%)'
+                  ? 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(37,99,235,0.05) 100%)'
                   : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #6366F1' : '3px solid transparent',
+                borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
                 color: isActive ? '#A5B4FC' : '#64748B',
                 fontSize: 14,
                 fontWeight: isActive ? 600 : 400,
@@ -145,10 +145,10 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
                 width: '100%',
                 padding: '11px 24px',
                 background: isActive
-                  ? 'linear-gradient(90deg, rgba(99,102,241,0.2) 0%, rgba(99,102,241,0.05) 100%)'
+                  ? 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(37,99,235,0.05) 100%)'
                   : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #6366F1' : '3px solid transparent',
+                borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
                 color: isActive ? '#A5B4FC' : '#64748B',
                 fontSize: 14,
                 fontWeight: isActive ? 600 : 400,

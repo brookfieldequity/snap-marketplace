@@ -95,10 +95,10 @@ function ScoreHistoryChart({ history }) {
       {[0, 25, 50, 75, 100].map(v => (
         <text key={v} x={padL - 4} y={yPos(v) + 4} textAnchor="end" fontSize={9} fill="#94A3B8">{v}</text>
       ))}
-      {n > 1 && <polyline points={polyline} fill="none" stroke="#6366F1" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
+      {n > 1 && <polyline points={polyline} fill="none" stroke="#2563EB" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
       {pts.map((p, i) => (
         <g key={i}>
-          <circle cx={p.x} cy={p.y} r={4} fill="#6366F1" />
+          <circle cx={p.x} cy={p.y} r={4} fill="#2563EB" />
           <text x={p.x} y={padT + innerH + 18} textAnchor="middle" fontSize={9} fill="#64748B">
             {typeof p.label === 'string' ? p.label.slice(5, 10).replace('-', '/') : ''}
           </text>
@@ -201,7 +201,7 @@ export default function StaffIQInputsPage({ onNavigate }) {
       </div>
 
       {/* Quick-start note */}
-      <div style={{ padding: '14px 18px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#4338CA', lineHeight: 1.6 }}>
+      <div style={{ padding: '14px 18px', background: '#EFF6FF', border: '1px solid #C7D2FE', borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#1E40AF', lineHeight: 1.6 }}>
         <strong>Only one field is required to get your score.</strong> Enter your total anesthetizing locations and we'll apply industry-standard defaults for any fields you leave blank ($390/hr ANES, $260/hr CRNA, 75% utilization, mixed team model).
       </div>
 
@@ -216,7 +216,7 @@ export default function StaffIQInputsPage({ onNavigate }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
             <Field label="Total Anesthetizing Locations">
               <input
-                style={{ ...inputStyle, border: '1px solid #6366F1' }}
+                style={{ ...inputStyle, border: '1px solid #2563EB' }}
                 type="number"
                 min="1"
                 value={form.totalLocations}
@@ -386,14 +386,14 @@ export default function StaffIQInputsPage({ onNavigate }) {
             disabled={submitting}
             style={{
               padding: '12px 28px',
-              background: submitting ? '#A5B4FC' : '#6366F1',
+              background: submitting ? '#A5B4FC' : '#2563EB',
               color: '#fff',
               border: 'none',
               borderRadius: 10,
               fontSize: 15,
               fontWeight: 700,
               cursor: submitting ? 'not-allowed' : 'pointer',
-              boxShadow: submitting ? 'none' : '0 4px 14px rgba(99,102,241,0.4)',
+              boxShadow: submitting ? 'none' : '0 4px 14px rgba(37,99,235,0.4)',
             }}
           >
             {submitting ? 'Calculating…' : 'Calculate My StaffIQ Score →'}
@@ -435,7 +435,7 @@ export default function StaffIQInputsPage({ onNavigate }) {
             </div>
           )}
 
-          <div style={{ marginTop: 20, padding: '14px 18px', background: '#EEF2FF', borderRadius: 10, fontSize: 13, color: '#4338CA', lineHeight: 1.6 }}>
+          <div style={{ marginTop: 20, padding: '14px 18px', background: '#EFF6FF', borderRadius: 10, fontSize: 13, color: '#1E40AF', lineHeight: 1.6 }}>
             Your StaffIQ score has been calculated based on your inputs. Upload your scheduling data for an even more accurate analysis.
           </div>
         </div>

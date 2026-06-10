@@ -151,7 +151,7 @@ export default function FacilityProfilePage() {
   const completion = computeCompletion(form)
 
   const hoverFocus = {
-    onFocus: (e) => (e.target.style.borderColor = '#6366F1'),
+    onFocus: (e) => (e.target.style.borderColor = '#2563EB'),
     onBlur:  (e) => (e.target.style.borderColor = '#E2E8F0'),
   }
 
@@ -214,7 +214,7 @@ export default function FacilityProfilePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Section: Basic Info */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#6366F1', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>
               Basic Information
             </div>
 
@@ -269,7 +269,7 @@ export default function FacilityProfilePage() {
             </div>
 
             {/* Section: Provider-facing info */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#6366F1', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginTop: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginTop: 8 }}>
               Provider-Facing Details
             </div>
 
@@ -324,7 +324,7 @@ export default function FacilityProfilePage() {
 
             {/* Facility Photos */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#6366F1', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginBottom: 16 }}>
                 Facility Photos
               </div>
 
@@ -366,11 +366,11 @@ export default function FacilityProfilePage() {
                   opacity: photoUploading ? 0.7 : 1,
                   transition: 'border-color 0.15s',
                 }}
-                onMouseEnter={(e) => { if (!photoUploading) e.currentTarget.style.borderColor = '#6366F1' }}
+                onMouseEnter={(e) => { if (!photoUploading) e.currentTarget.style.borderColor = '#2563EB' }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#CBD5E1' }}
               >
                 {photoUploading ? (
-                  <div style={{ fontSize: 14, color: '#6366F1', fontWeight: 600 }}>Uploading...</div>
+                  <div style={{ fontSize: 14, color: '#2563EB', fontWeight: 600 }}>Uploading...</div>
                 ) : form.photoUrls.length >= 10 ? (
                   <>
                     <div style={{ fontSize: 24, marginBottom: 6 }}>📷</div>
@@ -414,7 +414,7 @@ export default function FacilityProfilePage() {
               disabled={saving}
               style={{
                 padding: '14px',
-                background: saved ? '#10B981' : saving ? '#A5B4FC' : '#6366F1',
+                background: saved ? '#10B981' : saving ? '#A5B4FC' : '#2563EB',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 12,
@@ -422,7 +422,7 @@ export default function FacilityProfilePage() {
                 fontWeight: 700,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 transition: 'background 0.3s',
-                boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+                boxShadow: '0 4px 14px rgba(37,99,235,0.3)',
               }}
             >
               {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save Profile'}

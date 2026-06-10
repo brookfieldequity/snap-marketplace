@@ -90,7 +90,7 @@ export default function ProvidersPage() {
             color: '#0F172A',
             outline: 'none',
           }}
-          onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+          onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
           onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
         />
       </div>
@@ -129,7 +129,7 @@ export default function ProvidersPage() {
             <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #6366F1, #7C3AED)',
+                background: 'linear-gradient(135deg, #2563EB, #1E3A8A)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0,
               }}>
@@ -138,7 +138,7 @@ export default function ProvidersPage() {
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{p.name}</div>
                 {p.vip && (
-                  <span style={{ background: '#F3E8FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+                  <span style={{ background: '#F3E8FF', color: '#1E3A8A', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
                     ✦ VIP
                   </span>
                 )}
@@ -187,8 +187,8 @@ export default function ProvidersPage() {
                 disabled={actionLoading[p.id]}
                 style={{
                   padding: '6px 12px',
-                  background: p.preferred ? '#FEF2F2' : '#EEF2FF',
-                  color: p.preferred ? '#DC2626' : '#6366F1',
+                  background: p.preferred ? '#FEF2F2' : '#EFF6FF',
+                  color: p.preferred ? '#DC2626' : '#2563EB',
                   border: `1px solid ${p.preferred ? '#FCA5A5' : '#A5B4FC'}`,
                   borderRadius: 7,
                   fontSize: 12,
@@ -247,7 +247,7 @@ export default function ProvidersPage() {
               onClick={() => { togglePreferred(selectedProvider); setSP(null) }}
               style={{
                 width: '100%', padding: '13px',
-                background: selectedProvider.preferred ? '#FEF2F2' : '#6366F1',
+                background: selectedProvider.preferred ? '#FEF2F2' : '#2563EB',
                 color: selectedProvider.preferred ? '#DC2626' : '#fff',
                 border: selectedProvider.preferred ? '1px solid #FCA5A5' : 'none',
                 borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer',

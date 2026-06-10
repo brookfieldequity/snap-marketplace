@@ -77,9 +77,9 @@ export default function RequestsPage() {
               onClick={() => setTab(k)}
               style={{
                 padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                background: active ? '#6366F1' : '#fff',
+                background: active ? '#2563EB' : '#fff',
                 color: active ? '#fff' : '#64748B',
-                border: `1.5px solid ${active ? '#6366F1' : '#E2E8F0'}`,
+                border: `1.5px solid ${active ? '#2563EB' : '#E2E8F0'}`,
               }}
             >
               {label}

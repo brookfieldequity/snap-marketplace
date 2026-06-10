@@ -111,7 +111,7 @@ const S = {
   addRow: { display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' },
   lbl: { fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', flexDirection: 'column', gap: 3 },
   input: { padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: 7, fontSize: 13, color: '#0F172A' },
-  addBtn: { padding: '9px 16px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+  addBtn: { padding: '9px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
   err: { color: '#DC2626', fontSize: 12, marginTop: 8 },
   muted: { color: '#94A3B8', fontSize: 13, padding: '8px 0' },
   item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #F1F5F9' },

@@ -9,7 +9,7 @@ const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
 // Care-team coverage model label from a ScheduleDay.supervisionRatio.
 // null = legacy/role-agnostic (no badge); 0 = MD-only; 3/4 = team ratio.
 function coverageLabel(ratio) {
-  if (ratio === 0) return { text: 'MD only', bg: '#F5F3FF', color: '#7C3AED' }
+  if (ratio === 0) return { text: 'MD only', bg: '#F5F3FF', color: '#1E3A8A' }
   if (ratio === 3) return { text: 'Team 1:3', bg: '#ECFDF5', color: '#059669' }
   if (ratio === 4) return { text: 'Team 1:4', bg: '#ECFDF5', color: '#059669' }
   return null
@@ -18,7 +18,7 @@ function coverageLabel(ratio) {
 // Per-room role tag (from ScheduleAssignment.role).
 const ROLE_TAG = {
   CRNA_ROOM: { text: 'CRNA', bg: '#EFF6FF', color: '#1D4ED8' },
-  SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#7C3AED' },
+  SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#1E3A8A' },
 }
 
 // Supervising MDs are stored at roomNumber >= 900 (mirrors scheduleBuilder.js).
@@ -114,11 +114,11 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
         <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>💵 Cost vs. your manual process</div>
         {hasRate && !editing && (
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
               Default {fmt(rate)}/room/day · edit
             </button>
             {onEditSiteRates && (
-              <button onClick={onEditSiteRates} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={onEditSiteRates} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Per-site rates{overrideCount > 0 ? ` (${overrideCount})` : ''}
               </button>
             )}
@@ -134,7 +134,7 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
               <span style={{ position: 'absolute', left: 12, top: 10, color: '#94A3B8' }}>$</span>
               <input type="number" value={val} onChange={(e) => setVal(e.target.value)} placeholder="1500" style={{ ...inputStyle, width: 170, paddingLeft: 22 }} />
             </div>
-            <button onClick={save} disabled={saving} style={{ padding: '10px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={save} disabled={saving} style={{ padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             {hasRate && <button onClick={() => setEditing(false)} style={{ padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>}
@@ -159,7 +159,7 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
               '#475569'
             )}
             {hasAssignments
-              ? cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#6366F1')
+              ? cell('SNAP schedule', fmt(snapCost), 'this month · all-in', '#2563EB')
               : cell('SNAP schedule', '—', 'build the schedule to compute', '#94A3B8')
             }
             {hasAssignments
@@ -344,7 +344,7 @@ function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
                   style={{ ...inputStyle, width: 110, paddingLeft: 20 }}
                 />
               </div>
-              <button onClick={() => saveRow(row)} disabled={savingKey === row.siteName} style={{ padding: '8px 14px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingKey === row.siteName ? 'default' : 'pointer', opacity: savingKey === row.siteName ? 0.6 : 1 }}>
+              <button onClick={() => saveRow(row)} disabled={savingKey === row.siteName} style={{ padding: '8px 14px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingKey === row.siteName ? 'default' : 'pointer', opacity: savingKey === row.siteName ? 0.6 : 1 }}>
                 {savingKey === row.siteName ? '…' : 'Save'}
               </button>
               <button onClick={() => clearRow(row)} disabled={!row.hasOverride || savingKey === row.siteName} style={{ padding: '8px 12px', background: '#fff', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: (!row.hasOverride || savingKey === row.siteName) ? 'not-allowed' : 'pointer', opacity: !row.hasOverride ? 0.4 : 1 }}>
@@ -355,7 +355,7 @@ function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={onClose} style={{ padding: '9px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
           Done
         </button>
       </div>
@@ -791,7 +791,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                 ? fmt(facility.industryRoomRatePerDay * summary.totalShifts)
                 : '—'
             }
-            color="#6366F1"
+            color="#2563EB"
           />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -810,7 +810,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           >
             🚀 Build the Schedule
           </button>
-          <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
+          <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
             {publishing ? 'Publishing...' : '📢 Publish Schedule'}
           </button>
           <button onClick={handleExport} disabled={exporting} style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer', color: '#374151' }}>
@@ -921,18 +921,18 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       {/* Schedule Intelligence banner */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
         <span style={{ fontSize: 16 }}>🧠</span>
-        <div style={{ flex: 1, fontSize: 13, color: '#5B21B6' }}>
+        <div style={{ flex: 1, fontSize: 13, color: '#172554' }}>
           <strong>StaffIQ Schedule Intelligence</strong> — Suggestions are ranked by provider availability, preferences, and cost optimization.
         </div>
         {intelligence && (
           <div style={{ display: 'flex', align: 'center', gap: 12, flexShrink: 0 }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#6366F1' }}>{intelligence.score}%</div>
-              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600, textTransform: 'uppercase' }}>Intelligence</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>{intelligence.score}%</div>
+              <div style={{ fontSize: 10, color: '#1E3A8A', fontWeight: 600, textTransform: 'uppercase' }}>Intelligence</div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#6366F1' }}>{intelligence.dataPoints}</div>
-              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 600, textTransform: 'uppercase' }}>Data Points</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>{intelligence.dataPoints}</div>
+              <div style={{ fontSize: 10, color: '#1E3A8A', fontWeight: 600, textTransform: 'uppercase' }}>Data Points</div>
             </div>
           </div>
         )}
@@ -1051,7 +1051,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               const { totalRooms, filledRooms } = hasSchedule ? getDayStats(dayRows) : { totalRooms: 0, filledRooms: 0 }
               const isToday = day === today.getDate() && month === today.getMonth() + 1 && year === today.getFullYear()
 
-              const borderColor = isToday ? '#6366F1' : (sc ? sc.border : '#E2E8F0')
+              const borderColor = isToday ? '#2563EB' : (sc ? sc.border : '#E2E8F0')
               const bgColor = isToday ? '#F5F3FF' : (sc ? sc.bg : '#fff')
 
               return (
@@ -1074,11 +1074,11 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                 >
                   {/* Header row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? '#6366F1' : '#0F172A' }}>{day}</span>
+                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? '#2563EB' : '#0F172A' }}>{day}</span>
                     <button
                       onClick={e => { e.stopPropagation(); setAddLocModal({ dateStr }); setLocForm({ location: '', roomsRequired: 1 }) }}
                       title="Add location"
-                      style={{ fontSize: 10, padding: '2px 6px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 4, cursor: 'pointer', color: '#4F46E5', fontWeight: 700 }}
+                      style={{ fontSize: 10, padding: '2px 6px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 4, cursor: 'pointer', color: '#1D4ED8', fontWeight: 700 }}
                     >+</button>
                   </div>
 
@@ -1349,7 +1349,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             <button
               onClick={() => { setDayDetailModal(null); setAddLocModal({ dateStr: dayDetailModal }); setLocForm({ location: '', roomsRequired: 1 }) }}
-              style={{ padding: '9px 18px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#4F46E5' }}
+              style={{ padding: '9px 18px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1D4ED8' }}
             >
               + Add Another Location
             </button>
@@ -1370,7 +1370,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setAddLocModal(null)} style={{ padding: '9px 18px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
-            <button onClick={handleAddLocation} disabled={savingLoc} style={{ padding: '9px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: savingLoc ? 'not-allowed' : 'pointer', opacity: savingLoc ? 0.7 : 1 }}>
+            <button onClick={handleAddLocation} disabled={savingLoc} style={{ padding: '9px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: savingLoc ? 'not-allowed' : 'pointer', opacity: savingLoc ? 0.7 : 1 }}>
               {savingLoc ? 'Saving...' : 'Save Location'}
             </button>
           </div>

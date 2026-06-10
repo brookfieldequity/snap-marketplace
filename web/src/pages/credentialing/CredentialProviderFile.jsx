@@ -17,7 +17,7 @@ const CRED_SECTIONS = [
   { type: 'CV', label: 'Curriculum Vitae', fields: [] },
 ]
 
-const STATUS_COLORS = { ACTIVE: '#10B981', EXPIRING_SOON: '#F59E0B', EXPIRED: '#EF4444', MISSING: '#94A3B8', PENDING: '#6366F1' }
+const STATUS_COLORS = { ACTIVE: '#10B981', EXPIRING_SOON: '#F59E0B', EXPIRED: '#EF4444', MISSING: '#94A3B8', PENDING: '#2563EB' }
 const STATUS_LABELS = { ACTIVE: 'Active', EXPIRING_SOON: 'Expiring Soon', EXPIRED: 'Expired', MISSING: 'Missing', PENDING: 'Pending' }
 
 function CredStatusBadge({ status }) {
@@ -117,7 +117,7 @@ function CredentialSection({ section, credential, entityApi, permission, onRefre
         {/* Document actions */}
         {cred?.documentName && (
           <>
-            <button onClick={handleViewDoc} style={actionBtn('#6366F1')}>View Document</button>
+            <button onClick={handleViewDoc} style={actionBtn('#2563EB')}>View Document</button>
             <a href="#" onClick={e => { e.preventDefault(); handleViewDoc() }} style={{ ...actionBtn('#374151'), textDecoration: 'none', display: 'inline-block' }}>Download</a>
           </>
         )}
@@ -154,7 +154,7 @@ function CredentialSection({ section, credential, entityApi, permission, onRefre
 
         {/* Add note */}
         {permission === 'COORDINATOR' && (
-          <button onClick={() => setShowNote(v => !v)} style={actionBtn('#6366F1')}>
+          <button onClick={() => setShowNote(v => !v)} style={actionBtn('#2563EB')}>
             {showNote ? 'Cancel' : '+ Note'}
           </button>
         )}
@@ -170,7 +170,7 @@ function CredentialSection({ section, credential, entityApi, permission, onRefre
             onChange={e => setNoteText(e.target.value)}
             autoFocus
           />
-          <button type="submit" style={{ padding: '8px 16px', background: '#6366F1', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+          <button type="submit" style={{ padding: '8px 16px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
         </form>
       )}
 
@@ -239,7 +239,7 @@ function ActivityLog({ providerId }) {
               <span style={{ fontSize: 14 }}>{icons[item.type] || icons[item.action] || '📌'}</span>
               <div style={{ flex: 1 }}>
                 <span style={{ fontWeight: 600 }}>{item.by}</span>: {item.action}
-                {item.credentialType && <span style={{ color: '#6366F1', marginLeft: 6 }}>[{item.credentialType.replace(/_/g, ' ')}]</span>}
+                {item.credentialType && <span style={{ color: '#2563EB', marginLeft: 6 }}>[{item.credentialType.replace(/_/g, ' ')}]</span>}
                 {item.note && <div style={{ color: '#64748B', fontSize: 12, marginTop: 2, fontStyle: 'italic' }}>{item.note}</div>}
               </div>
               <span style={{ color: '#94A3B8', fontSize: 11, flexShrink: 0 }}>{new Date(item.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
@@ -328,7 +328,7 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6 }}>
         ← Back to providers
       </button>
 
@@ -344,7 +344,7 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
                 {provider.firstName} {provider.lastName}
               </h2>
               {provider.specialty && (
-                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#EEF2FF', color: '#6366F1', fontSize: 12, fontWeight: 700 }}>{provider.specialty}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#EFF6FF', color: '#2563EB', fontSize: 12, fontWeight: 700 }}>{provider.specialty}</span>
               )}
               <span style={{ padding: '3px 10px', borderRadius: 999, background: `${statusColor}18`, color: statusColor, fontSize: 12, fontWeight: 700 }}>
                 {provider.status || 'No Credentials'}
@@ -364,7 +364,7 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
               <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>CREDENTIAL COMPLETION</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ width: `${provider.passportCompletion || 0}%`, height: '100%', background: provider.passportCompletion === 100 ? '#10B981' : '#6366F1', borderRadius: 4 }} />
+                  <div style={{ width: `${provider.passportCompletion || 0}%`, height: '100%', background: provider.passportCompletion === 100 ? '#10B981' : '#2563EB', borderRadius: 4 }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{provider.passportCompletion || 0}%</span>
               </div>
@@ -374,7 +374,7 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
           {permission === 'COORDINATOR' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
               {!isRoster && (
-                <button onClick={() => setShowReminderModal(true)} style={{ padding: '8px 14px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, color: '#6366F1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <button onClick={() => setShowReminderModal(true)} style={{ padding: '8px 14px', background: '#EFF6FF', border: '1px solid #C7D2FE', borderRadius: 8, color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Send Reminder
                 </button>
               )}
@@ -431,7 +431,7 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
                 />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button type="submit" style={{ flex: 1, padding: '11px', background: '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Send Reminder</button>
+                <button type="submit" style={{ flex: 1, padding: '11px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Send Reminder</button>
                 <button type="button" onClick={() => setShowReminderModal(false)} style={{ padding: '11px 20px', background: '#F1F5F9', border: 'none', borderRadius: 10, color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
               </div>
             </form>

@@ -32,7 +32,7 @@ function StepIndicator({ step }) {
         <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 26, height: 26, borderRadius: '50%',
-            background: step >= s.n ? '#6366F1' : '#E2E8F0',
+            background: step >= s.n ? '#2563EB' : '#E2E8F0',
             color: step >= s.n ? '#fff' : '#94A3B8',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, fontSize: 12,
@@ -207,7 +207,7 @@ export default function DataUploadPage({ onNavigate }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           style={{
-            border: `2px dashed ${dragOver ? '#6366F1' : '#CBD5E1'}`,
+            border: `2px dashed ${dragOver ? '#2563EB' : '#CBD5E1'}`,
             borderRadius: 16, padding: '56px 40px', textAlign: 'center',
             cursor: uploading ? 'default' : 'pointer',
             background: dragOver ? '#F5F3FF' : '#F8FAFC',
@@ -224,7 +224,7 @@ export default function DataUploadPage({ onNavigate }) {
           {!uploading && (
             <button
               onClick={(e) => { e.stopPropagation(); fileRef.current?.click() }}
-              style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >
               Browse files
             </button>
@@ -279,7 +279,7 @@ export default function DataUploadPage({ onNavigate }) {
     return (
       <div style={{ padding: '32px 40px', maxWidth: 820, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
-          <button onClick={resetToStep1} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 8 }}>
+          <button onClick={resetToStep1} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 8 }}>
             ← Back to Upload
           </button>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Schedule4 File Detected</h1>
@@ -312,7 +312,7 @@ export default function DataUploadPage({ onNavigate }) {
               <div key={facility} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderBottom: i < matrixFacilities.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{facility}</div>
                 <div style={{ display: 'flex', gap: 16 }}>
-                  <span style={{ fontSize: 13, color: '#6366F1', fontWeight: 600 }}>{counts.anes} ANES</span>
+                  <span style={{ fontSize: 13, color: '#2563EB', fontWeight: 600 }}>{counts.anes} ANES</span>
                   <span style={{ fontSize: 13, color: '#10B981', fontWeight: 600 }}>{counts.crna} CRNA</span>
                 </div>
               </div>
@@ -331,7 +331,7 @@ export default function DataUploadPage({ onNavigate }) {
           <button
             onClick={handleConfirm}
             disabled={confirming}
-            style={{ padding: '11px 26px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: confirming ? 'not-allowed' : 'pointer', opacity: confirming ? 0.7 : 1, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
+            style={{ padding: '11px 26px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: confirming ? 'not-allowed' : 'pointer', opacity: confirming ? 0.7 : 1, boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
           >
             {confirming ? '⚡ Importing & Analyzing…' : `⚡ Import ${uploadResult.totalRecords} Records & Run Analysis`}
           </button>
@@ -345,7 +345,7 @@ export default function DataUploadPage({ onNavigate }) {
     return (
       <div style={{ padding: '32px 40px', maxWidth: 900, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
-          <button onClick={resetToStep1} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 8 }}>
+          <button onClick={resetToStep1} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 8 }}>
             ← Back to Upload
           </button>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Map Your Columns</h1>
@@ -406,7 +406,7 @@ export default function DataUploadPage({ onNavigate }) {
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button onClick={resetToStep1} style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
-          <button onClick={handleConfirm} disabled={confirming} style={{ padding: '10px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: confirming ? 'not-allowed' : 'pointer', opacity: confirming ? 0.7 : 1 }}>
+          <button onClick={handleConfirm} disabled={confirming} style={{ padding: '10px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: confirming ? 'not-allowed' : 'pointer', opacity: confirming ? 0.7 : 1 }}>
             {confirming ? 'Importing...' : 'Confirm Import'}
           </button>
         </div>
@@ -420,7 +420,7 @@ export default function DataUploadPage({ onNavigate }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 36, justifyContent: 'center' }}>
         {[{ n: 1, label: 'Upload File' }, { n: 2, label: 'Review' }, { n: 3, label: 'Done' }].map((s, i) => (
           <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#6366F1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>✓</div>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#2563EB', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>✓</div>
             <span style={{ fontSize: 13, fontWeight: s.n === 3 ? 700 : 400, color: s.n === 3 ? '#0F172A' : '#94A3B8' }}>{s.label}</span>
             {i < 2 && <div style={{ width: 32, height: 1, background: '#86EFAC', margin: '0 4px' }} />}
           </div>
@@ -428,9 +428,9 @@ export default function DataUploadPage({ onNavigate }) {
       </div>
 
       {runningAnalysis ? (
-        <div style={{ background: '#F5F3FF', border: '1px solid #C4B5FD', borderRadius: 20, padding: '48px 40px', marginBottom: 24 }}>
+        <div style={{ background: '#F5F3FF', border: '1px solid #93C5FD', borderRadius: 20, padding: '48px 40px', marginBottom: 24 }}>
           <div style={{ fontSize: 64, marginBottom: 16 }}>⚡</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#6366F1', marginBottom: 8 }}>Running StaffIQ Analysis…</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB', marginBottom: 8 }}>Running StaffIQ Analysis…</div>
           <div style={{ fontSize: 15, color: '#4C1D95' }}>
             Calculating team model efficiency, Friday shortage risk, and cost savings. Redirecting to your insights in a moment.
           </div>
@@ -452,7 +452,7 @@ export default function DataUploadPage({ onNavigate }) {
           <button
             onClick={handleRunAnalysis}
             disabled={runningAnalysis}
-            style={{ padding: '12px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)' }}
+            style={{ padding: '12px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
           >
             ⚡ Run StaffIQ Analysis
           </button>

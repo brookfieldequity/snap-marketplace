@@ -2,7 +2,7 @@ import React from 'react'
 
 const STATUS_CONFIG = {
   DEPOSIT_PENDING: { label: 'Deposit Pending', bg: '#F1F5F9', color: '#64748B', border: '#CBD5E1' },
-  LIVE:            { label: 'Live',             bg: '#EEF2FF', color: '#4F46E5', border: '#A5B4FC' },
+  LIVE:            { label: 'Live',             bg: '#EFF6FF', color: '#1D4ED8', border: '#A5B4FC' },
   FILLED:          { label: 'Filled',           bg: '#FFFBEB', color: '#D97706', border: '#FCD34D' },
   COMPLETED:       { label: 'Completed',        bg: '#ECFDF5', color: '#059669', border: '#6EE7B7' },
   CANCELLED:       { label: 'Cancelled',        bg: '#FEF2F2', color: '#DC2626', border: '#FCA5A5' },

@@ -91,7 +91,7 @@ export default function AdminProvidersPage() {
               background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10,
               fontSize: 14, color: '#0F172A', outline: 'none',
             }}
-            onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+            onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
             onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
           />
         </div>
@@ -158,7 +158,7 @@ export default function AdminProvidersPage() {
             >
               {/* Name */}
               <div style={{ padding: '14px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #7C3AED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #1E3A8A)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                   {initial}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -182,7 +182,7 @@ export default function AdminProvidersPage() {
                   <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Marketplace only</span>
                 ) : (
                   (p.affiliations || []).map((f) => (
-                    <span key={f.id} title={f.name} style={{ background: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 600, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span key={f.id} title={f.name} style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #C7D2FE', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 600, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {f.name}
                     </span>
                   ))
@@ -217,14 +217,14 @@ export default function AdminProvidersPage() {
               {/* VIP */}
               <div style={{ padding: '14px 14px', display: 'flex', alignItems: 'center' }}>
                 {vip && (
-                  <span style={{ background: '#F3E8FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                  <span style={{ background: '#F3E8FF', color: '#1E3A8A', border: '1px solid #DDD6FE', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
                     ✦ VIP
                   </span>
                 )}
               </div>
 
               {/* VIP Points */}
-              <div style={{ padding: '14px 14px', fontSize: 13, fontWeight: 700, color: vip ? '#7C3AED' : '#64748B', display: 'flex', alignItems: 'center' }}>
+              <div style={{ padding: '14px 14px', fontSize: 13, fontWeight: 700, color: vip ? '#1E3A8A' : '#64748B', display: 'flex', alignItems: 'center' }}>
                 {vipPoints.toLocaleString()}
               </div>
 

@@ -79,14 +79,14 @@ function ResolveModal({ dispute, onClose, onResolved }) {
         {/* Hours comparison */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
           <div style={{ background: '#F3E8FF', border: '1px solid #DDD6FE', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Provider Claims</div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: '#7C3AED' }}>{dispute.providerHours}h</div>
-            <div style={{ fontSize: 12, color: '#7C3AED', opacity: 0.8 }}>{fmt(dispute.providerHours * dispute.payRate)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#1E3A8A', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Provider Claims</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: '#1E3A8A' }}>{dispute.providerHours}h</div>
+            <div style={{ fontSize: 12, color: '#1E3A8A', opacity: 0.8 }}>{fmt(dispute.providerHours * dispute.payRate)}</div>
           </div>
-          <div style={{ background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Facility Claims</div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: '#4F46E5' }}>{dispute.facilityHours}h</div>
-            <div style={{ fontSize: 12, color: '#4F46E5', opacity: 0.8 }}>{fmt(dispute.facilityHours * dispute.payRate)}</div>
+          <div style={{ background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Facility Claims</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: '#1D4ED8' }}>{dispute.facilityHours}h</div>
+            <div style={{ fontSize: 12, color: '#1D4ED8', opacity: 0.8 }}>{fmt(dispute.facilityHours * dispute.payRate)}</div>
           </div>
         </div>
 
@@ -111,7 +111,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
               width: '100%', padding: '12px 14px', background: '#F8FAFC',
               border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#0F172A', outline: 'none',
             }}
-            onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+            onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
             onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
           />
           {finalHours && (
@@ -135,7 +135,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
               border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A',
               outline: 'none', resize: 'vertical', lineHeight: 1.6,
             }}
-            onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+            onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
             onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
           />
         </div>
@@ -158,7 +158,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
             disabled={loading || !finalHours}
             style={{
               flex: 2, padding: '12px',
-              background: loading ? '#A5B4FC' : '#6366F1',
+              background: loading ? '#A5B4FC' : '#2563EB',
               color: '#fff', border: 'none', borderRadius: 10,
               fontSize: 14, fontWeight: 700,
               cursor: (loading || !finalHours) ? 'not-allowed' : 'pointer',
@@ -248,15 +248,15 @@ export default function AdminDisputesPage() {
                 {/* Hours comparison */}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ background: '#F3E8FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', marginBottom: 2 }}>Provider says</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#7C3AED' }}>{dispute.providerHours}h</div>
-                    <div style={{ fontSize: 11, color: '#7C3AED', opacity: 0.8 }}>{fmt(dispute.providerHours * dispute.payRate)}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#1E3A8A', textTransform: 'uppercase', marginBottom: 2 }}>Provider says</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#1E3A8A' }}>{dispute.providerHours}h</div>
+                    <div style={{ fontSize: 11, color: '#1E3A8A', opacity: 0.8 }}>{fmt(dispute.providerHours * dispute.payRate)}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', color: '#94A3B8', fontSize: 20 }}>vs</div>
-                  <div style={{ background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 10, padding: '10px 16px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', marginBottom: 2 }}>Facility says</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#4F46E5' }}>{dispute.facilityHours}h</div>
-                    <div style={{ fontSize: 11, color: '#4F46E5', opacity: 0.8 }}>{fmt(dispute.facilityHours * dispute.payRate)}</div>
+                  <div style={{ background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 10, padding: '10px 16px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', marginBottom: 2 }}>Facility says</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{dispute.facilityHours}h</div>
+                    <div style={{ fontSize: 11, color: '#1D4ED8', opacity: 0.8 }}>{fmt(dispute.facilityHours * dispute.payRate)}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '10px 16px' }}>

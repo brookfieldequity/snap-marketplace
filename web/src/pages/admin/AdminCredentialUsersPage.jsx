@@ -4,7 +4,7 @@ import { adminAPI } from '../../api.js'
 const PERMISSIONS = ['COORDINATOR', 'DEPT_HEAD', 'BILLING']
 const PERM_LABELS = { COORDINATOR: 'Credentialing Coordinator', DEPT_HEAD: 'Department Head', BILLING: 'Billing' }
 const PERM_COLORS = {
-  COORDINATOR: { bg: '#EEF2FF', text: '#4F46E5' },
+  COORDINATOR: { bg: '#EFF6FF', text: '#1D4ED8' },
   DEPT_HEAD:   { bg: '#F0FDF4', text: '#15803D' },
   BILLING:     { bg: '#FFF7ED', text: '#C2410C' },
 }
@@ -103,7 +103,7 @@ export default function AdminCredentialUsersPage() {
         </div>
         <button
           onClick={() => { setShowCreate(!showCreate); setCreateError(''); setCreateSuccess('') }}
-          style={{ padding: '10px 20px', background: '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+          style={{ padding: '10px 20px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
         >
           + Create Facility User
         </button>
@@ -143,7 +143,7 @@ export default function AdminCredentialUsersPage() {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button type="submit" disabled={creating} style={{ padding: '10px 24px', background: creating ? '#A5B4FC' : '#6366F1', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: creating ? 'not-allowed' : 'pointer' }}>
+              <button type="submit" disabled={creating} style={{ padding: '10px 24px', background: creating ? '#A5B4FC' : '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: creating ? 'not-allowed' : 'pointer' }}>
                 {creating ? 'Creating & Sending Email…' : 'Create User & Send Welcome Email'}
               </button>
             </div>
@@ -199,7 +199,7 @@ export default function AdminCredentialUsersPage() {
                 <button
                   onClick={() => handleResetPassword(u)}
                   disabled={actionLoading[u.id + '_reset']}
-                  style={{ padding: '5px 10px', background: '#EEF2FF', border: 'none', borderRadius: 6, color: '#4F46E5', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '5px 10px', background: '#EFF6FF', border: 'none', borderRadius: 6, color: '#1D4ED8', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
                 >
                   {actionLoading[u.id + '_reset'] ? '…' : 'Reset PW'}
                 </button>

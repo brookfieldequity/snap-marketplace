@@ -86,7 +86,7 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
   function SortHeader({ label, field }) {
     const active = sortKey === field
     return (
-      <th onClick={() => handleSort(field)} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: active ? '#6366F1' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
+      <th onClick={() => handleSort(field)} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: active ? '#2563EB' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
         {label} {active ? (sortDir === 'asc' ? '↑' : '↓') : ''}
       </th>
     )

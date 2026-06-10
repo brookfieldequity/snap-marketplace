@@ -64,7 +64,7 @@ export default function CredentialDashboard({ onNavigate }) {
         <StatCard label="Active" value={summary?.GREEN ?? 0} color="#10B981" sub="All credentials current" />
         <StatCard label="Attention" value={summary?.YELLOW ?? 0} color="#F59E0B" sub="Expiring within 90 days" />
         <StatCard label="Urgent" value={summary?.RED ?? 0} color="#EF4444" sub="Expired or missing" />
-        <StatCard label="Pending Passport" value={summary?.pendingPassport ?? 0} color="#6366F1" sub="No SNAP account yet" />
+        <StatCard label="Pending Passport" value={summary?.pendingPassport ?? 0} color="#2563EB" sub="No SNAP account yet" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
@@ -73,7 +73,7 @@ export default function CredentialDashboard({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>🚨 Requires Immediate Action</div>
             {urgent.length > 0 && (
-              <button onClick={() => onNavigate('expiring')} style={{ fontSize: 12, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => onNavigate('expiring')} style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 View all →
               </button>
             )}
@@ -102,7 +102,7 @@ export default function CredentialDashboard({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>⚠️ Expiring Soon</div>
             {attention.length > 0 && (
-              <button onClick={() => onNavigate('expiring')} style={{ fontSize: 12, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => onNavigate('expiring')} style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 View all →
               </button>
             )}
@@ -132,7 +132,7 @@ export default function CredentialDashboard({ onNavigate }) {
       <div style={{ marginTop: 24, textAlign: 'center' }}>
         <button
           onClick={() => onNavigate('providers')}
-          style={{ padding: '12px 28px', background: '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.3)' }}
+          style={{ padding: '12px 28px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(37,99,235,0.3)' }}
         >
           View All Providers →
         </button>

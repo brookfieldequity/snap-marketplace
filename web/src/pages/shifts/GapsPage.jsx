@@ -5,7 +5,7 @@ const STATUS_STYLE = {
   OPEN:      { bg: '#EFF6FF', color: '#1D4ED8', border: '#93C5FD', label: 'OPEN' },
   FILLED:    { bg: '#F0FDF4', color: '#15803D', border: '#86EFAC', label: 'FILLED' },
   EXPIRED:   { bg: '#F8FAFC', color: '#64748B', border: '#CBD5E1', label: 'EXPIRED' },
-  ESCALATED: { bg: '#F5F3FF', color: '#7C3AED', border: '#C4B5FD', label: 'ESCALATED' },
+  ESCALATED: { bg: '#F5F3FF', color: '#1E3A8A', border: '#93C5FD', label: 'ESCALATED' },
 }
 
 const BLANK_SHIFT = {
@@ -200,7 +200,7 @@ export default function GapsPage({ onNavigate }) {
         </div>
         <button
           onClick={() => openCreateShift(null)}
-          style={{ padding: '10px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          style={{ padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
         >
           + Create Shift
         </button>
@@ -264,7 +264,7 @@ export default function GapsPage({ onNavigate }) {
                       </div>
                       <button
                         onClick={() => openCreateShift(gap)}
-                        style={{ padding: '7px 14px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        style={{ padding: '7px 14px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                       >
                         + Incentive Shift
                       </button>
@@ -326,7 +326,7 @@ export default function GapsPage({ onNavigate }) {
                         <button
                           onClick={() => handleEscalate(shift)}
                           disabled={escalatingIds[shift.id] || escalatedIds[shift.id]}
-                          style={{ padding: '7px 14px', background: '#F5F3FF', border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#7C3AED', opacity: escalatingIds[shift.id] ? 0.6 : 1 }}
+                          style={{ padding: '7px 14px', background: '#F5F3FF', border: '1px solid #93C5FD', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#1E3A8A', opacity: escalatingIds[shift.id] ? 0.6 : 1 }}
                         >
                           {escalatingIds[shift.id] ? 'Escalating...' : escalatedIds[shift.id] ? '✓ Escalated' : '🚀 Escalate to Marketplace'}
                         </button>
@@ -404,7 +404,7 @@ export default function GapsPage({ onNavigate }) {
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setShiftModal(null)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
-            <button onClick={handleCreateShift} disabled={saving} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={handleCreateShift} disabled={saving} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Creating...' : (shiftForm.isIncentive ? 'Create Incentive Shift' : 'Create Available Shift')}
             </button>
           </div>

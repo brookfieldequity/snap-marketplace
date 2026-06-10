@@ -2,9 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { credentialAPI } from '../../api.js'
 
 const ACTION_COLORS = {
-  UPLOAD: '#6366F1',
+  UPLOAD: '#2563EB',
   DOWNLOAD: '#0EA5E9',
-  VIEW_TOKEN: '#8B5CF6',
+  VIEW_TOKEN: '#1E40AF',
   VERIFY: '#10B981',
   UNVERIFY: '#F59E0B',
   FLAG: '#EF4444',

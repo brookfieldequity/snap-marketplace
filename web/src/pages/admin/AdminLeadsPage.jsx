@@ -55,7 +55,7 @@ function downloadCSV(csv, filename) {
 
 const STATUS_BADGE_COLORS = {
   NEW:            { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  CONTACTED:      { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' },
+  CONTACTED:      { bg: '#F5F3FF', color: '#172554', border: '#DDD6FE' },
   DEMO_SCHEDULED: { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
   CUSTOMER:       { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   NOT_INTERESTED: { bg: '#F8FAFC', color: '#64748B', border: '#E2E8F0' },
@@ -133,10 +133,10 @@ export default function AdminLeadsPage() {
       {/* Stats bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
         {[
-          { label: 'Total Leads',            value: totalLeads,       icon: '📬', color: '#6366F1' },
+          { label: 'Total Leads',            value: totalLeads,       icon: '📬', color: '#2563EB' },
           { label: 'Open (New + Contacted)', value: openLeads,        icon: '🔓', color: '#F59E0B' },
           { label: 'Converted',              value: converted,        icon: '✅', color: '#10B981' },
-          { label: 'Total Savings Est.',     value: fmt$(totalSavings), icon: '💰', color: '#6366F1' },
+          { label: 'Total Savings Est.',     value: fmt$(totalSavings), icon: '💰', color: '#2563EB' },
         ].map(({ label, value, icon, color }) => (
           <div
             key={label}
@@ -171,15 +171,15 @@ export default function AdminLeadsPage() {
               style={{
                 padding: '7px 16px',
                 borderRadius: 20,
-                border: isActive ? '1px solid #6366F1' : '1px solid #E2E8F0',
-                background: isActive ? '#EEF2FF' : '#fff',
-                color: isActive ? '#4338CA' : '#475569',
+                border: isActive ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                background: isActive ? '#EFF6FF' : '#fff',
+                color: isActive ? '#1E40AF' : '#475569',
                 fontSize: 13,
                 fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer',
               }}
             >
-              {tab.label} <span style={{ fontSize: 11, color: isActive ? '#6366F1' : '#94A3B8' }}>({count})</span>
+              {tab.label} <span style={{ fontSize: 11, color: isActive ? '#2563EB' : '#94A3B8' }}>({count})</span>
             </button>
           )
         })}
@@ -221,8 +221,8 @@ export default function AdminLeadsPage() {
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>
                       {lead.contactName || '—'}
                     </td>
-                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#6366F1' }}>
-                      {lead.email ? <a href={`mailto:${lead.email}`} style={{ color: '#6366F1', textDecoration: 'none' }}>{lead.email}</a> : '—'}
+                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#2563EB' }}>
+                      {lead.email ? <a href={`mailto:${lead.email}`} style={{ color: '#2563EB', textDecoration: 'none' }}>{lead.email}</a> : '—'}
                     </td>
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>
                       {lead.calculatorType || '—'}

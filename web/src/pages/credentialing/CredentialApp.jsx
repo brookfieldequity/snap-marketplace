@@ -28,7 +28,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 40, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.06em' }}>SNAP</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.06em' }}>SNAP</div>
           <div style={{ fontSize: 15, color: '#64748B', marginTop: 4 }}>Credentialing Dashboard</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 20, padding: '36px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
@@ -46,7 +46,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
               <input type="password" style={inp} value={pw2} onChange={e => setPw2(e.target.value)} required placeholder="Re-enter password" />
             </div>
             {error && <div style={{ padding: '10px 14px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 16 }}>{error}</div>}
-            <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: loading ? '#A5B4FC' : '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: loading ? '#A5B4FC' : '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Saving…' : 'Set Password & Continue →'}
             </button>
           </form>

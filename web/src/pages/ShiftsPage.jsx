@@ -89,14 +89,14 @@ export default function ShiftsPage({ onNavigate }) {
           onClick={() => onNavigate('post-shift')}
           style={{
             padding: '11px 22px',
-            background: '#6366F1',
+            background: '#2563EB',
             color: '#fff',
             border: 'none',
             borderRadius: 10,
             fontSize: 14,
             fontWeight: 600,
             cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
+            boxShadow: '0 4px 12px rgba(37,99,235,0.35)',
           }}
         >
           + Post a Shift
@@ -150,7 +150,7 @@ export default function ShiftsPage({ onNavigate }) {
           <div style={{ padding: '60px', textAlign: 'center', color: '#94A3B8' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No shifts yet</div>
-            <button onClick={() => onNavigate('post-shift')} style={{ color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+            <button onClick={() => onNavigate('post-shift')} style={{ color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
               Post your first shift →
             </button>
           </div>
@@ -212,7 +212,7 @@ export default function ShiftsPage({ onNavigate }) {
                     {shift.status === 'COMPLETED' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRebook(shift) }}
-                        style={{ padding: '5px 12px', background: '#EEF2FF', color: '#6366F1', border: '1px solid #A5B4FC', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                        style={{ padding: '5px 12px', background: '#EFF6FF', color: '#2563EB', border: '1px solid #A5B4FC', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                       >
                         Rebook
                       </button>
@@ -228,7 +228,7 @@ export default function ShiftsPage({ onNavigate }) {
               {isExpanded && (
                 <div
                   style={{
-                    borderBottom: '2px solid #6366F1',
+                    borderBottom: '2px solid #2563EB',
                     background: '#FAFAFE',
                     padding: '20px 24px',
                   }}

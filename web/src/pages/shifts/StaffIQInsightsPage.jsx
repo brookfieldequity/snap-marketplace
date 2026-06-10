@@ -85,7 +85,7 @@ function ProviderMixPanel({ data }) {
   const current = data?.currentMix || {}
   const optimized = data?.optimizedMix || {}
   const types = ['CRNA', 'ANESTHESIOLOGIST', 'ANESTHESIA_ASSISTANT']
-  const colors = { CRNA: '#3B82F6', ANESTHESIOLOGIST: '#7C3AED', ANESTHESIA_ASSISTANT: '#0F766E' }
+  const colors = { CRNA: '#3B82F6', ANESTHESIOLOGIST: '#1E3A8A', ANESTHESIA_ASSISTANT: '#0F766E' }
   const labels = { CRNA: 'CRNA', ANESTHESIOLOGIST: 'Anesthesiologist', ANESTHESIA_ASSISTANT: 'Anesthesia Asst.' }
 
   return (
@@ -365,7 +365,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
         <button
           onClick={handleRunAnalysis}
           disabled={running || loading}
-          style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(99,102,241,0.35)' }}
+          style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
         >
           {running ? (
             <>
@@ -385,7 +385,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
 
       {/* No upload prompt */}
       {!loading && !hasUploads && (
-        <div style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)', border: '1px solid #A5B4FC', borderRadius: 16, padding: '32px 36px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ background: 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)', border: '1px solid #A5B4FC', borderRadius: 16, padding: '32px 36px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 48 }}>📤</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
@@ -396,7 +396,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
             </div>
             <button
               onClick={() => onNavigate('data-upload')}
-              style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
             >
               Upload Scheduling Data →
             </button>
@@ -447,7 +447,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
                 {/* SNAP Solution */}
                 {insight.snapSolution && (
                   <div style={{ marginTop: 24, borderTop: '1px solid #E2E8F0', paddingTop: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
                       SNAP Solution
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
@@ -462,7 +462,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
                           else if (action === 'post-shift') onNavigate('dashboard')
                           else onNavigate('windows')
                         }}
-                        style={{ padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(99,102,241,0.35)', flexShrink: 0 }}
+                        style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(37,99,235,0.35)', flexShrink: 0 }}
                       >
                         {insight.snapSolution.buttonLabel} →
                       </button>
@@ -481,7 +481,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No insights generated yet</div>
           <div style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Click "Run Analysis" to generate StaffIQ insights from your scheduling data.</div>
-          <button onClick={handleRunAnalysis} disabled={running} style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={handleRunAnalysis} disabled={running} style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ Run Analysis Now
           </button>
         </div>

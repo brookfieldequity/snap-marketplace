@@ -161,7 +161,7 @@ export default function App() {
             style={{
               fontSize: 22,
               fontWeight: 900,
-              color: '#6366F1',
+              color: '#2563EB',
               letterSpacing: '-0.04em',
               lineHeight: 1,
               width: 200,
@@ -191,7 +191,7 @@ export default function App() {
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
-                background: snapMode === 'SHIFTS' || snapMode === 'BOTH' ? '#6366F1' : 'transparent',
+                background: snapMode === 'SHIFTS' || snapMode === 'BOTH' ? '#2563EB' : 'transparent',
                 color: snapMode === 'SHIFTS' || snapMode === 'BOTH' ? '#fff' : '#64748B',
               }}
             >
@@ -207,7 +207,7 @@ export default function App() {
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
-                background: snapMode === 'MARKETPLACE' || snapMode === 'BOTH' ? '#6366F1' : 'transparent',
+                background: snapMode === 'MARKETPLACE' || snapMode === 'BOTH' ? '#2563EB' : 'transparent',
                 color: snapMode === 'MARKETPLACE' || snapMode === 'BOTH' ? '#fff' : '#64748B',
               }}
             >
@@ -398,7 +398,7 @@ export default function App() {
           style={{
             fontSize: 64,
             fontWeight: 900,
-            color: '#6366F1',
+            color: '#2563EB',
             letterSpacing: '-0.06em',
             lineHeight: 1,
           }}
@@ -464,7 +464,7 @@ export default function App() {
             width: 280,
             padding: '40px 32px',
             background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(99,102,241,0.3)',
+            border: '1px solid rgba(37,99,235,0.3)',
             borderRadius: 20,
             cursor: 'pointer',
             textAlign: 'left',
@@ -472,13 +472,13 @@ export default function App() {
             backdropFilter: 'blur(12px)',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
-            e.currentTarget.style.borderColor = 'rgba(99,102,241,0.6)'
+            e.currentTarget.style.background = 'rgba(37,99,235,0.12)'
+            e.currentTarget.style.borderColor = 'rgba(37,99,235,0.6)'
             e.currentTarget.style.transform = 'translateY(-4px)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-            e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'
+            e.currentTarget.style.borderColor = 'rgba(37,99,235,0.3)'
             e.currentTarget.style.transform = 'translateY(0)'
           }}
         >
@@ -495,7 +495,7 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              color: '#6366F1',
+              color: '#2563EB',
               fontWeight: 600,
               fontSize: 14,
             }}
@@ -553,7 +553,7 @@ export default function App() {
 
       <div style={{ marginTop: 48, fontSize: 13, color: '#334155' }}>
         Are you a provider?{' '}
-        <span style={{ color: '#6366F1', fontWeight: 600 }}>Download the SNAP mobile app</span>
+        <span style={{ color: '#2563EB', fontWeight: 600 }}>Download the SNAP mobile app</span>
       </div>
     </div>
   )

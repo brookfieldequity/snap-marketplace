@@ -21,7 +21,7 @@ function SavingsCard({ label, period, agencyCost, snapCost, savings, isShiftsMod
         position: 'relative',
         overflow: 'hidden',
         boxShadow: '0 20px 60px rgba(15,23,42,0.25)',
-        border: '1px solid rgba(99,102,241,0.2)',
+        border: '1px solid rgba(37,99,235,0.2)',
       }}
     >
       {/* Decorative glow */}
@@ -32,7 +32,7 @@ function SavingsCard({ label, period, agencyCost, snapCost, savings, isShiftsMod
           right: -60,
           width: 200,
           height: 200,
-          background: 'radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(37,99,235,0.25) 0%, transparent 70%)',
           pointerEvents: 'none',
         }}
       />
@@ -138,7 +138,7 @@ function SavingsCard({ label, period, agencyCost, snapCost, savings, isShiftsMod
   )
 }
 
-function StatCard({ label, value, icon, color = '#6366F1', sub }) {
+function StatCard({ label, value, icon, color = '#2563EB', sub }) {
   return (
     <div
       style={{
@@ -274,7 +274,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           onClick={() => onNavigate('post-shift')}
           style={{
             padding: '12px 24px',
-            background: '#6366F1',
+            background: '#2563EB',
             color: '#fff',
             border: 'none',
             borderRadius: 12,
@@ -284,18 +284,18 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            boxShadow: '0 4px 14px rgba(99,102,241,0.4)',
+            boxShadow: '0 4px 14px rgba(37,99,235,0.4)',
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#4F46E5'
+            e.currentTarget.style.background = '#1D4ED8'
             e.currentTarget.style.transform = 'translateY(-1px)'
-            e.currentTarget.style.boxShadow = '0 6px 20px rgba(99,102,241,0.5)'
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(37,99,235,0.5)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#6366F1'
+            e.currentTarget.style.background = '#2563EB'
             e.currentTarget.style.transform = 'translateY(0)'
-            e.currentTarget.style.boxShadow = '0 4px 14px rgba(99,102,241,0.4)'
+            e.currentTarget.style.boxShadow = '0 4px 14px rgba(37,99,235,0.4)'
           }}
         >
           <span style={{ fontSize: 18 }}>+</span>
@@ -317,9 +317,9 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           </h2>
           <div
             style={{
-              background: isShiftsMode ? '#EEF2FF' : '#ECFDF5',
+              background: isShiftsMode ? '#EFF6FF' : '#ECFDF5',
               border: isShiftsMode ? '1px solid #A5B4FC' : '1px solid #6EE7B7',
-              color: isShiftsMode ? '#4F46E5' : '#059669',
+              color: isShiftsMode ? '#1D4ED8' : '#059669',
               fontSize: 11,
               fontWeight: 700,
               padding: '3px 10px',
@@ -354,7 +354,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         <div
           style={{
             marginTop: 16,
-            background: 'linear-gradient(90deg, rgba(16,185,129,0.08) 0%, rgba(99,102,241,0.06) 100%)',
+            background: 'linear-gradient(90deg, rgba(16,185,129,0.08) 0%, rgba(37,99,235,0.06) 100%)',
             border: '1px solid rgba(16,185,129,0.2)',
             borderRadius: 12,
             padding: '14px 24px',
@@ -392,7 +392,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         }}
       >
         <StatCard label="TOTAL SHIFTS"  value={stats.totalShifts || 0}  icon="📋" color="#0F172A" />
-        <StatCard label="FILL RATE"     value={`${stats.fillRate || 0}%`} icon="🎯" color="#6366F1" />
+        <StatCard label="FILL RATE"     value={`${stats.fillRate || 0}%`} icon="🎯" color="#2563EB" />
         <StatCard label="OPEN"          value={stats.open || 0}           icon="🔵" color="#3B82F6" />
         <StatCard label="FILLED"        value={stats.filled || 0}         icon="🟡" color="#F59E0B" />
         <StatCard label="COMPLETED"     value={stats.completed || 0}      icon="✅" color="#10B981" />
@@ -464,7 +464,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>👤</span> Pending Applications
-            <span style={{ background: '#EEF2FF', color: '#4F46E5', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #A5B4FC' }}>
+            <span style={{ background: '#EFF6FF', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #A5B4FC' }}>
               {(d.pendingApplications || MOCK.pendingApplications).length}
             </span>
           </h2>
@@ -488,7 +488,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                       width: 40,
                       height: 40,
                       borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #6366F1, #7C3AED)',
+                      background: 'linear-gradient(135deg, #2563EB, #1E3A8A)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -559,7 +559,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           {(d.upcomingShifts || MOCK.upcomingShifts).length === 0 ? (
             <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
               No upcoming shifts in the next 7 days.{' '}
-              <button onClick={() => onNavigate('post-shift')} style={{ color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => onNavigate('post-shift')} style={{ color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 Post one now →
               </button>
             </div>
@@ -602,7 +602,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                     <div style={{ fontSize: 13, color: '#64748B' }}>
                       {shift.startTime} · {shift.duration}h
                       {shift.providerName && (
-                        <span> · <span style={{ color: '#6366F1', fontWeight: 500 }}>{shift.providerName}</span></span>
+                        <span> · <span style={{ color: '#2563EB', fontWeight: 500 }}>{shift.providerName}</span></span>
                       )}
                     </div>
                   </div>
@@ -615,7 +615,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         <div style={{ textAlign: 'right', marginTop: 12 }}>
           <button
             onClick={() => onNavigate('shifts')}
-            style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
             View all shifts →
           </button>

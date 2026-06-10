@@ -54,7 +54,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 48, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.06em', lineHeight: 1 }}>SNAP</div>
+          <div style={{ fontSize: 48, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.06em', lineHeight: 1 }}>SNAP</div>
           <div style={{ fontSize: 16, color: '#64748B', marginTop: 6, fontWeight: 500 }}>Credentialing Dashboard</div>
         </div>
 
@@ -77,7 +77,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
                 </div>
 
                 <div style={{ textAlign: 'right', marginBottom: 20 }}>
-                  <button type="button" onClick={() => { setForgotEmail(email); setView('forgot') }} style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                  <button type="button" onClick={() => { setForgotEmail(email); setView('forgot') }} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
                     Forgot password?
                   </button>
                 </div>
@@ -91,7 +91,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  style={{ width: '100%', padding: '13px', background: loading ? 'rgba(99,102,241,0.5)' : '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 4px 14px rgba(99,102,241,0.4)' }}
+                  style={{ width: '100%', padding: '13px', background: loading ? 'rgba(37,99,235,0.5)' : '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 4px 14px rgba(37,99,235,0.4)' }}
                 >
                   {loading ? 'Signing in…' : 'Sign In →'}
                 </button>
@@ -113,7 +113,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  style={{ width: '100%', padding: '13px', background: forgotLoading ? 'rgba(99,102,241,0.5)' : '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: forgotLoading ? 'not-allowed' : 'pointer' }}
+                  style={{ width: '100%', padding: '13px', background: forgotLoading ? 'rgba(37,99,235,0.5)' : '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: forgotLoading ? 'not-allowed' : 'pointer' }}
                 >
                   {forgotLoading ? 'Sending…' : 'Send Reset Link'}
                 </button>
@@ -142,7 +142,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <p style={{ color: '#334155', fontSize: 13, margin: '0 0 8px' }}>
             To request facility access, contact SNAP Medical at{' '}
-            <a href="mailto:admin@snapmedical.com" style={{ color: '#6366F1', textDecoration: 'none' }}>admin@snapmedical.com</a>
+            <a href="mailto:admin@snapmedical.com" style={{ color: '#2563EB', textDecoration: 'none' }}>admin@snapmedical.com</a>
           </p>
         </div>
 

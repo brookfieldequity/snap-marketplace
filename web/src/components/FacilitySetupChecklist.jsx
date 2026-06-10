@@ -330,7 +330,7 @@ const styles = {
     transition: 'background 0.15s',
   },
   stepCta: {
-    background: '#6366F1',
+    background: '#2563EB',
     color: '#fff',
     padding: '6px 12px',
     borderRadius: 8,

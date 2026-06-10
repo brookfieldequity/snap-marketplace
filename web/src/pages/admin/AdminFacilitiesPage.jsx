@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { adminAPI } from '../../api.js'
 
 const TIER_COLORS = {
-  BASIC:        { bg: '#EEF2FF', text: '#4F46E5', border: '#A5B4FC' },
-  PROFESSIONAL: { bg: '#F3E8FF', text: '#7C3AED', border: '#DDD6FE' },
+  BASIC:        { bg: '#EFF6FF', text: '#1D4ED8', border: '#A5B4FC' },
+  PROFESSIONAL: { bg: '#F3E8FF', text: '#1E3A8A', border: '#DDD6FE' },
   ENTERPRISE:   { bg: '#0F172A', text: '#fff',    border: '#334155' },
 }
 
@@ -86,9 +86,9 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
         <button
           onClick={() => setShowNew(true)}
           style={{
-            background: '#6366F1', color: '#fff', border: 'none',
+            background: '#2563EB', color: '#fff', border: 'none',
             padding: '10px 18px', borderRadius: 10, fontSize: 14, fontWeight: 700,
-            cursor: 'pointer', boxShadow: '0 1px 3px rgba(99,102,241,0.3)',
+            cursor: 'pointer', boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
           }}
         >
           + New Facility
@@ -123,7 +123,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
             background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10,
             fontSize: 14, color: '#0F172A', outline: 'none',
           }}
-          onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+          onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
           onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
         />
       </div>
@@ -200,7 +200,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                 <button
                   onClick={() => setInviteTarget({ id: f.id, name: f._name })}
                   title="Invite a coordinator to this facility"
-                  style={{ padding: '6px 10px', background: '#fff', color: '#6366F1', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '6px 10px', background: '#fff', color: '#2563EB', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                 >
                   📧 Invite
                 </button>
@@ -408,7 +408,7 @@ function NewFacilityModal({ onClose, onCreated }) {
           <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
             {submitting ? 'Creating…' : 'Create Facility'}
           </button>
         </div>
@@ -482,7 +482,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
             <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               Cancel
             </button>
-            <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+            <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
               {submitting ? 'Sending…' : 'Send Invite'}
             </button>
           </div>
@@ -505,7 +505,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
             </p>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-            <button onClick={onSent} style={{ padding: '10px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={onSent} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               Done
             </button>
           </div>

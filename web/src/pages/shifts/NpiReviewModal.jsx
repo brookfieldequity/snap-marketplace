@@ -23,8 +23,8 @@ function CandidateRow({ candidate, selected, onSelect }) {
     <label
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
-        border: `1.5px solid ${selected ? '#6366F1' : '#E2E8F0'}`,
-        background: selected ? '#EEF2FF' : '#fff',
+        border: `1.5px solid ${selected ? '#2563EB' : '#E2E8F0'}`,
+        background: selected ? '#EFF6FF' : '#fff',
         borderRadius: 10, cursor: 'pointer', marginBottom: 8,
       }}
     >
@@ -164,7 +164,7 @@ function ReviewCard({ row, onResolved }) {
   )
 }
 
-const btnPrimary = { padding: '10px 18px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const btnPrimary = { padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const btnSecondary = { padding: '9px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }
 
 export default function NpiReviewModal({ rows, onClose, onAllResolved }) {

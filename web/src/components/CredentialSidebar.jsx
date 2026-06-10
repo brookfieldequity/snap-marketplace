@@ -37,9 +37,9 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
     }}>
       {/* Logo */}
       <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div style={{ fontSize: 20, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.04em' }}>SNAP</div>
+        <div style={{ fontSize: 20, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
         <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginTop: 2 }}>Credentialing</div>
-        <div style={{ marginTop: 8, fontSize: 11, background: 'rgba(99,102,241,0.15)', color: '#818CF8', borderRadius: 4, padding: '2px 8px', display: 'inline-block', fontWeight: 600 }}>
+        <div style={{ marginTop: 8, fontSize: 11, background: 'rgba(37,99,235,0.15)', color: '#60A5FA', borderRadius: 4, padding: '2px 8px', display: 'inline-block', fontWeight: 600 }}>
           {user?.facilityName || ''}
         </div>
       </div>
@@ -56,10 +56,10 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
               gap: 12,
               width: '100%',
               padding: '11px 20px',
-              background: activePage === item.key ? 'rgba(99,102,241,0.15)' : 'transparent',
+              background: activePage === item.key ? 'rgba(37,99,235,0.15)' : 'transparent',
               border: 'none',
-              borderLeft: `3px solid ${activePage === item.key ? '#6366F1' : 'transparent'}`,
-              color: activePage === item.key ? '#818CF8' : '#64748B',
+              borderLeft: `3px solid ${activePage === item.key ? '#2563EB' : 'transparent'}`,
+              color: activePage === item.key ? '#60A5FA' : '#64748B',
               fontSize: 13,
               fontWeight: activePage === item.key ? 700 : 500,
               cursor: 'pointer',

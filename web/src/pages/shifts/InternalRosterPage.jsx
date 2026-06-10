@@ -5,7 +5,7 @@ import TimeOffModal from './TimeOffModal.jsx'
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
-  ANESTHESIOLOGIST: { bg: '#F5F3FF', color: '#7C3AED', label: 'Anesthesiologist' },
+  ANESTHESIOLOGIST: { bg: '#F5F3FF', color: '#1E3A8A', label: 'Anesthesiologist' },
   ANESTHESIA_ASSISTANT: { bg: '#F0FDFA', color: '#0F766E', label: 'Anesthesia Asst.' },
   STAFF: { bg: '#F1F5F9', color: '#475569', label: 'Staff' },
 }
@@ -47,7 +47,7 @@ function isExpiringSoon(dateStr) {
 // the marketplace "SNAP Account Linked" dot.
 const CRED_STATUS = {
   NOT_INVITED: { label: 'Not invited', bg: '#F1F5F9', color: '#64748B' },
-  INVITED: { label: 'Invited', bg: '#EEF2FF', color: '#4F46E5' },
+  INVITED: { label: 'Invited', bg: '#EFF6FF', color: '#1D4ED8' },
   CLAIMED: { label: 'Claimed', bg: '#ECFDF5', color: '#059669' },
   COMPLETED: { label: 'Credentialed', bg: '#ECFDF5', color: '#047857' },
 }
@@ -107,7 +107,7 @@ function Field({ label, required, children }) {
 function SectionDivider({ label }) {
   return (
     <div style={{ borderTop: '1px solid #E2E8F0', margin: '20px 0 14px', paddingTop: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
     </div>
   )
 }
@@ -118,9 +118,9 @@ const inputStyle = {
   boxSizing: 'border-box', outline: 'none',
 }
 
-const primaryBtnStyle = { padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const primaryBtnStyle = { padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtnStyle = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
-const linkBtnStyle = { background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }
+const linkBtnStyle = { background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }
 
 export default function InternalRosterPage({ onNavigate }) {
   const [roster, setRoster] = useState([])
@@ -591,7 +591,7 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
           <button
             onClick={openInviteModal}
-            style={{ padding: '11px 18px', background: '#fff', color: '#4F46E5', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '11px 18px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>✉️</span> Invite to Credentialing
           </button>
@@ -621,7 +621,7 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
           <button
             onClick={openAdd}
-            style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
           </button>
@@ -735,7 +735,7 @@ export default function InternalRosterPage({ onNavigate }) {
                         if (!contact) { note = 'No email or phone on file'; noteColor = '#DC2626' }
                         else if (status === 'CLAIMED') { note = 'Passport claimed'; noteColor = '#059669' }
                         else if (status === 'COMPLETED') { note = 'Credentialed'; noteColor = '#047857' }
-                        else if (status === 'INVITED') { note = 'Already invited — re-send'; noteColor = '#6366F1' }
+                        else if (status === 'INVITED') { note = 'Already invited — re-send'; noteColor = '#2563EB' }
                         else if (p.externallyCredentialed && !expiring) { note = `Already credentialed — defers to renewal${p.licenseExpiration ? ' (' + p.licenseExpiration.substring(0, 10) + ')' : ''}`; noteColor = '#A16207' }
                         return (
                           <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid #F1F5F9', cursor: contact ? 'pointer' : 'not-allowed', opacity: contact ? 1 : 0.6 }}>
@@ -791,7 +791,7 @@ export default function InternalRosterPage({ onNavigate }) {
         const missing = roster.filter(needsRate)
         if (missing.length === 0) return null
         return (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 12, padding: '14px 20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#EFF6FF', border: '1px solid #C7D2FE', borderRadius: 12, padding: '14px 20px', marginBottom: 20 }}>
             <div style={{ fontSize: 14, color: '#3730A3' }}>
               <strong>{missing.length} clinical provider{missing.length !== 1 ? 's' : ''}</strong> {missing.length !== 1 ? 'are' : 'is'} missing a pay rate. Enter their rates so the Schedule Builder's savings number reflects real labor cost instead of estimates.
             </div>
@@ -826,7 +826,7 @@ export default function InternalRosterPage({ onNavigate }) {
           <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No providers on your roster yet.</div>
           <div style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Add your first provider to start building your schedule.</div>
-          <button onClick={openAdd} style={{ padding: '11px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={openAdd} style={{ padding: '11px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             + Add Your First Provider
           </button>
         </div>
@@ -845,13 +845,13 @@ export default function InternalRosterPage({ onNavigate }) {
 
             const isSelected = selectedIds.has(p.id)
             return (
-              <div key={p.id} style={{ position: 'relative', background: '#fff', borderRadius: 14, border: `1px solid ${isSelected ? '#6366F1' : '#E2E8F0'}`, padding: '20px 22px', boxShadow: isSelected ? '0 0 0 3px rgba(99,102,241,0.15)' : '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div key={p.id} style={{ position: 'relative', background: '#fff', borderRadius: 14, border: `1px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`, padding: '20px 22px', boxShadow: isSelected ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <input
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => toggleSelect(p.id)}
                   title={isSelected ? 'Deselect' : 'Select for bulk action'}
-                  style={{ position: 'absolute', top: 14, right: 14, width: 18, height: 18, cursor: 'pointer', accentColor: '#6366F1' }}
+                  style={{ position: 'absolute', top: 14, right: 14, width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB' }}
                 />
                 <div style={{ paddingRight: 28 }}>
                   <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', marginBottom: 8 }}>{p.providerName}</div>
@@ -898,7 +898,7 @@ export default function InternalRosterPage({ onNavigate }) {
                 )}
 
                 {rateLabel ? (
-                  <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>{rateLabel}</div>
+                  <div style={{ fontSize: 12, color: '#2563EB', fontWeight: 600 }}>{rateLabel}</div>
                 ) : needsRate(p) ? (
                   <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No rate — savings demo uses default</div>
                 ) : null}
@@ -933,7 +933,7 @@ export default function InternalRosterPage({ onNavigate }) {
                       onClick={() => handleInvite(p.id)}
                       disabled={!hasContact(p)}
                       title={!hasContact(p) ? 'Add an email or phone to send a credentialing invite' : 'Send credentialing invite'}
-                      style={{ padding: '6px 14px', background: p.credentialingStatus === 'INVITED' ? '#F0FDF4' : '#EEF2FF', border: `1px solid ${p.credentialingStatus === 'INVITED' ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: p.credentialingStatus === 'INVITED' ? '#15803D' : '#4F46E5', opacity: hasContact(p) ? 1 : 0.5 }}
+                      style={{ padding: '6px 14px', background: p.credentialingStatus === 'INVITED' ? '#F0FDF4' : '#EFF6FF', border: `1px solid ${p.credentialingStatus === 'INVITED' ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: p.credentialingStatus === 'INVITED' ? '#15803D' : '#1D4ED8', opacity: hasContact(p) ? 1 : 0.5 }}
                     >
                       {p.credentialingStatus === 'INVITED' ? '↻ Re-invite' : '✉️ Invite'}
                     </button>
@@ -1072,9 +1072,9 @@ export default function InternalRosterPage({ onNavigate }) {
                     onClick={() => toggleDay(day)}
                     style={{
                       padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: active ? '#6366F1' : '#F8FAFC',
+                      background: active ? '#2563EB' : '#F8FAFC',
                       color: active ? '#fff' : '#64748B',
-                      border: `1px solid ${active ? '#6366F1' : '#E2E8F0'}`,
+                      border: `1px solid ${active ? '#2563EB' : '#E2E8F0'}`,
                       transition: 'all 0.12s',
                     }}
                   >
@@ -1133,7 +1133,7 @@ export default function InternalRosterPage({ onNavigate }) {
             <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Saving...' : 'Save Provider'}
             </button>
           </div>
@@ -1156,7 +1156,7 @@ export default function InternalRosterPage({ onNavigate }) {
               <div style={{ marginBottom: 16 }}>
                 <button
                   onClick={downloadTemplate}
-                  style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                 >
                   📄 Download blank template (.csv)
                 </button>
@@ -1207,7 +1207,7 @@ export default function InternalRosterPage({ onNavigate }) {
                 <button onClick={() => setShowUploadModal(false)} disabled={uploading} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                   Cancel
                 </button>
-                <button onClick={handleUpload} disabled={!uploadFile || uploading} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !uploadFile || uploading ? 'not-allowed' : 'pointer', opacity: !uploadFile || uploading ? 0.6 : 1 }}>
+                <button onClick={handleUpload} disabled={!uploadFile || uploading} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !uploadFile || uploading ? 'not-allowed' : 'pointer', opacity: !uploadFile || uploading ? 0.6 : 1 }}>
                   {uploading ? 'Importing…' : 'Import'}
                 </button>
               </div>
@@ -1262,7 +1262,7 @@ export default function InternalRosterPage({ onNavigate }) {
                     Review NPIs now
                   </button>
                 )}
-                <button onClick={async () => { setShowUploadModal(false); await load(); await loadNpiReview() }} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={async () => { setShowUploadModal(false); await load(); await loadNpiReview() }} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   Done
                 </button>
               </div>

@@ -8,10 +8,10 @@ import { facilityAPI } from '../../api.js'
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
 const ROLE_TAG = {
   CRNA_ROOM: { text: 'CRNA', bg: '#EFF6FF', color: '#1D4ED8' },
-  SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#7C3AED' },
+  SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#1E3A8A' },
 }
 function coverageLabel(ratio) {
-  if (ratio === 0) return { text: 'MD only', bg: '#F5F3FF', color: '#7C3AED' }
+  if (ratio === 0) return { text: 'MD only', bg: '#F5F3FF', color: '#1E3A8A' }
   if (ratio === 3) return { text: 'Team 1:3', bg: '#ECFDF5', color: '#059669' }
   if (ratio === 4) return { text: 'Team 1:4', bg: '#ECFDF5', color: '#059669' }
   return null
@@ -88,7 +88,7 @@ function LocationCard({ row }) {
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {supervisors.map((s) => (
-                <span key={s.id || s.roomNumber} style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', background: '#F5F3FF', padding: '4px 10px', borderRadius: 20 }}>
+                <span key={s.id || s.roomNumber} style={{ fontSize: 11, fontWeight: 600, color: '#1E3A8A', background: '#F5F3FF', padding: '4px 10px', borderRadius: 20 }}>
                   {EMP_PREFIX[s.rosterEntry?.employmentCategory] || ''} {s.rosterEntry?.providerName || 'MD'}
                 </span>
               ))}
@@ -143,7 +143,7 @@ export default function DailyViewPage({ onNavigate }) {
           <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', minWidth: 270, textAlign: 'center' }}>{label}</div>
           <button onClick={() => setDateStr(shiftISO(dateStr, 1))} style={navBtn}>›</button>
           <input type="date" value={dateStr} onChange={(e) => e.target.value && setDateStr(e.target.value)} style={inputStyle} />
-          <button onClick={() => setDateStr(todayISO())} style={{ padding: '9px 16px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: '#4F46E5' }}>Today</button>
+          <button onClick={() => setDateStr(todayISO())} style={{ padding: '9px 16px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: '#1D4ED8' }}>Today</button>
         </div>
         <div style={{ display: 'flex', gap: 10, marginLeft: 'auto', flexWrap: 'wrap' }}>
           <Stat label="Sites" value={dayRows.length} />
@@ -159,7 +159,7 @@ export default function DailyViewPage({ onNavigate }) {
         <div style={{ textAlign: 'center', padding: '70px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>🗓️</div>
           <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Nothing scheduled for this day.</div>
-          <button onClick={() => onNavigate && onNavigate('schedule')} style={{ padding: '10px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Open Schedule Builder</button>
+          <button onClick={() => onNavigate && onNavigate('schedule')} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Open Schedule Builder</button>
         </div>
       )}
 

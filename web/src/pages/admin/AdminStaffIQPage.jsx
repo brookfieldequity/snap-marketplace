@@ -18,7 +18,7 @@ function CAPASlide1() {
       name: 'SNAP Shifts',
       icon: '📅',
       desc: 'Internal scheduling with provider preferences, availability tracking, and gap detection',
-      color: '#818CF8',
+      color: '#60A5FA',
     },
     {
       name: 'SNAP Marketplace',
@@ -36,7 +36,7 @@ function CAPASlide1() {
 
   return (
     <div style={{ width: '100%', maxWidth: 860, textAlign: 'center' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#6366F1', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
         SNAP Medical — CAPA Pitch Deck
       </div>
       <h2 style={{ fontSize: 42, fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: 16 }}>
@@ -119,8 +119,8 @@ function CAPASlide3() {
         CAPA is over-relying on anesthesiologists where CRNAs can provide the same coverage at significantly lower cost.
       </p>
       <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'rgba(99,102,241,0.15)', padding: '14px 24px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#818CF8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metric</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'rgba(37,99,235,0.15)', padding: '14px 24px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metric</div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Current State</div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#10B981', textTransform: 'uppercase', letterSpacing: '0.08em' }}>With SNAP</div>
         </div>
@@ -221,7 +221,7 @@ function CAPASlide5() {
   const products = [
     {
       name: 'SNAP Shifts',
-      color: '#818CF8',
+      color: '#60A5FA',
       items: [
         'Internal schedule builder with room-level assignments',
         'Provider preference matching (days, locations, rate)',
@@ -305,7 +305,7 @@ function CAPASlide6() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 36, alignItems: 'center' }}>
         {/* Calendar mockup */}
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#818CF8', marginBottom: 16 }}>Provider Availability — June</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#60A5FA', marginBottom: 16 }}>Provider Availability — June</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
             {days.map(d => (
               <div key={d} style={{ fontSize: 10, fontWeight: 700, color: '#475569', textAlign: 'center', paddingBottom: 4 }}>{d}</div>
@@ -345,7 +345,7 @@ function CAPASlide6() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {features.map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(129,140,248,0.15)', border: '1px solid rgba(129,140,248,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: '#818CF8', fontWeight: 900 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: '#60A5FA', fontWeight: 900 }}>
                 {i + 1}
               </div>
               <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.6 }}>{f}</div>
@@ -403,7 +403,7 @@ function CAPASlide7() {
 
       {/* Investment + ROI */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ padding: '20px 22px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 12, textAlign: 'center' }}>
+        <div style={{ padding: '20px 22px', background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 12, textAlign: 'center' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#A5B4FC', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Platform Investment</div>
           <div style={{ fontSize: 28, fontWeight: 900, color: '#fff' }}>{fmtK(investment)}/yr</div>
         </div>
@@ -434,7 +434,7 @@ function CAPASlide8() {
 
   return (
     <div style={{ width: '100%', maxWidth: 780, textAlign: 'center' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#6366F1', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
         Exclusive Offer
       </div>
       <h2 style={{ fontSize: 38, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: 12 }}>
@@ -456,7 +456,7 @@ function CAPASlide8() {
 
       {/* Investment + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 14, padding: '16px 28px' }}>
+        <div style={{ background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.4)', borderRadius: 14, padding: '16px 28px' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#A5B4FC', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Founding Partner Investment</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>$75,000 / year</div>
         </div>
@@ -465,14 +465,14 @@ function CAPASlide8() {
           disabled={!CAPA_AGREEMENT_URL}
           style={{
             padding: '18px 36px',
-            background: CAPA_AGREEMENT_URL ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'rgba(99,102,241,0.3)',
+            background: CAPA_AGREEMENT_URL ? 'linear-gradient(135deg, #2563EB, #1E40AF)' : 'rgba(37,99,235,0.3)',
             border: 'none',
             borderRadius: 14,
             fontSize: 17,
             fontWeight: 800,
             color: '#fff',
             cursor: CAPA_AGREEMENT_URL ? 'pointer' : 'default',
-            boxShadow: CAPA_AGREEMENT_URL ? '0 6px 24px rgba(99,102,241,0.5)' : 'none',
+            boxShadow: CAPA_AGREEMENT_URL ? '0 6px 24px rgba(37,99,235,0.5)' : 'none',
             letterSpacing: '-0.01em',
           }}
         >
@@ -507,10 +507,10 @@ export default function AdminStaffIQPage() {
   }
 
   const metrics = [
-    { label: 'Total Insights Generated', value: data?.totalInsights ?? '—', icon: '🧠', color: '#6366F1' },
+    { label: 'Total Insights Generated', value: data?.totalInsights ?? '—', icon: '🧠', color: '#2563EB' },
     { label: 'Total Dollar Savings Calculated', value: fmt$(data?.totalSavings), icon: '💰', color: '#10B981' },
     { label: 'Most Common Inefficiency Type', value: data?.topInefficencyType || '—', icon: '📊', color: '#F59E0B' },
-    { label: 'Avg Savings Per Facility / Month', value: fmt$(data?.avgSavingsPerFacilityMonth), icon: '📈', color: '#7C3AED' },
+    { label: 'Avg Savings Per Facility / Month', value: fmt$(data?.avgSavingsPerFacilityMonth), icon: '📈', color: '#1E3A8A' },
   ]
 
   const SlideComponent = SLIDES[garyPage]
@@ -530,7 +530,7 @@ export default function AdminStaffIQPage() {
 
           {/* Header */}
           <div style={{ padding: '28px 60px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#6366F1', letterSpacing: '0.1em', textTransform: 'uppercase' }}>SNAP Medical</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB', letterSpacing: '0.1em', textTransform: 'uppercase' }}>SNAP Medical</div>
             <div style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>CAPA Pitch Deck</div>
           </div>
 
@@ -554,7 +554,7 @@ export default function AdminStaffIQPage() {
             {garyPage < TOTAL_SLIDES - 1 ? (
               <button
                 onClick={() => setGaryPage(p => Math.min(TOTAL_SLIDES - 1, p + 1))}
-                style={{ padding: '10px 24px', background: '#6366F1', border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '10px 24px', background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
               >
                 Next →
               </button>

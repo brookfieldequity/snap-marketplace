@@ -62,7 +62,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
         </button>
 
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.04em' }}>SNAP</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
           <div
             style={{
               display: 'inline-flex',
@@ -70,14 +70,14 @@ export default function AdminLoginPage({ onLogin, onBack }) {
               gap: 5,
               marginTop: 6,
               marginBottom: 8,
-              background: 'rgba(99,102,241,0.08)',
-              border: '1px solid rgba(99,102,241,0.2)',
+              background: 'rgba(37,99,235,0.08)',
+              border: '1px solid rgba(37,99,235,0.2)',
               borderRadius: 6,
               padding: '2px 8px',
             }}
           >
             <span style={{ fontSize: 10 }}>🔐</span>
-            <span style={{ fontSize: 11, color: '#6366F1', fontWeight: 700, letterSpacing: '0.06em' }}>ADMIN PANEL</span>
+            <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 700, letterSpacing: '0.06em' }}>ADMIN PANEL</span>
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 4 }}>Admin Sign In</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Restricted access — SNAP staff only</p>
@@ -94,7 +94,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
                 placeholder="admin@snapmedical.com"
                 required
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                 onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
               />
             </div>
@@ -107,7 +107,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
                 placeholder="••••••••"
                 required
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                 onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
               />
             </div>
@@ -124,7 +124,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
               style={{
                 width: '100%',
                 padding: '13px',
-                background: loading ? '#A5B4FC' : '#6366F1',
+                background: loading ? '#A5B4FC' : '#2563EB',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 10,

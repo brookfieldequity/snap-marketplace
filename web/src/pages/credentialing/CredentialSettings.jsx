@@ -84,7 +84,7 @@ function UserForm({ initial, onSave, onCancel }) {
       {err && <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 6, color: '#DC2626', fontSize: 13, marginBottom: 14 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 10 }}>
         <button type="button" onClick={onCancel} style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-        <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 8, background: saving ? '#A5B4FC' : '#6366F1', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+        <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 8, background: saving ? '#A5B4FC' : '#2563EB', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
           {saving ? 'Saving…' : (initial ? 'Update User' : 'Create & Send Welcome Email')}
         </button>
       </div>
@@ -122,7 +122,7 @@ function UsersTab() {
     load()
   }
 
-  const permColor = { COORDINATOR: '#6366F1', DEPT_HEAD: '#F59E0B', BILLING: '#94A3B8' }
+  const permColor = { COORDINATOR: '#2563EB', DEPT_HEAD: '#F59E0B', BILLING: '#94A3B8' }
 
   return (
     <div>
@@ -133,7 +133,7 @@ function UsersTab() {
         </div>
         <button
           onClick={() => setModal('add')}
-          style={{ padding: '10px 18px', background: '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          style={{ padding: '10px 18px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
         >
           + Add User
         </button>
@@ -251,7 +251,7 @@ function AddProviderForm({ onSave, onCancel }) {
       {err && <div style={{ padding: '8px 12px', background: '#FEE2E2', borderRadius: 6, color: '#DC2626', fontSize: 13, marginBottom: 14 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 10 }}>
         <button type="button" onClick={onCancel} style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-        <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 8, background: saving ? '#A5B4FC' : '#6366F1', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+        <button type="submit" disabled={saving} style={{ flex: 2, padding: '10px', border: 'none', borderRadius: 8, background: saving ? '#A5B4FC' : '#2563EB', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
           {saving ? 'Adding…' : 'Add Provider'}
         </button>
       </div>
@@ -342,7 +342,7 @@ function RosterTab() {
           </label>
           <button
             onClick={() => setModal('add')}
-            style={{ padding: '10px 18px', background: '#6366F1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+            style={{ padding: '10px 18px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >
             + Add Provider
           </button>
@@ -387,7 +387,7 @@ function RosterTab() {
                         <button
                           onClick={() => handleInvite(r)}
                           disabled={inviting === r.id}
-                          style={{ padding: '5px 12px', border: '1px solid #C7D2FE', borderRadius: 6, background: '#EEF2FF', fontSize: 12, fontWeight: 600, cursor: inviting === r.id ? 'not-allowed' : 'pointer', color: '#6366F1' }}
+                          style={{ padding: '5px 12px', border: '1px solid #C7D2FE', borderRadius: 6, background: '#EFF6FF', fontSize: 12, fontWeight: 600, cursor: inviting === r.id ? 'not-allowed' : 'pointer', color: '#2563EB' }}
                         >
                           {inviting === r.id ? 'Sending…' : 'Invite'}
                         </button>
@@ -419,9 +419,9 @@ export default function CredentialSettings() {
   const tabStyle = active => ({
     padding: '10px 20px',
     border: 'none',
-    borderBottom: `3px solid ${active ? '#6366F1' : 'transparent'}`,
+    borderBottom: `3px solid ${active ? '#2563EB' : 'transparent'}`,
     background: 'none',
-    color: active ? '#6366F1' : '#64748B',
+    color: active ? '#2563EB' : '#64748B',
     fontSize: 14,
     fontWeight: active ? 700 : 500,
     cursor: 'pointer',

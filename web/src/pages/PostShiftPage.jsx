@@ -43,7 +43,7 @@ function Toggle({ label, description, checked, onChange }) {
         gap: 16,
         padding: '16px 20px',
         background: checked ? '#FAFAFE' : '#FAFAFA',
-        border: `1.5px solid ${checked ? '#6366F1' : '#E2E8F0'}`,
+        border: `1.5px solid ${checked ? '#2563EB' : '#E2E8F0'}`,
         borderRadius: 12,
         cursor: 'pointer',
         transition: 'all 0.15s',
@@ -59,7 +59,7 @@ function Toggle({ label, description, checked, onChange }) {
           width: 44,
           height: 24,
           borderRadius: 12,
-          background: checked ? '#6366F1' : '#CBD5E1',
+          background: checked ? '#2563EB' : '#CBD5E1',
           position: 'relative',
           flexShrink: 0,
           transition: 'background 0.2s',
@@ -105,7 +105,7 @@ export default function PostShiftPage({ onNavigate }) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  function handleFocus(e) { e.target.style.borderColor = '#6366F1' }
+  function handleFocus(e) { e.target.style.borderColor = '#2563EB' }
   function handleBlur(e)  { e.target.style.borderColor = '#E2E8F0' }
 
   async function handleCreate() {
@@ -173,7 +173,7 @@ export default function PostShiftPage({ onNavigate }) {
         {/* Step bar */}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           {[1, 2].map((s) => (
-            <div key={s} style={{ height: 4, flex: 1, borderRadius: 2, background: s <= step ? '#6366F1' : '#E2E8F0', transition: 'background 0.3s' }} />
+            <div key={s} style={{ height: 4, flex: 1, borderRadius: 2, background: s <= step ? '#2563EB' : '#E2E8F0', transition: 'background 0.3s' }} />
           ))}
         </div>
       </div>
@@ -292,7 +292,7 @@ export default function PostShiftPage({ onNavigate }) {
                   onChange={(v) => set('preferredEarlyAccess', v)}
                 />
                 {form.preferredEarlyAccess && (
-                  <div style={{ marginLeft: 16, paddingLeft: 16, borderLeft: '2px solid #6366F1' }}>
+                  <div style={{ marginLeft: 16, paddingLeft: 16, borderLeft: '2px solid #2563EB' }}>
                     <label style={labelStyle}>Early Access Window (hours)</label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       {[1, 2, 3, 4].map((h) => (
@@ -302,9 +302,9 @@ export default function PostShiftPage({ onNavigate }) {
                           style={{
                             padding: '8px 16px',
                             borderRadius: 8,
-                            border: form.preferredHours === h ? '2px solid #6366F1' : '1.5px solid #E2E8F0',
-                            background: form.preferredHours === h ? '#EEF2FF' : '#fff',
-                            color: form.preferredHours === h ? '#6366F1' : '#64748B',
+                            border: form.preferredHours === h ? '2px solid #2563EB' : '1.5px solid #E2E8F0',
+                            background: form.preferredHours === h ? '#EFF6FF' : '#fff',
+                            color: form.preferredHours === h ? '#2563EB' : '#64748B',
                             fontWeight: form.preferredHours === h ? 700 : 400,
                             cursor: 'pointer',
                             fontSize: 14,
@@ -337,14 +337,14 @@ export default function PostShiftPage({ onNavigate }) {
               style={{
                 width: '100%',
                 padding: '14px',
-                background: loading ? '#A5B4FC' : '#6366F1',
+                background: loading ? '#A5B4FC' : '#2563EB',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 12,
                 fontSize: 16,
                 fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
+                boxShadow: '0 4px 14px rgba(37,99,235,0.35)',
               }}
             >
               {loading ? 'Creating...' : 'Continue to Deposit →'}
@@ -359,7 +359,7 @@ export default function PostShiftPage({ onNavigate }) {
 
           {/* Summary card */}
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            <div style={{ background: 'linear-gradient(135deg, #6366F1, #7C3AED)', padding: '20px 28px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #2563EB, #1E3A8A)', padding: '20px 28px' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.06em', marginBottom: 4 }}>
                 SHIFT CREATED
               </div>
@@ -390,7 +390,7 @@ export default function PostShiftPage({ onNavigate }) {
                     </span>
                   )}
                   {form.preferredEarlyAccess && (
-                    <span style={{ background: '#EEF2FF', color: '#4F46E5', border: '1px solid #A5B4FC', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
+                    <span style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #A5B4FC', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
                       🔒 Early Access {form.preferredHours}h
                     </span>
                   )}
@@ -444,14 +444,14 @@ export default function PostShiftPage({ onNavigate }) {
             style={{
               width: '100%',
               padding: '16px',
-              background: loading ? '#A5B4FC' : '#6366F1',
+              background: loading ? '#A5B4FC' : '#2563EB',
               color: '#fff',
               border: 'none',
               borderRadius: 14,
               fontSize: 17,
               fontWeight: 800,
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 6px 20px rgba(99,102,241,0.4)',
+              boxShadow: '0 6px 20px rgba(37,99,235,0.4)',
               letterSpacing: '-0.01em',
             }}
           >

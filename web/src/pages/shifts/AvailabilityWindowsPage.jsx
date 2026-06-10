@@ -194,7 +194,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
         </div>
         <button
           onClick={openCreate}
-          style={{ padding: '11px 22px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Create Window
         </button>
@@ -212,7 +212,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No availability windows yet.</div>
           <div style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Create a window to start collecting availability from your providers.</div>
-          <button onClick={openCreate} style={{ padding: '11px 24px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={openCreate} style={{ padding: '11px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             + Create Your First Window
           </button>
         </div>
@@ -245,7 +245,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
                       {submitted} of {total} submitted — {pct}%
                     </div>
                     <div style={{ background: '#F1F5F9', borderRadius: 6, height: 6, overflow: 'hidden', maxWidth: 280 }}>
-                      <div style={{ background: pct === 100 ? '#10B981' : '#6366F1', height: '100%', width: `${pct}%`, borderRadius: 6, transition: 'width 0.3s' }} />
+                      <div style={{ background: pct === 100 ? '#10B981' : '#2563EB', height: '100%', width: `${pct}%`, borderRadius: 6, transition: 'width 0.3s' }} />
                     </div>
                   </div>
                 </div>
@@ -272,7 +272,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
                   )}
                   <button
                     onClick={() => openReport(w)}
-                    style={{ padding: '7px 14px', background: '#EEF2FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#4F46E5' }}
+                    style={{ padding: '7px 14px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#1D4ED8' }}
                   >
                     📊 View Report
                   </button>
@@ -319,7 +319,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setShowForm(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Saving...' : 'Save Window'}
             </button>
           </div>
@@ -343,7 +343,7 @@ export default function AvailabilityWindowsPage({ onNavigate }) {
                   <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Submitted</div>
                 </div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: '#6366F1' }}>{report.percentComplete ?? 0}%</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: '#2563EB' }}>{report.percentComplete ?? 0}%</div>
                   <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Complete</div>
                 </div>
               </div>

@@ -7,8 +7,8 @@ const TIERS = [
     name: 'Basic',
     price: '$750',
     per: '/mo',
-    color: '#6366F1',
-    accent: '#EEF2FF',
+    color: '#2563EB',
+    accent: '#EFF6FF',
     limit: '4 shifts/month',
     features: [
       { text: '4 shifts per month', included: true },
@@ -26,7 +26,7 @@ const TIERS = [
     name: 'Professional',
     price: '$2,000',
     per: '/mo',
-    color: '#7C3AED',
+    color: '#1E3A8A',
     accent: '#F3E8FF',
     popular: true,
     features: [
@@ -150,7 +150,7 @@ export default function SubscriptionPage() {
                 style={{
                   height: '100%',
                   width: `${(usage.shiftsThisMonth / 4) * 100}%`,
-                  background: usage.shiftsThisMonth >= 4 ? '#EF4444' : '#6366F1',
+                  background: usage.shiftsThisMonth >= 4 ? '#EF4444' : '#2563EB',
                   borderRadius: 3,
                   transition: 'width 0.4s',
                 }}
@@ -169,11 +169,11 @@ export default function SubscriptionPage() {
               key={tier.id}
               style={{
                 background: '#fff',
-                border: isCurrent ? `2px solid #6366F1` : '1px solid #E2E8F0',
+                border: isCurrent ? `2px solid #2563EB` : '1px solid #E2E8F0',
                 borderRadius: 20,
                 padding: '28px 24px',
                 position: 'relative',
-                boxShadow: isCurrent ? '0 0 0 4px rgba(99,102,241,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
+                boxShadow: isCurrent ? '0 0 0 4px rgba(37,99,235,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
                 transition: 'box-shadow 0.2s',
               }}
             >
@@ -184,7 +184,7 @@ export default function SubscriptionPage() {
                     top: -13,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    background: '#7C3AED',
+                    background: '#1E3A8A',
                     color: '#fff',
                     fontSize: 11,
                     fontWeight: 700,
@@ -204,8 +204,8 @@ export default function SubscriptionPage() {
                     position: 'absolute',
                     top: 16,
                     right: 16,
-                    background: '#EEF2FF',
-                    color: '#6366F1',
+                    background: '#EFF6FF',
+                    color: '#2563EB',
                     fontSize: 10,
                     fontWeight: 700,
                     padding: '2px 8px',
@@ -284,7 +284,7 @@ export default function SubscriptionPage() {
                     style={{
                       width: '100%',
                       padding: '11px',
-                      background: '#6366F1',
+                      background: '#2563EB',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 10,
@@ -322,7 +322,7 @@ export default function SubscriptionPage() {
 
       <p style={{ textAlign: 'center', fontSize: 13, color: '#94A3B8', marginTop: 24 }}>
         Need help choosing a plan?{' '}
-        <a href="mailto:hello@snapmedical.com" style={{ color: '#6366F1', fontWeight: 600 }}>
+        <a href="mailto:hello@snapmedical.com" style={{ color: '#2563EB', fontWeight: 600 }}>
           Contact our team
         </a>
       </p>

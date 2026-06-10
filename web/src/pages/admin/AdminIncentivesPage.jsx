@@ -51,7 +51,7 @@ export default function AdminIncentivesPage() {
       {/* Stats bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
         {[
-          { label: 'Total Incentive Shifts', value: totalShifts, icon: '⚡', color: '#6366F1' },
+          { label: 'Total Incentive Shifts', value: totalShifts, icon: '⚡', color: '#2563EB' },
           { label: 'Fill Rate',              value: `${fillRate}%`, icon: '🎯', color: '#10B981' },
           { label: 'Escalation Rate',        value: `${escalationRate}%`, icon: '🔺', color: '#F59E0B' },
         ].map(({ label, value, icon, color }) => (
@@ -118,7 +118,7 @@ export default function AdminIncentivesPage() {
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>
                       {s.providerType || s.specialty || '—'}
                     </td>
-                    <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#6366F1' }}>
+                    <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#2563EB' }}>
                       {fmt$(s.incentiveRate ?? s.rate)}
                     </td>
                     <td style={{ padding: '14px 16px' }}>

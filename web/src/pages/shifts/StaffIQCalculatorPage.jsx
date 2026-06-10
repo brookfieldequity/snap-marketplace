@@ -130,7 +130,7 @@ function LeadCapture({ locations, providers, hourlyRate }) {
             disabled={submitting}
             style={{
               padding: '13px 32px',
-              background: '#6366F1',
+              background: '#2563EB',
               color: '#fff',
               border: 'none',
               borderRadius: 10,
@@ -138,7 +138,7 @@ function LeadCapture({ locations, providers, hourlyRate }) {
               fontWeight: 700,
               cursor: submitting ? 'not-allowed' : 'pointer',
               opacity: submitting ? 0.7 : 1,
-              boxShadow: '0 4px 14px rgba(99,102,241,0.5)',
+              boxShadow: '0 4px 14px rgba(37,99,235,0.5)',
             }}
           >
             {submitting ? 'Generating...' : 'Generate My Free StaffIQ Report →'}
@@ -265,7 +265,7 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
             <div style={{ fontSize: 13, color: '#475569', marginBottom: 6 }}>
               Your facility is likely wasting <strong style={{ color: '#EF4444' }}>{inefficiencyPct}%</strong> of your annual staffing budget
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#6366F1' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#2563EB' }}>
               Potential annual savings with SNAP infrastructure: {fmt(potentialSavings)}
             </div>
           </div>

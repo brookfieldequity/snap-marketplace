@@ -74,7 +74,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
         </button>
 
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.04em' }}>
+          <div style={{ fontSize: 28, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>
             SNAP
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
@@ -98,7 +98,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
                 placeholder="you@facility.com"
                 required
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                 onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
               />
             </div>
@@ -114,7 +114,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
                 placeholder="••••••••"
                 required
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                 onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
               />
             </div>
@@ -140,7 +140,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
               style={{
                 width: '100%',
                 padding: '13px',
-                background: loading ? '#A5B4FC' : '#6366F1',
+                background: loading ? '#A5B4FC' : '#2563EB',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 10,
@@ -163,7 +163,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
             style={{
               background: 'none',
               border: 'none',
-              color: '#6366F1',
+              color: '#2563EB',
               fontWeight: 600,
               cursor: 'pointer',
               fontSize: 14,

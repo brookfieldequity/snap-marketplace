@@ -15,7 +15,7 @@ const TIERS = [
     name: 'Basic',
     price: '$750',
     per: '/mo',
-    color: '#6366F1',
+    color: '#2563EB',
     features: [
       'Up to 4 shifts/month',
       'Access to credentialed providers',
@@ -29,7 +29,7 @@ const TIERS = [
     name: 'Professional',
     price: '$2,000',
     per: '/mo',
-    color: '#7C3AED',
+    color: '#1E3A8A',
     popular: true,
     features: [
       'Up to 20 shifts/month',
@@ -193,7 +193,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
 
           {/* Header */}
           <div style={{ marginBottom: 32 }}>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#6366F1', letterSpacing: '-0.04em' }}>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>
               SNAP
             </div>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
@@ -217,7 +217,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                   height: 4,
                   flex: 1,
                   borderRadius: 2,
-                  background: s <= step ? '#6366F1' : '#E2E8F0',
+                  background: s <= step ? '#2563EB' : '#E2E8F0',
                   transition: 'background 0.3s',
                 }}
               />
@@ -236,7 +236,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     onChange={(e) => handleChange('email', e.target.value)}
                     placeholder="admin@facility.com"
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                    onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                     onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                   />
                 </div>
@@ -248,7 +248,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     onChange={(e) => handleChange('password', e.target.value)}
                     placeholder="••••••••"
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                    onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                     onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                   />
                 </div>
@@ -262,7 +262,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                   onChange={(e) => handleChange('facilityName', e.target.value)}
                   placeholder="Boston Surgery Center"
                   style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                  onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                   onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                 />
               </div>
@@ -273,7 +273,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                   value={form.facilityType}
                   onChange={(e) => handleChange('facilityType', e.target.value)}
                   style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                  onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                   onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                 >
                   <option value="">Select type...</option>
@@ -292,7 +292,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     onChange={(e) => handleChange('address', e.target.value)}
                     placeholder="123 Medical Plaza Dr"
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                    onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                     onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                   />
                 </div>
@@ -305,7 +305,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     placeholder="02101"
                     maxLength={5}
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = '#6366F1')}
+                    onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
                     onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
                   />
                 </div>
@@ -323,7 +323,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                 style={{
                   width: '100%',
                   padding: '13px',
-                  background: '#6366F1',
+                  background: '#2563EB',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 10,
@@ -355,14 +355,14 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                       key={tier.id}
                       onClick={() => setSelectedTier(tier.id)}
                       style={{
-                        border: isSelected ? `2px solid #6366F1` : '2px solid #E2E8F0',
+                        border: isSelected ? `2px solid #2563EB` : '2px solid #E2E8F0',
                         borderRadius: 16,
                         padding: '28px 24px',
                         cursor: 'pointer',
                         position: 'relative',
                         background: isSelected ? '#FAFAFE' : '#fff',
                         transition: 'all 0.2s ease',
-                        boxShadow: isSelected ? '0 0 0 4px rgba(99,102,241,0.1)' : 'none',
+                        boxShadow: isSelected ? '0 0 0 4px rgba(37,99,235,0.1)' : 'none',
                       }}
                     >
                       {tier.popular && (
@@ -372,7 +372,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                             top: -12,
                             left: '50%',
                             transform: 'translateX(-50%)',
-                            background: '#7C3AED',
+                            background: '#1E3A8A',
                             color: '#fff',
                             fontSize: 11,
                             fontWeight: 700,
@@ -412,7 +412,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                             textAlign: 'center',
                             fontSize: 12,
                             fontWeight: 700,
-                            color: '#6366F1',
+                            color: '#2563EB',
                             letterSpacing: '0.04em',
                           }}
                         >
@@ -436,7 +436,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                 style={{
                   width: '100%',
                   padding: '14px',
-                  background: loading ? '#A5B4FC' : '#6366F1',
+                  background: loading ? '#A5B4FC' : '#2563EB',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 12,
@@ -473,9 +473,9 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     transition: 'all 0.18s ease',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#6366F1'
+                    e.currentTarget.style.borderColor = '#2563EB'
                     e.currentTarget.style.background = '#F5F3FF'
-                    e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.1)'
+                    e.currentTarget.style.boxShadow = '0 0 0 4px rgba(37,99,235,0.1)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = '#E2E8F0'
