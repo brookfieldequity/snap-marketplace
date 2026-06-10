@@ -198,6 +198,7 @@ export const facilityAPI = {
   getWindowReport: (id) => apiFetch(`${BASE}/windows/${id}/report`, { headers: facilityHeaders() }),
 
   // Schedule Builder
+  scheduleExists: () => apiFetch(`${BASE}/schedule/exists`, { headers: facilityHeaders() }),
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   deleteScheduleDay: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}`, { method: 'DELETE', headers: facilityHeaders() }),

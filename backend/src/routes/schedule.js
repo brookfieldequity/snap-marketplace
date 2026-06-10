@@ -48,6 +48,24 @@ function monthRange(year, month) {
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
+// GET /exists — has this facility ever built a schedule? Powers the dashboard
+// setup checklist. True if any ScheduleDay grid was generated OR any build run
+// exists — across all months (a schedule built for a future month still
+// counts), so we don't false-negative when the current month is empty.
+router.get('/exists', facilityAuth, async (req, res) => {
+  try {
+    const facilityId = req.facility.id;
+    const [scheduleDays, buildRuns] = await Promise.all([
+      prisma.scheduleDay.count({ where: { facilityId } }),
+      prisma.scheduleBuildRun.count({ where: { facilityId } }),
+    ]);
+    res.json({ exists: scheduleDays > 0 || buildRuns > 0, scheduleDays, buildRuns });
+  } catch (err) {
+    console.error('[schedule/exists] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /month — all schedule days for the month with assignments and availability
 router.get('/month', facilityAuth, async (req, res) => {
   try {

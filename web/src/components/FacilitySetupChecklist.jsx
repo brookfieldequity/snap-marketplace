@@ -17,6 +17,7 @@ import { facilityAPI } from '../api.js'
 export default function FacilitySetupChecklist({ facility, onNavigate }) {
   const [roster, setRoster]       = useState(null)
   const [locations, setLocations] = useState(null)
+  const [hasSchedule, setHasSchedule] = useState(false)
   const [loading, setLoading]     = useState(true)
   const [dismissed, setDismissed] = useState(() => {
     // Per-facility dismissal — if the coordinator hit "I'm all set" once for
@@ -29,10 +30,13 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
     Promise.allSettled([
       facilityAPI.getRoster(),
       facilityAPI.getRosterLocations(),
-    ]).then(([rRes, lRes]) => {
+      facilityAPI.scheduleExists(),
+    ]).then(([rRes, lRes, sRes]) => {
       if (cancelled) return
       setRoster(rRes.status === 'fulfilled' ? (rRes.value || []) : [])
-      setLocations(lRes.status === 'fulfilled' ? (lRes.value || []) : [])
+      // /roster/locations returns { locations: [...] } — unwrap it.
+      setLocations(lRes.status === 'fulfilled' ? (lRes.value?.locations || []) : [])
+      setHasSchedule(sRes.status === 'fulfilled' ? !!sRes.value?.exists : false)
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -47,10 +51,9 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
   const facilityInfoDone = !!(facility?.name && (facility?.address || facility?.zipCode))
   const sitesDone        = locationsCount > 0
   const rosterDone       = rosterCount > 0
-  // We can't easily tell "first schedule built" without an extra call.
-  // Treat it as never-done so the CTA stays visible — gives Ryan
-  // (and SCA's coordinator) a clear "what's next" once roster lands.
-  const firstScheduleDone = false
+  // True once any schedule grid or build run exists for the facility
+  // (across all months — a future-month build counts). See GET /schedule/exists.
+  const firstScheduleDone = hasSchedule
 
   const allDone = facilityInfoDone && sitesDone && rosterDone && firstScheduleDone
 
