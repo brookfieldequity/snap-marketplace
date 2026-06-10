@@ -253,4 +253,13 @@ export const scheduleRequestAPI = {
   cancel: (id) => api.delete(`/schedule-requests/${id}`),
 };
 
+// ---------------------------------------------------------------------------
+// Snappy assistant API (provider-context)
+// ---------------------------------------------------------------------------
+
+export const snappyAPI = {
+  /** Send the running transcript; returns { reply, escalated }. */
+  chat: (messages) => api.post('/snappy/provider-chat', { messages }),
+};
+
 export default api;

@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleAPI, scheduleRequestAPI } from '../api/client';
 import NotificationsInbox from '../components/NotificationsInbox';
 import RequestModal from '../components/RequestModal';
+import SnappyChat from '../components/SnappyChat';
 
 // "My Schedule" — read-only monthly calendar of the provider's own SNAP
 // Shifts assignments. Doubles as the entry point for the Apple/Google
@@ -404,6 +405,9 @@ export default function MyScheduleScreen() {
         memberships={memberships}
         onSubmitted={() => setInboxKey((k) => k + 1)}
       />
+
+      {/* Snappy assistant — floating launcher + chat */}
+      <SnappyChat />
     </SafeAreaView>
   );
 }

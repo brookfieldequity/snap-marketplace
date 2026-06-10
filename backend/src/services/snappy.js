@@ -157,22 +157,140 @@ async function execTool(name, input, ctx) {
   return { error: `Unknown tool: ${name}` };
 }
 
-// ── Chat loop ───────────────────────────────────────────────────────────────────
+// ── Provider-side Snappy (mobile app) ───────────────────────────────────────────
+// The marketplace mobile app is provider-facing (CRNAs/anesthesiologists). This
+// runs with the authenticated PROVIDER's context (ctx.userId); its tools only
+// ever read that provider's own schedule across the facilities they belong to.
 
+const PROVIDER_SYSTEM_PROMPT = `You are Snappy, the in-app assistant in the SNAP Medical app for anesthesia providers (CRNAs, anesthesiologists, anesthesia assistants).
+
+You are talking to a provider inside their SNAP mobile app. Be warm, professional, and concise. Do not use emoji. Write like a helpful colleague.
+
+What you can help with:
+- Their work schedule: which days they are assigned, at which sites, across the facilities they work with on SNAP.
+- How the app works: My Schedule, setting availability and per-day notes, requesting a day off or to work a date (the Request feature), the notifications inbox, and picking up available/incentive shifts they are offered.
+- General questions about SNAP.
+
+How to help:
+- When a question depends on the provider's own schedule, USE YOUR TOOLS to look it up before answering. Never guess their assignments or dates.
+- For "how do I..." questions, give clear steps referencing the app's actual features above.
+- If you cannot resolve something — a bug, a pay/contract question, anything needing a person — use escalate_to_human, then tell them you've flagged it for the SNAP team and Matt will follow up.
+
+Hard rules:
+- Never ask for or repeat protected health information (patient data). You handle scheduling and app support only.
+- If you are not sure, say so and offer to escalate rather than inventing an answer.
+- Keep replies short unless asked for detail.`;
+
+const PROVIDER_TOOLS = [
+  {
+    name: 'get_my_schedule',
+    description: "Look up the asking provider's own assignments for a month across all facilities they work with: dates, sites, and total shifts. Month/year default to the current month.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        year: { type: 'integer', description: 'Four-digit year, e.g. 2026' },
+        month: { type: 'integer', description: 'Month 1-12' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_my_facilities',
+    description: "List the facilities this provider works with on SNAP (the rosters they are on). Use for 'where do I work' / 'which facilities am I on' questions.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'escalate_to_human',
+    description: 'Hand the conversation to the SNAP team (Matt) when you cannot resolve it: bugs, pay/contract questions, account changes, or when the provider asks for a person. Sends Matt an email and a text. Call this, then tell the user you have flagged it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: "One or two sentences describing the provider's issue for the SNAP team." },
+        urgency: { type: 'string', enum: ['low', 'normal', 'high'], description: 'How time-sensitive this is.' },
+      },
+      required: ['summary'],
+      additionalProperties: false,
+    },
+  },
+];
+
+async function execProviderTool(name, input, ctx) {
+  // The provider's roster memberships (one InternalRosterEntry per facility).
+  async function memberships() {
+    const provider = await prisma.providerProfile.findUnique({
+      where: { userId: ctx.userId }, select: { id: true },
+    });
+    if (!provider) return [];
+    return prisma.internalRosterEntry.findMany({
+      where: { linkedProviderId: provider.id },
+      select: { id: true, facilityId: true, facility: { select: { name: true } } },
+    });
+  }
+
+  if (name === 'get_my_facilities') {
+    const mems = await memberships();
+    return { facilities: mems.map((m) => m.facility?.name).filter(Boolean) };
+  }
+
+  if (name === 'get_my_schedule') {
+    const mems = await memberships();
+    if (mems.length === 0) return { assignments: [], note: 'Not yet linked to any facility roster.' };
+    const now = new Date();
+    const year = input.year || now.getFullYear();
+    const month = input.month || now.getMonth() + 1;
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 1));
+    const rosterIds = mems.map((m) => m.id);
+    const facilityById = new Map(mems.map((m) => [m.facilityId, m.facility?.name]));
+    const assignments = await prisma.scheduleAssignment.findMany({
+      where: { rosterId: { in: rosterIds }, scheduleDay: { date: { gte: start, lt: end } } },
+      include: { scheduleDay: { select: { date: true, location: true } } },
+      orderBy: { scheduleDay: { date: 'asc' } },
+    });
+    return {
+      year, month,
+      totalShifts: assignments.length,
+      assignments: assignments.map((a) => ({
+        date: a.scheduleDay.date.toISOString().slice(0, 10),
+        site: a.scheduleDay.location,
+        facility: facilityById.get(a.facilityId) || null,
+      })),
+    };
+  }
+
+  if (name === 'escalate_to_human') {
+    return escalateToHuman(input, ctx, ctx.userEmail ? `Provider ${ctx.userEmail}` : 'A provider');
+  }
+
+  return { error: `Unknown tool: ${name}` };
+}
+
+// Shared escalation (email + SMS to the SNAP team). Never throws into the loop.
+async function escalateToHuman(input, ctx, who) {
+  const userEmail = ctx.userEmail || 'unknown';
+  const transcript = (ctx.messages || [])
+    .map((m) => `${m.role.toUpperCase()}: ${typeof m.content === 'string' ? m.content : '[structured]'}`)
+    .join('\n');
+  const subject = `Snappy escalation — ${who} (${input.urgency || 'normal'})`;
+  const body = `${input.summary}\n\nFrom: ${who}\nUser: ${userEmail}\n\n--- Conversation ---\n${transcript}`;
+  try { await sendEmail(SUPPORT_EMAIL, subject, `<pre style="white-space:pre-wrap;font-family:inherit">${body.replace(/</g, '&lt;')}</pre>`); } catch (e) { console.error('[snappy] escalation email failed:', e.message); }
+  try { await sendSMS(SUPPORT_SMS, `SNAP support: ${who} — ${input.summary}`.slice(0, 300)); } catch (e) { console.error('[snappy] escalation SMS failed:', e.message); }
+  return { escalated: true };
+}
+
+// ── Generic chat loop ───────────────────────────────────────────────────────────
 // messages: [{ role: 'user'|'assistant', content: string }, ...] from the client.
-// ctx: { facility, userEmail }. Returns { reply, escalated }.
-async function chat({ messages, ctx }) {
+// ctx carries audience context (facility OR provider) for the tool executor.
+async function runConversation({ messages, ctx, system, tools, exec }) {
   const anthropic = getClient();
   if (!anthropic) {
     return { reply: "Snappy isn't configured yet — the SNAP team needs to add the assistant key. You can reach Matt at matt@snapmedical.app in the meantime.", escalated: false };
   }
 
-  // Convert inbound messages to the API shape (content as string is fine).
   const convo = messages
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .map((m) => ({ role: m.role, content: m.content }))
     .slice(-20); // cap history
-
   ctx.messages = convo; // for escalate transcript
 
   let escalated = false;
@@ -180,11 +298,7 @@ async function chat({ messages, ctx }) {
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const resp = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: TOOLS,
-      messages: working,
+      model: MODEL, max_tokens: 1024, system, tools, messages: working,
     });
 
     if (resp.stop_reason === 'tool_use') {
@@ -194,7 +308,7 @@ async function chat({ messages, ctx }) {
       for (const tu of toolUses) {
         if (tu.name === 'escalate_to_human') escalated = true;
         let out;
-        try { out = await execTool(tu.name, tu.input || {}, ctx); }
+        try { out = await exec(tu.name, tu.input || {}, ctx); }
         catch (e) { out = { error: e.message }; }
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(out) });
       }
@@ -202,13 +316,21 @@ async function chat({ messages, ctx }) {
       continue;
     }
 
-    // Final text answer.
     const text = resp.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     return { reply: text || "I'm not sure how to help with that — want me to flag it for the SNAP team?", escalated };
   }
 
-  // Ran out of tool iterations — return a safe fallback.
   return { reply: "I'm having trouble pulling that together. I can flag this for the SNAP team if you'd like — just say the word.", escalated };
 }
 
-module.exports = { chat };
+// Facility-side (web portal): tools read the authenticated facility's data.
+function chat({ messages, ctx }) {
+  return runConversation({ messages, ctx, system: SYSTEM_PROMPT, tools: TOOLS, exec: execTool });
+}
+
+// Provider-side (mobile app): tools read the authenticated provider's data.
+function providerChat({ messages, ctx }) {
+  return runConversation({ messages, ctx, system: PROVIDER_SYSTEM_PROMPT, tools: PROVIDER_TOOLS, exec: execProviderTool });
+}
+
+module.exports = { chat, providerChat };
