@@ -109,21 +109,91 @@ router.get('/facilities', adminAuth, async (req, res) => {
 router.delete('/facility/:id', adminAuth, async (req, res) => {
   try {
     const facilityId = req.params.id;
+    // ?force=true does a deep-clean: deletes all dependent rows (shifts +
+    // their bookings/applications/completions, schedules, roster, ratings,
+    // messages, etc.) before removing the facility. Use ONLY for test/
+    // orphan facilities — this is irreversible and removes real data if
+    // pointed at a live customer.
+    const force = req.query.force === 'true';
+
     const result = await prisma.$transaction(async (tx) => {
+      if (force) {
+        // ── Shift subtree (children first) ────────────────────────────────
+        const shiftIds = (await tx.shift.findMany({
+          where: { facilityId }, select: { id: true },
+        })).map((s) => s.id);
+        if (shiftIds.length) {
+          await tx.shiftCompletion.deleteMany({ where: { shiftId: { in: shiftIds } } });
+          await tx.shiftApplication.deleteMany({ where: { shiftId: { in: shiftIds } } });
+          await tx.shiftBooking.deleteMany({ where: { shiftId: { in: shiftIds } } });
+          await tx.message.deleteMany({ where: { shiftId: { in: shiftIds } } });
+        }
+        await tx.message.deleteMany({ where: { facilityId } });
+        await tx.shift.deleteMany({ where: { facilityId } });
+
+        // ── Scheduling subtree ────────────────────────────────────────────
+        const dayIds = (await tx.scheduleDay.findMany({
+          where: { facilityId }, select: { id: true },
+        })).map((d) => d.id);
+        if (dayIds.length) {
+          await tx.scheduleAssignment.deleteMany({ where: { scheduleDayId: { in: dayIds } } });
+        }
+        await tx.scheduleDay.deleteMany({ where: { facilityId } });
+        await tx.scheduleBuildRun.deleteMany({ where: { facilityId } });
+        await tx.scheduleFeedback.deleteMany({ where: { facilityId } });
+        await tx.schedulingRecord.deleteMany({ where: { facilityId } });
+        await tx.schedulingUpload.deleteMany({ where: { facilityId } });
+
+        // ── Internal staffing (roster + related) ──────────────────────────
+        const rosterIds = (await tx.internalRosterEntry.findMany({
+          where: { facilityId }, select: { id: true },
+        })).map((r) => r.id);
+        if (rosterIds.length) {
+          await tx.providerLocation.deleteMany({ where: { rosterEntryId: { in: rosterIds } } });
+          await tx.rosterTimeOff.deleteMany({ where: { rosterEntryId: { in: rosterIds } } });
+          // NB: this model's FK field is `rosterId`, not `rosterEntryId`.
+          await tx.internalIncentiveShiftResponse.deleteMany({ where: { rosterId: { in: rosterIds } } });
+        }
+        await tx.internalIncentiveShift.deleteMany({ where: { facilityId } });
+        await tx.internalRosterEntry.deleteMany({ where: { facilityId } });
+        await tx.availabilityWindow.deleteMany({ where: { facilityId } });
+        await tx.coverageTemplate.deleteMany({ where: { facilityId } });
+        await tx.facilityHoliday.deleteMany({ where: { facilityId } });
+        await tx.facilitySiteRate.deleteMany({ where: { facilityId } });
+
+        // ── StaffIQ / analytics / misc ────────────────────────────────────
+        await tx.staffIQInsight.deleteMany({ where: { facilityId } });
+        await tx.staffIQInput.deleteMany({ where: { facilityId } });
+        await tx.staffIQScoreHistory.deleteMany({ where: { facilityId } });
+        await tx.automationEvent.deleteMany({ where: { facilityId } });
+        await tx.facilityRoiSnapshot.deleteMany({ where: { facilityId } });
+        await tx.facilityRoiBaseline.deleteMany({ where: { facilityId } });
+
+        // ── Marketplace relationship rows ─────────────────────────────────
+        await tx.preferredProvider.deleteMany({ where: { facilityId } });
+        await tx.providerRating.deleteMany({ where: { facilityId } });
+        await tx.facilityRating.deleteMany({ where: { facilityId } });
+
+        // ── Credentialing-portal rows ─────────────────────────────────────
+        await tx.facilityRosterEntry.deleteMany({ where: { facilityId } });
+        await tx.credentialUser.deleteMany({ where: { facilityId } });
+      }
+
       const fu = await tx.facilityUser.deleteMany({ where: { facilityId } });
       const sub = await tx.facilitySubscription.deleteMany({ where: { facilityId } });
       const fac = await tx.facility.delete({ where: { id: facilityId } });
       return {
         facilityUsersDeleted: fu.count,
         subscriptionsDeleted: sub.count,
+        forced: force,
         facility: { id: fac.id, name: fac.name },
       };
-    });
+    }, { timeout: 30000 });
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[admin] delete facility failed:', err);
     res.status(500).json({
-      error: 'Failed to delete facility — likely has dependent rows.',
+      error: 'Failed to delete facility — likely has dependent rows. Retry with ?force=true to deep-clean a TEST facility (irreversible).',
       details: err.message,
     });
   }
