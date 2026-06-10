@@ -2,8 +2,9 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Set EXPO_PUBLIC_API_URL in eas.json (under build profile env) or in a .env file.
-// Falls back to the live Railway backend so builds without the env still work.
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://snap-marketplace-production.up.railway.app/api';
+// Falls back to the production API domain so builds without the env still work.
+// (The old snap-marketplace-production.up.railway.app host also still resolves.)
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.snapmedical.app/api';
 
 // ---------------------------------------------------------------------------
 // Axios instance
