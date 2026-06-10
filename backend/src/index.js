@@ -105,6 +105,8 @@ app.use('/api/facility-claim', require('./routes/facilityClaim'));
 // Provider notification inbox (Task #16) + provider schedule requests (Task #21).
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/schedule-requests', require('./routes/scheduleRequests'));
+// Snappy AI support assistant (Task #17).
+app.use('/api/snappy', require('./routes/snappy'));
 // Coverage Templates + holiday overrides (per-facility). See
 // docs/coverage-templates-design.md.
 app.use('/api/coverage-templates', coverageTemplatesRoutes);

@@ -156,9 +156,19 @@ router.post('/provider/login', async (req, res) => {
   }
 });
 
-// ── Facility registration ─────────────────────────────────────────────────────
-
+// ── Facility registration — RETIRED (Task #12) ─────────────────────────────────
+// Facility self-registration is replaced by the admin-initiated invite + claim
+// flow (snap-applications/capa-pilot/facility-invite-spec.md). Self-register was
+// the source of the orphan-User bug Ryan hit. SNAP Admin now creates the
+// facility and invites the coordinator; this endpoint is disabled.
 router.post('/facility/register', async (req, res) => {
+  return res.status(410).json({
+    error: 'Self-registration is no longer available. Facilities are set up by the SNAP team, who send an invite to set your password. Contact matt@snapmedical.app to get started.',
+  });
+});
+
+// Legacy handler retained below the early-return for reference; never reached.
+router.post('/_facility/register-legacy', async (req, res) => {
   try {
     const { email, password, facilityName, facilityType, address, zipCode, tier } = req.body;
     if (!email || !password || !facilityName) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar.jsx'
+import SnappyWidget from './components/SnappyWidget.jsx'
 import AdminSidebar from './components/AdminSidebar.jsx'
 import { facilityAPI } from './api.js'
 
@@ -304,6 +305,8 @@ export default function App() {
             )}
           </main>
         </div>
+        {/* Snappy AI assistant — facility portal (Task #17) */}
+        <SnappyWidget />
       </div>
     )
   }
