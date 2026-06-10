@@ -1148,6 +1148,83 @@ router.post('/roster/relink-all', adminAuth, async (req, res) => {
   }
 });
 
+// ── Test-era cleanup: purge ALL marketplace provider accounts ──────────────────
+// One-shot tool for clearing May-era test providers before the CAPA pilot.
+// Deletes every User with role=PROVIDER plus their ProviderProfile and the
+// full dependency tree (applications, bookings, completions, ratings,
+// messages, availability, VIP logs, credentials). Also un-links any
+// InternalRosterEntry soft pointers (linkedProviderId has no FK constraint,
+// so without this step roster rows would point at ghosts and My Schedule
+// linking would silently break for re-registering providers).
+//
+// Guarded by an explicit confirm string — this is irreversible and must
+// NEVER run after real providers exist. Remove this endpoint alongside the
+// other temporary admin tools once the pilot is live (task: retire
+// self-register).
+router.post('/providers/purge-all', adminAuth, async (req, res) => {
+  try {
+    if (req.body?.confirm !== 'DELETE ALL PROVIDERS') {
+      return res.status(400).json({
+        error: 'Confirmation required. Pass { "confirm": "DELETE ALL PROVIDERS" } in the body.',
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const profiles = await tx.providerProfile.findMany({
+        select: { id: true, userId: true },
+      });
+      const profileIds = profiles.map((p) => p.id);
+      const userIds = profiles.map((p) => p.userId);
+      if (profileIds.length === 0) {
+        return { providersDeleted: 0, rosterRowsUnlinked: 0 };
+      }
+
+      // Children first. Completions/ratings reference bookings, so they go
+      // before bookings.
+      await tx.shiftCompletion.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.providerRating.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.facilityRating.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.shiftBooking.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.shiftApplication.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.message.deleteMany({ where: { senderId: { in: profileIds } } });
+      await tx.providerAvailability.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.availabilitySubmission.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.vIPPointsLog.deleteMany({ where: { providerId: { in: profileIds } } });
+      await tx.preferredProvider.deleteMany({ where: { providerId: { in: profileIds } } });
+      // Credentialing-portal rows that reference the marketplace profile:
+      // providerId is optional on both — null it rather than delete the rows,
+      // since the cred-portal records may be facility-owned data.
+      await tx.providerCredential.updateMany({
+        where: { providerId: { in: profileIds } },
+        data: { providerId: null },
+      });
+      await tx.facilityRosterEntry.updateMany({
+        where: { providerId: { in: profileIds } },
+        data: { providerId: null },
+      });
+
+      // Un-link internal roster soft pointers BEFORE deleting profiles.
+      const unlinked = await tx.internalRosterEntry.updateMany({
+        where: { linkedProviderId: { in: profileIds } },
+        data: { linkedProviderId: null, snapAccountLinked: false },
+      });
+
+      await tx.providerProfile.deleteMany({ where: { id: { in: profileIds } } });
+      await tx.user.deleteMany({ where: { id: { in: userIds }, role: 'PROVIDER' } });
+
+      return {
+        providersDeleted: profileIds.length,
+        rosterRowsUnlinked: unlinked.count,
+      };
+    }, { timeout: 30000 });
+
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[admin] provider purge failed:', err);
+    res.status(500).json({ error: 'Provider purge failed', details: err.message });
+  }
+});
+
 // ── Facility creation + invite (the proper enterprise onboarding flow) ────────
 // Replaces /auth/facility/register. SNAP Admin creates the Facility in
 // advance, then invites the coordinator(s). Full spec:
