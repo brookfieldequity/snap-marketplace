@@ -50,7 +50,7 @@ export default function SnappyWidget() {
       {/* Launcher bubble */}
       {!open && (
         <button onClick={() => setOpen(true)} style={styles.bubble} title="Ask Snappy" aria-label="Open Snappy assistant">
-          <span style={styles.bubbleMark}>S</span>
+          <span style={styles.bubbleMark}>Snappy</span>
         </button>
       )}
 
@@ -104,12 +104,12 @@ export default function SnappyWidget() {
 
 const styles = {
   bubble: {
-    position: 'fixed', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28,
+    position: 'fixed', bottom: 24, right: 24, height: 52, padding: '0 24px', borderRadius: 26,
     background: 'linear-gradient(135deg, #6366F1, #7C3AED)', border: 'none', cursor: 'pointer',
     boxShadow: '0 8px 24px rgba(99,102,241,0.4)', zIndex: 900,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
-  bubbleMark: { color: '#fff', fontSize: 24, fontWeight: 900, letterSpacing: '-0.02em' },
+  bubbleMark: { color: '#fff', fontSize: 26, fontWeight: 700, fontFamily: "'Dancing Script', cursive", lineHeight: 1, paddingBottom: 2 },
   panel: {
     position: 'fixed', bottom: 24, right: 24, width: 380, maxWidth: 'calc(100vw - 32px)',
     height: 560, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 18,
@@ -118,8 +118,8 @@ const styles = {
   },
   header: { background: '#6366F1', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
-  headerMark: { width: 32, height: 32, borderRadius: 16, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 900, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: '#fff', fontSize: 15, fontWeight: 800, lineHeight: 1.1 },
+  headerMark: { width: 32, height: 32, borderRadius: 16, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: "'Dancing Script', cursive", display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 2 },
+  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 700, lineHeight: 1.1, fontFamily: "'Dancing Script', cursive" },
   headerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11 },
   close: { background: 'transparent', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 },
   body: { flex: 1, overflowY: 'auto', padding: '16px 14px', background: '#FAFAFA', display: 'flex', flexDirection: 'column', gap: 10 },
