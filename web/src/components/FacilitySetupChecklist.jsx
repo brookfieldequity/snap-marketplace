@@ -11,8 +11,10 @@ import { facilityAPI } from '../api.js'
 // The component reads the actual facility state and:
 //   - Renders green ✓ for items that are done.
 //   - Renders hollow ☐ for items still to do, with a "Next step" CTA.
-//   - Hides itself (returns null) when every checklist item is done — so
-//     long-term users get a clean dashboard, not perpetual welcome wagon.
+//   - Stays up even once every item is done (completed items keep their ✓).
+//   - Each row has an "x" to close out that one item; closing an item also
+//     drops its "Next step" CTA. Once every row is closed (or the coordinator
+//     hits "I'm all set"), the whole panel hides. Both are per-facility.
 
 export default function FacilitySetupChecklist({ facility, onNavigate }) {
   const [roster, setRoster]       = useState(null)
@@ -23,6 +25,12 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
     // Per-facility dismissal — if the coordinator hit "I'm all set" once for
     // this facility, don't re-show the checklist.
     try { return localStorage.getItem(`snapChecklistDismissed:${facility?.id}`) === '1' } catch { return false }
+  })
+  const [hiddenRows, setHiddenRows] = useState(() => {
+    // Per-facility, per-item dismissal — coordinators can close out individual
+    // checklist rows they no longer want to see (separate from the whole-panel
+    // "I'm all set" dismissal above).
+    try { return new Set(JSON.parse(localStorage.getItem(`snapChecklistRows:${facility?.id}`) || '[]')) } catch { return new Set() }
   })
 
   useEffect(() => {
@@ -55,22 +63,23 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
   // (across all months — a future-month build counts). See GET /schedule/exists.
   const firstScheduleDone = hasSchedule
 
-  const allDone = facilityInfoDone && sitesDone && rosterDone && firstScheduleDone
-
-  if (allDone) {
-    // Once everything is done, fall through to dismiss + hide.
-    try { localStorage.setItem(`snapChecklistDismissed:${facility?.id}`, '1') } catch {}
-    return null
-  }
-
   function dismiss() {
     try { localStorage.setItem(`snapChecklistDismissed:${facility?.id}`, '1') } catch {}
     setDismissed(true)
   }
 
+  function hideRow(key) {
+    setHiddenRows((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      try { localStorage.setItem(`snapChecklistRows:${facility?.id}`, JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
+
   // Compose "next steps" — only show actions that map to unmet items.
   const nextSteps = []
-  if (!facilityInfoDone) {
+  if (!facilityInfoDone && !hiddenRows.has('facility')) {
     nextSteps.push({
       label: 'Fill in your facility address',
       detail: 'Helps us locate the facility on maps + for shift posting.',
@@ -78,7 +87,7 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
       cta: 'Edit profile',
     })
   }
-  if (!sitesDone) {
+  if (!sitesDone && !hiddenRows.has('sites')) {
     nextSteps.push({
       label: 'Add your sites (operating rooms / locations)',
       detail: 'You schedule providers into sites. Most ASCs have 1–6 sites.',
@@ -86,7 +95,7 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
       cta: 'Configure sites',
     })
   }
-  if (!rosterDone) {
+  if (!rosterDone && !hiddenRows.has('roster')) {
     nextSteps.push({
       label: 'Upload your roster',
       detail: 'Drag in a CSV from your existing system, or add providers one-at-a-time.',
@@ -94,7 +103,7 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
       cta: 'Open roster',
     })
   }
-  if (sitesDone && rosterDone && !firstScheduleDone) {
+  if (sitesDone && rosterDone && !firstScheduleDone && !hiddenRows.has('schedule')) {
     nextSteps.push({
       label: 'Build your first schedule',
       detail: 'SNAP can generate it for you based on your roster + coverage template.',
@@ -102,6 +111,33 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
       cta: 'Build schedule',
     })
   }
+
+  const rows = [
+    {
+      key: 'facility', done: facilityInfoDone, title: 'Facility info',
+      detail: facilityInfoDone
+        ? `${facility?.name}${facility?.state ? `, ${facility?.state}` : ''}${facility?.address ? ` · ${facility?.address}` : ''}`
+        : 'Add an address to complete your facility profile.',
+    },
+    {
+      key: 'sites', done: sitesDone, title: `Sites (${locationsCount})`,
+      detail: sitesDone ? namesPreview(locations) : 'Add the locations / operating rooms you schedule providers into.',
+      loading: loading && locations === null,
+    },
+    {
+      key: 'roster', done: rosterDone, title: `Roster (${rosterCount})`,
+      detail: rosterDone ? rosterPreview(roster) : 'Upload or add the providers who work at this facility.',
+      loading: loading && roster === null,
+    },
+    {
+      key: 'schedule', done: firstScheduleDone, title: 'First schedule',
+      detail: firstScheduleDone ? 'Built.' : 'Build a schedule for your roster and let providers see their shifts.',
+    },
+  ]
+  const visibleRows = rows.filter((r) => !hiddenRows.has(r.key))
+
+  // Whole panel hides only once every row has been individually closed out.
+  if (visibleRows.length === 0) return null
 
   const greeting = greetingFor(facility?.name)
 
@@ -116,30 +152,9 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
       </div>
 
       <div style={styles.checklist}>
-        <ChecklistRow done={facilityInfoDone}
-          title="Facility info"
-          detail={facilityInfoDone
-            ? `${facility?.name}${facility?.state ? `, ${facility?.state}` : ''}${facility?.address ? ` · ${facility?.address}` : ''}`
-            : 'Add an address to complete your facility profile.'}
-        />
-        <ChecklistRow done={sitesDone}
-          title={`Sites (${locationsCount})`}
-          detail={sitesDone
-            ? namesPreview(locations)
-            : 'Add the locations / operating rooms you schedule providers into.'}
-          loading={loading && locations === null}
-        />
-        <ChecklistRow done={rosterDone}
-          title={`Roster (${rosterCount})`}
-          detail={rosterDone
-            ? rosterPreview(roster)
-            : 'Upload or add the providers who work at this facility.'}
-          loading={loading && roster === null}
-        />
-        <ChecklistRow done={firstScheduleDone}
-          title="First schedule"
-          detail={firstScheduleDone ? 'Built.' : 'Build a schedule for your roster and let providers see their shifts.'}
-        />
+        {visibleRows.map((r) => (
+          <ChecklistRow key={r.key} done={r.done} title={r.title} detail={r.detail} loading={r.loading} onClose={() => hideRow(r.key)} />
+        ))}
       </div>
 
       {nextSteps.length > 0 && (
@@ -160,7 +175,7 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
   )
 }
 
-function ChecklistRow({ done, title, detail, loading }) {
+function ChecklistRow({ done, title, detail, loading, onClose }) {
   return (
     <div style={styles.row}>
       <div style={{ ...styles.bullet, background: done ? '#10B981' : 'transparent', borderColor: done ? '#10B981' : '#CBD5E1', color: done ? '#fff' : '#94A3B8' }}>
@@ -170,6 +185,9 @@ function ChecklistRow({ done, title, detail, loading }) {
         <div style={styles.rowTitle}>{title}</div>
         <div style={styles.rowDetail}>{loading ? '…' : detail}</div>
       </div>
+      {onClose && (
+        <button onClick={onClose} title="Hide this item" aria-label="Hide this item" style={styles.rowClose}>✕</button>
+      )}
     </div>
   )
 }
@@ -259,6 +277,17 @@ const styles = {
     justifyContent: 'center',
     fontSize: 13,
     fontWeight: 800,
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  rowClose: {
+    background: 'transparent',
+    border: 'none',
+    color: '#CBD5E1',
+    fontSize: 13,
+    cursor: 'pointer',
+    padding: '2px 6px',
+    lineHeight: 1,
     flexShrink: 0,
     marginTop: 2,
   },
