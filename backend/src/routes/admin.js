@@ -218,11 +218,37 @@ router.delete('/facility/:id', adminAuth, async (req, res) => {
         await tx.credentialUser.deleteMany({ where: { facilityId } });
       }
 
+      // Capture the logins attached to this facility BEFORE removing the
+      // membership links, so we can clean up coordinator accounts that become
+      // orphaned by the delete (TEMPORARY test-teardown convenience).
+      const attachedUserIds = force
+        ? (await tx.facilityUser.findMany({ where: { facilityId }, select: { userId: true } })).map((x) => x.userId)
+        : [];
+
       const fu = await tx.facilityUser.deleteMany({ where: { facilityId } });
       const sub = await tx.facilitySubscription.deleteMany({ where: { facilityId } });
       const fac = await tx.facility.delete({ where: { id: facilityId } });
+
+      // Delete coordinator logins that are now orphaned: role FACILITY_USER with
+      // zero remaining facility memberships. Never PROVIDER/ADMIN accounts, and
+      // never an account still attached to another facility (e.g. an internal
+      // anesthesiologist who is also on the real CAPA roster). Runs after
+      // facility.delete so FacilityInvite rows (onDelete: Cascade) are already
+      // gone and don't pin claimedByUserId.
+      const loginsDeleted = [];
+      for (const uid of attachedUserIds) {
+        const remaining = await tx.facilityUser.count({ where: { userId: uid } });
+        if (remaining > 0) continue;
+        const u = await tx.user.findUnique({ where: { id: uid }, select: { email: true, role: true } });
+        if (u && u.role === 'FACILITY_USER') {
+          await tx.user.delete({ where: { id: uid } });
+          loginsDeleted.push(u.email);
+        }
+      }
+
       return {
         facilityUsersDeleted: fu.count,
+        loginsDeleted,
         subscriptionsDeleted: sub.count,
         forced: force,
         facility: { id: fac.id, name: fac.name },

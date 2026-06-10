@@ -60,6 +60,33 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
     }
   }
 
+  // TEMPORARY (test-period teardown): force-delete a facility + ALL its data +
+  // orphaned coordinator logins. Guarded by typing the exact facility name so a
+  // mis-click can't nuke the real CAPA facility. Remove this + the button after
+  // the pilot.
+  async function handleDeleteFacility(id, name) {
+    const typed = window.prompt(
+      `⚠️ PERMANENTLY delete "${name}"?\n\n` +
+      `This removes the facility and ALL its data — roster, schedules, coverage ` +
+      `templates, shifts, ROI, credentialing — plus orphaned coordinator logins. ` +
+      `This CANNOT be undone.\n\nType the facility name exactly to confirm:`
+    )
+    if (typed === null) return
+    if (typed.trim() !== name) { alert('Name did not match — delete cancelled.'); return }
+    try {
+      const res = await adminAPI.deleteFacility(id, true)
+      const logins = res?.loginsDeleted || []
+      alert(
+        `Deleted "${res?.facility?.name || name}".\n` +
+        `Membership links removed: ${res?.facilityUsersDeleted ?? 0}\n` +
+        `Logins deleted: ${logins.length ? logins.join(', ') : 'none'}`
+      )
+      load()
+    } catch (e) {
+      alert('Delete failed: ' + (e?.message || e))
+    }
+  }
+
   const normalize = (f) => ({
     ...f,
     _name: f.name || '',
@@ -220,6 +247,14 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                     💰 ROI
                   </button>
                 )}
+                {/* TEMPORARY test-teardown button — remove after the pilot */}
+                <button
+                  onClick={() => handleDeleteFacility(f.id, f._name)}
+                  title="TEST TEARDOWN — permanently delete this facility, its data, and orphaned logins"
+                  style={{ padding: '6px 10px', background: '#fff', color: '#DC2626', border: '1.5px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  🗑 Delete
+                </button>
               </div>
             </div>
           )

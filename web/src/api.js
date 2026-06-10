@@ -475,8 +475,8 @@ export const adminAPI = {
       body: JSON.stringify(data),
     }),
 
-  deleteFacility: (facilityId) =>
-    apiFetch(`${BASE}/admin/facility/${facilityId}`, {
+  deleteFacility: (facilityId, force = false) =>
+    apiFetch(`${BASE}/admin/facility/${facilityId}${force ? '?force=true' : ''}`, {
       method: 'DELETE',
       headers: adminHeaders(),
     }),
