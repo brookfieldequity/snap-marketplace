@@ -98,17 +98,20 @@ router.post('/:token', async (req, res) => {
       // Find or create the User row.
       let user = await tx.user.findUnique({ where: { email: invite.email } });
       let createdUser = false;
+      const hashed = await bcrypt.hash(password, 10);
       if (user) {
-        // Existing User. Make sure role is FACILITY_USER so the auth checks
-        // work; don't touch their existing password.
-        if (user.role !== 'FACILITY_USER') {
-          user = await tx.user.update({
-            where: { id: user.id },
-            data: { role: 'FACILITY_USER' },
-          });
-        }
+        // Existing User claiming an invite — overwrite the password with
+        // whatever they typed on the claim page. They're consenting to
+        // re-set credentials by clicking the tokenized invite link, so this
+        // is the correct behavior. (The alternative — preserving an old
+        // password — bites users who try to log back in later: their "new"
+        // password silently doesn't work because the DB still has the old
+        // one.) Also force role to FACILITY_USER so middleware accepts them.
+        user = await tx.user.update({
+          where: { id: user.id },
+          data: { password: hashed, role: 'FACILITY_USER' },
+        });
       } else {
-        const hashed = await bcrypt.hash(password, 10);
         user = await tx.user.create({
           data: {
             email: invite.email,
