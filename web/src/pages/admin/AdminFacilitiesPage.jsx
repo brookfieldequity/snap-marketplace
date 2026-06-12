@@ -7,7 +7,7 @@ const TIER_COLORS = {
   ENTERPRISE:   { bg: '#0F172A', text: '#fff',    border: '#334155' },
 }
 
-const TIER_PRICES = { BASIC: '$750', PROFESSIONAL: '$2,000', ENTERPRISE: '$5,000' }
+const TIER_PRICES = { BASIC: '$2,500', PROFESSIONAL: '$5,000', ENTERPRISE: '$10,000' }
 
 const FACILITY_TYPES = [
   '',

@@ -13,11 +13,11 @@ const TIERS = [
   {
     id: 'BASIC',
     name: 'Basic',
-    price: '$750',
+    price: '$2,500',
     per: '/mo',
     color: '#2563EB',
     features: [
-      'Up to 4 shifts/month',
+      'Full scheduling & marketplace access',
       'Access to credentialed providers',
       'Standard provider pool',
       'Email support',
@@ -27,12 +27,12 @@ const TIERS = [
   {
     id: 'PROFESSIONAL',
     name: 'Professional',
-    price: '$2,000',
+    price: '$5,000',
     per: '/mo',
     color: '#1E3A8A',
     popular: true,
     features: [
-      'Up to 20 shifts/month',
+      'Full scheduling & marketplace access',
       'Preferred provider list',
       'Early access posting (1-4 hrs)',
       'Featured shift listings',
@@ -44,11 +44,11 @@ const TIERS = [
   {
     id: 'ENTERPRISE',
     name: 'Enterprise',
-    price: '$5,000',
+    price: '$10,000',
     per: '/mo',
     color: '#0F172A',
     features: [
-      'Unlimited shifts',
+      'Unlimited usage',
       'Dedicated account manager',
       'VIP provider access',
       'Custom contract terms',
