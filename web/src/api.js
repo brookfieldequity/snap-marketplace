@@ -544,7 +544,7 @@ export const adminAPI = {
   getStaffIQScores: () => apiFetch(`${BASE}/admin/staffiq-scores`, { headers: adminHeaders() }),
   getCalculatorLeads: () => apiFetch(`${BASE}/admin/calculator-leads`, { headers: adminHeaders() }),
   updateCalculatorLead: (id, followUpStatus) => apiFetch(`${BASE}/admin/calculator-leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
-  getGaryPresentation: () => apiFetch(`${BASE}/admin/staffiq/gary-presentation`, { headers: adminHeaders() }),
+  getFacilityPitch: () => apiFetch(`${BASE}/admin/staffiq/facility-pitch`, { headers: adminHeaders() }),
 
   // Credential user management
   getCredentialUsers: () => apiFetch(`${BASE}/admin/credential-users`, { headers: adminHeaders() }),

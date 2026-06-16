@@ -491,8 +491,8 @@ export default function AdminStaffIQPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const [garyMode, setGaryMode] = useState(false)
-  const [garyPage, setGaryPage] = useState(0)
+  const [pitchMode, setPitchMode] = useState(false)
+  const [pitchPage, setPitchPage] = useState(0)
 
   useEffect(() => {
     adminAPI.getStaffIQAnalytics()
@@ -501,9 +501,9 @@ export default function AdminStaffIQPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  function openGaryMode() {
-    setGaryMode(true)
-    setGaryPage(0)
+  function openPitchMode() {
+    setPitchMode(true)
+    setPitchPage(0)
   }
 
   const metrics = [
@@ -513,16 +513,16 @@ export default function AdminStaffIQPage() {
     { label: 'Avg Savings Per Facility / Month', value: fmt$(data?.avgSavingsPerFacilityMonth), icon: '📈', color: '#1E3A8A' },
   ]
 
-  const SlideComponent = SLIDES[garyPage]
+  const SlideComponent = SLIDES[pitchPage]
 
   return (
     <div style={{ padding: '32px 40px' }}>
       {/* Presentation overlay */}
-      {garyMode && (
+      {pitchMode && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#0F172A', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
           {/* Close */}
           <button
-            onClick={() => setGaryMode(false)}
+            onClick={() => setPitchMode(false)}
             style={{ position: 'absolute', top: 24, right: 32, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: 20, width: 40, height: 40, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
           >
             ×
@@ -542,25 +542,25 @@ export default function AdminStaffIQPage() {
           {/* Navigation */}
           <div style={{ padding: '24px 60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
-              onClick={() => setGaryPage(p => Math.max(0, p - 1))}
-              disabled={garyPage === 0}
-              style={{ padding: '10px 24px', background: garyPage === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: garyPage === 0 ? '#475569' : '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: garyPage === 0 ? 'not-allowed' : 'pointer' }}
+              onClick={() => setPitchPage(p => Math.max(0, p - 1))}
+              disabled={pitchPage === 0}
+              style={{ padding: '10px 24px', background: pitchPage === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: pitchPage === 0 ? '#475569' : '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: pitchPage === 0 ? 'not-allowed' : 'pointer' }}
             >
               ← Previous
             </button>
             <div style={{ color: '#64748B', fontSize: 13, fontWeight: 600 }}>
-              {garyPage + 1} of {TOTAL_SLIDES}
+              {pitchPage + 1} of {TOTAL_SLIDES}
             </div>
-            {garyPage < TOTAL_SLIDES - 1 ? (
+            {pitchPage < TOTAL_SLIDES - 1 ? (
               <button
-                onClick={() => setGaryPage(p => Math.min(TOTAL_SLIDES - 1, p + 1))}
+                onClick={() => setPitchPage(p => Math.min(TOTAL_SLIDES - 1, p + 1))}
                 style={{ padding: '10px 24px', background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
               >
                 Next →
               </button>
             ) : (
               <button
-                onClick={() => setGaryMode(false)}
+                onClick={() => setPitchMode(false)}
                 style={{ padding: '10px 24px', background: '#10B981', border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
               >
                 Close Presentation
@@ -581,10 +581,10 @@ export default function AdminStaffIQPage() {
           </p>
         </div>
         <button
-          onClick={openGaryMode}
+          onClick={openPitchMode}
           style={{ padding: '10px 20px', background: '#1E1B4B', color: '#A5B4FC', border: '1px solid #3730A3', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
         >
-          Gary Presentation Mode →
+          Facility Pitch Mode →
         </button>
       </div>
 

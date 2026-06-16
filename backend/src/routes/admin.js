@@ -763,8 +763,8 @@ router.patch('/calculator-leads/:id', adminAuth, async (req, res) => {
   }
 });
 
-// GET /staffiq/gary-presentation — CAPA-specific presentation data
-router.get('/staffiq/gary-presentation', adminAuth, async (req, res) => {
+// GET /staffiq/facility-pitch — CAPA-specific pitch/presentation data
+router.get('/staffiq/facility-pitch', adminAuth, async (req, res) => {
   try {
     // Find CAPA facility
     const facility = await prisma.facility.findFirst({
