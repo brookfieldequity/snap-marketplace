@@ -444,10 +444,12 @@ router.get('/analytics', adminAuth, async (req, res) => {
       where: { bookings: { some: { confirmedAt: { gte: new Date(now.getTime() - 30 * 86400000) } } } },
     });
 
+    // Tier prices repriced 2026-06-10 (Basic 2.5k / Pro 5k / Ent 10k; $750 retired).
+    // Keep in sync with services/scorecard.js TIER_PRICE and the web pricing pages.
     const subscriptionRevenue = {
-      BASIC: (subscriptions.find((s) => s.tier === 'BASIC')?._count.tier || 0) * 750,
-      PROFESSIONAL: (subscriptions.find((s) => s.tier === 'PROFESSIONAL')?._count.tier || 0) * 2000,
-      ENTERPRISE: (subscriptions.find((s) => s.tier === 'ENTERPRISE')?._count.tier || 0) * 5000,
+      BASIC: (subscriptions.find((s) => s.tier === 'BASIC')?._count.tier || 0) * 2500,
+      PROFESSIONAL: (subscriptions.find((s) => s.tier === 'PROFESSIONAL')?._count.tier || 0) * 5000,
+      ENTERPRISE: (subscriptions.find((s) => s.tier === 'ENTERPRISE')?._count.tier || 0) * 10000,
     };
 
     res.json({
