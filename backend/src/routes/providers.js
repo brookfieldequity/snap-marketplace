@@ -79,6 +79,7 @@ router.get('/me/availability', auth, async (req, res) => {
   try {
     const { month, year } = req.query;
     const profile = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+    if (!profile) return res.json([]); // no provider profile yet → nothing to show
     const start = new Date(year || new Date().getFullYear(), (month || new Date().getMonth()) - 1, 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 2, 0);
 
@@ -87,6 +88,7 @@ router.get('/me/availability', auth, async (req, res) => {
     });
     res.json(availability);
   } catch (err) {
+    console.error('[availability] load failed:', err);
     res.status(500).json({ error: 'Failed to load availability' });
   }
 });
@@ -101,14 +103,21 @@ router.post('/me/availability', auth, async (req, res) => {
     // `note` (Task #20) is optional free text attached to that specific date,
     // surfaced to the coordinator in the schedule-builder day editor.
     const profile = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+    if (!profile) {
+      return res.status(400).json({ error: 'No provider profile found — complete your profile before setting availability.' });
+    }
 
-    const ops = dates.map(({ date, available, note }) =>
-      prisma.providerAvailability.upsert({
-        where: { providerId_date: { providerId: profile.id, date: new Date(date) } },
-        create: { providerId: profile.id, date: new Date(date), available, note: note ?? null },
-        update: { available, ...(note !== undefined ? { note: note || null } : {}) },
-      })
-    );
+    // Only upsert entries with a real boolean `available` (the column is required;
+    // a malformed entry would otherwise fail the whole transaction).
+    const ops = dates
+      .filter((d) => d && d.date && typeof d.available === 'boolean')
+      .map(({ date, available, note }) =>
+        prisma.providerAvailability.upsert({
+          where: { providerId_date: { providerId: profile.id, date: new Date(date) } },
+          create: { providerId: profile.id, date: new Date(date), available, note: note ?? null },
+          update: { available, ...(note !== undefined ? { note: note || null } : {}) },
+        })
+      );
     if (clearDates.length > 0) {
       ops.push(
         prisma.providerAvailability.deleteMany({
@@ -119,20 +128,25 @@ router.post('/me/availability', auth, async (req, res) => {
         })
       );
     }
-    const results = await prisma.$transaction(ops);
+    const results = ops.length > 0 ? await prisma.$transaction(ops) : [];
 
-    // VIP point for keeping calendar updated
-    await prisma.providerProfile.update({
-      where: { id: profile.id },
-      data: { vipPoints: { increment: 1 } },
-    });
-    await prisma.vIPPointsLog.create({
-      data: { providerId: profile.id, points: 1, reason: 'CALENDAR_UPDATED' },
-    });
+    // VIP points are a non-critical side effect — never let them fail the save.
+    try {
+      await prisma.providerProfile.update({
+        where: { id: profile.id },
+        data: { vipPoints: { increment: 1 } },
+      });
+      await prisma.vIPPointsLog.create({
+        data: { providerId: profile.id, points: 1, reason: 'CALENDAR_UPDATED' },
+      });
+      await checkVipStatus(profile.id);
+    } catch (vipErr) {
+      console.error('[availability] VIP side-effect failed (availability still saved):', vipErr.message);
+    }
 
-    await checkVipStatus(profile.id);
     res.json(results);
   } catch (err) {
+    console.error('[availability] save failed:', err);
     res.status(500).json({ error: 'Failed to save availability' });
   }
 });

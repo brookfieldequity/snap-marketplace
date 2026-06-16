@@ -457,9 +457,11 @@ export default function StaffIQInsightsPage({ onNavigate }) {
                       <button
                         onClick={() => {
                           const action = insight.snapSolution.buttonAction
-                          if (action === 'create-incentive') onNavigate('incentive')
+                          // Map to real facility page keys (App.jsx). Incentive shifts
+                          // are created on the Gaps page; the shifts home is 'shifts-dashboard'.
+                          if (action === 'create-incentive') onNavigate('gaps')
                           else if (action === 'friday-alerts') onNavigate('windows')
-                          else if (action === 'post-shift') onNavigate('dashboard')
+                          else if (action === 'post-shift') onNavigate('shifts-dashboard')
                           else onNavigate('windows')
                         }}
                         style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(37,99,235,0.35)', flexShrink: 0 }}
