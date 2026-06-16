@@ -529,6 +529,12 @@ export const adminAPI = {
       headers: adminHeaders(),
     }),
 
+  getScorecard: () => apiFetch(`${BASE}/admin/scorecard`, { headers: adminHeaders() }),
+  setScorecardManual: (values) =>
+    apiFetch(`${BASE}/admin/scorecard/manual`, {
+      method: 'POST', headers: adminHeaders(), body: JSON.stringify(values),
+    }),
+
   getStaffIQAnalytics: () => apiFetch(`${BASE}/admin/staffiq/analytics`, { headers: adminHeaders() }),
   getAdminLeads: (status) => apiFetch(`${BASE}/admin/leads${status ? `?status=${status}` : ''}`, { headers: adminHeaders() }),
   updateLeadStatus: (id, followUpStatus) => apiFetch(`${BASE}/admin/leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
