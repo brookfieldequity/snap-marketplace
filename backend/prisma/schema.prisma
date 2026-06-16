@@ -1375,3 +1375,34 @@ model ScheduleRequest {
   @@index([rosterEntryId, date])
   @@index([facilityId, date])
 }
+
+// ── Admin scorecard (EOS weekly scorecard) — see docs/admin-scorecard-spec.md ──
+// Manual inputs for the numbers the platform can't auto-compute yet: MRR (until
+// Stripe billing exists), pipeline + days-to-close (until HubSpot is wired), and
+// CAPA NPS (until a survey mechanism exists). Single upserted row (id="singleton").
+model ScorecardManual {
+  id             String   @id @default("singleton")
+  mrrMonthly     Float? // manual MRR override (until billing)
+  pipelineActive Int? // active sales conversations (HubSpot/manual)
+  avgDaysToClose Float? // avg days to close open deals
+  capaNps        Float? // CAPA administrator NPS (1-10)
+  updatedBy      String?
+  updatedAt      DateTime @updatedAt
+}
+
+// Weekly snapshot of the seven numbers — powers trend lines + the weekly report.
+model ScorecardSnapshot {
+  id                  String   @id @default(cuid())
+  weekOf              DateTime
+  activeProviders     Int      @default(0)
+  shiftsCompletedCum  Int      @default(0)
+  shiftsCompletedWeek Int      @default(0)
+  pipelineActive      Int?
+  avgDaysToClose      Float?
+  mrr                 Float?
+  capaBackupReduction Float? // percent
+  capaNps             Float?
+  createdAt           DateTime @default(now())
+
+  @@index([weekOf])
+}

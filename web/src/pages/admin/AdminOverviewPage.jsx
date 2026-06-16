@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
+import WeeklyScorecard from '../../components/WeeklyScorecard.jsx'
 
 function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -77,6 +78,8 @@ export default function AdminOverviewPage() {
         <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Platform Overview</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Real-time SNAP marketplace metrics</p>
       </div>
+
+      <WeeklyScorecard />
 
       {/* Primary metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>

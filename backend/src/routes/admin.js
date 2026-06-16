@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
 const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
+const scorecard = require('../services/scorecard');
 
 // Where claim links land. The web app deploys separately from the backend
 // (per CLAUDE.md), so this points at the web service URL. Override via
@@ -471,6 +472,32 @@ router.get('/analytics', adminAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
+// ── Weekly Scorecard (EOS) — see docs/admin-scorecard-spec.md ───────────────────
+// The seven numbers, composed from existing data + roiCalc + manual inputs.
+router.get('/scorecard', adminAuth, async (req, res) => {
+  try {
+    res.json(await scorecard.getScorecard());
+  } catch (err) {
+    console.error('[scorecard] load failed:', err);
+    res.status(500).json({ error: 'Failed to load scorecard' });
+  }
+});
+
+// Set the manual inputs (MRR / pipeline / days-to-close / CAPA NPS).
+router.post('/scorecard/manual', adminAuth, async (req, res) => {
+  try {
+    const { mrrMonthly, pipelineActive, avgDaysToClose, capaNps } = req.body || {};
+    const saved = await scorecard.setManual(
+      { mrrMonthly, pipelineActive, avgDaysToClose, capaNps },
+      req.user?.email || null,
+    );
+    res.json(saved);
+  } catch (err) {
+    console.error('[scorecard] save manual failed:', err);
+    res.status(500).json({ error: 'Failed to save scorecard inputs' });
   }
 });
 
