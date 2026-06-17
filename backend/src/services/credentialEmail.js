@@ -39,7 +39,11 @@ async function send(msg) {
     return
   }
   try {
-    await sgMail.send(msg)
+    // Disable SendGrid click tracking — it rewrites links through a branded
+    // tracking subdomain (url####.snapmedical.app) without a valid SSL cert,
+    // causing "connection is not private" on invite links. Transactional email:
+    // links must point straight to the real, valid-cert URL.
+    await sgMail.send({ ...msg, trackingSettings: { clickTracking: { enable: false, enableText: false } } })
   } catch (err) {
     console.error('[credentialEmail] SendGrid error:', err.response?.body || err.message)
   }

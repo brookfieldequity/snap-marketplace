@@ -45,7 +45,11 @@ async function sendPush(tokens, title, body, data = {}) {
 
 async function sendEmail(to, subject, html) {
   if (!process.env.SENDGRID_API_KEY || !to) return;
-  try { await sgMail.send({ to, from: FROM_EMAIL, subject, html }); }
+  // Disable SendGrid click tracking: it rewrites links through a branded tracking
+  // subdomain (url####.snapmedical.app) whose SSL isn't provisioned, so recipients
+  // hit "connection is not private". These are transactional emails (invites,
+  // notifications) — links must go straight to the real, valid-cert URL.
+  try { await sgMail.send({ to, from: FROM_EMAIL, subject, html, trackingSettings: { clickTracking: { enable: false, enableText: false } } }); }
   catch (err) { console.error('SendGrid error:', err.message); }
 }
 
