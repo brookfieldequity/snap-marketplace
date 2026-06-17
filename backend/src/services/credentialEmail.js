@@ -155,7 +155,7 @@ async function sendWelcomeEmail(toEmail, name, facilityName, tempPassword) {
         </div>
         <p style="color:#DC2626;font-weight:600">You will be required to set a new password on your first login.</p>
         <a href="${loginUrl}" style="background:#6366F1;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px;font-weight:600">Sign In to SNAP Credentialing →</a>
-        <p style="color:#94A3B8;font-size:12px;margin-top:24px">If you did not expect this email, please contact admin@snapmedical.com.</p>
+        <p style="color:#94A3B8;font-size:12px;margin-top:24px">If you did not expect this email, please contact admin@snapmedical.app.</p>
       </div>
     `,
   })

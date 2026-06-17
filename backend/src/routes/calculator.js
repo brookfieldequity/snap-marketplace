@@ -450,7 +450,7 @@ router.post('/staffiq-simple/lead', async (req, res) => {
           }),
           // Internal notification to admin
           sgMail.send({
-            to: process.env.ADMIN_EMAIL || 'admin@snapmedical.com',
+            to: process.env.ADMIN_EMAIL || 'admin@snapmedical.app',
             from: process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.app',
             subject: `New StaffIQ Calculator Lead — ${facilityName}`,
             text: [

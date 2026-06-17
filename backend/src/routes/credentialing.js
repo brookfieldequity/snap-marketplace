@@ -138,7 +138,7 @@ router.post('/auth/login', async (req, res) => {
       include: { facility: { select: { id: true, name: true } } },
     })
     if (!user) return res.status(401).json({ error: 'Invalid credentials' })
-    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated. Contact admin@snapmedical.com.' })
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated. Contact admin@snapmedical.app.' })
 
     const valid = await bcrypt.compare(password, user.passwordHash)
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
