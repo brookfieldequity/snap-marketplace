@@ -36,6 +36,7 @@ const automationEventsRoutes = require('./routes/automationEvents');
 const { runSurgePricing, expireOldShifts, openPreferredShifts, notifySurgeExpiring } = require('./jobs/surge');
 const { checkAllVipStatuses } = require('./jobs/vip');
 const { checkExpiredIncentiveShifts } = require('./services/notifications');
+const { seedNetworkPriors } = require('./services/staffiqLearning');
 const { runCredentialAlerts } = require('./jobs/credentialAlerts');
 
 const app = express();
@@ -178,6 +179,7 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   console.log(`SNAP Marketplace backend running on port ${PORT}`);
   await seedAdmin();
+  await seedNetworkPriors(); // jump-start StaffIQ benchmark with published-norm priors
   await runSurgePricing();
   await checkAllVipStatuses();
 });

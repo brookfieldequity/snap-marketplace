@@ -3,6 +3,7 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
+const { dayOfWeekFromLabel } = require('../utils/staffiqScore');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -79,7 +80,11 @@ function parseSchedule4Matrix(workbook) {
     const month = parseInt(match[1], 10);
     const day = parseInt(match[2], 10);
     const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    dateCols.push({ colIndex: c, date, dayPart });
+    // Trust the weekday the file states ("5/01 Fri") over a year-derived guess —
+    // schedules from a prior year (or spanning a year boundary) would otherwise be
+    // mislabeled, which is exactly what breaks Friday detection.
+    const dayOfWeek = dayOfWeekFromLabel(dayPart);
+    dateCols.push({ colIndex: c, date, dayPart, dayOfWeek });
   }
 
   if (dateCols.length === 0) return null;
@@ -143,15 +148,20 @@ function parseSchedule4Matrix(workbook) {
     });
   }
 
+  // date → weekday index (0=Sun..6=Sat) as stated by the source file.
+  const dowByDate = {};
+  dateCols.forEach(({ date, dayOfWeek }) => { dowByDate[date] = dayOfWeek; });
+
   // Flatten facilityDays into a flat records array
   const records = [];
   for (const [facility, days] of Object.entries(facilityDays)) {
     for (const [date, { anes, crna }] of Object.entries(days)) {
+      const dayOfWeek = dowByDate[date] ?? null;
       anes.forEach(({ providerName, shiftHours }) => records.push({
-        facility, providerName, providerType: 'ANES', date, shiftHours,
+        facility, providerName, providerType: 'ANES', date, shiftHours, dayOfWeek,
       }));
       crna.forEach(({ providerName, shiftHours }) => records.push({
-        facility, providerName, providerType: 'CRNA', date, shiftHours,
+        facility, providerName, providerType: 'CRNA', date, shiftHours, dayOfWeek,
       }));
     }
   }
@@ -373,6 +383,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
         shiftDate:        new Date(r.date + 'T12:00:00'),
         durationHours:    r.shiftHours || 10,
         facilityLocation: r.facility,
+        dayOfWeek:        Number.isInteger(r.dayOfWeek) ? r.dayOfWeek : null,
       }));
 
       // Batch insert in chunks of 500
@@ -418,6 +429,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
       facilityLocation: r.facilityLocation ? String(r.facilityLocation) : null,
       caseType:         r.caseType    ? String(r.caseType)    : null,
       rate:             r.rate !== null && r.rate !== undefined ? parseFloat(r.rate) || null : null,
+      dayOfWeek:        (() => { const d = parseShiftDate(r.shiftDate); return d && !isNaN(d.getTime()) ? d.getDay() : null; })(),
     }));
 
     const validDates = records.map((r) => r.shiftDate).filter(Boolean);

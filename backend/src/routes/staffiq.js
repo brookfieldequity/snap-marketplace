@@ -6,6 +6,7 @@ const {
   calculateScoreFromAnalysis,
   getScoreStatus,
 } = require('../utils/staffiqScore');
+const learning = require('../services/staffiqLearning');
 
 const router = express.Router();
 
@@ -126,6 +127,9 @@ router.post('/analyze', facilityAuth, async (req, res) => {
         providerType: true,
         facilityLocation: true,
         durationHours: true,
+        dayOfWeek: true,
+        rate: true,
+        caseType: true,
       },
     });
 
@@ -144,7 +148,14 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       const dateStr = new Date(rec.shiftDate).toISOString().split('T')[0];
       const key = `${location}|${dateStr}`;
       if (!byLocationDate[key]) {
-        byLocationDate[key] = { location, date: dateStr, anesCount: 0, crnaCount: 0 };
+        byLocationDate[key] = {
+          location,
+          date: dateStr,
+          anesCount: 0,
+          crnaCount: 0,
+          // Carry the file-stated weekday so the analyzer doesn't re-guess it.
+          dayOfWeek: Number.isInteger(rec.dayOfWeek) ? rec.dayOfWeek : null,
+        };
       }
       const pt = (rec.providerType || '').toUpperCase();
       if (pt === 'ANESTHESIOLOGIST' || pt === 'ANES') byLocationDate[key].anesCount++;
@@ -210,6 +221,14 @@ router.post('/analyze', facilityAuth, async (req, res) => {
           avgFridayRatio: fac.avgFridayRatio,
           fridayRatioDrop: fac.fridayRatioDrop,
           fridayAnnualPremium: fac.fridayAnnualPremium,
+          // Volume + confidence context behind the corrected, cost-based detection.
+          avgFridayRooms: fac.avgFridayRooms,
+          avgWeekdayRooms: fac.avgWeekdayRooms,
+          avgWeekdayWastePerRoom: fac.avgWeekdayWastePerRoom,
+          avgFridayWastePerRoom: fac.avgFridayWastePerRoom,
+          excessWastePerRoom: fac.excessWastePerRoom,
+          fridaySampleSize: fac.fridaySampleSize,
+          fridayConfidence: fac.fridayConfidence,
         };
         const saved = await saveInsight(
           facilityId,
@@ -257,6 +276,35 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       },
     });
 
+    // ── Learning layer: fold this run into the facility's baseline, refresh the
+    // network benchmark, and grade this facility against it. All best-effort —
+    // failures here must never break the analysis the user just ran.
+    const dates = allRecords.map(r => r.shiftDate).filter(Boolean).map(d => new Date(d).getTime());
+    const dataSpanDays = dates.length
+      ? Math.round((Math.max(...dates) - Math.min(...dates)) / 86400000)
+      : null;
+
+    await learning.updateFacilityProfile(facilityId, facilityResults, scoreResult.score, dataSpanDays);
+    await learning.updateNetworkBenchmark();
+
+    const [benchmark, profile] = await Promise.all([
+      learning.getNetworkBenchmark(),
+      learning.getFacilityProfile(facilityId),
+    ]);
+    const facilityMetrics = learning.summarizeResults(facilityResults);
+    const networkGrade = facilityMetrics ? learning.gradeAgainstNetwork(facilityMetrics, benchmark) : null;
+
+    const hasRates = allRecords.some(r => r.rate != null);
+    const hasCaseTypes = allRecords.some(r => r.caseType != null);
+    const dataReadiness = learning.assessDataReadiness({
+      totalRecords: allRecords.length,
+      dataSpanDays,
+      uploadsAnalyzed: profile?.uploadsAnalyzed || 1,
+      observationCount: profile?.observationCount || 0,
+      hasRates,
+      hasCaseTypes,
+    });
+
     res.json({
       score: scoreResult.score,
       status,
@@ -264,6 +312,15 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       facilityBreakdown: facilityResults,
       totalAnnualWaste,
       recordsAnalyzed: allRecords.length,
+      // Learning-layer context for the portal.
+      learning: {
+        networkGrade,
+        benchmark,
+        dataReadiness,
+        baselineConfidence: dataReadiness.confidence,
+        observationCount: profile?.observationCount || 0,
+        uploadsAnalyzed: profile?.uploadsAnalyzed || 1,
+      },
     });
   } catch (err) {
     console.error(err);
@@ -464,6 +521,113 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load StaffIQ dashboard' });
+  }
+});
+
+// GET /benchmark — facility's learned baseline + network benchmark + standing
+router.get('/benchmark', facilityAuth, async (req, res) => {
+  try {
+    const facilityId = req.facility.id;
+    const [benchmark, profile] = await Promise.all([
+      learning.getNetworkBenchmark(),
+      learning.getFacilityProfile(facilityId),
+    ]);
+
+    // Grade the facility from its own learned profile so the comparison reflects
+    // its stable baseline, not just the most recent upload.
+    let networkGrade = null;
+    if (profile) {
+      const metrics = {
+        costPerRoom: profile.avgCostPerRoom,
+        careTeamRatio: profile.avgCareTeamRatio,
+        wastePerRoom: profile.avgWeekdayWastePerRoom,
+        fridayExcessPerRoom: profile.avgFridayWastePerRoom,
+        inefficiencyPct: profile.avgWeekdayWastePerRoom != null && profile.avgCostPerRoom
+          ? (profile.avgWeekdayWastePerRoom / profile.avgCostPerRoom) * 100
+          : null,
+      };
+      networkGrade = learning.gradeAgainstNetwork(metrics, benchmark);
+    }
+
+    res.json({ profile, benchmark, networkGrade });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load StaffIQ benchmark' });
+  }
+});
+
+// GET /data-readiness — confidence + prioritized "feed me more data" suggestions
+router.get('/data-readiness', facilityAuth, async (req, res) => {
+  try {
+    const facilityId = req.facility.id;
+    const [profile, agg, ratesCount, caseCount] = await Promise.all([
+      learning.getFacilityProfile(facilityId),
+      prisma.schedulingRecord.aggregate({
+        where: { facilityId },
+        _count: { _all: true },
+        _min: { shiftDate: true },
+        _max: { shiftDate: true },
+      }),
+      prisma.schedulingRecord.count({ where: { facilityId, rate: { not: null } } }),
+      prisma.schedulingRecord.count({ where: { facilityId, caseType: { not: null } } }),
+    ]);
+
+    const min = agg._min.shiftDate ? new Date(agg._min.shiftDate).getTime() : null;
+    const max = agg._max.shiftDate ? new Date(agg._max.shiftDate).getTime() : null;
+    const dataSpanDays = min && max ? Math.round((max - min) / 86400000) : 0;
+
+    const readiness = learning.assessDataReadiness({
+      totalRecords: agg._count._all,
+      dataSpanDays,
+      uploadsAnalyzed: profile?.uploadsAnalyzed || 0,
+      observationCount: profile?.observationCount || 0,
+      hasRates: ratesCount > 0,
+      hasCaseTypes: caseCount > 0,
+    });
+
+    res.json(readiness);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to assess data readiness' });
+  }
+});
+
+// POST /insights/:id/feedback — coordinator confirms/dismisses an insight.
+// This is the labeled signal the learning layer uses to calibrate over time.
+router.post('/insights/:id/feedback', facilityAuth, async (req, res) => {
+  try {
+    const facilityId = req.facility.id;
+    const { id } = req.params;
+    const { status, reason, note } = req.body || {};
+
+    const allowed = ['ACCEPTED', 'DISMISSED', 'ACTIONED'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ error: `status must be one of ${allowed.join(', ')}` });
+    }
+
+    const insight = await prisma.staffIQInsight.findFirst({ where: { id, facilityId } });
+    if (!insight) return res.status(404).json({ error: 'Insight not found' });
+
+    const updated = await prisma.staffIQInsight.update({
+      where: { id },
+      data: {
+        status,
+        feedback: { reason: reason || null, note: note || null, by: req.user?.userId || null, at: new Date().toISOString() },
+        actionedAt: status === 'ACTIONED' ? new Date() : insight.actionedAt,
+      },
+    });
+
+    // Log the feedback as an outcome so accept/dismiss rates can tune thresholds.
+    await learning.recordOutcome(facilityId, 'INSIGHT_FEEDBACK', {
+      insightId: id,
+      predictedDollar: insight.dollarImpactEstimate,
+      metadata: { status, reason: reason || null, insightType: insight.insightType },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to record insight feedback' });
   }
 });
 

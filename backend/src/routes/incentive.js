@@ -4,9 +4,14 @@ const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const auth = require('../middleware/auth');
 const { sendSMS, recordNotifications } = require('../services/notifications');
+const learning = require('../services/staffiqLearning');
 
 const router = express.Router();
 const expo = new Expo();
+
+// Agency hourly benchmarks used to estimate realized savings when an internal
+// incentive fill avoids an agency placement (feeds the StaffIQ learning loop).
+const AGENCY_RATES = { ANESTHESIOLOGIST: 425, CRNA: 300, ANESTHESIA_ASSISTANT: 250 };
 
 // ── Push helper ───────────────────────────────────────────────────────────────
 
@@ -229,6 +234,18 @@ router.post('/:id/escalate', facilityAuth, async (req, res) => {
       },
     });
 
+    // An escalation means the internal roster couldn't cover the gap — the signal
+    // StaffIQ uses to learn where internal capacity falls short.
+    const agencyRate = AGENCY_RATES[updated.providerTypeRequired] || 300;
+    await learning.recordOutcome(updated.facilityId, 'INCENTIVE_ESCALATED', {
+      predictedDollar: agencyRate * (updated.durationHours || 0),
+      metadata: {
+        shiftId: updated.id,
+        providerType: updated.providerTypeRequired,
+        incentiveRate: updated.incentiveRate,
+      },
+    });
+
     res.json({
       shift: updated,
       escalated: true,
@@ -392,6 +409,22 @@ router.post('/:id/respond', auth, async (req, res) => {
       updatedShift = await prisma.internalIncentiveShift.update({
         where: { id: shift.id },
         data: { status: 'FILLED' },
+      });
+
+      // Close the loop: an internal fill avoided an agency placement. Record the
+      // realized agency savings so StaffIQ can calibrate its estimates over time.
+      const agencyRate = AGENCY_RATES[shift.providerTypeRequired] || 300;
+      const hours = shift.durationHours || 0;
+      const realizedSavings = Math.max(0, (agencyRate - (shift.incentiveRate || 0)) * hours);
+      await learning.recordOutcome(shift.facilityId, 'INCENTIVE_FILLED', {
+        predictedDollar: agencyRate * hours,
+        realizedDollar: realizedSavings,
+        metadata: {
+          shiftId: shift.id,
+          providerType: shift.providerTypeRequired,
+          incentiveRate: shift.incentiveRate,
+          hours,
+        },
       });
     } else {
       updatedShift = await prisma.internalIncentiveShift.findUnique({

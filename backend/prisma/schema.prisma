@@ -273,6 +273,8 @@ model Facility {
   incentiveShifts     InternalIncentiveShift[]
   staffiqInputs       StaffIQInput[]
   staffiqScoreHistory StaffIQScoreHistory[]
+  staffingProfile     FacilityStaffingProfile?
+  staffiqOutcomes     StaffIQOutcome[]
   credentialUsers     CredentialUser[]
   credRosterEntries   FacilityRosterEntry[]
   coverageTemplates   CoverageTemplate[]
@@ -893,6 +895,10 @@ model SchedulingRecord {
   facilityLocation String?
   caseType         String?
   rate             Float?
+  // Weekday index (0=Sun..6=Sat) as stated by the source schedule, when available.
+  // Preferred over re-deriving from shiftDate so Friday detection stays correct
+  // even for schedules from another year or spanning a year boundary.
+  dayOfWeek        Int?
   sourceUploadId   String?
   sourceUpload     SchedulingUpload? @relation(fields: [sourceUploadId], references: [id])
   createdAt        DateTime          @default(now())
@@ -907,6 +913,11 @@ model StaffIQInsight {
   insightData          Json
   dollarImpactEstimate Float?
   dataPointsAnalyzed   Int?
+  // Closed-loop feedback: coordinators confirm or reject each insight, which is
+  // the labeled signal the learning layer uses to calibrate thresholds over time.
+  status               String      @default("NEW") // NEW | ACCEPTED | DISMISSED | ACTIONED
+  feedback             Json?       // { reason, note, by, at }
+  actionedAt           DateTime?
 }
 
 model InternalIncentiveShift {
@@ -1009,6 +1020,72 @@ model StaffIQScoreHistory {
   score             Int
   calculationMethod String
   calculatedAt      DateTime @default(now())
+}
+
+// ── StaffIQ learning layer ────────────────────────────────────────────────────
+//
+// The learning system has three pieces:
+//   1. FacilityStaffingProfile — each facility's OWN learned baseline, updated as
+//      an exponential moving average on every analysis. This is what lets StaffIQ
+//      grade a facility against its own normal patterns (and get more confident
+//      with more data) instead of applying static universal constants.
+//   2. StaffIQBenchmark — cross-facility network aggregates (the moat). Every
+//      facility is also graded against network percentiles. Seeded with priors so
+//      it's useful on day one, then recomputed as real facilities feed it data.
+//   3. StaffIQOutcome — realized results (incentive fills, escalations, insight
+//      feedback) that close the loop and let estimates be calibrated against truth.
+
+model FacilityStaffingProfile {
+  id                     String   @id @default(cuid())
+  facilityId             String   @unique
+  facility               Facility @relation(fields: [facilityId], references: [id])
+
+  // Learned (EMA) baselines.
+  avgRoomsByDow          Json?    // { "1": 6.2, ..., "5": 3.1 } learned rooms per weekday
+  avgCareTeamRatio       Float?   // learned CRNA:ANES ratio on care-team days
+  avgCostPerRoom         Float?   // learned $/room/shift
+  avgWeekdayWastePerRoom Float?
+  avgFridayWastePerRoom  Float?
+  fridayRoomIndex        Float?   // avg Friday rooms / avg weekday rooms (volume signal)
+
+  // Confidence bookkeeping — more observations = more trustworthy baseline.
+  observationCount       Int      @default(0) // day-records folded in
+  uploadsAnalyzed        Int      @default(0)
+  dataSpanDays           Int?     // calendar span of observed schedule data
+  lastScore              Int?
+
+  updatedAt              DateTime @updatedAt
+  createdAt              DateTime @default(now())
+}
+
+model StaffIQBenchmark {
+  id               String   @id @default(cuid())
+  metric           String   // costPerRoom | careTeamRatio | inefficiencyPct | wastePerRoom | fridayExcessPerRoom
+  scope            String   @default("network") // future: region/specialty scoping
+  p25              Float?
+  median           Float?
+  p75              Float?
+  mean             Float?
+  sampleFacilities Int      @default(0)
+  source           String   @default("computed") // computed | seed_prior
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  @@unique([metric, scope])
+}
+
+model StaffIQOutcome {
+  id              String   @id @default(cuid())
+  facilityId      String
+  facility        Facility @relation(fields: [facilityId], references: [id])
+  insightId       String?  // optional link to the insight that prompted the action
+  outcomeType     String   // INCENTIVE_FILLED | INCENTIVE_ESCALATED | GAP_UNFILLED | INSIGHT_FEEDBACK
+  predictedDollar Float?   // what StaffIQ estimated
+  realizedDollar  Float?   // what actually happened (e.g. agency cost avoided)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([facilityId])
 }
 
 model CalculatorLead {

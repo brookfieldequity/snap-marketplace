@@ -10,7 +10,7 @@ const PANEL_META = {
   FRIDAY_SHORTAGE: {
     title: 'Friday CRNA Shortage',
     icon: '📅',
-    desc: 'Your CRNA-to-ANES ratio drops significantly on Fridays compared to Mon-Thu. This means more expensive anesthesiologist-heavy coverage on the highest-turnover day of the week.',
+    desc: 'On comparable workloads, your Fridays cost more per staffed room than Mon–Thu — typically because CRNAs are harder to cover and rooms get backfilled with anesthesiologists. This compares like-for-like, so it only flags genuinely pricier Fridays, not days that are simply lighter.',
   },
   UTILIZATION: {
     title: 'Staffing Utilization Summary',
@@ -202,48 +202,83 @@ function TeamModelPanel({ data }) {
   )
 }
 
+const CONFIDENCE_META = {
+  high: { label: 'High confidence', color: '#10B981' },
+  medium: { label: 'Medium confidence', color: '#F59E0B' },
+  low: { label: 'Low confidence', color: '#94A3B8' },
+}
+
 function FridayShortagePanel({ data }) {
   const weekdayRatio = data?.avgWeekdayRatio ?? 0
   const fridayRatio = data?.avgFridayRatio ?? 0
-  const maxRatio = 4.0
+  const weekdayWaste = data?.avgWeekdayWastePerRoom
+  const excess = data?.excessWastePerRoom
+  const fridayRooms = data?.avgFridayRooms
+  const weekdayRooms = data?.avgWeekdayRooms
+  const sample = data?.fridaySampleSize
+  const conf = CONFIDENCE_META[data?.fridayConfidence] || CONFIDENCE_META.low
+  // Cost per staffed room drives the flag now; show that as the headline metric.
+  const fridayPerRoom = excess != null && weekdayWaste != null ? weekdayWaste + excess : null
+  const maxPerRoom = Math.max(fridayPerRoom || 0, weekdayWaste || 0, 1)
 
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-        Location: {data?.facilityName}
-      </div>
-      {/* Ratio comparison side-by-side */}
-      <div style={{ display: 'flex', gap: 32, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Mon–Thu Average</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#10B981', letterSpacing: '-0.02em' }}>1:{weekdayRatio.toFixed(1)}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Location: {data?.facilityName}
         </div>
-        <div>
-          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Friday Average</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#EF4444', letterSpacing: '-0.02em' }}>1:{fridayRatio.toFixed(1)}</div>
+        {data?.fridayConfidence && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: conf.color, background: '#F8FAFC', border: `1px solid ${conf.color}33`, borderRadius: 999, padding: '3px 10px' }}>
+            {conf.label}{sample != null ? ` · ${sample} Fridays` : ''}
+          </div>
+        )}
+      </div>
+
+      {/* Excess cost per staffed room — the real driver of the flag */}
+      {excess != null && (
+        <div style={{ display: 'flex', gap: 32, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Mon–Thu cost / room</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#10B981', letterSpacing: '-0.02em' }}>${Math.round(weekdayWaste || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Friday cost / room</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#EF4444', letterSpacing: '-0.02em' }}>${Math.round(fridayPerRoom || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Excess / room</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#DC2626', letterSpacing: '-0.02em' }}>+${Math.round(excess).toLocaleString()}</div>
+          </div>
         </div>
-      </div>
-      <div style={{ fontSize: 13, color: '#EF4444', fontWeight: 600, marginBottom: 18 }}>
-        {data?.fridayRatioDrop}% drop in CRNA coverage on Fridays
-      </div>
-      {/* Bar visualization */}
+      )}
+
+      {/* Volume context — proves this isn't just a lighter day */}
+      {fridayRooms != null && weekdayRooms != null && (
+        <div style={{ fontSize: 12.5, color: '#475569', marginBottom: 16 }}>
+          Friday runs ~<strong>{fridayRooms}</strong> rooms vs ~<strong>{weekdayRooms}</strong> Mon–Thu —
+          the flag reflects pricier coverage per room, not fewer rooms. Supervision ratio: 1:{weekdayRatio.toFixed(1)} → 1:{fridayRatio.toFixed(1)}.
+        </div>
+      )}
+
+      {/* Bar visualization (cost per room) */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 4 }}>Weekday</div>
+          <div style={{ fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 4 }}>Mon–Thu</div>
           <div style={{ background: '#F1F5F9', borderRadius: 6, height: 10, width: '100%', overflow: 'hidden' }}>
-            <div style={{ background: '#10B981', width: `${(weekdayRatio / maxRatio) * 100}%`, height: '100%', borderRadius: 6, transition: 'width 0.4s' }} />
+            <div style={{ background: '#10B981', width: `${((weekdayWaste || 0) / maxPerRoom) * 100}%`, height: '100%', borderRadius: 6, transition: 'width 0.4s' }} />
           </div>
         </div>
         <div>
           <div style={{ fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 4 }}>Friday</div>
           <div style={{ background: '#F1F5F9', borderRadius: 6, height: 10, width: '100%', overflow: 'hidden' }}>
-            <div style={{ background: '#F97316', width: `${(fridayRatio / maxRatio) * 100}%`, height: '100%', borderRadius: 6, transition: 'width 0.4s' }} />
+            <div style={{ background: '#F97316', width: `${((fridayPerRoom || 0) / maxPerRoom) * 100}%`, height: '100%', borderRadius: 6, transition: 'width 0.4s' }} />
           </div>
         </div>
       </div>
+
       {/* Annual premium */}
       <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '10px 14px' }}>
-        This Friday shortage costs an estimated{' '}
+        This Friday premium costs an estimated{' '}
         <span style={{ fontWeight: 700, color: '#DC2626' }}>${data?.fridayAnnualPremium?.toLocaleString()}/year</span>{' '}
         in excess anesthesiologist coverage
       </div>

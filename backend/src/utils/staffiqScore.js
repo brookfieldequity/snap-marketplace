@@ -6,6 +6,30 @@ const DEFAULT_CRNA_RATE = 260;
 const DEFAULT_SHIFT_HOURS = 10;
 const DEFAULT_OPERATING_DAYS = 250;
 
+// Friday-shortage detection tuning.
+// A Friday "shortage" means the facility spends materially MORE per staffed room
+// on Fridays than on comparable Mon–Thu days — typically because CRNAs are
+// unavailable and rooms get backfilled with (pricier) anesthesiologists, or run
+// thinner care teams. We measure this with waste-per-room (actual minus the
+// optimal care-team cost, divided by rooms), which is volume-independent — a
+// smaller-but-efficiently-staffed Friday produces ZERO excess and is never flagged.
+const FRIDAY_MIN_SAMPLE = 3;                 // need >=3 Fridays before we trust the signal
+const FRIDAY_EXCESS_WASTE_PER_ROOM = 100;    // $/room over the shift above weekday baseline
+
+function fridayConfidence(sampleSize) {
+  if (sampleSize >= 8) return 'high';
+  if (sampleSize >= FRIDAY_MIN_SAMPLE) return 'medium';
+  return 'low';
+}
+
+// Map a weekday abbreviation ("Mon".."Sun") to a JS day-of-week index (0=Sun..6=Sat).
+const DOW_LABELS = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function dayOfWeekFromLabel(label) {
+  if (label == null) return null;
+  const key = String(label).trim().slice(0, 3).toLowerCase();
+  return key in DOW_LABELS ? DOW_LABELS[key] : null;
+}
+
 /**
  * Given a single day's staffing (anes count, crna count), determine if it's efficient.
  * Efficient configurations:
@@ -27,9 +51,18 @@ function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE
 
   const dailyWaste = Math.max(0, actualCost - optimalCost);
   const isEfficient = dailyWaste === 0;
+  // Waste per room is volume-independent: it answers "how much more than the
+  // optimal mix does each staffed room cost on this day?" — the basis for a fair
+  // Friday-vs-weekday comparison regardless of how many rooms ran.
+  const wastePerRoom = totalRooms > 0 ? dailyWaste / totalRooms : 0;
 
   // Clinical override flag: all-ANES days with 3+ rooms (may be intentional high-acuity)
   const isPotentialClinicalOverride = crnaCount === 0 && anesCount >= 3;
+
+  // A true care-team day has both provider types present — the only configuration
+  // where the supervision ratio is meaningful. Solo-MD and independent-CRNA days
+  // are excluded from ratio statistics so they don't distort Friday detection.
+  const isCareTeam = anesCount > 0 && crnaCount > 0;
 
   // Supervision ratio (CRNAs per ANES)
   const supervisionRatio = anesCount > 0 ? crnaCount / anesCount : 0;
@@ -39,8 +72,10 @@ function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE
     actualCost,
     optimalCost,
     dailyWaste,
+    wastePerRoom,
     isEfficient,
     isPotentialClinicalOverride,
+    isCareTeam,
     supervisionRatio,
     optimalAnes,
     optimalCrnas,
@@ -56,6 +91,7 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
   const anesRate = rates.anesRate || DEFAULT_ANES_RATE;
   const crnaRate = rates.crnaRate || DEFAULT_CRNA_RATE;
   const shiftHours = rates.shiftHours || DEFAULT_SHIFT_HOURS;
+  const operatingDays = rates.operatingDays || DEFAULT_OPERATING_DAYS;
 
   let totalDays = 0;
   let inefficientDays = 0;
@@ -64,8 +100,18 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
   let totalOptimalCost = 0;
   let totalRooms = 0;
 
-  const weekdayRatios = []; // Mon-Thu
-  const fridayRatios = [];
+  // Care-team supervision ratios (display only) — computed solely on days with
+  // both provider types present, so solo/independent days never skew them.
+  const weekdayRatios = []; // Mon-Thu care-team days
+  const fridayRatios = [];   // Friday care-team days
+
+  // Waste-per-room samples drive the actual Friday-shortage decision.
+  const weekdayWastePerRoom = [];
+  const fridayWastePerRoom = [];
+  let fridayRoomTotal = 0;
+  let fridayDayCount = 0;
+  let weekdayRoomTotal = 0;
+  let weekdayDayCount = 0;
 
   records.forEach(rec => {
     if (rec.isWeekend) return;
@@ -78,36 +124,55 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     if (!day.isEfficient && !day.isPotentialClinicalOverride) inefficientDays++;
     if (day.isPotentialClinicalOverride) clinicalOverrideDays++;
 
-    const dateObj = new Date(rec.date + 'T12:00:00');
-    const dow = dateObj.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
-    const ratio = day.supervisionRatio;
+    // Prefer the weekday the source file stated (rec.dayOfWeek, 0=Sun..6=Sat);
+    // fall back to deriving it from the date string only if no label was carried.
+    const dow = Number.isInteger(rec.dayOfWeek)
+      ? rec.dayOfWeek
+      : new Date(rec.date + 'T12:00:00').getDay();
 
-    if (dow === 5) fridayRatios.push(ratio);
-    else if (dow >= 1 && dow <= 4) weekdayRatios.push(ratio);
+    if (dow === 5) {
+      fridayDayCount++;
+      fridayRoomTotal += day.totalRooms;
+      fridayWastePerRoom.push(day.wastePerRoom);
+      if (day.isCareTeam) fridayRatios.push(day.supervisionRatio);
+    } else if (dow >= 1 && dow <= 4) {
+      weekdayDayCount++;
+      weekdayRoomTotal += day.totalRooms;
+      weekdayWastePerRoom.push(day.wastePerRoom);
+      if (day.isCareTeam) weekdayRatios.push(day.supervisionRatio);
+    }
   });
 
   const inefficiencyPct = totalDays > 0 ? (inefficientDays / totalDays) * 100 : 0;
-  const annualWaste = (totalActualCost - totalOptimalCost) * (DEFAULT_OPERATING_DAYS / Math.max(totalDays, 1));
+  const annualWaste = (totalActualCost - totalOptimalCost) * (operatingDays / Math.max(totalDays, 1));
 
-  // Friday shortage detection
-  const avgWeekdayRatio = weekdayRatios.length > 0 ? weekdayRatios.reduce((a, b) => a + b, 0) / weekdayRatios.length : 0;
-  const avgFridayRatio = fridayRatios.length > 0 ? fridayRatios.reduce((a, b) => a + b, 0) / fridayRatios.length : 0;
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+
+  // Display-only care-team ratios.
+  const avgWeekdayRatio = avg(weekdayRatios);
+  const avgFridayRatio = avg(fridayRatios);
   const fridayRatioDrop = avgWeekdayRatio > 0 ? (avgWeekdayRatio - avgFridayRatio) / avgWeekdayRatio : 0;
-  const hasFridayShortage = fridayRatios.length >= 2 && fridayRatioDrop > 0.20;
 
-  // Friday premium cost (annual)
+  // Friday-shortage decision: do Fridays carry materially more cost-above-optimal
+  // per room than Mon–Thu? This is true only when Fridays are genuinely staffed
+  // less efficiently (e.g. MD backfill) — not merely lighter.
+  const avgFridayWastePerRoom = avg(fridayWastePerRoom);
+  const avgWeekdayWastePerRoom = avg(weekdayWastePerRoom);
+  const excessWastePerRoom = Math.max(0, avgFridayWastePerRoom - avgWeekdayWastePerRoom);
+  const avgFridayRooms = fridayDayCount > 0 ? fridayRoomTotal / fridayDayCount : 0;
+  const avgWeekdayRooms = weekdayDayCount > 0 ? weekdayRoomTotal / weekdayDayCount : 0;
+
+  const hasFridayShortage =
+    fridayDayCount >= FRIDAY_MIN_SAMPLE &&
+    excessWastePerRoom > FRIDAY_EXCESS_WASTE_PER_ROOM;
+
+  // Annual Friday premium: excess waste per room, on actual Friday room volume,
+  // across the facility's own count of operating Fridays (operatingDays / 5).
+  // wastePerRoom already bakes in shiftHours, so no extra hours multiplier.
   let fridayAnnualPremium = 0;
   if (hasFridayShortage) {
-    // Lower CRNA ratio on Fridays means more ANES-heavy coverage = higher cost per room
-    const avgFridayRooms = totalRooms / Math.max(totalDays, 1);
-    const weekdayCostPerRoom = avgWeekdayRatio > 0
-      ? (1 / (1 + avgWeekdayRatio)) * anesRate + (avgWeekdayRatio / (1 + avgWeekdayRatio)) * crnaRate
-      : anesRate;
-    const fridayCostPerRoom = avgFridayRatio > 0
-      ? (1 / (1 + avgFridayRatio)) * anesRate + (avgFridayRatio / (1 + avgFridayRatio)) * crnaRate
-      : anesRate;
-    const premiumPerRoom = Math.max(0, fridayCostPerRoom - weekdayCostPerRoom);
-    fridayAnnualPremium = Math.round(premiumPerRoom * avgFridayRooms * shiftHours * 48);
+    const fridaysPerYear = operatingDays / 5;
+    fridayAnnualPremium = Math.round(excessWastePerRoom * avgFridayRooms * fridaysPerYear);
   }
 
   return {
@@ -124,6 +189,14 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     hasFridayShortage,
     fridayRatioDrop: Math.round(fridayRatioDrop * 100),
     fridayAnnualPremium,
+    // Volume + confidence context so the UI can be honest about the signal.
+    avgFridayRooms: Math.round(avgFridayRooms * 10) / 10,
+    avgWeekdayRooms: Math.round(avgWeekdayRooms * 10) / 10,
+    fridaySampleSize: fridayDayCount,
+    fridayConfidence: fridayConfidence(fridayDayCount),
+    avgFridayWastePerRoom: Math.round(avgFridayWastePerRoom),
+    avgWeekdayWastePerRoom: Math.round(avgWeekdayWastePerRoom),
+    excessWastePerRoom: Math.round(excessWastePerRoom),
     avgRooms: totalDays > 0 ? Math.round((totalRooms / totalDays) * 10) / 10 : 0,
     weekdayRatios,
     fridayRatios,
@@ -249,6 +322,7 @@ module.exports = {
   calculateScoreFromAnalysis,
   calculateStaffIQScore,
   getScoreStatus,
+  dayOfWeekFromLabel,
   DEFAULT_ANES_RATE,
   DEFAULT_CRNA_RATE,
   DEFAULT_SHIFT_HOURS,
