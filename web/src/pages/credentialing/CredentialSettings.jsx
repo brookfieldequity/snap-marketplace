@@ -389,7 +389,7 @@ function RosterTab() {
                           disabled={inviting === r.id}
                           style={{ padding: '5px 12px', border: '1px solid #C7D2FE', borderRadius: 6, background: '#EFF6FF', fontSize: 12, fontWeight: 600, cursor: inviting === r.id ? 'not-allowed' : 'pointer', color: '#2563EB' }}
                         >
-                          {inviting === r.id ? 'Sending…' : 'Invite'}
+                          {inviting === r.id ? 'Sending…' : 'Invite to SNAP Credentialing'}
                         </button>
                       )}
                       <button onClick={() => handleRemove(r.id)} style={{ padding: '5px 12px', border: '1px solid #FCA5A5', borderRadius: 6, background: '#FFF5F5', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#EF4444' }}>Remove</button>

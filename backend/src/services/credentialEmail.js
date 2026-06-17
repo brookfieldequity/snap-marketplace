@@ -13,6 +13,9 @@ const APP_URL = process.env.APP_URL || 'https://snap-marketplace.up.railway.app'
 // option in the provider invite — the primary CTA stays the tokenized web claim
 // link, which is what binds the provider to the inviting facility.
 const CRED_APP_INVITE_URL = process.env.CRED_APP_INVITE_URL || 'https://testflight.apple.com/join/12ZpetEh'
+// Facility-coordinator onboarding invites come from the admin alias (not the
+// credentialing alias) — these are account/relationship emails, not credentialing.
+const ADMIN_FROM = process.env.ADMIN_FROM || 'admin@snapmedical.app'
 
 function credTypeName(type) {
   const names = {
@@ -201,7 +204,7 @@ async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, rol
 
   await send({
     to: toEmail,
-    from: FROM,
+    from: ADMIN_FROM,
     replyTo: 'matt@snapmedical.app',
     subject,
     html: `

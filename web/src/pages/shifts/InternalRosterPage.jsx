@@ -935,7 +935,7 @@ export default function InternalRosterPage({ onNavigate }) {
                       title={!hasContact(p) ? 'Add an email or phone to send a credentialing invite' : 'Send credentialing invite'}
                       style={{ padding: '6px 14px', background: p.credentialingStatus === 'INVITED' ? '#F0FDF4' : '#EFF6FF', border: `1px solid ${p.credentialingStatus === 'INVITED' ? '#86EFAC' : '#A5B4FC'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: p.credentialingStatus === 'INVITED' ? '#15803D' : '#1D4ED8', opacity: hasContact(p) ? 1 : 0.5 }}
                     >
-                      {p.credentialingStatus === 'INVITED' ? '↻ Re-invite' : '✉️ Invite'}
+                      {p.credentialingStatus === 'INVITED' ? '↻ Re-invite to SNAP Credentialing' : '✉️ Invite to SNAP Credentialing'}
                     </button>
                   )}
                   <button onClick={() => handleDelete(p.id)} disabled={deletingIds[p.id]} style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626', marginLeft: 'auto' }}>
