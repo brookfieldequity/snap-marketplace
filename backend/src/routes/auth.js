@@ -252,7 +252,12 @@ router.post('/facility/login', async (req, res) => {
 
 router.post('/admin/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
+    // Guard missing fields: findUnique({ where: { email: undefined } }) throws,
+    // which previously turned a blank submit into a 500 instead of a clean 401.
+    if (!email || !password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || user.role !== 'ADMIN') {
       return res.status(401).json({ error: 'Invalid credentials' });

@@ -159,9 +159,10 @@ export default function RegisterScreen({ navigation }) {
 
   const validateStep2 = () => {
     const e = {};
-    if (!maLicenseNumber.trim()) e.maLicenseNumber = 'License number is required';
-    if (!maLicenseExpiry.trim()) e.maLicenseExpiry = 'Expiry date is required';
-    else if (!/^\d{2}\/\d{4}$/.test(maLicenseExpiry)) e.maLicenseExpiry = 'Format: MM/YYYY';
+    // License number + expiry are optional at signup — providers can add them
+    // later in their profile / when credentialing. Only validate expiry format
+    // if they chose to enter it. The MA-license acknowledgment is still required.
+    if (maLicenseExpiry.trim() && !/^\d{2}\/\d{4}$/.test(maLicenseExpiry)) e.maLicenseExpiry = 'Format: MM/YYYY';
     if (!maLicenseAcknowledged) e.maLicenseAcknowledged = 'You must confirm your license';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -358,7 +359,7 @@ export default function RegisterScreen({ navigation }) {
       <Text style={styles.stepSubtitle}>All providers must hold a valid MA license</Text>
 
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>MA License / CRNA Cert Number</Text>
+        <Text style={styles.label}>MA License / CRNA Cert Number (optional)</Text>
         <TextInput
           style={[styles.input, errors.maLicenseNumber && styles.inputError]}
           value={maLicenseNumber}
@@ -373,7 +374,7 @@ export default function RegisterScreen({ navigation }) {
       </View>
 
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Expiration date</Text>
+        <Text style={styles.label}>Expiration date (optional)</Text>
         <TextInput
           style={[styles.input, errors.maLicenseExpiry && styles.inputError]}
           value={maLicenseExpiry}
