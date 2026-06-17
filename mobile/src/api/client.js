@@ -86,6 +86,25 @@ export const authAPI = {
    */
   resetPassword: (email, code, newPassword) =>
     api.post('/auth/reset-password', { email, code, newPassword }),
+
+  /**
+   * Sign in / sign up with a verified Google ID token.
+   * The backend verifies the token server-side against Google before issuing
+   * a SNAP JWT. Returns { token, user }.
+   * @param {string} idToken - Google OIDC id_token from expo-auth-session
+   */
+  oauthGoogle: (idToken) => api.post('/auth/oauth/google', { idToken }),
+
+  /**
+   * Sign in / sign up with a verified Apple identity token.
+   * The backend verifies the token against Apple's public keys. Returns
+   * { token, user }.
+   * @param {string} identityToken - Apple JWT from expo-apple-authentication
+   * @param {object} [fullName] - Apple's { givenName, familyName }, present
+   *   only on the first authorization.
+   */
+  oauthApple: (identityToken, fullName) =>
+    api.post('/auth/oauth/apple', { identityToken, fullName }),
 };
 
 // ---------------------------------------------------------------------------

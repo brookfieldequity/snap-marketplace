@@ -2,6 +2,8 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
+const jwksClient = require('jwks-rsa');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const { reverseLinkForProvider } = require('../services/rosterLink');
@@ -155,6 +157,210 @@ router.post('/provider/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── OAuth sign-in (Google + Apple) ──────────────────────────────────────────────
+//
+// Both endpoints verify the provider's token SERVER-SIDE against the issuing
+// provider (Google / Apple). We NEVER trust a client-supplied email or
+// identity claim — the email is read only from the cryptographically-verified
+// token payload. On success we find-or-create a PROVIDER User (no password —
+// OAuth users authenticate via their identity provider) and issue the exact
+// same JWT shape as /provider/login.
+//
+// SECURITY NOTE: these are scaffolds. They are inert (return 503) until the
+// corresponding env vars are configured, so shipping this code adds no
+// attack surface before real client IDs are in place.
+
+// Lazily-built, cached Apple JWKS client. Apple rotates its signing keys, so
+// jwks-rsa caches keys and re-fetches on a cache miss.
+let _appleJwks = null;
+function getAppleJwksClient() {
+  if (!_appleJwks) {
+    _appleJwks = jwksClient({
+      jwksUri: 'https://appleid.apple.com/auth/keys',
+      cache: true,
+      cacheMaxEntries: 5,
+      cacheMaxAge: 10 * 60 * 1000, // 10 min
+      rateLimit: true,
+    });
+  }
+  return _appleJwks;
+}
+
+// Resolve the public key for a given Apple JWT `kid` (header key id).
+function appleGetSigningKey(header, callback) {
+  getAppleJwksClient().getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err);
+    callback(null, key.getPublicKey());
+  });
+}
+
+// Lazily-built, cached Google OAuth2 client (only used for token verification).
+let _googleClient = null;
+function getGoogleClient() {
+  if (!_googleClient) _googleClient = new OAuth2Client();
+  return _googleClient;
+}
+
+/**
+ * Find an existing PROVIDER User by email, or create one (with a nested
+ * ProviderProfile) for an OAuth sign-in. Password stays null — these users
+ * authenticate exclusively through their identity provider. Mirrors the
+ * create shape used by /provider/register, minus the password/PIN/license bits
+ * (those are collected later in profile completion).
+ *
+ * Returns the { token, user } payload to send back to the client, in the same
+ * shape as /provider/login.
+ */
+async function loginOrCreateOAuthUser({ email, firstName, lastName }) {
+  const normalizedEmail = String(email).trim().toLowerCase();
+
+  let user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: { providerProfile: true },
+  });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        // No password for OAuth users — they sign in via Google/Apple only.
+        password: null,
+        role: 'PROVIDER',
+        providerProfile: {
+          create: {
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
+            profileCompletePct: 10,
+          },
+        },
+      },
+      include: { providerProfile: true },
+    });
+
+    // Recompute completeness from whatever the provider gave us.
+    if (user.providerProfile) {
+      const pct = calcProfilePct(user.providerProfile);
+      await prisma.providerProfile.update({
+        where: { id: user.providerProfile.id },
+        data: { profileCompletePct: pct },
+      });
+    }
+  }
+
+  // Stitch this provider to any roster row a facility already imported.
+  // Idempotent + non-fatal — never block sign-in if it errors.
+  if (user.providerProfile) {
+    reverseLinkForProvider({
+      id: user.providerProfile.id,
+      userEmail: user.email,
+      npiNumber: user.providerProfile.npiNumber || null,
+    }).catch((e) => console.error('[auth] reverse-link on oauth failed:', e.message));
+  }
+
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile?.id },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  return { token, user: { id: user.id, email: user.email, profileId: user.providerProfile?.id } };
+}
+
+// POST /api/auth/oauth/google  { idToken }
+router.post('/oauth/google', async (req, res) => {
+  try {
+    const audiences = (process.env.GOOGLE_CLIENT_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (audiences.length === 0) {
+      return res.status(503).json({ error: 'Google sign-in is not configured.' });
+    }
+
+    const { idToken } = req.body || {};
+    if (!idToken) return res.status(400).json({ error: 'idToken is required.' });
+
+    let payload;
+    try {
+      const ticket = await getGoogleClient().verifyIdToken({ idToken, audience: audiences });
+      payload = ticket.getPayload();
+    } catch (e) {
+      console.error('[auth] google verifyIdToken failed:', e.message);
+      return res.status(401).json({ error: 'Invalid Google token.' });
+    }
+
+    if (!payload || !payload.email) {
+      return res.status(400).json({ error: 'Google did not provide an email.' });
+    }
+    if (!payload.email_verified) {
+      return res.status(401).json({ error: 'Google email is not verified.' });
+    }
+
+    const result = await loginOrCreateOAuthUser({
+      email: payload.email,
+      firstName: payload.given_name || undefined,
+      lastName: payload.family_name || undefined,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[auth] oauth/google failed:', err);
+    return res.status(500).json({ error: 'Google sign-in failed.' });
+  }
+});
+
+// POST /api/auth/oauth/apple  { identityToken, fullName? }
+// fullName (when present, only on first auth) is Apple's shape:
+//   { givenName, familyName }
+router.post('/oauth/apple', async (req, res) => {
+  try {
+    const appleClientId = process.env.APPLE_CLIENT_ID;
+    if (!appleClientId) {
+      return res.status(503).json({ error: 'Apple sign-in is not configured.' });
+    }
+
+    const { identityToken, fullName } = req.body || {};
+    if (!identityToken) return res.status(400).json({ error: 'identityToken is required.' });
+
+    let payload;
+    try {
+      payload = await new Promise((resolve, reject) => {
+        jwt.verify(
+          identityToken,
+          appleGetSigningKey,
+          {
+            algorithms: ['RS256'],
+            issuer: 'https://appleid.apple.com',
+            audience: appleClientId,
+          },
+          (err, decoded) => (err ? reject(err) : resolve(decoded))
+        );
+      });
+    } catch (e) {
+      console.error('[auth] apple identityToken verify failed:', e.message);
+      return res.status(401).json({ error: 'Invalid Apple token.' });
+    }
+
+    // Apple only returns the email on the FIRST authorization. After that the
+    // token has no email claim — until we persist an Apple subject mapping
+    // (future work), fall back to email sign-up.
+    const email = payload && payload.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Apple did not provide an email; please use email sign-up.' });
+    }
+
+    const result = await loginOrCreateOAuthUser({
+      email,
+      firstName: fullName?.givenName || undefined,
+      lastName: fullName?.familyName || undefined,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[auth] oauth/apple failed:', err);
+    return res.status(500).json({ error: 'Apple sign-in failed.' });
   }
 });
 

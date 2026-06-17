@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { authAPI } from '../api/client';
+import {
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_ANDROID_CLIENT_ID,
+  GOOGLE_WEB_CLIENT_ID,
+  GOOGLE_ENABLED,
+  APPLE_ENABLED,
+} from '../config/oauth';
+
+// Required for the web-based Google auth flow to dismiss the browser session.
+WebBrowser.maybeCompleteAuthSession();
 
 const COLORS = {
   primary: '#2563EB',
@@ -32,7 +45,36 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Google sign-in via expo-auth-session. Returns a `request` (null until the
+  // hook is ready), a `response` we react to in the effect below, and a
+  // `promptAsync` to launch the flow. We request an id_token so the backend
+  // can verify it server-side. Only configured when client IDs are present.
+  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+  });
+
+  // When Google returns an id_token, exchange it with our backend.
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const idToken = googleResponse.params?.id_token || googleResponse.authentication?.idToken;
+      if (idToken) {
+        exchangeGoogleToken(idToken);
+      } else {
+        setOauthLoading(false);
+        Alert.alert('Sign In Failed', 'Google did not return an identity token. Please try again.');
+      }
+    } else if (googleResponse?.type === 'error') {
+      setOauthLoading(false);
+      Alert.alert('Sign In Failed', 'Google sign-in could not be completed.');
+    } else if (googleResponse?.type === 'dismiss' || googleResponse?.type === 'cancel') {
+      setOauthLoading(false);
+    }
+  }, [googleResponse]);
 
   const validate = () => {
     const newErrors = {};
@@ -67,6 +109,96 @@ export default function LoginScreen({ navigation }) {
     Alert.alert('Coming Soon', `${provider} sign-in will be available in a future update.`);
   };
 
+  // Shared post-login handling — mirrors handleLogin: persist the token under
+  // the same AsyncStorage key and reset to the Main stack.
+  const completeOAuthLogin = async (token) => {
+    await AsyncStorage.setItem('snapToken', token);
+    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+  };
+
+  // Backend-error → user-facing message, with a graceful note when sign-in
+  // isn't configured yet (503 from the scaffolded endpoints).
+  const oauthErrorMessage = (err, provider) => {
+    if (err.response?.status === 503) {
+      return `${provider} sign-in isn't available yet. Please sign in with email.`;
+    }
+    return (
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      `${provider} sign-in failed. Please try again or use email.`
+    );
+  };
+
+  const exchangeGoogleToken = async (idToken) => {
+    try {
+      const response = await authAPI.oauthGoogle(idToken);
+      await completeOAuthLogin(response.data.token);
+    } catch (err) {
+      Alert.alert('Sign In Failed', oauthErrorMessage(err, 'Google'));
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    // Fallback before client IDs are configured, or if the auth request hook
+    // hasn't initialized — keeps the build usable pre-credentials.
+    if (!GOOGLE_ENABLED || !googleRequest) {
+      handleSocialComingSoon('Google');
+      return;
+    }
+    setOauthLoading(true);
+    try {
+      await googlePromptAsync();
+      // Result is handled in the googleResponse effect above.
+    } catch (err) {
+      setOauthLoading(false);
+      Alert.alert('Sign In Failed', 'Google sign-in could not be started.');
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    if (!APPLE_ENABLED) {
+      handleSocialComingSoon('Apple');
+      return;
+    }
+    setOauthLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const identityToken = credential.identityToken;
+      if (!identityToken) {
+        Alert.alert('Sign In Failed', 'Apple did not return an identity token. Please try again.');
+        return;
+      }
+
+      // fullName is only present on the FIRST authorization. Pass Apple's shape
+      // through so the backend can seed first/last name on account creation.
+      const fullName = credential.fullName
+        ? {
+            givenName: credential.fullName.givenName || undefined,
+            familyName: credential.fullName.familyName || undefined,
+          }
+        : undefined;
+
+      const response = await authAPI.oauthApple(identityToken, fullName);
+      await completeOAuthLogin(response.data.token);
+    } catch (err) {
+      // User-cancelled the native sheet — stay silent.
+      if (err.code === 'ERR_REQUEST_CANCELED' || err.code === 'ERR_CANCELED') {
+        return;
+      }
+      Alert.alert('Sign In Failed', oauthErrorMessage(err, 'Apple'));
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -95,27 +227,35 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.socialSection}>
             <TouchableOpacity
               style={styles.socialButton}
-              onPress={() => handleSocialComingSoon('Google')}
+              onPress={handleGoogleSignIn}
+              disabled={oauthLoading}
               activeOpacity={0.75}
             >
               <Text style={styles.socialIcon}>G</Text>
               <Text style={styles.socialButtonText}>Continue with Google</Text>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
+              {!GOOGLE_ENABLED && (
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonText}>Soon</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialComingSoon('Apple')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.socialIconApple}></Text>
-              <Text style={styles.socialButtonText}>Continue with Apple</Text>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
-            </TouchableOpacity>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={handleAppleSignIn}
+                disabled={oauthLoading}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.socialIconApple}></Text>
+                <Text style={styles.socialButtonText}>Continue with Apple</Text>
+                {!APPLE_ENABLED && (
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonText}>Soon</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Divider */}
