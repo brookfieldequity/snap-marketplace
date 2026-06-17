@@ -11,7 +11,14 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Used to center the shift map near you and sort shifts by distance."
+        "NSLocationWhenInUseUsageDescription": "Used to center the shift map near you and sort shifts by distance.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.724134958485-teqsmte78bbruief2npp1b9ds3039pgg"
+            ]
+          }
+        ]
       }
     },
     "android": {
