@@ -46,6 +46,23 @@ async function apiFetch(url, options = {}) {
   return data
 }
 
+// ─── Shared auth API (forgot/reset password — OTP code flow, no auth header) ───
+
+export const authAPI = {
+  forgotPassword: (email) =>
+    apiFetch(`${BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (email, code, newPassword) =>
+    apiFetch(`${BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, newPassword }),
+    }),
+}
+
 // ─── Facility API ─────────────────────────────────────────────────────────────
 
 export const facilityAPI = {
