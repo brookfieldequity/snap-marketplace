@@ -14,7 +14,9 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.snapmedical.app/api"
+        "EXPO_PUBLIC_API_URL": "https://api.snapmedical.app/api",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "724134958485-teqsmte78bbruief2npp1b9ds3039pgg.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "724134958485-su5e2h4kequ0jkrvekiv7tmvkglu6qkr.apps.googleusercontent.com"
       }
     }
   },
