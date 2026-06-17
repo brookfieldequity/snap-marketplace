@@ -40,6 +40,40 @@ const COLORS = {
   error: '#EF4444',
 };
 
+// Google sign-in button. ISOLATED in its own component so the
+// expo-auth-session hook (which throws on an empty client ID) only ever runs
+// when real client IDs are configured — the parent renders this only when
+// GOOGLE_ENABLED. Calls onToken(idToken) on success.
+function GoogleSignInButton({ onToken, disabled }) {
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const idToken = response.params?.id_token || response.authentication?.idToken;
+      if (idToken) onToken(idToken);
+      else Alert.alert('Sign In Failed', 'Google did not return an identity token. Please try again.');
+    } else if (response?.type === 'error') {
+      Alert.alert('Sign In Failed', 'Google sign-in could not be completed.');
+    }
+  }, [response]);
+
+  return (
+    <TouchableOpacity
+      style={styles.socialButton}
+      onPress={() => promptAsync()}
+      disabled={disabled || !request}
+      activeOpacity={0.75}
+    >
+      <Text style={styles.socialIcon}>G</Text>
+      <Text style={styles.socialButtonText}>Continue with Google</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,33 +82,12 @@ export default function LoginScreen({ navigation }) {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Google sign-in via expo-auth-session. Returns a `request` (null until the
-  // hook is ready), a `response` we react to in the effect below, and a
-  // `promptAsync` to launch the flow. We request an id_token so the backend
-  // can verify it server-side. Only configured when client IDs are present.
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
-    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
-  });
-
-  // When Google returns an id_token, exchange it with our backend.
-  useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const idToken = googleResponse.params?.id_token || googleResponse.authentication?.idToken;
-      if (idToken) {
-        exchangeGoogleToken(idToken);
-      } else {
-        setOauthLoading(false);
-        Alert.alert('Sign In Failed', 'Google did not return an identity token. Please try again.');
-      }
-    } else if (googleResponse?.type === 'error') {
-      setOauthLoading(false);
-      Alert.alert('Sign In Failed', 'Google sign-in could not be completed.');
-    } else if (googleResponse?.type === 'dismiss' || googleResponse?.type === 'cancel') {
-      setOauthLoading(false);
-    }
-  }, [googleResponse]);
+  // NOTE: Google sign-in is intentionally NOT wired up here. expo-auth-session's
+  // useIdTokenAuthRequest hook THROWS during render when no client ID is set,
+  // which crashes the login screen on launch. So the hook lives in the
+  // <GoogleSignInButton> child component below, which is only rendered when
+  // GOOGLE_ENABLED (real client IDs configured). Until then we show a plain
+  // "coming soon" button with no hook.
 
   const validate = () => {
     const newErrors = {};
@@ -137,23 +150,6 @@ export default function LoginScreen({ navigation }) {
       Alert.alert('Sign In Failed', oauthErrorMessage(err, 'Google'));
     } finally {
       setOauthLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    // Fallback before client IDs are configured, or if the auth request hook
-    // hasn't initialized — keeps the build usable pre-credentials.
-    if (!GOOGLE_ENABLED || !googleRequest) {
-      handleSocialComingSoon('Google');
-      return;
-    }
-    setOauthLoading(true);
-    try {
-      await googlePromptAsync();
-      // Result is handled in the googleResponse effect above.
-    } catch (err) {
-      setOauthLoading(false);
-      Alert.alert('Sign In Failed', 'Google sign-in could not be started.');
     }
   };
 
@@ -225,20 +221,22 @@ export default function LoginScreen({ navigation }) {
 
           {/* Social Buttons */}
           <View style={styles.socialSection}>
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={handleGoogleSignIn}
-              disabled={oauthLoading}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.socialIcon}>G</Text>
-              <Text style={styles.socialButtonText}>Continue with Google</Text>
-              {!GOOGLE_ENABLED && (
+            {GOOGLE_ENABLED ? (
+              <GoogleSignInButton onToken={exchangeGoogleToken} disabled={oauthLoading} />
+            ) : (
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => handleSocialComingSoon('Google')}
+                disabled={oauthLoading}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.socialIcon}>G</Text>
+                <Text style={styles.socialButtonText}>Continue with Google</Text>
                 <View style={styles.comingSoonBadge}>
                   <Text style={styles.comingSoonText}>Soon</Text>
                 </View>
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            )}
 
             {Platform.OS === 'ios' && (
               <TouchableOpacity
