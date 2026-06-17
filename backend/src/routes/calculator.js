@@ -632,7 +632,7 @@ function generateStaffIQSimplePdf({
       { lineGap: 4 }
     );
     doc.moveDown(1);
-    doc.fontSize(12).fillColor('#1a2e4a').text('Ready to get started? Visit snapmedical.com or reply to this email.');
+    doc.fontSize(12).fillColor('#1a2e4a').text('Ready to get started? Visit snapmedical.app or reply to this email.');
     doc.moveDown(1);
     pageFooter();
 

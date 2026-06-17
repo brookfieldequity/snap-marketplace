@@ -262,7 +262,7 @@ export default function SubscriptionPage() {
                 </div>
               ) : tier.id === 'ENTERPRISE' ? (
                 <a
-                  href="mailto:hello@snapmedical.com"
+                  href="mailto:hello@snapmedical.app"
                   style={{
                     display: 'block',
                     textAlign: 'center',
@@ -322,7 +322,7 @@ export default function SubscriptionPage() {
 
       <p style={{ textAlign: 'center', fontSize: 13, color: '#94A3B8', marginTop: 24 }}>
         Need help choosing a plan?{' '}
-        <a href="mailto:hello@snapmedical.com" style={{ color: '#2563EB', fontWeight: 600 }}>
+        <a href="mailto:hello@snapmedical.app" style={{ color: '#2563EB', fontWeight: 600 }}>
           Contact our team
         </a>
       </p>

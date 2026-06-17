@@ -166,7 +166,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@snapmedical.com"
+                    placeholder="admin@snapmedical.app"
                     required
                     style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
@@ -236,7 +236,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="admin@snapmedical.com"
+                  placeholder="admin@snapmedical.app"
                   required
                   autoFocus
                   style={inputStyle}

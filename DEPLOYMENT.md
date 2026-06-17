@@ -48,10 +48,10 @@ In the backend service → **Variables** tab, add every variable from `backend/.
 |---|---|
 | `DATABASE_URL` | Your Neon URL or the Railway PostgreSQL URL from Step 2 |
 | `JWT_SECRET` | Run `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` locally and paste the result |
-| `ADMIN_EMAIL` | `admin@snapmedical.com` |
+| `ADMIN_EMAIL` | `admin@snapmedical.app` |
 | `ADMIN_PASSWORD` | A strong password you will use to log into the admin panel |
 | `SENDGRID_API_KEY` | Your SendGrid key (starts with `SG.`) |
-| `SENDGRID_FROM_EMAIL` | `noreply@snapmedical.com` |
+| `SENDGRID_FROM_EMAIL` | `noreply@snapmedical.app` |
 | `TWILIO_ACCOUNT_SID` | Your Twilio SID (starts with `AC`) |
 | `TWILIO_AUTH_TOKEN` | Your Twilio auth token |
 | `TWILIO_PHONE_NUMBER` | `+18669701509` |
@@ -158,17 +158,17 @@ Before building a new version of the mobile app pointing to Railway:
 
 ## Step 8 — Custom Domain (Optional)
 
-To use `api.snapmedical.com` and `app.snapmedical.com` instead of Railway's generated URLs:
+To use `api.snapmedical.app` and `app.snapmedical.app` instead of Railway's generated URLs:
 
 1. Backend service → **Settings** → **Domains** → **Custom Domain**
-   - Add `api.snapmedical.com`
+   - Add `api.snapmedical.app`
    - Add the CNAME record Railway provides to your DNS (Namecheap / Cloudflare)
 2. Web service → **Settings** → **Domains** → **Custom Domain**
-   - Add `app.snapmedical.com`
+   - Add `app.snapmedical.app`
 3. After DNS propagates (~5 min with Cloudflare, up to 48h otherwise), update:
-   - Backend `CORS_ORIGINS` to include `https://app.snapmedical.com`
-   - Web `VITE_API_URL` to `https://api.snapmedical.com/api`
-   - `mobile/eas.json` `EXPO_PUBLIC_API_URL` to `https://api.snapmedical.com/api`
+   - Backend `CORS_ORIGINS` to include `https://app.snapmedical.app`
+   - Web `VITE_API_URL` to `https://api.snapmedical.app/api`
+   - `mobile/eas.json` `EXPO_PUBLIC_API_URL` to `https://api.snapmedical.app/api`
 
 ---
 
