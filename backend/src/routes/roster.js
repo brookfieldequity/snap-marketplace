@@ -694,7 +694,7 @@ router.post('/bulk-invite', facilityAuth, async (req, res) => {
 // Email always (when SendGrid is configured); SMS when Twilio is configured.
 
 const APP_INVITE_URL = process.env.APP_INVITE_URL ||
-  'https://apps.apple.com/app/snap-medical'; // safe placeholder
+  'https://testflight.apple.com/join/MEfbAxDX'; // SNAP app TestFlight public link
 
 function buildAppInviteEmail(entry, facilityName) {
   const url = APP_INVITE_URL;

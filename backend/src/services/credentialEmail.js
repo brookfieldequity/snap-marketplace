@@ -6,6 +6,10 @@ if (process.env.SENDGRID_API_KEY) {
 
 const FROM = process.env.SENDGRID_FROM || 'credentialing@snapmedical.com'
 const APP_URL = process.env.APP_URL || 'https://snap-marketplace.up.railway.app'
+// SNAP Credentialing mobile app (TestFlight public link). Offered as a secondary
+// option in the provider invite — the primary CTA stays the tokenized web claim
+// link, which is what binds the provider to the inviting facility.
+const CRED_APP_INVITE_URL = process.env.CRED_APP_INVITE_URL || 'https://testflight.apple.com/join/12ZpetEh'
 
 function credTypeName(type) {
   const names = {
@@ -90,6 +94,8 @@ async function sendProviderInvitation(toEmail, providerName, facilityName, invit
       <p>Your digital credential passport allows your facility to verify and track your credentials automatically — no more paper forms.</p>
       <p><a href="${inviteLink}" style="background:#6366F1;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">Create My SNAP Account</a></p>
       <p style="color:#94A3B8;font-size:12px">If you already have a SNAP account, log in and your credentials will be linked automatically.</p>
+      <p style="margin-top:24px;padding-top:16px;border-top:1px solid #E2E8F0;color:#475569;font-size:13px">Prefer the mobile app? Get the SNAP Credentialing app on your iPhone:</p>
+      <p><a href="${CRED_APP_INVITE_URL}" style="background:#fff;color:#6366F1;border:1.5px solid #6366F1;padding:10px 22px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600">Get the SNAP Credentialing app →</a></p>
     `,
   })
 }
