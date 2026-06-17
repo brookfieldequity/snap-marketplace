@@ -8,6 +8,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.snapmedical.marketplace",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Used to center the shift map near you and sort shifts by distance."
