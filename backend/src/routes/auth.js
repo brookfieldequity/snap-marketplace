@@ -529,6 +529,12 @@ router.post('/forgot-password', async (req, res) => {
     if (!user) {
       return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
     }
+    // ADMIN accounts are never resettable via self-service — password recovery
+    // for the admin panel is owner-controlled / out-of-band only. Respond
+    // generically (no enumeration) and send nothing.
+    if (user.role === 'ADMIN') {
+      return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
+    }
 
     const now = new Date();
 
@@ -588,6 +594,11 @@ router.post('/reset-password', async (req, res) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+    // ADMIN accounts cannot be reset via self-service — refuse generically even
+    // if a code somehow exists. Admin password recovery is owner-controlled.
+    if (user.role === 'ADMIN') {
       return res.status(400).json({ error: 'Invalid or expired reset code.' });
     }
 
