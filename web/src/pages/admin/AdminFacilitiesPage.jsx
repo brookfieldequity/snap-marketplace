@@ -9,12 +9,14 @@ const TIER_COLORS = {
 
 const TIER_PRICES = { BASIC: '$2,500', PROFESSIONAL: '$5,000', ENTERPRISE: '$10,000' }
 
+// Values must match the FacilityType enum in the Prisma schema; labels are for display.
 const FACILITY_TYPES = [
-  '',
-  'ASC',
-  'HOSPITAL',
-  'OFFICE_BASED',
-  'OTHER',
+  { value: '',               label: '— Select —' },
+  { value: 'SURGERY_CENTER', label: 'Surgery Center (ASC)' },
+  { value: 'HOSPITAL',       label: 'Hospital' },
+  { value: 'OUTPATIENT',     label: 'Outpatient / Office-Based' },
+  { value: 'DENTAL',         label: 'Dental' },
+  { value: 'OTHER',          label: 'Other' },
 ]
 
 const ROLE_OPTIONS = [
@@ -382,7 +384,7 @@ function NewFacilityModal({ onClose, onCreated }) {
 
         <Field label="Type">
           <select value={facilityType} onChange={(e) => setFacilityType(e.target.value)} style={inputStyle}>
-            {FACILITY_TYPES.map((t) => <option key={t || 'none'} value={t}>{t || '— Select —'}</option>)}
+            {FACILITY_TYPES.map((t) => <option key={t.value || 'none'} value={t.value}>{t.label}</option>)}
           </select>
         </Field>
 

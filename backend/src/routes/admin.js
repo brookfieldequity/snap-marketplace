@@ -1311,6 +1311,22 @@ router.post('/providers/purge-all', adminAuth, async (req, res) => {
 // advance, then invites the coordinator(s). Full spec:
 // snap-applications/capa-pilot/facility-invite-spec.md (locked 2026-06-09).
 
+// Facility.facilityType is a FacilityType enum (HOSPITAL | SURGERY_CENTER |
+// OUTPATIENT | DENTAL | OTHER). Normalize any incoming value — including legacy
+// free-form labels like "ASC"/"OFFICE_BASED" still sent by older clients — to a
+// valid enum member, so a stray value can never blow up the create with a Prisma
+// validation error. Blank/unknown → null (the column is optional).
+function normalizeFacilityType(raw) {
+  if (!raw) return null;
+  const v = String(raw).trim().toUpperCase();
+  if (['HOSPITAL'].includes(v)) return 'HOSPITAL';
+  if (['SURGERY_CENTER', 'ASC', 'SURGERY', 'SURGICAL', 'AMBULATORY_SURGERY_CENTER'].includes(v)) return 'SURGERY_CENTER';
+  if (['OUTPATIENT', 'OFFICE_BASED', 'OFFICE', 'CLINIC', 'AMBULATORY'].includes(v)) return 'OUTPATIENT';
+  if (['DENTAL'].includes(v)) return 'DENTAL';
+  if (['OTHER'].includes(v)) return 'OTHER';
+  return 'OTHER'; // unrecognized but non-empty → bucket as OTHER rather than 500
+}
+
 // POST /admin/facilities — create a new facility (and its subscription).
 // Atomic via $transaction so we can never produce orphan-facility-without-
 // subscription states like the old /auth/facility/register could.
@@ -1324,7 +1340,7 @@ router.post('/facilities', adminAuth, async (req, res) => {
       return tx.facility.create({
         data: {
           name: name.trim(),
-          facilityType: facilityType || null,
+          facilityType: normalizeFacilityType(facilityType),
           address: address || null,
           zipCode: zipCode || null,
           state: state || 'MA',
