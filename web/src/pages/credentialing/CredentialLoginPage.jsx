@@ -142,7 +142,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <p style={{ color: '#334155', fontSize: 13, margin: '0 0 8px' }}>
             To request facility access, contact SNAP Medical at{' '}
-            <a href="mailto:admin@snapmedical.com" style={{ color: '#2563EB', textDecoration: 'none' }}>admin@snapmedical.com</a>
+            <a href="mailto:admin@snapmedical.app" style={{ color: '#2563EB', textDecoration: 'none' }}>admin@snapmedical.app</a>
           </p>
         </div>
 
