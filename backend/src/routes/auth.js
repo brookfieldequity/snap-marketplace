@@ -497,13 +497,14 @@ function resetCodeEmailHtml(code) {
   <span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em">SNAP Medical</span>
 </td></tr>
 <tr><td style="padding:32px">
-  <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">Password reset code</h2>
+  <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">Your verification code</h2>
   <div style="font-size:14px;color:#374151;line-height:1.6">
-    <p>Use the code below to reset your SNAP password:</p>
+    <p>Enter this 6-digit code on the password reset screen to confirm it's you. You'll choose your new password on the next step.</p>
     <div style="margin:24px 0;text-align:center">
       <span style="display:inline-block;font-size:34px;font-weight:800;letter-spacing:10px;color:#0F172A;background:#F1F5F9;border-radius:12px;padding:16px 28px">${code}</span>
     </div>
-    <p>This code expires in <strong>15 minutes</strong>.</p>
+    <p style="color:#64748B"><strong>This code is not your password</strong> — it just verifies it's you. You'll create your new password after entering it.</p>
+    <p>The code expires in <strong>15 minutes</strong>.</p>
     <p>If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
   </div>
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #F1F5F9;font-size:11px;color:#94A3B8">
