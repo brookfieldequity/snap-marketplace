@@ -656,7 +656,7 @@ export default function InternalRosterPage({ onNavigate }) {
               Cancel
             </button>
             <button onClick={handleBulkInviteToApp} disabled={bulkDeleting} style={{ padding: '8px 16px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
-              📱 Invite {selectedIds.size} to App
+              📱 Invite {selectedIds.size} to SNAP
             </button>
             <button onClick={handleBulkDelete} disabled={bulkDeleting} style={{ padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDeleting ? 'default' : 'pointer', opacity: bulkDeleting ? 0.6 : 1 }}>
               {bulkDeleting ? 'Deleting…' : `🗑️ Delete ${selectedIds.size} selected`}
@@ -925,7 +925,7 @@ export default function InternalRosterPage({ onNavigate }) {
                       title={!hasContact(p) ? 'Add an email or phone before inviting' : 'Email/SMS a download link for the marketplace mobile app'}
                       style={{ padding: '6px 14px', background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: hasContact(p) ? 'pointer' : 'not-allowed', color: '#047857', opacity: hasContact(p) ? 1 : 0.5 }}
                     >
-                      {invitingToApp[p.id] ? '…' : (p.inviteSentAt ? '↻ Re-invite to App' : '📱 Invite to App')}
+                      {invitingToApp[p.id] ? '…' : (p.inviteSentAt ? '↻ Re-invite to SNAP' : '📱 Invite to SNAP')}
                     </button>
                   )}
                   {canCredential(p) && p.credentialingStatus !== 'CLAIMED' && p.credentialingStatus !== 'COMPLETED' && (
