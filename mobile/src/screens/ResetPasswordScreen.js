@@ -12,7 +12,6 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from '../api/client';
 
 const COLORS = {
@@ -27,44 +26,44 @@ const COLORS = {
   error: '#EF4444',
 };
 
-export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function ResetPasswordScreen({ navigation, route }) {
+  const email = route?.params?.email || '';
+
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   const validate = () => {
     const newErrors = {};
-    if (!email.trim()) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Enter a valid email';
-    if (!password) newErrors.password = 'Password is required';
+    if (!/^\d{6}$/.test(code.trim())) newErrors.code = 'Enter the 6-digit code';
+    if (!newPassword) newErrors.newPassword = 'Password is required';
+    else if (newPassword.length < 8) newErrors.newPassword = 'Must be at least 8 characters';
+    if (confirmPassword !== newPassword) newErrors.confirmPassword = 'Passwords do not match';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const response = await authAPI.providerLogin({ email: email.trim().toLowerCase(), password });
-      const { token } = response.data;
-      await AsyncStorage.setItem('snapToken', token);
-      // Navigate to main tabs — replace auth stack
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      const response = await authAPI.resetPassword(email, code.trim(), newPassword);
+      const msg = response.data?.message || 'Password updated. You can now sign in.';
+      Alert.alert('Password updated', msg, [
+        { text: 'Sign In', onPress: () => navigation.navigate('Login') },
+      ]);
     } catch (err) {
       const msg =
         err.response?.data?.message ||
         err.response?.data?.error ||
-        'Login failed. Please check your credentials.';
-      Alert.alert('Sign In Failed', msg);
+        'Could not reset password. Please try again.';
+      Alert.alert('Reset Failed', msg);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSocialComingSoon = (provider) => {
-    Alert.alert('Coming Soon', `${provider} sign-in will be available in a future update.`);
   };
 
   return (
@@ -78,7 +77,6 @@ export default function LoginScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
@@ -87,73 +85,44 @@ export default function LoginScreen({ navigation }) {
             <View style={styles.logoMini}>
               <Text style={styles.logoMiniText}>S</Text>
             </View>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to your SNAP account</Text>
+            <Text style={styles.title}>Reset password</Text>
+            <Text style={styles.subtitle}>
+              {email
+                ? `Enter the 6-digit code sent to ${email} and choose a new password.`
+                : 'Enter the 6-digit code from your email and choose a new password.'}
+            </Text>
           </View>
 
-          {/* Social Buttons */}
-          <View style={styles.socialSection}>
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialComingSoon('Google')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.socialIcon}>G</Text>
-              <Text style={styles.socialButtonText}>Continue with Google</Text>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialComingSoon('Apple')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.socialIconApple}></Text>
-              <Text style={styles.socialButtonText}>Continue with Apple</Text>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or sign in with email</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Form */}
           <View style={styles.form}>
-            {/* Email */}
+            {/* Code */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email address</Text>
+              <Text style={styles.label}>6-digit code</Text>
               <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
-                value={email}
-                onChangeText={(v) => { setEmail(v); setErrors((e) => ({ ...e, email: null })); }}
-                placeholder="you@example.com"
+                style={[styles.input, errors.code && styles.inputError]}
+                value={code}
+                onChangeText={(v) => { setCode(v); setErrors((e) => ({ ...e, code: null })); }}
+                placeholder="123456"
                 placeholderTextColor="#94A3B8"
-                keyboardType="email-address"
+                keyboardType="number-pad"
+                maxLength={6}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              {errors.code && <Text style={styles.errorText}>{errors.code}</Text>}
             </View>
 
-            {/* Password */}
+            {/* New password */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>New password</Text>
               <View style={styles.passwordRow}>
                 <TextInput
-                  style={[styles.input, styles.passwordInput, errors.password && styles.inputError]}
-                  value={password}
-                  onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: null })); }}
+                  style={[styles.input, styles.passwordInput, errors.newPassword && styles.inputError]}
+                  value={newPassword}
+                  onChangeText={(v) => { setNewPassword(v); setErrors((e) => ({ ...e, newPassword: null })); }}
                   placeholder="••••••••"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                 />
                 <TouchableOpacity
                   style={styles.showPasswordButton}
@@ -162,36 +131,42 @@ export default function LoginScreen({ navigation }) {
                   <Text style={styles.showPasswordText}>{showPassword ? 'Hide' : 'Show'}</Text>
                 </TouchableOpacity>
               </View>
-              {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+              {errors.newPassword && <Text style={styles.errorText}>{errors.newPassword}</Text>}
             </View>
 
-            <TouchableOpacity
-              style={styles.forgotLink}
-              onPress={() => navigation.navigate('ForgotPassword')}
-            >
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
+            {/* Confirm password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Confirm new password</Text>
+              <TextInput
+                style={[styles.input, errors.confirmPassword && styles.inputError]}
+                value={confirmPassword}
+                onChangeText={(v) => { setConfirmPassword(v); setErrors((e) => ({ ...e, confirmPassword: null })); }}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+            </View>
           </View>
 
-          {/* Submit */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleLogin}
+            onPress={handleSubmit}
             disabled={loading}
             activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color={COLORS.white} />
             ) : (
-              <Text style={styles.submitButtonText}>Sign In</Text>
+              <Text style={styles.submitButtonText}>Update password</Text>
             )}
           </TouchableOpacity>
 
-          {/* Register link */}
           <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Get Started</Text>
+            <Text style={styles.registerText}>Didn't get a code? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={styles.registerLink}>Request again</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -253,73 +228,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: COLORS.textMuted,
-  },
-  socialSection: {
-    gap: 10,
-    marginBottom: 24,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  socialIcon: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#EA4335',
-    marginRight: 12,
-    width: 20,
     textAlign: 'center',
-  },
-  socialIconApple: {
-    fontSize: 16,
-    color: COLORS.textDark,
-    marginRight: 12,
-    width: 20,
-    textAlign: 'center',
-  },
-  socialButtonText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textDark,
-  },
-  comingSoonBadge: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  comingSoonText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-    letterSpacing: 0.3,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dividerText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginHorizontal: 12,
+    paddingHorizontal: 12,
   },
   form: {
     marginBottom: 8,
@@ -368,15 +278,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.error,
     marginTop: 6,
-  },
-  forgotLink: {
-    alignSelf: 'flex-end',
-    marginTop: 4,
-  },
-  forgotText: {
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '600',
   },
   submitButton: {
     backgroundColor: COLORS.primary,

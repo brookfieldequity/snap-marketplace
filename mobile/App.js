@@ -17,6 +17,8 @@ Notifications.setNotificationHandler({
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import ShiftDetailScreen from './src/screens/ShiftDetailScreen';
 import MainTabs from './src/navigation/MainTabs';
 
@@ -56,6 +58,8 @@ export default function App() {
           <RootStack.Screen name="Welcome" component={WelcomeScreen} />
           <RootStack.Screen name="Login" component={LoginScreen} />
           <RootStack.Screen name="Register" component={RegisterScreen} />
+          <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <RootStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
           <RootStack.Screen name="Main" component={MainTabs} />
           <RootStack.Screen name="ShiftDetail" component={ShiftDetailScreen} />
         </RootStack.Navigator>

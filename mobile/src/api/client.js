@@ -70,6 +70,22 @@ export const authAPI = {
    * @param {object} data - { pin }
    */
   verifyPin: (data) => api.post('/auth/provider/verify-pin', data),
+
+  /**
+   * Request a 6-digit password reset code by email.
+   * Always resolves generically (no account enumeration).
+   * @param {string} email
+   */
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+
+  /**
+   * Reset the password using the emailed code.
+   * @param {string} email
+   * @param {string} code - 6-digit code
+   * @param {string} newPassword
+   */
+  resetPassword: (email, code, newPassword) =>
+    api.post('/auth/reset-password', { email, code, newPassword }),
 };
 
 // ---------------------------------------------------------------------------

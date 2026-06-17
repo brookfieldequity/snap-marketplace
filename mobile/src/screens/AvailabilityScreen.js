@@ -279,7 +279,10 @@ export default function AvailabilityScreen() {
       setDirty(false);
       Alert.alert('Saved', 'Your availability has been updated.');
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message || 'Could not save availability.');
+      // Backend sends { error }, not { message } — surface the real reason
+      // (e.g. "complete your profile before setting availability") instead of a
+      // generic catch-all so the provider knows what to do.
+      Alert.alert('Error', err.response?.data?.error || err.response?.data?.message || 'Could not save availability.');
     } finally {
       setSaving(false);
     }

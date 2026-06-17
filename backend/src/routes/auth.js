@@ -1,9 +1,11 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const { reverseLinkForProvider } = require('../services/rosterLink');
+const { sendEmail } = require('../services/notifications');
 
 const router = express.Router();
 
@@ -266,6 +268,155 @@ router.post('/admin/login', async (req, res) => {
     res.json({ token });
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── Forgot password — request a reset code ─────────────────────────────────────
+
+const GENERIC_FORGOT_MESSAGE =
+  "If an account exists for that email, we've sent a 6-digit reset code.";
+
+function resetCodeEmailHtml(code) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;padding:32px 16px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;border:1px solid #E2E8F0">
+<tr><td style="background:#6366F1;padding:24px 32px;border-radius:16px 16px 0 0">
+  <span style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em">SNAP Medical</span>
+</td></tr>
+<tr><td style="padding:32px">
+  <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">Password reset code</h2>
+  <div style="font-size:14px;color:#374151;line-height:1.6">
+    <p>Use the code below to reset your SNAP password:</p>
+    <div style="margin:24px 0;text-align:center">
+      <span style="display:inline-block;font-size:34px;font-weight:800;letter-spacing:10px;color:#0F172A;background:#F1F5F9;border-radius:12px;padding:16px 28px">${code}</span>
+    </div>
+    <p>This code expires in <strong>15 minutes</strong>.</p>
+    <p>If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
+  </div>
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #F1F5F9;font-size:11px;color:#94A3B8">
+    SNAP Medical Marketplace · Massachusetts
+  </div>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+}
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Always respond generically — never reveal whether the account exists.
+    if (!user) {
+      return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
+    }
+
+    const now = new Date();
+
+    // Rate-limit: if an active code was issued in the last 60s, don't issue
+    // another one (but still respond with the generic success).
+    const recent = await prisma.passwordReset.findFirst({
+      where: {
+        userId: user.id,
+        used: false,
+        expiresAt: { gt: now },
+        createdAt: { gt: new Date(now.getTime() - 60 * 1000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) {
+      return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
+    }
+
+    // Invalidate any prior unused codes for this user.
+    await prisma.passwordReset.updateMany({
+      where: { userId: user.id, used: false },
+      data: { used: true },
+    });
+
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = await bcrypt.hash(code, 10);
+
+    await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        expiresAt: new Date(now.getTime() + 15 * 60 * 1000),
+        attempts: 0,
+        used: false,
+      },
+    });
+
+    await sendEmail(user.email, 'Your SNAP password reset code', resetCodeEmailHtml(code));
+
+    return res.json({ ok: true, message: GENERIC_FORGOT_MESSAGE });
+  } catch (err) {
+    console.error('[auth] forgot-password failed:', err);
+    return res.status(500).json({ error: 'Could not process request. Please try again.' });
+  }
+});
+
+// ── Reset password — verify code + set new password ────────────────────────────
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { code, newPassword } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+
+    const reset = await prisma.passwordReset.findFirst({
+      where: { userId: user.id, used: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!reset) {
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+
+    const attempts = reset.attempts + 1;
+
+    // Too many attempts → burn the code and force a new request.
+    if (attempts > 5) {
+      await prisma.passwordReset.update({
+        where: { id: reset.id },
+        data: { attempts, used: true },
+      });
+      return res.status(400).json({ error: 'Too many attempts. Please request a new code.' });
+    }
+
+    const valid = await bcrypt.compare(String(code), reset.codeHash);
+    if (!valid) {
+      await prisma.passwordReset.update({
+        where: { id: reset.id },
+        data: { attempts },
+      });
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+
+    const hashedPw = await bcrypt.hash(newPassword, 10);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { password: hashedPw } }),
+      prisma.passwordReset.update({ where: { id: reset.id }, data: { attempts, used: true } }),
+    ]);
+
+    return res.json({ ok: true, message: 'Password updated. You can now sign in.' });
+  } catch (err) {
+    console.error('[auth] reset-password failed:', err);
+    return res.status(500).json({ error: 'Could not process request. Please try again.' });
   }
 });
 
