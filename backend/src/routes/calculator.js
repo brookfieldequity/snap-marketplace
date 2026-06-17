@@ -287,7 +287,7 @@ router.post('/generate-report', async (req, res) => {
       try {
         await sgMail.send({
           to:      email,
-          from:    process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.com',
+          from:    process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.app',
           subject: `Your StaffIQ™ Savings Report — ${facilityName}`,
           text: `Hi ${contactName},\n\nPlease find your personalized StaffIQ™ Savings Report attached.\n\nOur team will follow up with you within 24 hours.\n\n— The SNAP Medical Team`,
           html: `<p>Hi ${contactName},</p><p>Please find your personalized StaffIQ™ Savings Report attached.</p><p>Our team will follow up with you within 24 hours.</p><p>— The SNAP Medical Team</p>`,
@@ -435,7 +435,7 @@ router.post('/staffiq-simple/lead', async (req, res) => {
           // Email to lead
           sgMail.send({
             to: email,
-            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.com',
+            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.app',
             subject: `Your StaffIQ™ Savings Report — ${facilityName}`,
             text: `Hi ${contactName},\n\nThank you for using the SNAP StaffIQ calculator. Please find your personalized savings report attached.\n\nOur team will follow up with you within 24 hours to discuss how SNAP Shifts can help your facility recover these savings.\n\n— The SNAP Medical Team`,
             html: `<p>Hi ${contactName},</p><p>Thank you for using the SNAP StaffIQ calculator. Please find your personalized savings report attached.</p><p>Our team will follow up with you within 24 hours to discuss how SNAP Shifts can help your facility recover these savings.</p><p>— The SNAP Medical Team</p>`,
@@ -451,7 +451,7 @@ router.post('/staffiq-simple/lead', async (req, res) => {
           // Internal notification to admin
           sgMail.send({
             to: process.env.ADMIN_EMAIL || 'admin@snapmedical.com',
-            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.com',
+            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@snapmedical.app',
             subject: `New StaffIQ Calculator Lead — ${facilityName}`,
             text: [
               `New StaffIQ calculator lead submitted:`,

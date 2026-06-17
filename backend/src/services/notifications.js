@@ -26,7 +26,7 @@ async function sendSMS(to, body) {
   }
 }
 
-const FROM_EMAIL = process.env.SENDGRID_FROM || 'noreply@snapmedical.com';
+const FROM_EMAIL = process.env.SENDGRID_FROM || 'noreply@snapmedical.app';
 
 // ── Primitives ────────────────────────────────────────────────────────────────
 

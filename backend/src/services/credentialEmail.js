@@ -4,7 +4,10 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 }
 
-const FROM = process.env.SENDGRID_FROM || 'credentialing@snapmedical.com'
+// Credentialing emails send from the branded, reply-able credentialing alias on
+// the DKIM-authenticated snapmedical.app domain. Decoupled from the generic
+// SENDGRID_FROM so these specifically come from credentialing@ (overridable).
+const FROM = process.env.CREDENTIALING_FROM || 'credentialing@snapmedical.app'
 const APP_URL = process.env.APP_URL || 'https://snap-marketplace.up.railway.app'
 // SNAP Credentialing mobile app (TestFlight public link). Offered as a secondary
 // option in the provider invite — the primary CTA stays the tokenized web claim
