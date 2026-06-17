@@ -401,8 +401,22 @@ export default function InternalRosterPage({ onNavigate }) {
 
   async function handleInvite(id) {
     try {
-      await facilityAPI.inviteRosterProvider(id)
+      const res = await facilityAPI.inviteRosterProvider(id)
       await load()
+      // Tell the coordinator what actually happened — a credentialing "invite"
+      // doesn't always send an email: a provider who already has a passport gets
+      // an in-app access request instead, which previously looked like nothing.
+      const mode = res?.inviteResult?.mode
+      const channels = res?.inviteResult?.delivered || []
+      if (mode === 'INVITE_CREATED') {
+        alert(`✅ Invite sent (${channels.join(' + ') || 'email'}). They'll get a link to create their SNAP Credentialing passport.`)
+      } else if (mode === 'EXISTING_PROVIDER') {
+        alert('✅ This provider already has a SNAP Credentialing passport. We sent them an in-app access request to share it with your facility — no email needed.')
+      } else if (mode === 'ALREADY_GRANTED') {
+        alert('✅ Your facility already has access to this provider\'s SNAP Credentialing passport.')
+      } else {
+        alert('✅ Credentialing invite processed.')
+      }
     } catch (e) {
       alert('Invite failed: ' + (e.message || 'Unknown error'))
     }

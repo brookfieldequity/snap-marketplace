@@ -1045,7 +1045,11 @@ router.post('/:id/invite', facilityAuth, async (req, res) => {
     }
 
     const updated = await prisma.internalRosterEntry.findUnique({ where: { id: existing.id } });
-    res.json(updated);
+    // Surface what actually happened so the UI can confirm it clearly:
+    //   INVITE_CREATED   → claim email/SMS sent
+    //   EXISTING_PROVIDER → provider already has a passport; access request pushed
+    //   ALREADY_GRANTED   → this facility already has access
+    res.json({ ...updated, inviteResult: { mode: result.mode, delivered: result.delivered, status: result.status } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
