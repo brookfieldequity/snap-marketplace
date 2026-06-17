@@ -20,6 +20,7 @@ const adminRoutes = require('./routes/admin');
 const uploadRoutes = require('./routes/uploads');
 // SNAP Shifts routes
 const rosterRoutes = require('./routes/roster');
+const rosterAvailabilityRoutes = require('./routes/rosterAvailability');
 const windowRoutes = require('./routes/windows');
 const scheduleRoutes = require('./routes/schedule');
 const incentiveRoutes = require('./routes/incentive');
@@ -91,6 +92,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/uploads', uploadRoutes);
 // SNAP Shifts
 app.use('/api/roster', rosterRoutes);
+app.use('/api/roster-availability', rosterAvailabilityRoutes);
 app.use('/api/windows', windowRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/incentive', incentiveRoutes);

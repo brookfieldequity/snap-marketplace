@@ -6,6 +6,7 @@ const facilityAuth = require('../middleware/facilityAuth');
 const auth = require('../middleware/auth');
 const { sendSMS } = require('../services/notifications');
 const { logAutomationEvent } = require('../services/automationEvents');
+const { resolveDayAvailability } = require('../services/availability');
 
 const router = express.Router();
 const expo = new Expo();
@@ -783,7 +784,12 @@ router.post('/build', facilityAuth, async (req, res) => {
     const providerIdToRosterId = Object.fromEntries(
       roster.filter((r) => r.linkedProviderId).map((r) => [r.linkedProviderId, r.id])
     );
-    const [timeOff, unavailRows] = await Promise.all([
+    // Effective availability per (roster entry, date), resolved with the shared
+    // policy (see services/availability.js): admin override > PTO > provider
+    // self-submit > default-by-employment (FULL_TIME available, PER_DIEM/LOCUMS
+    // unavailable unless explicitly opted in). Anyone not available is added to
+    // unavailableKeys, which the builder HARD-excludes.
+    const [timeOff, providerRows, adminRows] = await Promise.all([
       prisma.rosterTimeOff.findMany({
         where: {
           facilityId: req.facility.id,
@@ -794,24 +800,54 @@ router.post('/build', facilityAuth, async (req, res) => {
       }),
       linkedProviderIds.length > 0
         ? prisma.providerAvailability.findMany({
-            where: { available: false, date: { gte: monthStart, lt: monthEnd }, providerId: { in: linkedProviderIds } },
-            select: { providerId: true, date: true },
+            where: { date: { gte: monthStart, lt: monthEnd }, providerId: { in: linkedProviderIds } },
+            select: { providerId: true, date: true, available: true },
           })
         : Promise.resolve([]),
+      prisma.rosterAvailability.findMany({
+        where: { facilityId: req.facility.id, date: { gte: monthStart, lt: monthEnd } },
+        select: { rosterEntryId: true, date: true, available: true, source: true },
+      }),
     ]);
-    const unavailableKeys = new Set();
+
+    const isoOf = (d) => new Date(d).toISOString().slice(0, 10);
     const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // PTO coverage: `${rid}::${date}`
+    const ptoSet = new Set();
     for (const t of timeOff) {
       let d = new Date(Math.max(new Date(t.startDate).getTime(), monthStart.getTime()));
       const last = Math.min(new Date(t.endDate).getTime(), monthEnd.getTime() - DAY_MS);
       while (d.getTime() <= last) {
-        unavailableKeys.add(`${t.rosterEntryId}::${d.toISOString().slice(0, 10)}`);
+        ptoSet.add(`${t.rosterEntryId}::${isoOf(d)}`);
         d = new Date(d.getTime() + DAY_MS);
       }
     }
-    for (const a of unavailRows) {
-      const rid = providerIdToRosterId[a.providerId];
-      if (rid) unavailableKeys.add(`${rid}::${new Date(a.date).toISOString().slice(0, 10)}`);
+    // Admin overrides (authoritative) and provider/self-submitted signals.
+    const adminMap = new Map();
+    const providerMap = new Map();
+    for (const a of adminRows) {
+      if (a.source === 'ADMIN') adminMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
+      else providerMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
+    }
+    for (const p of providerRows) {
+      const rid = providerIdToRosterId[p.providerId];
+      if (rid) providerMap.set(`${rid}::${isoOf(p.date)}`, p.available);
+    }
+
+    const unavailableKeys = new Set();
+    const uniqueDayISOs = [...new Set(scheduleDays.map((d) => isoOf(d.date)))];
+    for (const r of roster) {
+      for (const dISO of uniqueDayISOs) {
+        const key = `${r.id}::${dISO}`;
+        const { available } = resolveDayAvailability({
+          employmentCategory: r.employmentCategory,
+          adminAvailable: adminMap.has(key) ? adminMap.get(key) : null,
+          ptoCovers: ptoSet.has(key),
+          providerAvailable: providerMap.has(key) ? providerMap.get(key) : null,
+        });
+        if (!available) unavailableKeys.add(key);
+      }
     }
 
     // Task #21: accepted "request to work" preferences for the build month.

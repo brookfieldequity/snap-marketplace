@@ -215,6 +215,13 @@ export const facilityAPI = {
   clearScheduleMonth: (year, month) =>
     apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { method: 'DELETE', headers: facilityHeaders() }),
 
+  // Internal Roster — monthly availability (feeds the Schedule Builder)
+  getRosterAvailability: (month) => apiFetch(`${BASE}/roster-availability?month=${encodeURIComponent(month)}`, { headers: facilityHeaders() }),
+  setRosterAvailability: (body) => apiFetch(`${BASE}/roster-availability`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  setRosterAvailabilityRange: (body) => apiFetch(`${BASE}/roster-availability/range`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  clearRosterAvailability: (body) => apiFetch(`${BASE}/roster-availability`, { method: 'DELETE', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  copyRosterAvailabilityMonth: (body) => apiFetch(`${BASE}/roster-availability/copy-month`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+
   // Internal Roster — time off / PTO
   getTimeOff: (from, to) => {
     const q = new URLSearchParams()

@@ -13,6 +13,7 @@ const SHIFTS_ITEMS = [
   { key: 'coverage-templates',label: 'Coverage Templates',  icon: '🧩' },
   { key: 'roster',            label: 'Internal Roster',     icon: '👥' },
   { key: 'windows',           label: 'Availability Windows',icon: '🗓' },
+  { key: 'availability',      label: 'Set Availability',    icon: '✅' },
   { key: 'requests',          label: 'Provider Requests',   icon: '✋' },
   { key: 'gaps',              label: 'Gaps & Incentives',   icon: '🔴' },
   { key: 'staffiq',           label: 'StaffIQ Insights',    icon: '🧠' },

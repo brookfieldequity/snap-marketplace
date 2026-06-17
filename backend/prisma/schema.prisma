@@ -738,6 +738,7 @@ model InternalRosterEntry {
   scheduleFeedback    ScheduleFeedback[]
   locations           ProviderLocation[]
   timeOff             RosterTimeOff[]
+  availability        RosterAvailability[]
   scheduleRequests    ScheduleRequest[]
 
   @@index([rosterCode])
@@ -763,6 +764,35 @@ model RosterTimeOff {
 
   @@index([facilityId, startDate, endDate])
   @@index([rosterEntryId])
+}
+
+// Per-date availability override, keyed on the roster entry (not a SNAP
+// ProviderProfile) so it works for every roster member — including providers
+// not yet on the app (the early-onboarding case). One row = "on this date,
+// this person IS / IS NOT available", with an optional note.
+//
+// How the Schedule Builder resolves effective availability for (entry, date):
+//   1. ADMIN RosterAvailability row  → authoritative (wins over everything)
+//   2. RosterTimeOff range covering the date → unavailable (admin PTO)
+//   3. PROVIDER RosterAvailability / app-submitted ProviderAvailability → use it
+//   4. Default by employmentCategory: FULL_TIME = available; PER_DIEM / LOCUMS
+//      = UNAVAILABLE unless explicitly marked available.
+// So full-time staff are exception-based (mark PTO), and per-diems are opt-in
+// (must be marked available by the provider or the admin).
+model RosterAvailability {
+  id            String              @id @default(cuid())
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  facilityId    String
+  date          DateTime            @db.Date
+  available     Boolean
+  note          String?
+  source        String              @default("ADMIN") // ADMIN | PROVIDER
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([rosterEntryId, date])
+  @@index([facilityId, date])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

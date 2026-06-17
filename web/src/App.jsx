@@ -19,6 +19,7 @@ import SubscriptionPage from './pages/SubscriptionPage.jsx'
 import SnapShiftsDashboard from './pages/shifts/SnapShiftsDashboard.jsx'
 import InternalRosterPage from './pages/shifts/InternalRosterPage.jsx'
 import AvailabilityWindowsPage from './pages/shifts/AvailabilityWindowsPage.jsx'
+import FacilityAvailabilityPage from './pages/shifts/FacilityAvailabilityPage.jsx'
 import ScheduleBuilderPage from './pages/shifts/ScheduleBuilderPage.jsx'
 import DailyViewPage from './pages/shifts/DailyViewPage.jsx'
 import GapsPage from './pages/shifts/GapsPage.jsx'
@@ -45,6 +46,7 @@ import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
 import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx'
 import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
+import SmsTermsPage from './pages/SmsTermsPage.jsx'
 
 export default function App() {
   // Public claim route — short-circuits all portal / auth logic. When the
@@ -56,6 +58,12 @@ export default function App() {
     window.location.pathname.match(/^\/facility-claim\/([^/?#]+)/)
   if (claimMatch) {
     return <FacilityClaimPage token={decodeURIComponent(claimMatch[1])} />
+  }
+
+  // Public messaging-policy page — no login. This is the URL supplied to
+  // carriers for SMS (toll-free / A2P) opt-in verification.
+  if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/sms-terms') {
+    return <SmsTermsPage />
   }
 
   const [facilityToken, setFacilityToken] = useState(
@@ -243,6 +251,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'windows' && (
               <AvailabilityWindowsPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && facilityPage === 'availability' && (
+              <FacilityAvailabilityPage onNavigate={setFacilityPage} />
             )}
             {isShiftsMode && facilityPage === 'schedule' && (
               <ScheduleBuilderPage onNavigate={setFacilityPage} />
