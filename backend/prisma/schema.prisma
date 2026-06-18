@@ -1741,6 +1741,9 @@ model PayrollRun {
   providerCount  Int              @default(0)
   totalHours     Float            @default(0)
   totalGross     Float            @default(0)
+  // Run-level invoice number — the SAME value for every provider on this run
+  // (Gusto's invoice_number column), set once per payroll and incremented each run.
+  invoiceNumber  String?
   status         PayrollRunStatus @default(DRAFT)
   csvContent     String? // stored copy of the generated CSV (set on export)
   fileName       String?

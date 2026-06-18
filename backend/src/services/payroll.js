@@ -25,6 +25,7 @@ const SNAP_FIELDS = {
   rate: { label: 'Rate', synonyms: ['rate', 'hourly rate', 'pay rate', 'rate of pay', 'hourly', 'rate hr', 'hourly pay rate'] },
   gross: { label: 'Gross Pay', synonyms: ['gross pay', 'gross', 'total pay', 'amount', 'gross wages', 'total', 'gross amount'] },
   bonus: { label: 'Bonus', synonyms: ['bonus', 'bonus pay', 'bonus amount', 'bonuses'] },
+  invoiceNumber: { label: 'Invoice #', synonyms: ['invoice number', 'invoice no', 'invoice', 'invoice num'] },
   workerType: { label: 'Worker Type', synonyms: ['worker type', 'type', 'employment type', 'employee type', 'classification', 'w2 1099'] },
   fileCode: { label: 'File Code', synonyms: ['file code', 'file no', 'company code', 'batch id', 'co code', 'file number'] },
 };
@@ -204,6 +205,8 @@ function valueForField(field, { item, run, config }) {
       const b = computeBonus(item);
       return b > 0 ? money(b) : ''; // blank when no bonus (cleaner for Gusto)
     }
+    case 'invoiceNumber':
+      return run.invoiceNumber || ''; // run-level: same for every provider
     case 'workerType':
       return run.payClass === 'CONTRACTOR' ? 'Contractor' : 'Employee';
     case 'fileCode':

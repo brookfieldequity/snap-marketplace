@@ -218,7 +218,7 @@ router.get('/preview', async (req, res) => {
 // Body: { system, payClass, periodStart, periodEnd, lineItems: [...] }
 // lineItems are the admin-reviewed rows (edited hours/rates, all approved).
 router.post('/runs', async (req, res) => {
-  const { system: rawSystem, payClass: rawClass, periodStart, periodEnd, lineItems } = req.body || {};
+  const { system: rawSystem, payClass: rawClass, periodStart, periodEnd, lineItems, invoiceNumber } = req.body || {};
   const system = String(rawSystem || '').toUpperCase();
   const payClass = String(rawClass || '').toUpperCase();
   if (!VALID_SYSTEMS.includes(system)) return res.status(400).json({ error: 'Invalid payroll system' });
@@ -262,11 +262,13 @@ router.post('/runs', async (req, res) => {
     });
     const tpl = resolveTemplate(config, system);
 
+    const invoiceNum = invoiceNumber != null && String(invoiceNumber).trim() !== '' ? String(invoiceNumber).trim() : null;
     const run = {
       periodStart: new Date(periodStart),
       periodEnd: new Date(periodEnd),
       payClass,
       system,
+      invoiceNumber: invoiceNum,
     };
     const csv = generateCsv({ headers: tpl.headers, map: tpl.map, items, run, config: { fileCode: tpl.fileCode } });
 
@@ -287,6 +289,7 @@ router.post('/runs', async (req, res) => {
         providerCount: items.length,
         totalHours: Math.round(totalHours * 100) / 100,
         totalGross: Math.round(totalGross * 100) / 100,
+        invoiceNumber: invoiceNum,
         status: 'EXPORTED',
         csvContent: csv,
         fileName,

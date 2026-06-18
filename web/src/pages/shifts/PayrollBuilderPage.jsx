@@ -58,6 +58,9 @@ export default function PayrollBuilderPage({ onNavigate }) {
   // Review state
   const [payClass, setPayClass] = useState('W2')
   const [period, setPeriod] = useState(defaultPeriod())
+  // One invoice number for the whole run (same value on every provider row);
+  // incremented manually each payroll. Maps to the template's invoice_number column.
+  const [invoiceNumber, setInvoiceNumber] = useState('')
   // Per-class grid cache: { W2: { items, approved:Set, summary }, CONTRACTOR: {...} }
   const [grids, setGrids] = useState({})
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -177,6 +180,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
         payClass,
         periodStart: period.start,
         periodEnd: period.end,
+        invoiceNumber,
         lineItems: grid.items,
       })
       setExported(res)
@@ -488,6 +492,15 @@ export default function PayrollBuilderPage({ onNavigate }) {
               <input type="date" value={period.start} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} style={{ ...inputStyle, width: 150 }} />
               to
               <input type="date" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} style={{ ...inputStyle, width: 150 }} />
+              <span style={{ marginLeft: 8 }}>Invoice #</span>
+              <input
+                type="text"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="e.g. 25"
+                title="One invoice number for this whole payroll run — applied to every provider row."
+                style={{ ...inputStyle, width: 90 }}
+              />
             </div>
           </div>
 
@@ -729,6 +742,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
             <div style={{ fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Export Summary</div>
             {[
               ['Pay Period', `${exported.run.periodStart?.slice(0, 10)} — ${exported.run.periodEnd?.slice(0, 10)}`],
+              ['Invoice #', exported.run.invoiceNumber || '—'],
               ['System', exported.run.system],
               ['Pay Class', CLASS_LABEL[exported.run.payClass]],
               ['Providers', exported.run.providerCount],
