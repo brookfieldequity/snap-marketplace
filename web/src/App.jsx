@@ -117,7 +117,10 @@ export default function App() {
     facilityAPI.getMe()
       .then((facility) => {
         if (facility.snapMode) setSnapMode(facility.snapMode)
-        if (facility.facilityName && !facilityName) setFacilityName(facility.facilityName)
+        // The /facilities/me payload exposes the name as `name` (Prisma field);
+        // `facilityName` never existed, so on reload the header went blank.
+        const resolvedName = facility.name || facility.facilityName
+        if (resolvedName && !facilityName) setFacilityName(resolvedName)
       })
       .catch(() => {
         // Silently ignore — default MARKETPLACE mode stays
