@@ -352,8 +352,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
                 <div style={{ fontWeight: 700, color: '#059669', fontSize: 14 }}>✓ Template uploaded — {mapping.templateName}</div>
               </div>
               <div style={{ ...card }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                   Field Mapping — {system}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12, lineHeight: 1.4 }}>
+                  SNAP auto-maps the columns it has data for (name, hours, rate). Columns SNAP doesn't track —
+                  e.g. SSN/EIN, bonus, reimbursement — stay <strong>unmapped</strong> and export blank for you to
+                  fill in your payroll system. Adjust any mapping with the dropdowns.
                 </div>
                 {mapping.headers.map((h) => {
                   const mapped = mapping.fieldMapping[h]

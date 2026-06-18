@@ -70,31 +70,57 @@ function normalizeHeader(h) {
 
 // Fuzzy-map uploaded headers onto SNAP fields. Returns:
 //   { map: { header: snapField|null }, unmapped: [header] }
+// Does the word-sequence `seq` appear contiguously within `hay`?
+function containsSequence(hay, seq) {
+  for (let i = 0; i + seq.length <= hay.length; i++) {
+    let ok = true;
+    for (let j = 0; j < seq.length; j++) {
+      if (hay[i + j] !== seq[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
 function autoMapHeaders(headers) {
   const map = {};
-  const unmapped = [];
+  // Pass 1 — exact normalized match against a synonym or the field label.
+  // Handles clean headers like "last_name", "hourly_rate", "hours".
   for (const header of headers) {
     const norm = normalizeHeader(header);
     let matched = null;
-    // exact synonym hit first
     for (const [field, def] of Object.entries(SNAP_FIELDS)) {
       if (def.synonyms.includes(norm) || normalizeHeader(def.label) === norm) {
         matched = field;
         break;
       }
     }
-    // substring fallback
-    if (!matched) {
-      for (const [field, def] of Object.entries(SNAP_FIELDS)) {
-        if (def.synonyms.some((s) => norm.includes(s) || s.includes(norm))) {
+    map[header] = matched;
+  }
+  // Pass 2 — for still-unmapped headers, allow a MULTI-WORD synonym phrase to
+  // match as a contiguous word-sequence (e.g. "employee id number" → empId).
+  // Single-word synonyms are intentionally excluded here so generic words like
+  // "name"/"amount" don't grab "business_name" or "fixed_amount" by accident.
+  const wordsOf = (s) => normalizeHeader(s).split(' ').filter(Boolean);
+  for (const header of headers) {
+    if (map[header]) continue;
+    const hw = wordsOf(header);
+    let matched = null;
+    outer: for (const [field, def] of Object.entries(SNAP_FIELDS)) {
+      for (const syn of def.synonyms) {
+        const sw = syn.split(' ').filter(Boolean);
+        if (sw.length >= 2 && containsSequence(hw, sw)) {
           matched = field;
-          break;
+          break outer;
         }
       }
     }
     map[header] = matched;
-    if (!matched) unmapped.push(header);
   }
+  const unmapped = headers.filter((h) => !map[h]);
   return { map, unmapped };
 }
 
@@ -108,6 +134,20 @@ function money(n) {
   return Number(n || 0).toFixed(2);
 }
 
+// Split a provider name into { first, last }, handling both "First Last" and
+// "Last, First" (the Gusto contractor template has separate name columns).
+function splitName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return { first: '', last: '' };
+  if (s.includes(',')) {
+    const [last, first] = s.split(',').map((p) => p.trim());
+    return { first: first || '', last: last || '' };
+  }
+  const parts = s.split(/\s+/);
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts[0], last: parts[parts.length - 1] };
+}
+
 // Compute the value for a SNAP field given a line item + run context.
 function valueForField(field, { item, run, config }) {
   switch (field) {
@@ -116,11 +156,9 @@ function valueForField(field, { item, run, config }) {
     case 'name':
       return item.providerName || '';
     case 'firstName':
-      return (item.providerName || '').trim().split(/\s+/)[0] || '';
-    case 'lastName': {
-      const parts = (item.providerName || '').trim().split(/\s+/);
-      return parts.length > 1 ? parts[parts.length - 1] : '';
-    }
+      return splitName(item.providerName).first;
+    case 'lastName':
+      return splitName(item.providerName).last;
     case 'dept':
       return item.role || 'Anesthesia';
     case 'periodStart':
