@@ -242,6 +242,8 @@ router.post('/runs', async (req, res) => {
       return {
         rosterEntryId: li.rosterEntryId || null,
         providerName: li.providerName || '',
+        businessName: li.businessName || null,
+        useBusinessNameForPayroll: !!li.useBusinessNameForPayroll,
         role: li.role || null,
         payrollSystemId: li.payrollSystemId || null,
         regularHours,

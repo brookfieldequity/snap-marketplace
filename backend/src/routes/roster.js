@@ -215,6 +215,7 @@ router.post('/', facilityAuth, async (req, res) => {
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
+      businessName, useBusinessNameForPayroll,
     } = req.body;
 
     const linkFields = await resolveLinkFields({ npi, email: snapAccountEmail });
@@ -249,6 +250,8 @@ router.post('/', facilityAuth, async (req, res) => {
         employer: employer || null,
         is1099: typeof is1099 === 'boolean' ? is1099 : null,
         isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null,
+        businessName: businessName || null,
+        useBusinessNameForPayroll: useBusinessNameForPayroll === true,
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -281,6 +284,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
+      businessName, useBusinessNameForPayroll,
       ptoDaysAnnual, ptoEligible, seniorityRank,
     } = req.body;
 
@@ -324,6 +328,8 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(employer !== undefined && { employer: employer || null }),
         ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
+        ...(businessName !== undefined && { businessName: businessName || null }),
+        ...(useBusinessNameForPayroll !== undefined && { useBusinessNameForPayroll: useBusinessNameForPayroll === true }),
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),

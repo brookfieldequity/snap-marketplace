@@ -724,6 +724,14 @@ model InternalRosterEntry {
   // what the underlying provider earns. Free-form so customers don't have to
   // wait for an enum edit when they onboard a new staffing group.
   employer               String?
+  // 1099 contractors may be paid under a business name (LLC/EIN) rather than
+  // their personal name. `businessName` holds it; `useBusinessNameForPayroll`,
+  // when true, makes the Payroll Builder export the business name (and blank the
+  // first/last name columns) for THIS provider — PAYROLL ONLY. Everywhere else
+  // in SNAP (marketplace, shifts, credentialing) the person is addressed by
+  // their actual name.
+  businessName              String?
+  useBusinessNameForPayroll Boolean @default(false)
   // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
   // false = W-2 employee, null = unknown. Surfaced on the roster card so the
   // coordinator can see "1099 · FT" at a glance for cost attribution.

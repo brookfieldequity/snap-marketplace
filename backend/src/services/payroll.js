@@ -17,6 +17,7 @@ const SNAP_FIELDS = {
   name: { label: 'Employee Name', synonyms: ['employee name', 'name', 'full name', 'employee', 'worker name', 'provider', 'provider name'] },
   firstName: { label: 'First Name', synonyms: ['first name', 'first', 'fname', 'given name'] },
   lastName: { label: 'Last Name', synonyms: ['last name', 'last', 'lname', 'surname', 'family name'] },
+  businessName: { label: 'Business Name', synonyms: ['business name', 'company name', 'business', 'company', 'legal business name'] },
   dept: { label: 'Department', synonyms: ['department', 'dept', 'division', 'cost center', 'location', 'home department'] },
   periodStart: { label: 'Pay Period Start', synonyms: ['pay period start', 'period start', 'start date', 'from', 'begin date', 'pay begin date', 'period begin'] },
   periodEnd: { label: 'Pay Period End', synonyms: ['pay period end', 'period end', 'end date', 'to', 'pay end date', 'period end date'] },
@@ -181,12 +182,17 @@ function valueForField(field, { item, run, config }) {
   switch (field) {
     case 'empId':
       return item.payrollSystemId || '';
+    // When a contractor is paid under a business name, the business name trumps
+    // the personal name in payroll output: business_name is filled and the
+    // name columns are blanked (Gusto expects one or the other per contractor).
     case 'name':
-      return item.providerName || '';
+      return item.useBusinessNameForPayroll ? '' : item.providerName || '';
     case 'firstName':
-      return splitName(item.providerName).first;
+      return item.useBusinessNameForPayroll ? '' : splitName(item.providerName).first;
     case 'lastName':
-      return splitName(item.providerName).last;
+      return item.useBusinessNameForPayroll ? '' : splitName(item.providerName).last;
+    case 'businessName':
+      return item.useBusinessNameForPayroll ? item.businessName || '' : '';
     case 'dept':
       return item.role || 'Anesthesia';
     case 'periodStart':
@@ -338,6 +344,8 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
     return {
       rosterEntryId: entry.id,
       providerName: entry.providerName,
+      businessName: entry.businessName || null,
+      useBusinessNameForPayroll: !!entry.useBusinessNameForPayroll,
       role: entry.providerType || (entry.isNonClinical ? 'Staff' : null),
       payrollSystemId: entry.payrollSystemId || null,
       is1099: entry.is1099 ?? null,

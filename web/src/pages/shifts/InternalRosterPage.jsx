@@ -35,6 +35,10 @@ const BLANK_FORM = {
   // Employer / tax status / hours status. Empty string here means "unknown"
   // — submitted to the backend as null, which is the correct tri-state.
   employer: '', taxStatus: '', hoursStatus: '',
+  // Business name (1099s paid as an LLC/business). useBusinessNameForPayroll
+  // makes payroll export the business name instead of the personal name —
+  // payroll only; the person is addressed by their name everywhere else.
+  businessName: '', useBusinessNameForPayroll: false,
   // PTO. ptoDaysAnnual '' = use system default; ptoEligible '' = derive from
   // employment (W-2 / full-time eligible); seniorityRank '' = unset.
   ptoDaysAnnual: '', ptoEligible: '', seniorityRank: '',
@@ -282,6 +286,8 @@ export default function InternalRosterPage({ onNavigate }) {
       employer: p.employer || '',
       taxStatus: p.is1099 == null ? '' : (p.is1099 ? '1099' : 'W2'),
       hoursStatus: p.isFullTime == null ? '' : (p.isFullTime ? 'FT' : 'PT'),
+      businessName: p.businessName || '',
+      useBusinessNameForPayroll: !!p.useBusinessNameForPayroll,
       ptoDaysAnnual: p.ptoDaysAnnual ?? '',
       ptoEligible: p.ptoEligible == null ? '' : (p.ptoEligible ? 'YES' : 'NO'),
       seniorityRank: p.seniorityRank ?? '',
@@ -319,6 +325,8 @@ export default function InternalRosterPage({ onNavigate }) {
         contractEnd: form.contractEnd || null,
         notes: form.notes || null,
         employer: form.employer.trim() || null,
+        businessName: form.businessName.trim() || null,
+        useBusinessNameForPayroll: !!form.useBusinessNameForPayroll,
         // taxStatus/hoursStatus are tri-state strings in form land; map to
         // booleans for the API. Empty string → null (unknown).
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
@@ -1035,6 +1043,20 @@ export default function InternalRosterPage({ onNavigate }) {
                 <option value="FT">Full-time</option>
                 <option value="PT">Part-time</option>
               </select>
+            </Field>
+            <Field label="Business Name (for 1099s paid as an LLC)">
+              <input style={inputStyle} value={form.businessName} onChange={(e) => setF('businessName', e.target.value)} placeholder="e.g. Bailin Anesthesia LLC" />
+            </Field>
+            <Field label="Payroll Name">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: form.businessName.trim() ? '#374151' : '#94A3B8' }}>
+                <input
+                  type="checkbox"
+                  checked={form.useBusinessNameForPayroll}
+                  disabled={!form.businessName.trim()}
+                  onChange={(e) => setF('useBusinessNameForPayroll', e.target.checked)}
+                />
+                Pay under the business name (payroll only — used everywhere else by their name)
+              </label>
             </Field>
             <Field label="SNAP Account Email">
               <input style={inputStyle} type="email" value={form.snapEmail} onChange={(e) => setF('snapEmail', e.target.value)} placeholder="provider@example.com" />

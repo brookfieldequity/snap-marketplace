@@ -123,6 +123,16 @@ export default function PayrollBuilderPage({ onNavigate }) {
 
   const grid = grids[payClass]
 
+  // Only show the OT column when the active template actually has one (e.g. ADP).
+  // Gusto's contractor template has no OT column, so showing it is just noise.
+  const hasOtColumn = activeSystem?.fieldMapping
+    ? Object.values(activeSystem.fieldMapping).includes('otHours')
+    : false
+  // Grid columns: Provider, Role, Reg Hrs, [OT Hrs], Rate, Gross, Status
+  const gridCols = hasOtColumn
+    ? '2fr 1fr 0.8fr 0.8fr 1fr 1.2fr 110px'
+    : '2fr 1fr 0.9fr 1fr 1.2fr 110px'
+
   function updateItem(idx, patch) {
     setGrids((g) => {
       const cur = g[payClass]
@@ -162,14 +172,6 @@ export default function PayrollBuilderPage({ onNavigate }) {
   const allApproved =
     grid && grid.items.length > 0 && grid.items.every((i) => grid.approved.has(i.rosterEntryId))
   const anyMissingRate = grid && grid.items.some((i) => i.missingRate)
-
-  async function saveRate(item, idx) {
-    try {
-      await payrollAPI.setProviderRate(item.rosterEntryId, { hourlyRate: item.hourlyRate === '' ? null : item.hourlyRate })
-    } catch (e) {
-      setError(e.message)
-    }
-  }
 
   async function doExport() {
     setExporting(true)
@@ -538,11 +540,11 @@ export default function PayrollBuilderPage({ onNavigate }) {
               ) : (
                 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
                   {/* Table header */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr 1fr 110px', padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     <div>Provider</div>
                     <div>Role</div>
-                    <div>Reg Hrs</div>
-                    <div>OT Hrs</div>
+                    <div>{hasOtColumn ? 'Reg Hrs' : 'Hours'}</div>
+                    {hasOtColumn && <div>OT Hrs</div>}
                     <div>Rate</div>
                     <div>Gross</div>
                     <div style={{ textAlign: 'center' }}>Status</div>
@@ -555,7 +557,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr 1fr 110px',
+                            gridTemplateColumns: gridCols,
                             padding: '10px 16px',
                             borderBottom: '1px solid #F1F5F9',
                             alignItems: 'center',
@@ -566,8 +568,11 @@ export default function PayrollBuilderPage({ onNavigate }) {
                             <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
                               {item.hasShiftData ? '▸ ' : ''}{item.providerName}
                             </div>
+                            {item.useBusinessNameForPayroll && item.businessName && (
+                              <div style={{ fontSize: 11, color: '#7C3AED' }}>pays as {item.businessName}</div>
+                            )}
                             {item.missingRate && (
-                              <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠ No rate set</div>
+                              <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠ No rate — set it on the roster</div>
                             )}
                           </div>
                           <div style={{ fontSize: 13, color: '#64748B' }}>{item.role || '—'}</div>
@@ -577,20 +582,18 @@ export default function PayrollBuilderPage({ onNavigate }) {
                             onChange={(e) => updateItem(idx, { regularHours: e.target.value })}
                             style={{ ...inputStyle, width: 64, padding: '5px 7px' }}
                           />
-                          <input
-                            type="number"
-                            value={item.otHours}
-                            onChange={(e) => updateItem(idx, { otHours: e.target.value })}
-                            style={{ ...inputStyle, width: 64, padding: '5px 7px', color: Number(item.otHours) > 0 ? '#B45309' : '#0F172A', background: Number(item.otHours) > 0 ? '#FFFBEB' : '#fff' }}
-                          />
-                          <input
-                            type="number"
-                            placeholder="rate"
-                            value={item.hourlyRate ?? ''}
-                            onChange={(e) => updateItem(idx, { hourlyRate: e.target.value })}
-                            onBlur={() => saveRate(item, idx)}
-                            style={{ ...inputStyle, width: 80, padding: '5px 7px', borderColor: item.missingRate ? '#FCA5A5' : '#E2E8F0' }}
-                          />
+                          {hasOtColumn && (
+                            <input
+                              type="number"
+                              value={item.otHours}
+                              onChange={(e) => updateItem(idx, { otHours: e.target.value })}
+                              style={{ ...inputStyle, width: 64, padding: '5px 7px', color: Number(item.otHours) > 0 ? '#B45309' : '#0F172A', background: Number(item.otHours) > 0 ? '#FFFBEB' : '#fff' }}
+                            />
+                          )}
+                          {/* Rate is read-only here — it comes from the roster card */}
+                          <div style={{ fontSize: 14, color: item.missingRate ? '#DC2626' : '#0F172A' }}>
+                            {item.hourlyRate != null ? '$' + Number(item.hourlyRate).toFixed(2) : '—'}
+                          </div>
                           <div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{fmtMoney(item.grossPay)}</div>
                             {clientBonus(item) > 0 && (
