@@ -61,6 +61,32 @@ const DEFAULT_TEMPLATES = {
   },
 };
 
+// Find the real header row in a parsed sheet. Payroll providers (Gusto, ADP)
+// often prefix the export with a title row and/or blank rows before the actual
+// column headers — so we can't assume row 0. Heuristic: among the first several
+// rows, the header row is the one with the most non-empty cells (ties → earliest,
+// which biases toward the header over any data rows beneath it).
+function detectHeaderRow(rows) {
+  const limit = Math.min(rows.length, 15);
+  let bestIdx = 0;
+  let bestCount = 0;
+  for (let i = 0; i < limit; i++) {
+    const count = (rows[i] || []).filter((c) => String(c == null ? '' : c).trim() !== '').length;
+    if (count > bestCount) {
+      bestCount = count;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+// Pull the trimmed, non-empty header strings out of a parsed sheet (rows from
+// XLSX sheet_to_json with header:1), auto-skipping any leading title/blank rows.
+function extractHeaders(rows) {
+  const idx = detectHeaderRow(rows);
+  return (rows[idx] || []).map((h) => String(h == null ? '' : h).trim()).filter(Boolean);
+}
+
 function normalizeHeader(h) {
   return String(h || '')
     .toLowerCase()
@@ -316,6 +342,8 @@ module.exports = {
   SNAP_FIELDS,
   DEFAULT_TEMPLATES,
   autoMapHeaders,
+  extractHeaders,
+  detectHeaderRow,
   generateCsv,
   computeGross,
   splitRegularOt,

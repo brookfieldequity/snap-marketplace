@@ -8,6 +8,7 @@ const {
   SNAP_FIELDS,
   DEFAULT_TEMPLATES,
   autoMapHeaders,
+  extractHeaders,
   generateCsv,
   computeGross,
   seedLineItems,
@@ -85,7 +86,8 @@ router.post('/template', templateUpload.single('file'), async (req, res) => {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
-    const headers = (rows[0] || []).map((h) => String(h).trim()).filter(Boolean);
+    // Auto-skip any leading title/blank rows (Gusto exports prefix a title row).
+    const headers = extractHeaders(rows);
     if (!headers.length) {
       return res.status(400).json({ error: 'Could not read column headers from the template.' });
     }
