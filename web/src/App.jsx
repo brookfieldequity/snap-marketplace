@@ -24,6 +24,7 @@ import ScheduleBuilderPage from './pages/shifts/ScheduleBuilderPage.jsx'
 import DailyViewPage from './pages/shifts/DailyViewPage.jsx'
 import GapsPage from './pages/shifts/GapsPage.jsx'
 import RequestsPage from './pages/shifts/RequestsPage.jsx'
+import RequestsNotesPage from './pages/shifts/RequestsNotesPage.jsx'
 import StaffIQInsightsPage from './pages/shifts/StaffIQInsightsPage.jsx'
 import StaffIQCalculatorPage from './pages/shifts/StaffIQCalculatorPage.jsx'
 import StaffIQInputsPage from './pages/shifts/StaffIQInputsPage.jsx'
@@ -266,6 +267,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'requests' && (
               <RequestsPage />
+            )}
+            {isShiftsMode && facilityPage === 'requests-notes' && (
+              <RequestsNotesPage />
             )}
             {isShiftsMode && facilityPage === 'gaps' && (
               <GapsPage onNavigate={setFacilityPage} />

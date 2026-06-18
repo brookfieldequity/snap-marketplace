@@ -399,10 +399,13 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                       const eff = effectiveFor(selectedMember, dateStr)
                       const isPast = dateStr < today
                       const isOpen = editorDate === dateStr
-                      // Colors: green tint = available, red/grey tint = unavailable.
-                      const bg = eff.available ? '#F0FDF4' : (eff.override ? '#FEF2F2' : '#F8FAFC')
-                      const border = isOpen ? '#2563EB' : (eff.available ? '#BBF7D0' : (eff.override ? '#FECACA' : '#E2E8F0'))
-                      const txt = eff.available ? '#15803D' : (eff.override ? '#B91C1C' : '#94A3B8')
+                      // Colors: green = available, red = unavailable (including the
+                      // per-diem/locums DEFAULT-unavailable, so it reads clearly at a
+                      // glance). The override dot below still distinguishes explicit
+                      // marks from the default.
+                      const bg = eff.available ? '#F0FDF4' : '#FEF2F2'
+                      const border = isOpen ? '#2563EB' : (eff.available ? '#BBF7D0' : '#FECACA')
+                      const txt = eff.available ? '#15803D' : '#B91C1C'
                       // Source dot color: PROVIDER vs ADMIN vs PTO
                       const dotColor = eff.source === 'PROVIDER' ? '#2563EB'
                         : eff.source === 'PTO' ? '#D97706'
