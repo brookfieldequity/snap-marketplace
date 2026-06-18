@@ -827,7 +827,8 @@ router.post('/build', facilityAuth, async (req, res) => {
     const adminMap = new Map();
     const providerMap = new Map();
     for (const a of adminRows) {
-      if (a.source === 'ADMIN') adminMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
+      // ADMIN and admin-set PTO are both authoritative (PTO rows are available:false).
+      if (a.source === 'ADMIN' || a.source === 'PTO') adminMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
       else providerMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
     }
     for (const p of providerRows) {

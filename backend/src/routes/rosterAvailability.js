@@ -76,11 +76,12 @@ router.get('/', facilityAuth, async (req, res) => {
         d = new Date(d.getTime() + DAY_MS);
       }
     }
-    const adminMap = new Map(); // key -> { available, note }
+    const adminMap = new Map(); // key -> { available, note, src }
     const providerMap = new Map();
     for (const a of adminRows) {
       const k = `${a.rosterEntryId}::${isoOf(a.date)}`;
-      if (a.source === 'ADMIN') adminMap.set(k, { available: a.available, note: a.note });
+      // ADMIN and PTO are both admin-set (authoritative); PROVIDER is self-submit.
+      if (a.source === 'ADMIN' || a.source === 'PTO') adminMap.set(k, { available: a.available, note: a.note, src: a.source });
       else providerMap.set(k, { available: a.available, note: a.note });
     }
     for (const p of providerRows) {
@@ -97,16 +98,19 @@ router.get('/', facilityAuth, async (req, res) => {
       if (!member) continue; // signal for a non-schedulable / filtered entry
       const adminEntry = adminMap.get(key);
       const providerEntry = providerMap.get(key);
-      const { available, source } = resolveDayAvailability({
+      const { available } = resolveDayAvailability({
         employmentCategory: member.employmentCategory,
         adminAvailable: adminEntry ? adminEntry.available : null,
         ptoCovers: ptoSet.has(key),
         providerAvailable: providerEntry ? providerEntry.available : null,
       });
-      const note = source === 'ADMIN' ? adminEntry?.note
-        : source === 'PTO' ? (ptoNote.get(key) || null)
-        : source === 'PROVIDER' ? providerEntry?.note
-        : null;
+      // Display source: an admin row reports its own source (ADMIN or PTO);
+      // otherwise a RosterTimeOff range = PTO, then provider, then default.
+      let source, note;
+      if (adminEntry) { source = adminEntry.src; note = adminEntry.note; }
+      else if (ptoSet.has(key)) { source = 'PTO'; note = ptoNote.get(key) || null; }
+      else if (providerEntry) { source = 'PROVIDER'; note = providerEntry.note; }
+      else { source = 'DEFAULT'; note = null; }
       if (!overrides[rid]) overrides[rid] = {};
       overrides[rid][date] = { available, source, note: note || null };
     }
@@ -130,21 +134,24 @@ router.get('/', facilityAuth, async (req, res) => {
 // ── POST / — set one date (admin override) ────────────────────────────────────
 router.post('/', facilityAuth, async (req, res) => {
   try {
-    const { rosterEntryId, date, available, note } = req.body || {};
+    const { rosterEntryId, date, available, note, pto } = req.body || {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     }
-    if (typeof available !== 'boolean') {
+    // PTO implies unavailable; otherwise an explicit available boolean is required.
+    if (!pto && typeof available !== 'boolean') {
       return res.status(400).json({ error: 'available (boolean) is required' });
     }
     const entry = await ownedEntry(rosterEntryId, req.facility.id);
     if (!entry) return res.status(404).json({ error: 'Roster member not found' });
 
     const dateObj = new Date(`${date}T00:00:00.000Z`);
+    const source = pto ? 'PTO' : 'ADMIN';
+    const avail = pto ? false : available;
     const row = await prisma.rosterAvailability.upsert({
       where: { rosterEntryId_date: { rosterEntryId, date: dateObj } },
-      create: { rosterEntryId, facilityId: req.facility.id, date: dateObj, available, note: note || null, source: 'ADMIN' },
-      update: { available, note: note || null, source: 'ADMIN' },
+      create: { rosterEntryId, facilityId: req.facility.id, date: dateObj, available: avail, note: note || null, source },
+      update: { available: avail, note: note || null, source },
     });
     res.json(row);
   } catch (err) {
@@ -156,11 +163,11 @@ router.post('/', facilityAuth, async (req, res) => {
 // ── POST /range — set every date in [startDate, endDate] (e.g. a vacation week) ─
 router.post('/range', facilityAuth, async (req, res) => {
   try {
-    const { rosterEntryId, startDate, endDate, available, note } = req.body || {};
+    const { rosterEntryId, startDate, endDate, available, note, pto } = req.body || {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startDate || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(endDate || ''))) {
       return res.status(400).json({ error: 'startDate and endDate must be YYYY-MM-DD' });
     }
-    if (typeof available !== 'boolean') {
+    if (!pto && typeof available !== 'boolean') {
       return res.status(400).json({ error: 'available (boolean) is required' });
     }
     const entry = await ownedEntry(rosterEntryId, req.facility.id);
@@ -171,13 +178,15 @@ router.post('/range', facilityAuth, async (req, res) => {
     if (end < start) return res.status(400).json({ error: 'endDate must be on or after startDate' });
     if ((end - start) / DAY_MS > 366) return res.status(400).json({ error: 'Range too large (max 1 year)' });
 
+    const source = pto ? 'PTO' : 'ADMIN';
+    const avail = pto ? false : available;
     const ops = [];
     for (let d = new Date(start); d <= end; d = new Date(d.getTime() + DAY_MS)) {
       const dateObj = new Date(d);
       ops.push(prisma.rosterAvailability.upsert({
         where: { rosterEntryId_date: { rosterEntryId, date: dateObj } },
-        create: { rosterEntryId, facilityId: req.facility.id, date: dateObj, available, note: note || null, source: 'ADMIN' },
-        update: { available, note: note || null, source: 'ADMIN' },
+        create: { rosterEntryId, facilityId: req.facility.id, date: dateObj, available: avail, note: note || null, source },
+        update: { available: avail, note: note || null, source },
       }));
     }
     const result = await prisma.$transaction(ops);
@@ -199,7 +208,7 @@ router.delete('/', facilityAuth, async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Roster member not found' });
 
     await prisma.rosterAvailability.deleteMany({
-      where: { rosterEntryId, date: new Date(`${date}T00:00:00.000Z`), source: 'ADMIN' },
+      where: { rosterEntryId, date: new Date(`${date}T00:00:00.000Z`), source: { in: ['ADMIN', 'PTO'] } },
     });
     res.json({ ok: true });
   } catch (err) {

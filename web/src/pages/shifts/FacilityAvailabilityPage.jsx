@@ -65,14 +65,14 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
 
   // Day editor (inline panel)
   const [editorDate, setEditorDate] = useState(null) // 'YYYY-MM-DD'
-  const [editorAvail, setEditorAvail] = useState(true)
+  const [editorMode, setEditorMode] = useState('available') // 'available' | 'unavailable' | 'pto'
   const [editorNote, setEditorNote] = useState('')
   const [savingDay, setSavingDay] = useState(false)
 
   // Range editor
   const [rangeStart, setRangeStart] = useState('')
   const [rangeEnd, setRangeEnd] = useState('')
-  const [rangeAvail, setRangeAvail] = useState(true)
+  const [rangeMode, setRangeMode] = useState('available') // 'available' | 'unavailable' | 'pto'
   const [rangeNote, setRangeNote] = useState('')
   const [savingRange, setSavingRange] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -141,7 +141,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
     if (dateStr < today) return // don't edit the past
     const eff = effectiveFor(selectedMember, dateStr)
     setEditorDate(dateStr)
-    setEditorAvail(eff.available)
+    setEditorMode(eff.source === 'PTO' ? 'pto' : (eff.available ? 'available' : 'unavailable'))
     setEditorNote(eff.note || '')
   }
 
@@ -153,7 +153,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
       await facilityAPI.setRosterAvailability({
         rosterEntryId: selectedMember.rosterEntryId,
         date: editorDate,
-        available: editorAvail,
+        ...(editorMode === 'pto' ? { pto: true } : { available: editorMode === 'available' }),
         note: editorNote.trim() || null,
       })
       setEditorDate(null)
@@ -201,7 +201,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
         rosterEntryId: selectedMember.rosterEntryId,
         startDate: rangeStart,
         endDate: rangeEnd,
-        available: rangeAvail,
+        ...(rangeMode === 'pto' ? { pto: true } : { available: rangeMode === 'available' }),
         note: rangeNote.trim() || null,
       })
       setRangeStart('')
@@ -363,9 +363,10 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: 11, color: '#64748B', marginBottom: 4 }}>State</label>
-                        <select value={rangeAvail ? '1' : '0'} onChange={(e) => setRangeAvail(e.target.value === '1')} style={{ ...inputStyle, width: 'auto' }}>
-                          <option value="1">Available</option>
-                          <option value="0">Unavailable</option>
+                        <select value={rangeMode} onChange={(e) => setRangeMode(e.target.value)} style={{ ...inputStyle, width: 'auto' }}>
+                          <option value="available">Available</option>
+                          <option value="unavailable">Unavailable</option>
+                          <option value="pto">PTO (time off)</option>
                         </select>
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
@@ -458,16 +459,22 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                         </div>
                         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                           <button
-                            onClick={() => setEditorAvail(true)}
-                            style={{ flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${editorAvail ? '#15803D' : '#E2E8F0'}`, background: editorAvail ? '#F0FDF4' : '#fff', color: editorAvail ? '#15803D' : '#64748B' }}
+                            onClick={() => setEditorMode('available')}
+                            style={{ flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${editorMode === 'available' ? '#15803D' : '#E2E8F0'}`, background: editorMode === 'available' ? '#F0FDF4' : '#fff', color: editorMode === 'available' ? '#15803D' : '#64748B' }}
                           >
                             ✓ Available
                           </button>
                           <button
-                            onClick={() => setEditorAvail(false)}
-                            style={{ flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${!editorAvail ? '#B91C1C' : '#E2E8F0'}`, background: !editorAvail ? '#FEF2F2' : '#fff', color: !editorAvail ? '#B91C1C' : '#64748B' }}
+                            onClick={() => setEditorMode('unavailable')}
+                            style={{ flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${editorMode === 'unavailable' ? '#B91C1C' : '#E2E8F0'}`, background: editorMode === 'unavailable' ? '#FEF2F2' : '#fff', color: editorMode === 'unavailable' ? '#B91C1C' : '#64748B' }}
                           >
                             ✕ Unavailable
+                          </button>
+                          <button
+                            onClick={() => setEditorMode('pto')}
+                            style={{ flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${editorMode === 'pto' ? '#B45309' : '#E2E8F0'}`, background: editorMode === 'pto' ? '#FFFBEB' : '#fff', color: editorMode === 'pto' ? '#B45309' : '#64748B' }}
+                          >
+                            🌴 PTO
                           </button>
                         </div>
                         <input
@@ -480,15 +487,15 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                           <button onClick={saveDay} disabled={savingDay} style={{ ...primaryBtnStyle, opacity: savingDay ? 0.6 : 1, cursor: savingDay ? 'default' : 'pointer' }}>
                             {savingDay ? 'Saving…' : 'Save'}
                           </button>
-                          {/* Clear is only meaningful when an admin override exists. */}
-                          {eff.override && eff.source === 'ADMIN' && (
+                          {/* Clear is meaningful for anything the admin set (incl. PTO). */}
+                          {eff.override && (eff.source === 'ADMIN' || eff.source === 'PTO') && (
                             <button onClick={clearDay} disabled={savingDay} style={ghostBtnStyle}>
                               Clear (use default)
                             </button>
                           )}
-                          {eff.override && eff.source !== 'ADMIN' && (
+                          {eff.override && eff.source === 'PROVIDER' && (
                             <span style={{ fontSize: 12, color: '#64748B' }}>
-                              {eff.source === 'PROVIDER' ? 'Provider-submitted' : eff.source === 'PTO' ? 'From PTO' : eff.source} — saving overrides it.
+                              Provider-submitted — saving overrides it.
                             </span>
                           )}
                         </div>
