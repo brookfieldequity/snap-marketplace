@@ -496,19 +496,26 @@ export default function PayrollBuilderPage({ onNavigate }) {
           ) : (
             <>
               {/* Summary cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                {[
+              {(() => {
+                const totalBonus = grid.items.reduce((s, i) => s + clientBonus(i), 0)
+                const cards = [
                   { label: 'Providers', value: grid.items.length },
                   { label: 'Total Hours', value: grid.items.reduce((s, i) => s + Number(i.regularHours || 0) + Number(i.otHours || 0), 0).toFixed(1) },
                   { label: 'Total Gross', value: fmtMoney(grid.items.reduce((s, i) => s + Number(i.grossPay || 0), 0)) },
+                  { label: 'Total Bonus', value: fmtMoney(totalBonus), color: totalBonus > 0 ? '#7C3AED' : '#0F172A' },
                   { label: 'Approved', value: `${grid.approved.size} / ${grid.items.length}` },
-                ].map((c) => (
-                  <div key={c.label} style={{ ...card, padding: 16 }}>
-                    <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{c.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: '#0F172A' }}>{c.value}</div>
+                ]
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 16 }}>
+                    {cards.map((c) => (
+                      <div key={c.label} style={{ ...card, padding: 16 }}>
+                        <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{c.label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: c.color || '#0F172A' }}>{c.value}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )
+              })()}
 
               {grid.items.length === 0 ? (
                 <div style={{ ...card, color: '#64748B' }}>
