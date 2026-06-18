@@ -209,6 +209,21 @@ export default function PayrollBuilderPage({ onNavigate }) {
     }
   }
 
+  async function resetTemplate(sys) {
+    if (!window.confirm(`Reset the ${sys} template? You'll re-upload it on the next step.`)) return
+    setError('')
+    try {
+      await payrollAPI.resetTemplate(sys)
+      const c = await payrollAPI.getConfig()
+      setConfig(c)
+      setMapping(null)
+      setSystem(sys)
+      setStep(2)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: '32px 40px', color: '#64748B' }}>Loading payroll…</div>
   }
@@ -308,18 +323,39 @@ export default function PayrollBuilderPage({ onNavigate }) {
                   <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
                     {conf?.configured ? '✓ Template configured' : 'No template yet'}
                   </div>
+                  {conf?.templateName && (
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {conf.templateName}
+                    </div>
+                  )}
+                  {conf?.configured && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        resetTemplate(sys)
+                      }}
+                      style={{ marginTop: 10, background: 'none', border: 'none', color: '#DC2626', fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Reset / replace template
+                    </button>
+                  )}
                 </div>
               )
             })}
           </div>
-          <div style={{ marginTop: 24 }}>
+          <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
             <button
               style={system ? primaryBtn : disabledBtn}
               disabled={!system}
               onClick={() => setStep(activeSystem?.configured ? 3 : 2)}
             >
-              Continue
+              {activeSystem?.configured ? 'Continue to Review' : 'Continue'}
             </button>
+            {activeSystem?.configured && (
+              <button style={ghostBtn} onClick={() => { setMapping(null); setStep(2) }}>
+                Replace template
+              </button>
+            )}
           </div>
         </div>
       )}
