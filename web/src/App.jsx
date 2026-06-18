@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar.jsx'
 import SnappyWidget from './components/SnappyWidget.jsx'
 import AdminSidebar from './components/AdminSidebar.jsx'
 import { facilityAPI } from './api.js'
+import PayrollBuilderPage from './pages/shifts/PayrollBuilderPage.jsx'
+import PayrollHistoryPage from './pages/shifts/PayrollHistoryPage.jsx'
 
 // Facility pages
 import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
@@ -46,6 +48,8 @@ import AdminIncentivesPage from './pages/admin/AdminIncentivesPage.jsx'
 import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
 import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx'
 import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
+import AdminMarketplaceFeesPage from './pages/admin/AdminMarketplaceFeesPage.jsx'
+import AdminFeatureFlagsPage from './pages/admin/AdminFeatureFlagsPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
 
@@ -79,6 +83,10 @@ export default function App() {
   const [facilityName, setFacilityName] = useState('')
   const [authMode, setAuthMode] = useState('login') // 'login' | 'register'
   const [snapMode, setSnapMode] = useState('MARKETPLACE')
+  // Effective feature flags for this facility ({ flagName: boolean }). Drives
+  // which nav items / pages render. Defaults to empty (everything gated off)
+  // until loaded.
+  const [featureFlags, setFeatureFlags] = useState({})
 
   // Admin-side state
   const [adminPage, setAdminPage] = useState('overview')
@@ -102,6 +110,11 @@ export default function App() {
       })
       .catch(() => {
         // Silently ignore — default MARKETPLACE mode stays
+      })
+    facilityAPI.getFeatureFlags()
+      .then((res) => setFeatureFlags(res.enabled || {}))
+      .catch(() => {
+        // Silently ignore — flags stay off (features hidden) on failure
       })
   }, [facilityToken])
 
@@ -241,6 +254,7 @@ export default function App() {
             facilityName={facilityName}
             onLogout={handleFacilityLogout}
             snapMode={snapMode}
+            featureFlags={featureFlags}
           />
           <main style={{ flex: 1, marginLeft: 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
             {/* SNAP Shifts pages */}
@@ -285,6 +299,12 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'data-upload' && (
               <DataUploadPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'payroll' && (
+              <PayrollBuilderPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'payroll-history' && (
+              <PayrollHistoryPage onNavigate={setFacilityPage} />
             )}
 
             {/* SNAP Marketplace pages */}
@@ -340,6 +360,8 @@ export default function App() {
           )}
           {adminPage === 'shifts'            && <AdminShiftsPage />}
           {adminPage === 'disputes'          && <AdminDisputesPage />}
+          {adminPage === 'marketplace-fees'  && <AdminMarketplaceFeesPage />}
+          {adminPage === 'feature-flags'     && <AdminFeatureFlagsPage />}
           {adminPage === 'messages'          && <AdminMessagesPage />}
           {adminPage === 'staffiq-analytics' && <AdminStaffIQPage />}
           {adminPage === 'roi'               && <AdminRoiPage preselectedFacilityId={adminRoiFacilityId} />}

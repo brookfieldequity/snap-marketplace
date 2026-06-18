@@ -31,17 +31,31 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
   const today = new Date();
   const [facilityId, setFacilityId] = useState(facilities[0]?.id || null);
   const [type, setType] = useState('DAY_OFF');
-  const [date, setDate] = useState(''); // selected date as 'YYYY-MM-DD'
+  const [date, setDate] = useState(''); // selected (start) date as 'YYYY-MM-DD'
+  const [endDate, setEndDate] = useState(''); // PTO range end (inclusive)
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [siteName, setSiteName] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // PTO is requested as a date range; day-off / work are single dates.
+  const isRange = type === 'PTO';
+
   function reset() {
-    setType('DAY_OFF'); setDate(''); setSiteName(''); setNote('');
+    setType('DAY_OFF'); setDate(''); setEndDate(''); setSiteName(''); setNote('');
     setViewYear(today.getFullYear()); setViewMonth(today.getMonth());
     setFacilityId(facilities[0]?.id || null);
+  }
+
+  // Tap handler: single-date for day-off/work; for PTO, first tap sets the
+  // start (clears end), next tap on/after start sets the end, earlier tap
+  // restarts the range.
+  function pickDay(key) {
+    if (!isRange) { setDate(key); return; }
+    if (!date || (date && endDate)) { setDate(key); setEndDate(''); }
+    else if (key < date) { setDate(key); setEndDate(''); }
+    else setEndDate(key);
   }
 
   // Don't let providers request dates in the past, or navigate before this month.
@@ -59,13 +73,14 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
 
   async function submit() {
     if (!facilityId) return Alert.alert('Pick a facility', 'Choose which facility this request is for.');
-    if (!date) return Alert.alert('Pick a date', 'Tap the date you want to request.');
+    if (!date) return Alert.alert('Pick a date', isRange ? 'Tap your PTO start and end dates.' : 'Tap the date you want to request.');
     setSaving(true);
     try {
       await scheduleRequestAPI.create({
         facilityId,
         type,
         date,
+        endDate: isRange && endDate ? endDate : undefined,
         siteName: type === 'WORK' && siteName.trim() ? siteName.trim() : undefined,
         note: note.trim() || undefined,
       });
@@ -100,6 +115,7 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
             <Text style={styles.label}>What are you requesting?</Text>
             <View style={styles.toggleRow}>
               {[
+                { v: 'PTO', label: '🌴 PTO' },
                 { v: 'DAY_OFF', label: 'Day off' },
                 { v: 'WORK', label: 'To work' },
               ].map(({ v, label }) => {
@@ -108,13 +124,16 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
                   <TouchableOpacity
                     key={v}
                     style={[styles.toggle, active && styles.toggleActive]}
-                    onPress={() => setType(v)}
+                    onPress={() => { setType(v); setEndDate(''); }}
                   >
                     <Text style={[styles.toggleText, active && styles.toggleTextActive]}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
+            {isRange && (
+              <Text style={styles.hint}>Tap your first PTO day, then your last day. PTO counts weekdays against your annual allotment.</Text>
+            )}
 
             {/* Facility picker (only if more than one) */}
             {facilities.length > 1 && (
@@ -138,7 +157,7 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
             )}
 
             {/* Date — tap-to-pick calendar */}
-            <Text style={styles.label}>Date</Text>
+            <Text style={styles.label}>{isRange ? 'Dates' : 'Date'}</Text>
             <View style={styles.calendar}>
               <View style={styles.calHeader}>
                 <TouchableOpacity onPress={prevMonth} disabled={atCurrentMonth} style={styles.calNav}>
@@ -157,18 +176,22 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
                   if (d === null) return <View key={`b${i}`} style={styles.cell} />;
                   const key = toDateKey(viewYear, viewMonth, d);
                   const isPast = key < todayKey;
-                  const isSelected = key === date;
+                  const isStart = key === date;
+                  const isEnd = key === endDate;
+                  const inRange = isRange && date && endDate && key > date && key < endDate;
+                  const isSelected = isStart || isEnd;
                   return (
                     <TouchableOpacity
                       key={key}
-                      style={[styles.cell, styles.dayCell, isSelected && styles.daySelected]}
+                      style={[styles.cell, styles.dayCell, inRange && styles.dayInRange, isSelected && styles.daySelected]}
                       disabled={isPast}
-                      onPress={() => setDate(key)}
+                      onPress={() => pickDay(key)}
                       activeOpacity={0.7}
                     >
                       <Text style={[
                         styles.dayText,
                         isPast && styles.dayPast,
+                        inRange && styles.dayInRangeText,
                         isSelected && styles.daySelectedText,
                       ]}>{d}</Text>
                     </TouchableOpacity>
@@ -176,7 +199,12 @@ export default function RequestModal({ visible, onClose, memberships = [], onSub
                 })}
               </View>
             </View>
-            {date ? <Text style={styles.selectedLabel}>Selected: {prettyDate(date)}</Text> : null}
+            {date ? (
+              <Text style={styles.selectedLabel}>
+                Selected: {prettyDate(date)}
+                {isRange ? (endDate ? ` – ${prettyDate(endDate)}` : ' — now tap your last day') : ''}
+              </Text>
+            ) : null}
 
             {/* Site (WORK only) */}
             {type === 'WORK' && (
@@ -244,9 +272,12 @@ const styles = StyleSheet.create({
   cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
   dayCell: { borderRadius: 8 },
   daySelected: { backgroundColor: '#2563EB' },
+  dayInRange: { backgroundColor: '#DBEAFE', borderRadius: 0 },
   dayText: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
   dayPast: { color: '#CBD5E1' },
+  dayInRangeText: { color: '#1D4ED8', fontWeight: '700' },
   daySelectedText: { color: '#fff', fontWeight: '800' },
+  hint: { fontSize: 12, color: '#64748B', marginTop: 8, lineHeight: 17 },
   selectedLabel: { marginTop: 8, fontSize: 13, fontWeight: '600', color: '#2563EB' },
   submit: { backgroundColor: '#2563EB', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 18 },
   submitText: { color: '#fff', fontSize: 15, fontWeight: '800' },

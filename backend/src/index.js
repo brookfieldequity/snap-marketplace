@@ -30,6 +30,8 @@ const calculatorRoutes = require('./routes/calculator');
 const leadsRoutes = require('./routes/leads');
 const staffiqInputsRoutes = require('./routes/staffiqInputs');
 const credentialingRoutes = require('./routes/credentialing');
+const payrollRoutes = require('./routes/payroll');
+const featureFlagRoutes = require('./routes/featureFlags');
 const coverageTemplatesRoutes = require('./routes/coverageTemplates');
 const holidayRoutes = require('./routes/holidays');
 const automationEventsRoutes = require('./routes/automationEvents');
@@ -101,6 +103,8 @@ app.use('/api/data-upload', datauploadRoutes);
 app.use('/api/calculator', calculatorRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/staffiq-inputs', staffiqInputsRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/feature-flags', featureFlagRoutes);
 app.use('/api/credentialing', credentialingRoutes);
 // Facility-coordinator invite + claim. Replaces /auth/facility/register
 // per snap-applications/capa-pilot/facility-invite-spec.md (2026-06-09).

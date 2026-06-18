@@ -74,6 +74,17 @@ enum PaymentStatus {
   PAID
 }
 
+// SNAP's own platform-fee collection state on a marketplace shift (Position 1).
+// Distinct from PaymentStatus (which tracks the provider's pay). NOT_APPLICABLE
+// = internal shift or transaction_fees flag off; PENDING = fee accrued/owed but
+// not yet charged (no Stripe yet); CHARGED/FAILED = once Stripe is wired (V-later).
+enum FeeStatus {
+  NOT_APPLICABLE
+  PENDING
+  CHARGED
+  FAILED
+}
+
 // ── SNAP Shifts enums ─────────────────────────────────────────────────────────
 
 enum SnapMode {
@@ -86,6 +97,28 @@ enum EmploymentCategory {
   FULL_TIME
   PER_DIEM
   LOCUMS
+}
+
+// ── Payroll Builder enums ─────────────────────────────────────────────────────
+
+// External payroll provider the facility uses. The uploaded template + field
+// mapping is keyed on this. Extend as new providers onboard (Paychex, etc).
+enum PayrollSystem {
+  ADP
+  GUSTO
+}
+
+// Pay class a payroll run is scoped to. Runs are split by class so W-2 staff
+// and 1099/contractors export as separate files (different tax handling, often
+// different templates). Derived from the roster card's is1099 flag.
+enum PayrollClass {
+  W2
+  CONTRACTOR
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  EXPORTED
 }
 
 enum IncentiveShiftStatus {
@@ -301,6 +334,10 @@ model Facility {
   roiSnapshots        FacilityRoiSnapshot[]
   facilityInvites     FacilityInvite[]
   scheduleRequests    ScheduleRequest[]
+  featureFlags        FacilityFeatureFlag[]
+  payrollTemplates    PayrollTemplateConfig[]
+  payrollRuns         PayrollRun[]
+  marketplaceFees     MarketplaceFeeLedger[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -529,6 +566,7 @@ model ShiftBooking {
   providerRating ProviderRating?
   facilityRating FacilityRating?
   completion     ShiftCompletion?
+  feeLedger      MarketplaceFeeLedger?
 
   createdAt DateTime @default(now())
 }
@@ -733,6 +771,20 @@ model InternalRosterEntry {
   // null as the practice's average (currently 0.85 as a sensible default).
   reliabilityScore Float?
 
+  // ── PTO (paid time off) — see docs / pto-builder-spec ───────────────────────
+  // Annual PTO-day allotment shown on the profile card ("PTO days annual").
+  // null = use the facility/system default (DEFAULT_PTO_DAYS_ANNUAL). Admin can
+  // override per provider. "Granted" and "used so far" are NOT stored — they're
+  // derived from source='PTO' RosterAvailability weekday rows for the year.
+  ptoDaysAnnual Int?
+  // PTO eligibility. null = derive from employment (W-2 i.e. is1099=false, OR
+  // full-time); true/false = explicit admin override. Per the locked spec, all
+  // full-time/W-2 staff are eligible by default; per-diems only when flagged.
+  ptoEligible   Boolean?
+  // Manual seniority rank for the future PTO Builder tie-break (1 = most
+  // senior). Unused by Feature A; added now so the profile card holds it.
+  seniorityRank Int?
+
   scheduleAssignments ScheduleAssignment[]
   incentiveResponses  InternalIncentiveShiftResponse[]
   scheduleFeedback    ScheduleFeedback[]
@@ -740,6 +792,8 @@ model InternalRosterEntry {
   timeOff             RosterTimeOff[]
   availability        RosterAvailability[]
   scheduleRequests    ScheduleRequest[]
+  rateHistory         RosterRateHistory[]
+  payrollLineItems    PayrollRunProvider[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
@@ -960,7 +1014,7 @@ model StaffIQInsight {
   // Closed-loop feedback: coordinators confirm or reject each insight, which is
   // the labeled signal the learning layer uses to calibrate thresholds over time.
   status               String      @default("NEW") // NEW | ACCEPTED | DISMISSED | ACTIONED
-  feedback             Json?       // { reason, note, by, at }
+  feedback             Json? // { reason, note, by, at }
   actionedAt           DateTime?
 }
 
@@ -1080,31 +1134,31 @@ model StaffIQScoreHistory {
 //      feedback) that close the loop and let estimates be calibrated against truth.
 
 model FacilityStaffingProfile {
-  id                     String   @id @default(cuid())
-  facilityId             String   @unique
-  facility               Facility @relation(fields: [facilityId], references: [id])
+  id         String   @id @default(cuid())
+  facilityId String   @unique
+  facility   Facility @relation(fields: [facilityId], references: [id])
 
   // Learned (EMA) baselines.
-  avgRoomsByDow          Json?    // { "1": 6.2, ..., "5": 3.1 } learned rooms per weekday
-  avgCareTeamRatio       Float?   // learned CRNA:ANES ratio on care-team days
-  avgCostPerRoom         Float?   // learned $/room/shift
+  avgRoomsByDow          Json? // { "1": 6.2, ..., "5": 3.1 } learned rooms per weekday
+  avgCareTeamRatio       Float? // learned CRNA:ANES ratio on care-team days
+  avgCostPerRoom         Float? // learned $/room/shift
   avgWeekdayWastePerRoom Float?
   avgFridayWastePerRoom  Float?
-  fridayRoomIndex        Float?   // avg Friday rooms / avg weekday rooms (volume signal)
+  fridayRoomIndex        Float? // avg Friday rooms / avg weekday rooms (volume signal)
 
   // Confidence bookkeeping — more observations = more trustworthy baseline.
-  observationCount       Int      @default(0) // day-records folded in
-  uploadsAnalyzed        Int      @default(0)
-  dataSpanDays           Int?     // calendar span of observed schedule data
-  lastScore              Int?
+  observationCount Int  @default(0) // day-records folded in
+  uploadsAnalyzed  Int  @default(0)
+  dataSpanDays     Int? // calendar span of observed schedule data
+  lastScore        Int?
 
-  updatedAt              DateTime @updatedAt
-  createdAt              DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 model StaffIQBenchmark {
   id               String   @id @default(cuid())
-  metric           String   // costPerRoom | careTeamRatio | inefficiencyPct | wastePerRoom | fridayExcessPerRoom
+  metric           String // costPerRoom | careTeamRatio | inefficiencyPct | wastePerRoom | fridayExcessPerRoom
   scope            String   @default("network") // future: region/specialty scoping
   p25              Float?
   median           Float?
@@ -1122,10 +1176,10 @@ model StaffIQOutcome {
   id              String   @id @default(cuid())
   facilityId      String
   facility        Facility @relation(fields: [facilityId], references: [id])
-  insightId       String?  // optional link to the insight that prompted the action
-  outcomeType     String   // INCENTIVE_FILLED | INCENTIVE_ESCALATED | GAP_UNFILLED | INSIGHT_FEEDBACK
-  predictedDollar Float?   // what StaffIQ estimated
-  realizedDollar  Float?   // what actually happened (e.g. agency cost avoided)
+  insightId       String? // optional link to the insight that prompted the action
+  outcomeType     String // INCENTIVE_FILLED | INCENTIVE_ESCALATED | GAP_UNFILLED | INSIGHT_FEEDBACK
+  predictedDollar Float? // what StaffIQ estimated
+  realizedDollar  Float? // what actually happened (e.g. agency cost avoided)
   metadata        Json?
   createdAt       DateTime @default(now())
 
@@ -1482,8 +1536,13 @@ model ScheduleRequest {
   rosterEntryId String
   rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
   // DAY_OFF = don't schedule me this date. WORK = please schedule me this date.
-  type          String // "DAY_OFF" | "WORK"
+  // PTO = paid time off (counts against the provider's annual allotment); on
+  // accept it writes source='PTO' RosterAvailability rows across [date,endDate].
+  type          String // "DAY_OFF" | "WORK" | "PTO"
   date          DateTime            @db.Date
+  // Inclusive end of the request span. null = single-day (date only). Used by
+  // PTO requests so a provider can request e.g. a Mon–Fri week in one request.
+  endDate       DateTime?           @db.Date
   // For WORK requests, the site the provider wants (optional; null = any site).
   siteName      String?
   note          String?
@@ -1526,4 +1585,157 @@ model ScorecardSnapshot {
   createdAt           DateTime @default(now())
 
   @@index([weekOf])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Feature flags + Payroll Builder (added 2026-06-18)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Per-facility feature gate. Effective access for a flag = this row's `enabled`
+// if a row exists (an explicit SNAP-admin override), otherwise the default for
+// the facility's SubscriptionTier (see config/featureFlags.js TIER_DEFAULTS).
+// Flags are set ONLY by SNAP admins; facility admins can read their own but
+// never modify. `source` records whether the row came from the tier default
+// being materialized or an explicit per-facility override.
+model FacilityFeatureFlag {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  flagName   String
+  enabled    Boolean
+  source     String   @default("OVERRIDE") // TIER | OVERRIDE
+  setById    String? // SNAP admin User id who set the override
+  setAt      DateTime @default(now())
+  notes      String?
+
+  @@unique([facilityId, flagName])
+  @@index([facilityId])
+}
+
+// Per-facility, per-system payroll template + field mapping. Uploaded once by
+// the facility admin; the saved column headers + mapping drive every future
+// export so the produced CSV matches exactly what ADP/Gusto expects to ingest.
+model PayrollTemplateConfig {
+  id           String        @id @default(cuid())
+  facilityId   String
+  facility     Facility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  system       PayrollSystem
+  templateName String? // original uploaded filename
+  // Raw ordered column headers parsed from the uploaded template (String[]).
+  headers      Json
+  // { snapField: templateHeader } — maps SNAP payroll fields onto the
+  // facility's template columns. Built by fuzzy auto-match, admin-confirmable.
+  fieldMapping Json
+  fileCode     String? // ADP "File Code" / company code, if provided
+  uploadedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([facilityId, system])
+}
+
+// A single payroll run for one facility, one pay period, one pay class.
+// W-2 and 1099/contractor staff export as SEPARATE runs (different files).
+// csvContent is the immutable generated export, stored so History can
+// re-download the exact file that was produced.
+model PayrollRun {
+  id             String           @id @default(cuid())
+  facilityId     String
+  facility       Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  system         PayrollSystem
+  payClass       PayrollClass
+  periodStart    DateTime
+  periodEnd      DateTime
+  providerCount  Int              @default(0)
+  totalHours     Float            @default(0)
+  totalGross     Float            @default(0)
+  status         PayrollRunStatus @default(DRAFT)
+  csvContent     String? // stored copy of the generated CSV (set on export)
+  fileName       String?
+  exportedById   String? // facility User id who exported
+  exportedByName String?
+  exportedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  lineItems PayrollRunProvider[]
+
+  @@index([facilityId, periodStart])
+}
+
+// One provider's line on a payroll run. Hours are auto-seeded from available
+// shift data then made editable in the review grid; grossPay is recomputed
+// from hours x rate. shiftDetail is the expandable per-shift breakdown.
+model PayrollRunProvider {
+  id              String               @id @default(cuid())
+  payrollRunId    String
+  payrollRun      PayrollRun           @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  rosterEntryId   String?
+  rosterEntry     InternalRosterEntry? @relation(fields: [rosterEntryId], references: [id], onDelete: SetNull)
+  providerName    String
+  role            String?
+  payrollSystemId String? // external payroll-provider employee id (pass-through)
+  regularHours    Float                @default(0)
+  otHours         Float                @default(0)
+  hourlyRate      Float?
+  annualRate      Float? // for salaried W-2; gross may derive from this instead
+  grossPay        Float                @default(0)
+  shiftDetail     Json? // [{ date, start, end, hours, type }]
+  approved        Boolean              @default(false)
+  approvedById    String?
+  approvedAt      DateTime?
+
+  @@index([payrollRunId])
+}
+
+// Audit trail of rate changes per roster provider. The current rate lives on
+// InternalRosterEntry (hourlyRate/annualRate); this records each change with an
+// effective date so historical payroll runs can be explained/reconstructed.
+model RosterRateHistory {
+  id            String              @id @default(cuid())
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  hourlyRate    Float?
+  annualRate    Float?
+  effectiveDate DateTime
+  setById       String?
+  note          String?
+  createdAt     DateTime            @default(now())
+
+  @@index([rosterEntryId, effectiveDate])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Marketplace Payment — Position 1 fee ledger (added 2026-06-18)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// One row per marketplace ShiftBooking that reaches dual-verified completion.
+// SNAP is NOT the payor: this records the 5% platform fee SNAP is owed by the
+// facility (the facility pays the provider directly). Accrued as PENDING on
+// verification; real charging waits until Stripe billing is wired (then status
+// flips to CHARGED/FAILED). Only created when the facility's transaction_fees
+// feature flag is ON. Internal shifts never get a row (they have no booking).
+model MarketplaceFeeLedger {
+  id         String       @id @default(cuid())
+  bookingId  String       @unique
+  booking    ShiftBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  facilityId String
+  facility   Facility     @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  providerId String
+
+  shiftValue Float // totalShiftValue at accrual time
+  feeRate    Float // e.g. 0.05
+  feeAmount  Float // shiftValue * feeRate
+  status     FeeStatus @default(PENDING)
+
+  accruedAt             DateTime  @default(now())
+  chargedAt             DateTime? // set when the Stripe charge succeeds (V-later)
+  stripePaymentIntentId String?
+  failureReason         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([facilityId, status])
+  @@index([status, accruedAt])
 }

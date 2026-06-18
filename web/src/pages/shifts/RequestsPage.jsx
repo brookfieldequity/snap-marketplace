@@ -9,6 +9,7 @@ import { facilityAPI } from '../../api.js'
 const TYPE_STYLE = {
   DAY_OFF: { bg: '#FEF2F2', color: '#B91C1C', border: '#FCA5A5', label: 'Day off' },
   WORK:    { bg: '#ECFDF5', color: '#047857', border: '#6EE7B7', label: 'Wants to work' },
+  PTO:     { bg: '#EEF2FF', color: '#4338CA', border: '#C7D2FE', label: '🌴 PTO' },
 }
 const STATUS_STYLE = {
   PENDING:  { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A', label: 'Pending' },
@@ -58,7 +59,7 @@ export default function RequestsPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
-          Day-off and work requests from your roster. Accepted requests are honored when you build the schedule.
+          PTO, day-off, and work requests from your roster. Approving a PTO request books it on the calendar and counts it toward the provider's annual PTO; other accepted requests are honored when you build the schedule.
         </p>
       </div>
 
@@ -113,7 +114,7 @@ export default function RequestsPage() {
                       <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20 }}>{s.label}</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#374151', marginTop: 6 }}>
-                      <strong>{fmtDate(r.date)}</strong>
+                      <strong>{r.endDate && String(r.endDate).slice(0, 10) > String(r.date).slice(0, 10) ? `${fmtDate(r.date)} – ${fmtDate(r.endDate)}` : fmtDate(r.date)}</strong>
                       {r.siteName ? <span style={{ color: '#64748B' }}> · {r.siteName}</span> : null}
                       {r.rosterEntry?.providerType ? <span style={{ color: '#94A3B8' }}> · {r.rosterEntry.providerType}</span> : null}
                     </div>

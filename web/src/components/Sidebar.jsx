@@ -20,6 +20,10 @@ const SHIFTS_ITEMS = [
   { key: 'staffiq',           label: 'StaffIQ Insights',    icon: '🧠' },
   { key: 'staffiq-inputs',    label: 'StaffIQ Data Input',  icon: '📝' },
   { key: 'data-upload',       label: 'Data Upload',         icon: '📤' },
+  // Payroll Builder is feature-flag gated (payroll_builder) — only shown when
+  // the facility's subscription tier / override enables it.
+  { key: 'payroll',           label: 'Payroll Builder',     icon: '💵', flag: 'payroll_builder' },
+  { key: 'payroll-history',   label: 'Payroll History',     icon: '🧾', flag: 'payroll_builder' },
   { key: 'calculator',        label: 'Calculator',          icon: '🧮' },
 ]
 
@@ -99,9 +103,11 @@ function Divider() {
   )
 }
 
-export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, snapMode }) {
+export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, snapMode, featureFlags = {} }) {
   const isShiftsMode = snapMode === 'SHIFTS' || snapMode === 'BOTH'
   const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
+  // Hide any nav item whose feature flag is off for this facility.
+  const shiftsItems = SHIFTS_ITEMS.filter((it) => !it.flag || featureFlags[it.flag])
 
   return (
     <aside
@@ -151,7 +157,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         {isShiftsMode && (
           <>
             <SectionHeader label="SNAP Shifts" />
-            {SHIFTS_ITEMS.map((item) => (
+            {shiftsItems.map((item) => (
               <NavItem
                 key={item.key}
                 item={item}

@@ -22,7 +22,10 @@ const { recordNotification } = require('../services/notifications');
 
 const router = express.Router();
 
-const VALID_TYPES = ['DAY_OFF', 'WORK'];
+const VALID_TYPES = ['DAY_OFF', 'WORK', 'PTO'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const dateOnly = (d) => new Date(`${String(d).slice(0, 10)}T00:00:00.000Z`);
 
 async function resolveProfileId(req) {
   if (req.user?.profileId) return req.user.profileId;
@@ -49,12 +52,24 @@ router.post('/', auth, async (req, res) => {
     const providerId = await resolveProfileId(req);
     if (!providerId) return res.status(404).json({ error: 'No provider profile' });
 
-    const { facilityId, type, date, siteName, note } = req.body || {};
+    const { facilityId, type, date, endDate, siteName, note } = req.body || {};
     if (!facilityId || !type || !date) {
       return res.status(400).json({ error: 'facilityId, type, and date are required' });
     }
     if (!VALID_TYPES.includes(type)) {
       return res.status(400).json({ error: `type must be one of ${VALID_TYPES.join(', ')}` });
+    }
+    // endDate (optional) makes the request a span [date, endDate]. Used for PTO
+    // (e.g. a Mon–Fri week) but allowed for any type. Must not precede date.
+    let end = null;
+    if (endDate) {
+      end = dateOnly(endDate);
+      if (end < dateOnly(date)) {
+        return res.status(400).json({ error: 'endDate must be on or after date' });
+      }
+      if ((end - dateOnly(date)) / DAY_MS > 366) {
+        return res.status(400).json({ error: 'Range too large (max 1 year)' });
+      }
     }
 
     const roster = await findRosterEntry(facilityId, providerId);
@@ -67,7 +82,8 @@ router.post('/', auth, async (req, res) => {
         facilityId,
         rosterEntryId: roster.id,
         type,
-        date: new Date(date),
+        date: dateOnly(date),
+        endDate: end,
         siteName: siteName || null,
         note: note || null,
       },
@@ -162,32 +178,60 @@ router.post('/:id/decide', facilityAuth, async (req, res) => {
         },
       });
 
-      // Accepted DAY_OFF → materialize a RosterTimeOff so the builder
-      // auto-excludes this provider on that date (single-day range).
-      if (decision === 'accept' && request.type === 'DAY_OFF') {
-        await tx.rosterTimeOff.create({
-          data: {
-            facilityId: req.facility.id,
-            rosterEntryId: request.rosterEntryId,
-            startDate: request.date,
-            endDate: request.date,
-            reason: 'Approved day-off request',
-          },
-        });
+      if (decision === 'accept') {
+        const spanEnd = request.endDate || request.date;
+        if (request.type === 'DAY_OFF') {
+          // Materialize a RosterTimeOff so the builder auto-excludes this
+          // provider across the requested span.
+          await tx.rosterTimeOff.create({
+            data: {
+              facilityId: req.facility.id,
+              rosterEntryId: request.rosterEntryId,
+              startDate: request.date,
+              endDate: spanEnd,
+              reason: 'Approved day-off request',
+            },
+          });
+        } else if (request.type === 'PTO') {
+          // Write source='PTO' RosterAvailability rows across the span so it
+          // shows on the calendar, counts toward the PTO allotment, and the
+          // schedule builder treats those days as unavailable (via resolver).
+          for (let d = new Date(request.date); d <= spanEnd; d = new Date(d.getTime() + DAY_MS)) {
+            const dateObj = new Date(d);
+            await tx.rosterAvailability.upsert({
+              where: { rosterEntryId_date: { rosterEntryId: request.rosterEntryId, date: dateObj } },
+              create: {
+                rosterEntryId: request.rosterEntryId,
+                facilityId: req.facility.id,
+                date: dateObj,
+                available: false,
+                source: 'PTO',
+                note: 'Approved PTO request',
+              },
+              update: { available: false, source: 'PTO', note: 'Approved PTO request' },
+            });
+          }
+        }
       }
     });
 
     // Notify the provider their request was answered.
     if (request.rosterEntry?.linkedProviderId) {
-      const dateStr = new Date(request.date).toLocaleDateString('en-US', {
+      const fmt = (d) => new Date(d).toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric',
       });
-      const verb = request.type === 'DAY_OFF' ? 'day off' : 'request to work';
+      const dateStr = request.endDate && request.endDate > request.date
+        ? `${fmt(request.date)} – ${fmt(request.endDate)}`
+        : fmt(request.date);
+      const verb = request.type === 'DAY_OFF' ? 'day off'
+        : request.type === 'PTO' ? 'PTO'
+        : 'request to work';
+      const past = newStatus === 'ACCEPTED' ? 'approved' : 'declined';
       await recordNotification(request.rosterEntry.linkedProviderId, {
         type: 'REQUEST_ANSWERED',
-        title: `Your ${verb} on ${dateStr} was ${newStatus === 'ACCEPTED' ? 'approved' : 'declined'}`,
-        body: `${req.facility.name} ${newStatus === 'ACCEPTED' ? 'approved' : 'declined'} your ${verb} request for ${dateStr}.`,
-        data: { scheduleRequestId: request.id, status: newStatus, date: request.date },
+        title: `Your ${verb} for ${dateStr} was ${past}`,
+        body: `${req.facility.name} ${past} your ${verb} request for ${dateStr}.`,
+        data: { scheduleRequestId: request.id, status: newStatus, date: request.date, endDate: request.endDate },
       });
     }
 

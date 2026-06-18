@@ -7,8 +7,10 @@ const NAV_ITEMS = [
   { key: 'credential-users', label: 'Credential Users', icon: '🔐' },
   { key: 'shifts',           label: 'Shifts',           icon: '📋' },
   { key: 'disputes',         label: 'Disputes',         icon: '⚖️' },
+  { key: 'marketplace-fees', label: 'Marketplace Fees', icon: '💵' },
   { key: 'messages',         label: 'Messages',         icon: '💬' },
   { key: 'analytics',        label: 'Analytics',        icon: '📈' },
+  { key: 'feature-flags',    label: 'Feature Flags',    icon: '🚩' },
 ]
 
 const SNAP_SHIFTS_ITEMS = [

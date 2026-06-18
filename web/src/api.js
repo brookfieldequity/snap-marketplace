@@ -180,6 +180,7 @@ export const facilityAPI = {
 
   // Internal Roster
   getRoster: () => apiFetch(`${BASE}/roster`, { headers: facilityHeaders() }),
+  getPtoSummary: (year) => apiFetch(`${BASE}/roster/pto-summary${year ? `?year=${year}` : ''}`, { headers: facilityHeaders() }),
   getRosterLocations: () => apiFetch(`${BASE}/roster/locations`, { headers: facilityHeaders() }),
   createRosterEntry: (data) => apiFetch(`${BASE}/roster`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   updateRosterEntry: (id, data) => apiFetch(`${BASE}/roster/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
@@ -336,6 +337,51 @@ export const facilityAPI = {
   // StaffIQ Calculator (no auth)
   calcStaffIQSimple: (inputs) => apiFetch(`${BASE}/calculator/staffiq-simple`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inputs) }),
   submitStaffIQLead: (data) => apiFetch(`${BASE}/calculator/staffiq-simple/lead`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  // Feature flags — this facility's effective access (drives nav gating)
+  getFeatureFlags: () => apiFetch(`${BASE}/feature-flags/me`, { headers: facilityHeaders() }),
+}
+
+// ─── Payroll Builder API (SNAP Shifts) ────────────────────────────────────────
+
+export const payrollAPI = {
+  getConfig: () => apiFetch(`${BASE}/payroll/config`, { headers: facilityHeaders() }),
+  uploadTemplate: async (system, file, fileCode) => {
+    const fd = new FormData()
+    fd.append('system', system)
+    fd.append('file', file)
+    if (fileCode) fd.append('fileCode', fileCode)
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/payroll/template`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
+  saveMapping: (system, fieldMapping, fileCode) =>
+    apiFetch(`${BASE}/payroll/template/${system}/mapping`, {
+      method: 'PUT',
+      headers: facilityHeaders(),
+      body: JSON.stringify({ fieldMapping, fileCode }),
+    }),
+  resetTemplate: (system) =>
+    apiFetch(`${BASE}/payroll/template/${system}`, { method: 'DELETE', headers: facilityHeaders() }),
+  preview: ({ payClass, periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/payroll/preview?payClass=${payClass}&periodStart=${periodStart}&periodEnd=${periodEnd}`, {
+      headers: facilityHeaders(),
+    }),
+  exportRun: (payload) =>
+    apiFetch(`${BASE}/payroll/runs`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
+  getRuns: () => apiFetch(`${BASE}/payroll/runs`, { headers: facilityHeaders() }),
+  getRun: (id) => apiFetch(`${BASE}/payroll/runs/${id}`, { headers: facilityHeaders() }),
+  setProviderRate: (rosterEntryId, data) =>
+    apiFetch(`${BASE}/payroll/providers/${rosterEntryId}/rate`, {
+      method: 'PATCH',
+      headers: facilityHeaders(),
+      body: JSON.stringify(data),
+    }),
+  getRateHistory: (rosterEntryId) =>
+    apiFetch(`${BASE}/payroll/providers/${rosterEntryId}/rate-history`, { headers: facilityHeaders() }),
 }
 
 // ─── Credential API ───────────────────────────────────────────────────────────
@@ -483,6 +529,17 @@ export const adminAPI = {
     apiFetch(`${BASE}/admin/facilities`, {
       headers: adminHeaders(),
     }),
+
+  // Feature flags (SNAP admin only)
+  getFlagCatalog: () => apiFetch(`${BASE}/feature-flags/catalog`, { headers: adminHeaders() }),
+  getFacilityFlags: (facilityId) => apiFetch(`${BASE}/feature-flags/facility/${facilityId}`, { headers: adminHeaders() }),
+  setFacilityFlag: (facilityId, payload) =>
+    apiFetch(`${BASE}/feature-flags/facility/${facilityId}`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(payload) }),
+
+  // Marketplace fee ledger (Position 1)
+  getMarketplaceFeeSummary: () => apiFetch(`${BASE}/admin/marketplace-fees/summary`, { headers: adminHeaders() }),
+  getMarketplaceFees: (status) =>
+    apiFetch(`${BASE}/admin/marketplace-fees${status ? `?status=${status}` : ''}`, { headers: adminHeaders() }),
 
   updateSubscription: (facilityId, tier) =>
     apiFetch(`${BASE}/admin/facilities/${facilityId}/subscription`, {

@@ -1,0 +1,98 @@
+import React, { useState, useEffect } from 'react'
+import { payrollAPI } from '../../api.js'
+
+const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
+const ghostBtn = { padding: '8px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const CLASS_LABEL = { W2: 'W-2', CONTRACTOR: '1099' }
+
+function downloadCsv(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export default function PayrollHistoryPage({ onNavigate }) {
+  const [runs, setRuns] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    payrollAPI
+      .getRuns()
+      .then((res) => setRuns(res.runs))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function redownload(run) {
+    try {
+      const { run: full } = await payrollAPI.getRun(run.id)
+      downloadCsv(full.csvContent || '', full.fileName || `${run.id}.csv`)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  return (
+    <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Payroll History</h1>
+          <div style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Every payroll run you've exported. Click to re-download the exact file.</div>
+        </div>
+        <button style={ghostBtn} onClick={() => onNavigate('payroll')}>
+          ← Back to Builder
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>
+      )}
+
+      {loading ? (
+        <div style={{ ...card, color: '#64748B' }}>Loading…</div>
+      ) : runs.length === 0 ? (
+        <div style={{ ...card, color: '#64748B' }}>No payroll runs yet. Build and export one from the Payroll Builder.</div>
+      ) : (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.8fr 1fr 1.2fr 1fr 110px', padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <div>Pay Period</div>
+            <div>System</div>
+            <div>Class</div>
+            <div>Providers</div>
+            <div>Hours</div>
+            <div>Gross Pay</div>
+            <div>Exported By</div>
+            <div></div>
+          </div>
+          {runs.map((run) => (
+            <div key={run.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.8fr 1fr 1.2fr 1fr 110px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center', fontSize: 13 }}>
+              <div style={{ color: '#0F172A', fontWeight: 600 }}>
+                {run.periodStart?.slice(0, 10)} — {run.periodEnd?.slice(0, 10)}
+              </div>
+              <div style={{ color: '#64748B' }}>{run.system}</div>
+              <div style={{ color: '#64748B' }}>{CLASS_LABEL[run.payClass] || run.payClass}</div>
+              <div style={{ color: '#64748B' }}>{run.providerCount}</div>
+              <div style={{ color: '#64748B' }}>{run.totalHours}</div>
+              <div style={{ color: '#059669', fontWeight: 700 }}>{fmtMoney(run.totalGross)}</div>
+              <div style={{ color: '#64748B', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {run.exportedByName || '—'}
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>{run.exportedAt?.slice(0, 10)}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <button style={ghostBtn} onClick={() => redownload(run)}>
+                  Download
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

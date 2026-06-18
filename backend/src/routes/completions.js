@@ -3,6 +3,7 @@ const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const facilityAuth = require('../middleware/facilityAuth');
 const { notifyCompletionConfirmed, notifyDispute } = require('../services/notifications');
+const { accrueBookingFee } = require('../services/marketplaceFees');
 
 const router = express.Router();
 
@@ -137,6 +138,10 @@ async function checkAndFinalizeCompletion(completionId) {
       data: { providerId: completion.providerId, points: 10, reason: 'SHIFT_COMPLETED' },
     }),
   ]);
+
+  // Position 1: accrue SNAP's 5% platform fee (ledger only — no charge yet),
+  // gated by the facility's transaction_fees flag. Non-fatal if it fails.
+  accrueBookingFee(completion.bookingId).catch((err) => console.error('accrueBookingFee:', err.message));
 
   notifyCompletionConfirmed(completionId).catch((err) => console.error('notifyCompletionConfirmed:', err.message));
 }

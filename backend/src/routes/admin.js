@@ -5,6 +5,7 @@ const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
 const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
 const scorecard = require('../services/scorecard');
+const { accrueBookingFee, feeSummary } = require('../services/marketplaceFees');
 
 // Where claim links land. The web app deploys separately from the backend
 // (per CLAUDE.md), so this points at the web service URL. Override via
@@ -349,11 +350,50 @@ router.patch('/disputes/:id/resolve', adminAuth, async (req, res) => {
         data: { totalShiftValue: total, platformFeeAmount: fee, completedAt: new Date(), paymentStatus: 'PROCESSING' },
       });
       await prisma.shift.update({ where: { id: booking.shiftId }, data: { status: 'COMPLETED' } });
+      // Position 1: accrue SNAP's platform fee now that the dispute is resolved
+      // and the final shift value is known. Ledger-only (no charge yet).
+      await accrueBookingFee(booking.id).catch((err) => console.error('accrueBookingFee:', err.message));
     }
 
     res.json(completion);
   } catch (err) {
     res.status(500).json({ error: 'Failed to resolve dispute' });
+  }
+});
+
+// ── Marketplace fee ledger (Position 1) ─────────────────────────────────────────
+
+router.get('/marketplace-fees/summary', adminAuth, async (req, res) => {
+  try {
+    res.json(await feeSummary());
+  } catch (err) {
+    console.error('[admin/marketplace-fees/summary]', err.message);
+    res.status(500).json({ error: 'Failed to load fee summary' });
+  }
+});
+
+router.get('/marketplace-fees', adminAuth, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const rows = await prisma.marketplaceFeeLedger.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { accruedAt: 'desc' },
+      take: 500,
+      include: {
+        facility: { select: { name: true } },
+        booking: {
+          select: {
+            totalShiftValue: true,
+            provider: { select: { firstName: true, lastName: true } },
+            shift: { select: { date: true } },
+          },
+        },
+      },
+    });
+    res.json({ fees: rows });
+  } catch (err) {
+    console.error('[admin/marketplace-fees]', err.message);
+    res.status(500).json({ error: 'Failed to load marketplace fees' });
   }
 });
 

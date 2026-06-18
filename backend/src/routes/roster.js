@@ -9,6 +9,7 @@ const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS, sendEmail } = require('../services/notifications');
 const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
+const ptoService = require('../services/pto');
 
 const router = express.Router();
 
@@ -158,6 +159,31 @@ router.get('/', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /pto-summary?year=YYYY — per-roster-entry PTO counter for the year.
+// Returns { year, asOf, summary: { [rosterEntryId]: { annual, granted, used,
+// eligible } } }. "granted"/"used" are derived weekday counts from source='PTO'
+// rows (see services/pto.js); "annual" is the override or the system default.
+router.get('/pto-summary', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getUTCFullYear();
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+      select: { id: true, ptoDaysAnnual: true, ptoEligible: true, is1099: true, isFullTime: true, employmentCategory: true },
+    });
+    const asOf = new Date();
+    const map = await ptoService.summarizeYear({ facilityId: req.facility.id, entries, year, asOf });
+    const summary = {};
+    for (const e of entries) {
+      const s = map.get(e.id) || { annual: ptoService.annualAllotment(e), granted: 0, used: 0 };
+      summary[e.id] = { ...s, eligible: ptoService.isPtoEligible(e) };
+    }
+    res.json({ year, asOf: asOf.toISOString(), summary });
+  } catch (err) {
+    console.error('[roster/pto-summary] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /locations — the sites this facility covers, taken from the COVERAGE
 // TEMPLATES only (the coordinator's curated, canonical site list). Powers the
 // credentialed-sites checklist on the provider form. Deliberately excludes
@@ -255,6 +281,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
+      ptoDaysAnnual, ptoEligible, seniorityRank,
     } = req.body;
 
     // Re-check linkage if email OR NPI is being changed. Either change
@@ -297,6 +324,9 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(employer !== undefined && { employer: employer || null }),
         ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
+        ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
+        ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
+        ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { deleteMany: {}, create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
