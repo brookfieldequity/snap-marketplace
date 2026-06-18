@@ -24,6 +24,7 @@ const SNAP_FIELDS = {
   otHours: { label: 'OT Hours', synonyms: ['ot hours', 'overtime hours', 'overtime', 'ot hrs', 'o t hours', 'overtime hrs'] },
   rate: { label: 'Rate', synonyms: ['rate', 'hourly rate', 'pay rate', 'rate of pay', 'hourly', 'rate hr', 'hourly pay rate'] },
   gross: { label: 'Gross Pay', synonyms: ['gross pay', 'gross', 'total pay', 'amount', 'gross wages', 'total', 'gross amount'] },
+  bonus: { label: 'Bonus', synonyms: ['bonus', 'bonus pay', 'bonus amount', 'bonuses'] },
   workerType: { label: 'Worker Type', synonyms: ['worker type', 'type', 'employment type', 'employee type', 'classification', 'w2 1099'] },
   fileCode: { label: 'File Code', synonyms: ['file code', 'file no', 'company code', 'batch id', 'co code', 'file number'] },
 };
@@ -199,6 +200,10 @@ function valueForField(field, { item, run, config }) {
       return item.hourlyRate != null ? money(item.hourlyRate) : '';
     case 'gross':
       return money(item.grossPay);
+    case 'bonus': {
+      const b = computeBonus(item);
+      return b > 0 ? money(b) : ''; // blank when no bonus (cleaner for Gusto)
+    }
     case 'workerType':
       return run.payClass === 'CONTRACTOR' ? 'Contractor' : 'Employee';
     case 'fileCode':
@@ -241,6 +246,15 @@ function computeGross({ regularHours, otHours, hourlyRate, annualRate }) {
     return annualRate / 26;
   }
   return 0;
+}
+
+// Total bonus = flat amount + (bonus hours x bonus rate). Any combination of the
+// three may be supplied; missing pieces count as 0. Kept SEPARATE from gross —
+// it maps to the template's own "bonus" column.
+function computeBonus({ bonusFlat, bonusHours, bonusRate } = {}) {
+  const flat = Number(bonusFlat || 0);
+  const fromHours = Number(bonusHours || 0) * Number(bonusRate || 0);
+  return Math.round((flat + fromHours) * 100) / 100;
 }
 
 // ISO-week key (year-week) for splitting OT on a weekly >40 basis.
@@ -330,6 +344,10 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
       hourlyRate,
       annualRate,
       grossPay: Math.round(grossPay * 100) / 100,
+      bonusFlat: null,
+      bonusHours: null,
+      bonusRate: null,
+      bonusTotal: 0,
       shiftDetail,
       // UI flags
       missingRate: hourlyRate == null && annualRate == null,
@@ -346,6 +364,7 @@ module.exports = {
   detectHeaderRow,
   generateCsv,
   computeGross,
+  computeBonus,
   splitRegularOt,
   seedLineItems,
   fmtDate,

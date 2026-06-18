@@ -11,6 +11,7 @@ const {
   extractHeaders,
   generateCsv,
   computeGross,
+  computeBonus,
   seedLineItems,
   fmtDate,
 } = require('../services/payroll');
@@ -38,13 +39,21 @@ function fieldCatalog() {
 }
 
 // Resolve the headers + header→field map to use for a system: the facility's
-// saved template if present, else the built-in default.
+// saved template if present, else the built-in default. Safety net: if a saved
+// template maps ZERO fields (e.g. an old config corrupted by the pre-fix
+// title-row bug), fall back to the default so we never emit an all-blank CSV.
 function resolveTemplate(config, system) {
-  if (config && Array.isArray(config.headers) && config.headers.length) {
-    return { headers: config.headers, map: config.fieldMapping || {}, fileCode: config.fileCode };
-  }
   const def = DEFAULT_TEMPLATES[system];
-  return { headers: def.headers, map: def.map, fileCode: config?.fileCode };
+  if (config && Array.isArray(config.headers) && config.headers.length) {
+    const map = config.fieldMapping || {};
+    const mappedCount = Object.values(map).filter(Boolean).length;
+    if (mappedCount > 0) {
+      return { headers: config.headers, map, fileCode: config.fileCode, stale: false };
+    }
+    // Saved template maps nothing — treat as stale, use default but flag it.
+    return { headers: def.headers, map: def.map, fileCode: config.fileCode, stale: true };
+  }
+  return { headers: def.headers, map: def.map, fileCode: config?.fileCode, stale: false };
 }
 
 // ── Config: saved templates + field catalog ─────────────────────────────────────
@@ -226,6 +235,10 @@ router.post('/runs', async (req, res) => {
       const hourlyRate = li.hourlyRate != null ? Number(li.hourlyRate) : null;
       const annualRate = li.annualRate != null ? Number(li.annualRate) : null;
       const grossPay = Math.round(computeGross({ regularHours, otHours, hourlyRate, annualRate }) * 100) / 100;
+      const bonusFlat = li.bonusFlat != null && li.bonusFlat !== '' ? Number(li.bonusFlat) : null;
+      const bonusHours = li.bonusHours != null && li.bonusHours !== '' ? Number(li.bonusHours) : null;
+      const bonusRate = li.bonusRate != null && li.bonusRate !== '' ? Number(li.bonusRate) : null;
+      const bonusTotal = computeBonus({ bonusFlat, bonusHours, bonusRate });
       return {
         rosterEntryId: li.rosterEntryId || null,
         providerName: li.providerName || '',
@@ -236,6 +249,10 @@ router.post('/runs', async (req, res) => {
         hourlyRate,
         annualRate,
         grossPay,
+        bonusFlat,
+        bonusHours,
+        bonusRate,
+        bonusTotal,
         shiftDetail: li.shiftDetail || null,
       };
     });
@@ -287,6 +304,10 @@ router.post('/runs', async (req, res) => {
             hourlyRate: i.hourlyRate,
             annualRate: i.annualRate,
             grossPay: i.grossPay,
+            bonusFlat: i.bonusFlat,
+            bonusHours: i.bonusHours,
+            bonusRate: i.bonusRate,
+            bonusTotal: i.bonusTotal,
             shiftDetail: i.shiftDetail,
             approved: true,
             approvedById: req.user.userId,
@@ -296,7 +317,7 @@ router.post('/runs', async (req, res) => {
       },
     });
 
-    res.json({ run: saved, csv, fileName });
+    res.json({ run: saved, csv, fileName, templateStale: tpl.stale === true });
   } catch (err) {
     console.error('[payroll/runs POST]', err.message);
     res.status(500).json({ error: 'Failed to export payroll run' });

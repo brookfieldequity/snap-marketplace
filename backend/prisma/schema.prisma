@@ -1772,6 +1772,13 @@ model PayrollRunProvider {
   hourlyRate      Float?
   annualRate      Float? // for salaried W-2; gross may derive from this instead
   grossPay        Float                @default(0)
+  // Bonus is a SEPARATE payroll line from regular pay (its own CSV column).
+  // Final bonus = bonusFlat + bonusHours * bonusRate (any combination). The
+  // total lands in the template's "bonus" column; it is NOT added to grossPay.
+  bonusFlat       Float? // flat dollar bonus
+  bonusHours      Float? // bonus computed from hours...
+  bonusRate       Float? // ...at this (often different) hourly rate
+  bonusTotal      Float                @default(0)
   shiftDetail     Json? // [{ date, start, end, hours, type }]
   approved        Boolean              @default(false)
   approvedById    String?

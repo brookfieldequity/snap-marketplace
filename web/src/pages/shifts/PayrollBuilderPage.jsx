@@ -20,6 +20,13 @@ function clientGross({ regularHours, otHours, hourlyRate, annualRate }) {
   return 0
 }
 
+// Total bonus = flat + bonus hours x bonus rate (matches backend computeBonus).
+function clientBonus({ bonusFlat, bonusHours, bonusRate }) {
+  const flat = Number(bonusFlat || 0)
+  const fromHours = Number(bonusHours || 0) * Number(bonusRate || 0)
+  return Math.round((flat + fromHours) * 100) / 100
+}
+
 // Default pay period = the most recent completed two-week period (ending last Sat).
 function defaultPeriod() {
   const today = new Date()
@@ -564,7 +571,12 @@ export default function PayrollBuilderPage({ onNavigate }) {
                             onBlur={() => saveRate(item, idx)}
                             style={{ ...inputStyle, width: 80, padding: '5px 7px', borderColor: item.missingRate ? '#FCA5A5' : '#E2E8F0' }}
                           />
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{fmtMoney(item.grossPay)}</div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{fmtMoney(item.grossPay)}</div>
+                            {clientBonus(item) > 0 && (
+                              <div style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600 }}>+ {fmtMoney(clientBonus(item))} bonus</div>
+                            )}
+                          </div>
                           <div style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => toggleApprove(item)}
@@ -616,6 +628,45 @@ export default function PayrollBuilderPage({ onNavigate }) {
                                 No shift records found for this period — enter hours manually above.
                               </div>
                             )}
+
+                            {/* Bonus editor — flat + (hours × rate), summed into the CSV "bonus" column */}
+                            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px dashed #E2E8F0' }}>
+                              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>
+                                Bonus (optional)
+                              </div>
+                              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                                <div>
+                                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Flat bonus ($)</div>
+                                  <input type="number" value={item.bonusFlat ?? ''} placeholder="0"
+                                    onChange={(e) => updateItem(idx, { bonusFlat: e.target.value })}
+                                    style={{ ...inputStyle, width: 110, padding: '6px 8px' }} />
+                                </div>
+                                <div style={{ color: '#94A3B8', paddingBottom: 8 }}>+</div>
+                                <div>
+                                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Bonus hours</div>
+                                  <input type="number" value={item.bonusHours ?? ''} placeholder="0"
+                                    onChange={(e) => updateItem(idx, { bonusHours: e.target.value })}
+                                    style={{ ...inputStyle, width: 90, padding: '6px 8px' }} />
+                                </div>
+                                <div style={{ color: '#94A3B8', paddingBottom: 8 }}>×</div>
+                                <div>
+                                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Bonus rate ($/hr)</div>
+                                  <input type="number" value={item.bonusRate ?? ''} placeholder="0"
+                                    onChange={(e) => updateItem(idx, { bonusRate: e.target.value })}
+                                    style={{ ...inputStyle, width: 110, padding: '6px 8px' }} />
+                                </div>
+                                <div style={{ color: '#94A3B8', paddingBottom: 8 }}>=</div>
+                                <div style={{ paddingBottom: 6 }}>
+                                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Total bonus</div>
+                                  <div style={{ fontSize: 16, fontWeight: 700, color: clientBonus(item) > 0 ? '#059669' : '#94A3B8' }}>
+                                    {fmtMoney(clientBonus(item))}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 6 }}>
+                                Use either or both. The total exports in the template's <strong>bonus</strong> column — separate from regular pay.
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -651,6 +702,16 @@ export default function PayrollBuilderPage({ onNavigate }) {
       {/* ── STEP 4: EXPORT ────────────────────────────────────────────────────── */}
       {step === 4 && exported && (
         <div style={{ maxWidth: 560 }}>
+          {exported.templateStale && (
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '14px 18px', marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, color: '#B45309', fontSize: 14 }}>⚠ Your saved {system} template needs re-uploading</div>
+              <div style={{ fontSize: 13, color: '#92400E', marginTop: 4 }}>
+                This file used SNAP's default column layout because your saved template had no usable column mapping
+                (an older upload). Go to Step 1 → <strong>Reset / replace template</strong> and re-upload your {system}
+                template so future files match its exact columns.
+              </div>
+            </div>
+          )}
           <div style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
             <div style={{ fontWeight: 700, color: '#059669', fontSize: 15 }}>✓ Payroll file generated & downloaded</div>
             <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
