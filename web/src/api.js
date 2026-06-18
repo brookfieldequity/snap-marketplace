@@ -2,7 +2,7 @@
 //   - Railway: set in the web service's Variables tab
 //   - Local dev: set in web/.env.local (points to localhost:3001)
 //   - Netlify: set in site environment variables
-const BASE = import.meta.env.VITE_API_URL || 'https://snap-marketplace-production-70bf.up.railway.app/api'
+const BASE = import.meta.env.VITE_API_URL || 'https://api.snapmedical.app/api'
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 
@@ -382,6 +382,26 @@ export const payrollAPI = {
     }),
   getRateHistory: (rosterEntryId) =>
     apiFetch(`${BASE}/payroll/providers/${rosterEntryId}/rate-history`, { headers: facilityHeaders() }),
+}
+
+// ─── PTO Builder API (Feature B) ──────────────────────────────────────────────
+export const ptoBuilderAPI = {
+  // Facility / admin (authenticated)
+  getWindows: (year) => apiFetch(`${BASE}/pto-builder/windows${year ? `?year=${year}` : ''}`, { headers: facilityHeaders() }),
+  createWindow: (data) => apiFetch(`${BASE}/pto-builder/windows`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  getWindow: (id) => apiFetch(`${BASE}/pto-builder/windows/${id}`, { headers: facilityHeaders() }),
+  updateWindow: (id, data) => apiFetch(`${BASE}/pto-builder/windows/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  setStatus: (id, status) => apiFetch(`${BASE}/pto-builder/windows/${id}/status`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ status }) }),
+  setCapacity: (id, overrides) => apiFetch(`${BASE}/pto-builder/windows/${id}/capacity`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ overrides }) }),
+  allocate: (id) => apiFetch(`${BASE}/pto-builder/windows/${id}/allocate`, { method: 'POST', headers: facilityHeaders() }),
+  getCalendar: (id) => apiFetch(`${BASE}/pto-builder/windows/${id}/calendar`, { headers: facilityHeaders() }),
+  getResults: (id) => apiFetch(`${BASE}/pto-builder/windows/${id}/results`, { headers: facilityHeaders() }),
+  getRankLinks: (id) => apiFetch(`${BASE}/pto-builder/windows/${id}/rank-links`, { headers: facilityHeaders() }),
+  cancelAllocation: (id) => apiFetch(`${BASE}/pto-builder/allocations/${id}/cancel`, { method: 'POST', headers: facilityHeaders() }),
+  promoteAllocation: (id, force) => apiFetch(`${BASE}/pto-builder/allocations/${id}/promote`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ force: !!force }) }),
+  // Provider ranking (public — token in URL, no auth header)
+  getRank: (token) => apiFetch(`${BASE}/pto-builder/rank/${token}`),
+  submitRank: (token, bids) => apiFetch(`${BASE}/pto-builder/rank/${token}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bids }) }),
 }
 
 // ─── Credential API ───────────────────────────────────────────────────────────

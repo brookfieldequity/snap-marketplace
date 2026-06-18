@@ -5,6 +5,8 @@ import AdminSidebar from './components/AdminSidebar.jsx'
 import { facilityAPI } from './api.js'
 import PayrollBuilderPage from './pages/shifts/PayrollBuilderPage.jsx'
 import PayrollHistoryPage from './pages/shifts/PayrollHistoryPage.jsx'
+import PtoBuilderPage from './pages/shifts/PtoBuilderPage.jsx'
+import PtoRankPage from './pages/PtoRankPage.jsx'
 
 // Facility pages
 import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
@@ -69,6 +71,15 @@ export default function App() {
   // carriers for SMS (toll-free / A2P) opt-in verification.
   if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/sms-terms') {
     return <SmsTermsPage />
+  }
+
+  // Public PTO ranking route — /pto-rank/{token}. No login: a provider clicks
+  // the signed link from their coordinator and ranks their PTO weeks. The
+  // token carries the windowId + rosterEntryId (see ptoBuilder route).
+  const rankMatch = typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/pto-rank\/([^/?#]+)/)
+  if (rankMatch) {
+    return <PtoRankPage token={decodeURIComponent(rankMatch[1])} />
   }
 
   const [facilityToken, setFacilityToken] = useState(
@@ -281,6 +292,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'requests' && (
               <RequestsPage />
+            )}
+            {isShiftsMode && featureFlags.pto_builder && facilityPage === 'pto-builder' && (
+              <PtoBuilderPage />
             )}
             {isShiftsMode && facilityPage === 'requests-notes' && (
               <RequestsNotesPage />

@@ -338,6 +338,7 @@ model Facility {
   payrollTemplates    PayrollTemplateConfig[]
   payrollRuns         PayrollRun[]
   marketplaceFees     MarketplaceFeeLedger[]
+  ptoWindows          PtoWindow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -794,6 +795,8 @@ model InternalRosterEntry {
   scheduleRequests    ScheduleRequest[]
   rateHistory         RosterRateHistory[]
   payrollLineItems    PayrollRunProvider[]
+  ptoBids             PtoBid[]
+  ptoAllocations      PtoAllocation[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
@@ -1554,6 +1557,95 @@ model ScheduleRequest {
   @@index([facilityId, status])
   @@index([rosterEntryId, date])
   @@index([facilityId, date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PTO Builder (Feature B) — annual ranked PTO bidding. See pto-builder-spec.
+//
+// Flow: admin opens a PtoWindow for a year (open/close dates). Eligible
+// providers rank up to maxRanks PTO weeks (Mon–Sun) via a signed web link
+// (PtoBid rows). At close the admin runs allocation: tier-by-tier by rank,
+// seniority tie-break, capped by each week's capacity AND each provider's
+// remaining annual allotment. Results land in PtoAllocation (GRANTED /
+// WAITLISTED); granted weeks also write source='PTO' RosterAvailability rows
+// so they hit the calendar + schedule builder, and count via services/pto.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PtoWindow {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  year       Int
+  openDate   DateTime @db.Date
+  closeDate  DateTime @db.Date
+  // Global per-week capacity default (how many providers may have PTO that
+  // week). Per-week overrides live in PtoWeekCapacity. Per-role/per-site
+  // capacity is deferred — PtoWeekCapacity is shaped to grow into it.
+  defaultWeeklyCapacity Int @default(1)
+  // How many weeks each provider may rank (1 = most wanted … maxRanks).
+  maxRanks   Int      @default(15)
+  status     String   @default("DRAFT") // DRAFT | OPEN | CLOSED | ALLOCATED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  capacities  PtoWeekCapacity[]
+  bids        PtoBid[]
+  allocations PtoAllocation[]
+
+  @@unique([facilityId, year])
+}
+
+// Per-week capacity override for a window. Absent row → window.defaultWeeklyCapacity.
+// `mode` is GLOBAL for this build; role/site columns are reserved for the
+// deferred per-role / per-site capacity without a future migration churn.
+model PtoWeekCapacity {
+  id        String    @id @default(cuid())
+  windowId  String
+  window    PtoWindow @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  weekStart DateTime  @db.Date // Monday of the week
+  capacity  Int
+  mode      String    @default("GLOBAL") // GLOBAL (reserved: ROLE | SITE)
+  role      String? // reserved for per-role capacity
+  siteName  String? // reserved for per-site capacity
+
+  @@unique([windowId, weekStart, mode, role, siteName])
+  @@index([windowId, weekStart])
+}
+
+// One provider's ranking of one week within a window. rank is 1-based
+// (1 = most wanted). A provider uses each rank at most once and each week once.
+model PtoBid {
+  id            String              @id @default(cuid())
+  windowId      String
+  window        PtoWindow           @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  weekStart     DateTime            @db.Date // Monday of the ranked week
+  rank          Int
+  createdAt     DateTime            @default(now())
+
+  @@unique([windowId, rosterEntryId, weekStart])
+  @@unique([windowId, rosterEntryId, rank])
+  @@index([windowId, weekStart])
+}
+
+// Allocation result for a (provider, week) after the engine runs. GRANTED
+// rows also materialize source='PTO' RosterAvailability rows for the week's
+// weekdays. WAITLISTED rows carry a rank-ordered waitlistPos for auto-promote.
+model PtoAllocation {
+  id            String              @id @default(cuid())
+  windowId      String
+  window        PtoWindow           @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  weekStart     DateTime            @db.Date
+  rank          Int // the rank this provider gave this week
+  status        String // GRANTED | WAITLISTED
+  waitlistPos   Int? // 1-based position among waitlisted for this week (null when granted)
+  decidedAt     DateTime            @default(now())
+
+  @@unique([windowId, rosterEntryId, weekStart])
+  @@index([windowId, weekStart, status])
 }
 
 // ── Admin scorecard (EOS weekly scorecard) — see docs/admin-scorecard-spec.md ──

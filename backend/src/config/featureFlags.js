@@ -23,6 +23,11 @@ const FLAGS = {
     description: 'SNAP Shifts payroll CSV export to ADP/Gusto.',
     category: 'SNAP Shifts',
   },
+  pto_builder: {
+    label: 'PTO Builder',
+    description: 'Annual ranked PTO bidding — providers rank weeks; allocation by seniority + capacity; waitlist.',
+    category: 'SNAP Shifts',
+  },
   // SNAP Marketplace — Position 1
   marketplace_core: {
     label: 'Marketplace Core',
