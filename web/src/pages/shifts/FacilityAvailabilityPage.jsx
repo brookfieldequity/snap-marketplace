@@ -406,10 +406,11 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                       const bg = eff.available ? '#F0FDF4' : '#FEF2F2'
                       const border = isOpen ? '#2563EB' : (eff.available ? '#BBF7D0' : '#FECACA')
                       const txt = eff.available ? '#15803D' : '#B91C1C'
-                      // Source dot color: PROVIDER vs ADMIN vs PTO
+                      // Source dot: PROVIDER (blue) vs ADMIN (amber) — colors kept
+                      // far apart for at-a-glance distinction. PTO gets a corner
+                      // "PTO" label instead of a dot (below).
                       const dotColor = eff.source === 'PROVIDER' ? '#2563EB'
-                        : eff.source === 'PTO' ? '#D97706'
-                        : eff.source === 'ADMIN' ? '#475569'
+                        : eff.source === 'ADMIN' ? '#D97706'
                         : null
                       return (
                         <button
@@ -427,8 +428,12 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                             padding: 4,
                           }}
                         >
+                          {/* PTO gets a clear corner label, not just a dot */}
+                          {eff.source === 'PTO' && (
+                            <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, fontWeight: 800, letterSpacing: '0.02em', color: isPast ? '#CBD5E1' : '#B91C1C' }}>PTO</span>
+                          )}
                           <span style={{ fontSize: 14, fontWeight: 700, color: isPast ? '#CBD5E1' : txt }}>{day}</span>
-                          {/* Override indicator + source dot */}
+                          {/* Source dot: provider (blue) / admin (amber) */}
                           {eff.override && dotColor && (
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor }} />
                           )}
@@ -497,11 +502,10 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
             {/* Legend */}
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', marginTop: 16, padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, fontSize: 12, color: '#475569' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#F0FDF4', border: '1.5px solid #BBF7D0' }} /> Available</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#FEF2F2', border: '1.5px solid #FECACA' }} /> Unavailable (marked)</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#F8FAFC', border: '1.5px solid #E2E8F0' }} /> Default (unmarked)</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563EB' }} /> Provider</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#475569' }} /> Admin</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D97706' }} /> PTO</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#FEF2F2', border: '1.5px solid #FECACA' }} /> Unavailable</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563EB' }} /> Provider-set</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D97706' }} /> Admin-set</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 9, fontWeight: 800, color: '#B91C1C' }}>PTO</span> Time off</span>
               <span style={{ color: '#94A3B8' }}>Full-time = available by default; per-diem/locums = unavailable by default.</span>
             </div>
           </div>
