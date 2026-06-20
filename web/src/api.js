@@ -382,6 +382,39 @@ export const payrollAPI = {
     }),
   getRateHistory: (rosterEntryId) =>
     apiFetch(`${BASE}/payroll/providers/${rosterEntryId}/rate-history`, { headers: facilityHeaders() }),
+  // Provider worked-hours entry (coordinator surface).
+  getHourEntries: ({ periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/hour-entry?periodStart=${periodStart}&periodEnd=${periodEnd}`, { headers: facilityHeaders() }),
+  seedHourEntries: ({ periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/hour-entry/seed`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd }) }),
+  addHourEntry: (payload) =>
+    apiFetch(`${BASE}/hour-entry`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
+  updateHourEntry: (id, patch) =>
+    apiFetch(`${BASE}/hour-entry/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(patch) }),
+  submitHourEntries: ({ periodStart, periodEnd, rosterEntryId }) =>
+    apiFetch(`${BASE}/hour-entry/submit`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd, rosterEntryId }) }),
+  deleteHourEntry: (id) =>
+    apiFetch(`${BASE}/hour-entry/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
+  // Agency invoice — the "CAPA All in" deliverable. JSON for the on-screen view.
+  getAgencyInvoice: ({ periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/payroll/agency-invoice?periodStart=${periodStart}&periodEnd=${periodEnd}`, {
+      headers: facilityHeaders(),
+    }),
+  // Download one agency's invoice as .xlsx (auth header → blob → save).
+  downloadAgencyInvoice: async ({ periodStart, periodEnd, employerId, fileName }) => {
+    const qs = new URLSearchParams({ periodStart, periodEnd, ...(employerId ? { employerId } : {}) })
+    const res = await fetch(`${BASE}/payroll/agency-invoice/export?${qs}`, { headers: facilityHeaders() })
+    if (!res.ok) throw new Error('Failed to download invoice')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName || 'agency-invoice.xlsx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
 }
 
 // ─── PTO Builder API (Feature B) ──────────────────────────────────────────────

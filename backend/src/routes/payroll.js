@@ -15,6 +15,7 @@ const {
   seedLineItems,
   fmtDate,
 } = require('../services/payroll');
+const eorCost = require('../services/eorCost');
 
 const router = express.Router();
 
@@ -431,6 +432,74 @@ router.get('/providers/:rosterEntryId/rate-history', async (req, res) => {
   } catch (err) {
     console.error('[payroll/rate-history]', err.message);
     res.status(500).json({ error: 'Failed to load rate history' });
+  }
+});
+
+// ── Agency invoice (the "CAPA All in" deliverable) ──────────────────────────────
+// One-click: hours (from the schedule) × each provider's all-in cost rate, per
+// staffing agency. The facility-facing total of what it owes each agency. The
+// provider PAY rate / margin are deliberately excluded (APNE-internal).
+// GET /agency-invoice?periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
+router.get('/agency-invoice', async (req, res) => {
+  const { periodStart, periodEnd } = req.query;
+  if (!periodStart || !periodEnd) {
+    return res.status(400).json({ error: 'periodStart and periodEnd are required' });
+  }
+  try {
+    const { providerCosts } = await eorCost.buildFacilityCostForPeriod({
+      facilityId: req.facility.id,
+      periodStart,
+      periodEnd,
+    });
+    const invoices = eorCost.composeAgencyInvoices({ providerCosts, periodStart, periodEnd });
+    res.json({ periodStart, periodEnd, invoices });
+  } catch (err) {
+    console.error('[payroll/agency-invoice]', err.message);
+    res.status(500).json({ error: 'Failed to build agency invoice' });
+  }
+});
+
+// Download one agency's invoice as an .xlsx mirroring the "CAPA All in" sheet.
+// GET /agency-invoice/export?periodStart&periodEnd&employerId
+router.get('/agency-invoice/export', async (req, res) => {
+  const { periodStart, periodEnd, employerId } = req.query;
+  if (!periodStart || !periodEnd) {
+    return res.status(400).json({ error: 'periodStart and periodEnd are required' });
+  }
+  try {
+    const { providerCosts } = await eorCost.buildFacilityCostForPeriod({
+      facilityId: req.facility.id,
+      periodStart,
+      periodEnd,
+    });
+    const invoices = eorCost.composeAgencyInvoices({ providerCosts, periodStart, periodEnd });
+    const invoice = employerId
+      ? invoices.find((i) => i.employerId === employerId)
+      : invoices[0];
+    if (!invoice) return res.status(404).json({ error: 'No agency invoice for that period' });
+
+    // Build the sheet: title rows, header, lines, total — mirrors "CAPA All in".
+    const aoa = [
+      [`${invoice.employerName || 'Agency'} → ${req.facility.name} Invoice`],
+      [`${fmtDate(periodStart)} to ${fmtDate(periodEnd)}`],
+      [],
+      ['contractor_type', 'payee', 'hours_worked', 'CAPA rate', 'amount'],
+      ...invoice.lines.map((l) => [l.contractorType, l.payeeName, l.hours, l.capaRate, l.amount]),
+      [],
+      ['', '', '', 'Total', invoice.total],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Invoice');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const safeName = (invoice.employerName || 'agency').replace(/[^a-z0-9]+/gi, '-');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}-invoice-${fmtDate(periodStart)}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[payroll/agency-invoice/export]', err.message);
+    res.status(500).json({ error: 'Failed to export agency invoice' });
   }
 });
 

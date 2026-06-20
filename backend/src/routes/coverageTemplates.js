@@ -54,14 +54,34 @@ function normalizeDays(days) {
         throw new Error('supervisionRatio must be null (unset), 0 (MD-only), 3, or 4.');
       }
     }
+    // Default shift window (optional). "HH:MM" 24-hour, or null/'' to leave unset.
+    const defaultStartTime = normalizeTime(d?.defaultStartTime);
+    const defaultEndTime = normalizeTime(d?.defaultEndTime);
+    if ((defaultStartTime && !defaultEndTime) || (!defaultStartTime && defaultEndTime)) {
+      throw new Error('A default shift window needs both a start and an end time.');
+    }
+
     const key = `${location}::${dayOfWeek}`;
     if (seen.has(key)) {
       throw new Error(`Duplicate entry for ${location} on day ${dayOfWeek}.`);
     }
     seen.add(key);
-    result.push({ location, dayOfWeek, roomsRequired, supervisionRatio });
+    result.push({ location, dayOfWeek, roomsRequired, supervisionRatio, defaultStartTime, defaultEndTime });
   }
   return result;
+}
+
+// Validate an "HH:MM" 24-hour time. Returns the normalized string, or null when
+// absent. Throws on a malformed value.
+function normalizeTime(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (!m) throw new Error(`Invalid time "${s}" — use HH:MM (24-hour), e.g. 06:30.`);
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) throw new Error(`Invalid time "${s}" — hours 0-23, minutes 0-59.`);
+  return `${String(h).padStart(2, '0')}:${m[2]}`;
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────────

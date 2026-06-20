@@ -23,8 +23,10 @@ const SHIFTS_ITEMS = [
   { key: 'data-upload',       label: 'Data Upload',         icon: '📤' },
   // Payroll Builder is feature-flag gated (payroll_builder) — only shown when
   // the facility's subscription tier / override enables it.
+  { key: 'hour-entry',        label: 'Provider Hours',      icon: '⏱', flag: 'payroll_builder' },
   { key: 'payroll',           label: 'Payroll Builder',     icon: '💵', flag: 'payroll_builder' },
   { key: 'payroll-history',   label: 'Payroll History',     icon: '🧾', flag: 'payroll_builder' },
+  { key: 'agency-invoice',    label: 'Agency Invoice',      icon: '📑', flag: 'payroll_builder' },
   { key: 'calculator',        label: 'Calculator',          icon: '🧮' },
 ]
 

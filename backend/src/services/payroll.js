@@ -323,17 +323,26 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
     (recsByKey[key] = recsByKey[key] || []).push(r);
   }
 
+  // For 1099s, SUBMITTED provider hour entries are authoritative — override the
+  // raw schedule hours. require() here (not top-level) avoids a load-order cycle.
+  const submittedByRoster =
+    payClass === 'CONTRACTOR'
+      ? await require('./hourEntry').submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd })
+      : {};
+
   return roster.map((entry) => {
+    const submitted = submittedByRoster[entry.id];
     const key = buildNameKey(entry.providerName);
     const recs = (key && recsByKey[key]) || [];
-    const shiftDetail = recs
-      .map((r) => ({
-        date: fmtDate(r.shiftDate),
-        start: r.startTime || '',
-        end: r.endTime || '',
-        hours: Number(r.durationHours || 0),
-        type: r.caseType || 'Regular',
-      }))
+    const shiftDetail = (submitted && submitted.length
+      ? submitted.map((s) => ({ date: s.date, start: '', end: '', hours: Number(s.hours || 0), type: 'Regular' }))
+      : recs.map((r) => ({
+          date: fmtDate(r.shiftDate),
+          start: r.startTime || '',
+          end: r.endTime || '',
+          hours: Number(r.durationHours || 0),
+          type: r.caseType || 'Regular',
+        })))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const { regularHours, otHours } = splitRegularOt(shiftDetail);

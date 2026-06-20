@@ -5,6 +5,8 @@ import AdminSidebar from './components/AdminSidebar.jsx'
 import { facilityAPI } from './api.js'
 import PayrollBuilderPage from './pages/shifts/PayrollBuilderPage.jsx'
 import PayrollHistoryPage from './pages/shifts/PayrollHistoryPage.jsx'
+import AgencyInvoicePage from './pages/shifts/AgencyInvoicePage.jsx'
+import HourEntryPage from './pages/shifts/HourEntryPage.jsx'
 import PtoBuilderPage from './pages/shifts/PtoBuilderPage.jsx'
 import PtoRankPage from './pages/PtoRankPage.jsx'
 
@@ -322,6 +324,12 @@ export default function App() {
             )}
             {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'payroll-history' && (
               <PayrollHistoryPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'agency-invoice' && (
+              <AgencyInvoicePage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'hour-entry' && (
+              <HourEntryPage onNavigate={setFacilityPage} />
             )}
 
             {/* SNAP Marketplace pages */}

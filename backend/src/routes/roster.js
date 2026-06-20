@@ -211,11 +211,11 @@ router.post('/', facilityAuth, async (req, res) => {
     const {
       providerName, providerType, employmentCategory, npi,
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
-      fteHours, annualRate, hourlyRate, preferredShiftLength,
+      fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
-      businessName, useBusinessNameForPayroll,
+      businessName, useBusinessNameForPayroll, payeeType, ein,
     } = req.body;
 
     const linkFields = await resolveLinkFields({ npi, email: snapAccountEmail });
@@ -241,6 +241,7 @@ router.post('/', facilityAuth, async (req, res) => {
         fteHours: fteHours != null ? parseFloat(fteHours) : null,
         annualRate: annualRate != null ? parseFloat(annualRate) : null,
         hourlyRate: hourlyRate != null ? parseFloat(hourlyRate) : null,
+        allInCostPerHour: allInCostPerHour != null ? parseFloat(allInCostPerHour) : null,
         preferredShiftLength: preferredShiftLength || null,
         preferredDays: preferredDays ?? null,
         locationRankings: locationRankings ?? null,
@@ -252,6 +253,8 @@ router.post('/', facilityAuth, async (req, res) => {
         isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null,
         businessName: businessName || null,
         useBusinessNameForPayroll: useBusinessNameForPayroll === true,
+        payeeType: payeeType || null,
+        ein: ein || null,
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -280,11 +283,11 @@ router.patch('/:id', facilityAuth, async (req, res) => {
     const {
       providerName, providerType, employmentCategory, npi,
       snapAccountEmail, phoneNumber, licenseNumber, licenseExpiration, notes,
-      fteHours, annualRate, hourlyRate, preferredShiftLength,
+      fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
-      businessName, useBusinessNameForPayroll,
+      businessName, useBusinessNameForPayroll, payeeType, ein,
       ptoDaysAnnual, ptoEligible, seniorityRank,
     } = req.body;
 
@@ -319,6 +322,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(fteHours !== undefined && { fteHours: fteHours != null ? parseFloat(fteHours) : null }),
         ...(annualRate !== undefined && { annualRate: annualRate != null ? parseFloat(annualRate) : null }),
         ...(hourlyRate !== undefined && { hourlyRate: hourlyRate != null ? parseFloat(hourlyRate) : null }),
+        ...(allInCostPerHour !== undefined && { allInCostPerHour: allInCostPerHour != null ? parseFloat(allInCostPerHour) : null }),
         ...(preferredShiftLength !== undefined && { preferredShiftLength }),
         ...(preferredDays !== undefined && { preferredDays }),
         ...(locationRankings !== undefined && { locationRankings }),
@@ -330,6 +334,8 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
         ...(businessName !== undefined && { businessName: businessName || null }),
         ...(useBusinessNameForPayroll !== undefined && { useBusinessNameForPayroll: useBusinessNameForPayroll === true }),
+        ...(payeeType !== undefined && { payeeType: payeeType || null }),
+        ...(ein !== undefined && { ein: ein || null }),
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),

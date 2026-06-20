@@ -121,6 +121,27 @@ enum PayrollRunStatus {
   EXPORTED
 }
 
+// ── EOR (Employer-of-Record) enums — see capa-pilot/eor-model-spec.md ──────────
+// Who pays a provider for a shift. Promotes the free-form
+// InternalRosterEntry.employer string to a first-class entity so an employer
+// (e.g. APNE) can have its own roster lens, payroll, and provider-pay data the
+// facility never sees. Phase 0 = correctness only (honest savings calc +
+// reimbursement totals); the employer portal is Phase 1.
+enum EmployerKind {
+  FACILITY_SELF   // the facility employing its own W-2 staff (CAPA pays CAPA staff)
+  STAFFING_AGENCY // external EOR that staffs the facility (APNE, JJM)
+}
+
+// Itemized cost lines layered on top of the bill rate (InternalRosterEntry.hourlyRate).
+// The malpractice case: type=MALPRACTICE, paidBy=FACILITY, reimbursable=true.
+enum CostComponentType {
+  MALPRACTICE
+  AGENCY_MARGIN
+  STIPEND
+  TRAVEL
+  OTHER
+}
+
 enum IncentiveShiftStatus {
   OPEN
   FILLED
@@ -339,6 +360,11 @@ model Facility {
   payrollRuns         PayrollRun[]
   marketplaceFees     MarketplaceFeeLedger[]
   ptoWindows          PtoWindow[]
+  // EOR (Phase 0). selfEmployer = this facility's own-W2 Employer row;
+  // employerLinks = external agencies (APNE, JJM) allowed to staff it.
+  selfEmployer        Employer?              @relation("FacilitySelfEmployer")
+  employerLinks       EmployerFacilityLink[]
+  hourEntries         ProviderHourEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -719,11 +745,18 @@ model InternalRosterEntry {
   icalToken              String?
   // Who employs / staffs this provider into the facility. For CAPA this is
   // typically one of: "APNE" (Matt's anesthesia practice — staffs CAPA),
-  // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). The pay rate
-  // in `hourlyRate` is what the facility pays THIS employer per hour — not
-  // what the underlying provider earns. Free-form so customers don't have to
+  // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). NOTE: `hourlyRate`
+  // is the PAY rate (what the provider earns, drives payroll); what the facility
+  // pays the employer all-in lives in `allInCostPerHour`. Free-form so customers
+  // don't have to
   // wait for an enum edit when they onboard a new staffing group.
+  // PHASE 0: kept as a denormalized mirror of Employer.name during migration;
+  // employerId below is the new source of truth. See eor-model-spec.md.
   employer               String?
+  // EOR link (Phase 0). Who pays this provider — resolves to a FACILITY_SELF
+  // Employer for CAPA's own W-2 staff, or a STAFFING_AGENCY (APNE) for 1099s.
+  employerId             String?
+  employerRef            Employer?           @relation(fields: [employerId], references: [id])
   // 1099 contractors may be paid under a business name (LLC/EIN) rather than
   // their personal name. `businessName` holds it; `useBusinessNameForPayroll`,
   // when true, makes the Payroll Builder export the business name (and blank the
@@ -732,6 +765,13 @@ model InternalRosterEntry {
   // their actual name.
   businessName              String?
   useBusinessNameForPayroll Boolean @default(false)
+  // Payee identity for the (future) payroll-feed export — mirrors the APNE
+  // payroll sheet's contractor_type/ein columns. "Business" payees bill under an
+  // LLC/EIN; "Individual" payees under their name. SSN is deliberately NOT stored
+  // here — full SSNs stay in the payroll processor until the feed generator is
+  // built (then encrypted-at-rest or last-4 only). See eor-model-spec.md.
+  payeeType                 String? // "Business" | "Individual"
+  ein                       String?
   // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
   // false = W-2 employee, null = unknown. Surfaced on the roster card so the
   // coordinator can see "1099 · FT" at a glance for cost attribution.
@@ -766,7 +806,15 @@ model InternalRosterEntry {
   // Employment-specific preference fields
   fteHours             Float? // FULL_TIME: hours per week
   annualRate           Float? // FULL_TIME: annual base salary
-  hourlyRate           Float? // PER_DIEM / LOCUMS: hourly rate
+  hourlyRate           Float? // PER_DIEM / LOCUMS: the PAY rate — what the provider/employee is actually paid. Drives the Payroll Builder export.
+  // "All-in cost" — the facility's true fully-loaded cost PER HOUR for this
+  // provider. Generic + optional (blank = not tracked): for an agency-staffed
+  // 1099 it's the bill rate the facility owes the agency (pay + malpractice +
+  // margin); for the facility's own W-2 staff it's the loaded cost (wage +
+  // taxes/benefits). The gap (allInCostPerHour - hourlyRate) x hours is the
+  // agency markup / reimbursement the facility owes. Feeds the EOR cost rollup
+  // (services/eorCost.js) and the one-click agency-invoice calc.
+  allInCostPerHour     Float?
   preferredShiftLength String? // "8hr" | "10hr" | "12hr" | "none"
   preferredDays        Json? // String[] e.g. ["Mon","Tue","Wed"]
   locationRankings     Json? // Array of location name strings (ranked)
@@ -805,6 +853,8 @@ model InternalRosterEntry {
   payrollLineItems    PayrollRunProvider[]
   ptoBids             PtoBid[]
   ptoAllocations      PtoAllocation[]
+  costComponents      AssignmentCostComponent[] // EOR pass-throughs (Phase 0)
+  hourEntries         ProviderHourEntry[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
@@ -973,6 +1023,8 @@ model ScheduleAssignment {
   // anesthesiologist supervising CRNA rooms (stored at roomNumber >= 900).
   role          String?
   createdAt     DateTime             @default(now())
+
+  costComponents AssignmentCostComponent[] // EOR one-off pass-throughs (Phase 0)
 
   @@unique([scheduleDayId, roomNumber])
 }
@@ -1379,6 +1431,12 @@ model CoverageTemplateDay {
   location      String // free text — matches ScheduleDay.location string semantics
   dayOfWeek     Int // 0=Sunday … 6=Saturday
   roomsRequired Int              @default(1)
+
+  // Default shift window for this location on this weekday, "HH:MM" 24h
+  // (e.g. "06:30" / "15:30"). Pre-fills provider hour-entry so a 1099 only has
+  // to adjust exceptions; null = no default set. See provider hour-entry feature.
+  defaultStartTime String?
+  defaultEndTime   String?
 
   // Anesthesia care-team model. null = MD-only (every room a solo
   // anesthesiologist). 3 = team 1:3, 4 = team 1:4 (rooms staffed by CRNAs,
@@ -1813,6 +1871,120 @@ model RosterRateHistory {
   createdAt     DateTime            @default(now())
 
   @@index([rosterEntryId, effectiveDate])
+}
+
+// Provider worked-hours entry. The per-day actual hours a 1099/per-diem provider
+// (or a coordinator on their behalf) confirms before payroll/invoicing. Seeded
+// from the schedule (pre-filled with the location's default shift window from
+// CoverageTemplateDay) and/or added manually. W-2 staff don't need entries — they
+// are paid regardless. SUBMITTED rows are what the Payroll Builder + Agency
+// Invoice consume for 1099s (overriding raw schedule hours). See the provider
+// hour-entry feature + eor-model-spec.md.
+model ProviderHourEntry {
+  id            String              @id @default(cuid())
+  facilityId    String
+  facility      Facility            @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  rosterEntryId String
+  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+
+  date      DateTime @db.Date
+  location  String?
+  startTime String? // "HH:MM" 24h — pre-filled from the location default window
+  endTime   String? // "HH:MM" 24h
+  hours     Float    @default(0) // computed from the window, editable
+
+  // DRAFT = seeded/in-progress; SUBMITTED = confirmed, ready for payroll/invoice.
+  status    String @default("DRAFT") // DRAFT | SUBMITTED
+  // Where the row originated, for provenance/dedup. SCHEDULE = SNAP scheduler;
+  // UPLOAD = ingested SchedulingRecord; MANUAL = added by hand.
+  source    String @default("MANUAL") // SCHEDULE | UPLOAD | MANUAL
+  enteredBy String? // 'coordinator' | 'provider' | a user id, for audit
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One entry per provider/day/location (a provider can cover two sites in a day).
+  @@unique([rosterEntryId, date, location])
+  @@index([facilityId, date])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EOR (Employer-of-Record) — Phase 0  (added 2026-06-18)
+// See capa-pilot/eor-model-spec.md. Half of CAPA's schedule is staffed by 1099s
+// who work for APNE, not CAPA; APNE runs payroll off CAPA's ONE master schedule
+// and CAPA reimburses certain pass-through costs (malpractice). There is no second
+// schedule — an employer gets a filtered LENS over the master schedule. Phase 0
+// adds the data primitives only (Employer, link, cost components, the FK on the
+// roster). The employer portal + agency-private provider pay are Phase 1.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// The Employer-of-Record: who actually pays a provider. Replaces the free-form
+// InternalRosterEntry.employer string. One per facility for its own W-2 staff
+// (kind=FACILITY_SELF) plus one per external staffing group (APNE, JJM).
+model Employer {
+  id        String       @id @default(cuid())
+  name      String // "APNE", "CAPA", "JJM"
+  legalName String? // for invoices / payroll
+  ein       String?
+  kind      EmployerKind @default(STAFFING_AGENCY)
+
+  // For FACILITY_SELF, the facility this employer IS. Unique so it's a clean
+  // one-to-one and CAPA's own W-2 staff resolve to an Employer without nulls.
+  ownerFacilityId String?   @unique
+  ownerFacility   Facility? @relation("FacilitySelfEmployer", fields: [ownerFacilityId], references: [id])
+
+  facilityLinks EmployerFacilityLink[]
+  rosterEntries InternalRosterEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Which facilities an agency may staff (and therefore see a schedule lens for).
+// This is the firewall's allow-list. CAPA<->APNE is one row.
+model EmployerFacilityLink {
+  id         String   @id @default(cuid())
+  employerId String
+  facilityId String
+  employer   Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  status     String   @default("ACTIVE") // ACTIVE | PAUSED
+  createdAt  DateTime @default(now())
+
+  @@unique([employerId, facilityId])
+}
+
+// Itemized cost lines on top of the bill rate. Attach to a roster entry (a
+// standing per-provider default) and/or a single assignment (one-off override).
+// Makes the savings calc + the APNE->CAPA reimbursement total both correct:
+// whether malpractice is deducted-from-rate or paid-directly, CAPA's true outflow
+// is the same — model it as an explicit line with paidBy + reimbursable.
+model AssignmentCostComponent {
+  id            String               @id @default(cuid())
+  rosterEntryId String?
+  rosterEntry   InternalRosterEntry? @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  assignmentId  String?
+  assignment    ScheduleAssignment?  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  type           CostComponentType
+  // Per-hour OR per-shift; exactly one is set.
+  amountPerHour  Float?
+  amountPerShift Float?
+
+  // Who bears the cost, and whether the facility reimburses the employer for it.
+  // Malpractice case: paidBy=FACILITY, reimbursable=true.
+  paidBy       String  @default("FACILITY") // FACILITY | EMPLOYER | PROVIDER
+  reimbursable Boolean @default(false)
+
+  // Agency-private lines (the agency's own margin) are never shown to the
+  // facility; reimbursable pass-throughs ARE (the facility owes them).
+  facilityVisible Boolean @default(true)
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([rosterEntryId])
+  @@index([assignmentId])
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

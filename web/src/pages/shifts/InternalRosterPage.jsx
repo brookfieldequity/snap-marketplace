@@ -29,6 +29,9 @@ const BLANK_FORM = {
   snapEmail: '', phoneNumber: '', licenseNumber: '', licenseExpiration: '',
   // Category fields
   fteHours: '', annualRate: '', hourlyRate: '',
+  // All-in cost ($/hr) — facility's true loaded cost for this provider (bill
+  // rate for agency-staffed 1099s; loaded cost for W-2 staff). Optional/blank.
+  allInCostPerHour: '',
   preferredShiftLength: 'none', preferredDays: [],
   locationRankings: [], maxShiftsPerMonth: '',
   contractStart: '', contractEnd: '', notes: '',
@@ -39,6 +42,8 @@ const BLANK_FORM = {
   // makes payroll export the business name instead of the personal name —
   // payroll only; the person is addressed by their name everywhere else.
   businessName: '', useBusinessNameForPayroll: false,
+  // Payee identity for the payroll feed (groundwork). SSN intentionally not held.
+  payeeType: '', ein: '',
   // PTO. ptoDaysAnnual '' = use system default; ptoEligible '' = derive from
   // employment (W-2 / full-time eligible); seniorityRank '' = unset.
   ptoDaysAnnual: '', ptoEligible: '', seniorityRank: '',
@@ -276,6 +281,7 @@ export default function InternalRosterPage({ onNavigate }) {
       fteHours: p.fteHours ?? '',
       annualRate: p.annualRate ?? '',
       hourlyRate: p.hourlyRate ?? '',
+      allInCostPerHour: p.allInCostPerHour ?? '',
       preferredShiftLength: p.preferredShiftLength || 'none',
       preferredDays: Array.isArray(p.preferredDays) ? p.preferredDays : [],
       locationRankings: Array.isArray(p.locationRankings) ? p.locationRankings : [],
@@ -288,6 +294,8 @@ export default function InternalRosterPage({ onNavigate }) {
       hoursStatus: p.isFullTime == null ? '' : (p.isFullTime ? 'FT' : 'PT'),
       businessName: p.businessName || '',
       useBusinessNameForPayroll: !!p.useBusinessNameForPayroll,
+      payeeType: p.payeeType || '',
+      ein: p.ein || '',
       ptoDaysAnnual: p.ptoDaysAnnual ?? '',
       ptoEligible: p.ptoEligible == null ? '' : (p.ptoEligible ? 'YES' : 'NO'),
       seniorityRank: p.seniorityRank ?? '',
@@ -314,6 +322,7 @@ export default function InternalRosterPage({ onNavigate }) {
         fteHours: form.fteHours !== '' ? parseFloat(form.fteHours) : null,
         annualRate: form.annualRate !== '' ? parseFloat(form.annualRate) : null,
         hourlyRate: form.hourlyRate !== '' ? parseFloat(form.hourlyRate) : null,
+        allInCostPerHour: form.allInCostPerHour !== '' ? parseFloat(form.allInCostPerHour) : null,
         preferredShiftLength: form.preferredShiftLength !== 'none' ? form.preferredShiftLength : null,
         preferredDays: form.preferredDays.length > 0 ? form.preferredDays : null,
         locationRankings: form.locationRankings.length > 0 ? form.locationRankings : null,
@@ -327,6 +336,8 @@ export default function InternalRosterPage({ onNavigate }) {
         employer: form.employer.trim() || null,
         businessName: form.businessName.trim() || null,
         useBusinessNameForPayroll: !!form.useBusinessNameForPayroll,
+        payeeType: form.payeeType || null,
+        ein: form.ein.trim() || null,
         // taxStatus/hoursStatus are tri-state strings in form land; map to
         // booleans for the API. Empty string → null (unknown).
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
@@ -937,6 +948,12 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No rate — savings demo uses default</div>
                 ) : null}
 
+                {p.allInCostPerHour != null && (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                    All-in cost: <strong style={{ color: '#475569' }}>${p.allInCostPerHour}/hr</strong>
+                  </div>
+                )}
+
                 {p.preferredDays && Array.isArray(p.preferredDays) && p.preferredDays.length > 0 && (
                   <div style={{ fontSize: 11, color: '#64748B' }}>
                     Prefers: {p.preferredDays.join(', ')}
@@ -1044,8 +1061,18 @@ export default function InternalRosterPage({ onNavigate }) {
                 <option value="PT">Part-time</option>
               </select>
             </Field>
+            <Field label="Payee Type (payroll)">
+              <select style={inputStyle} value={form.payeeType} onChange={(e) => setF('payeeType', e.target.value)}>
+                <option value="">— Not set —</option>
+                <option value="Individual">Individual</option>
+                <option value="Business">Business (LLC/PLLC)</option>
+              </select>
+            </Field>
             <Field label="Business Name (for 1099s paid as an LLC)">
               <input style={inputStyle} value={form.businessName} onChange={(e) => setF('businessName', e.target.value)} placeholder="e.g. Bailin Anesthesia LLC" />
+            </Field>
+            <Field label="EIN (business payees)">
+              <input style={inputStyle} value={form.ein} onChange={(e) => setF('ein', e.target.value)} placeholder="e.g. 92-0725051" />
             </Field>
             <Field label="Payroll Name">
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: form.businessName.trim() ? '#374151' : '#94A3B8' }}>
@@ -1136,6 +1163,17 @@ export default function InternalRosterPage({ onNavigate }) {
               </div>
             </>
           )}
+
+          {/* All-in cost — generic, optional, applies to any category. The
+              facility's true loaded cost per hour: bill rate for agency 1099s,
+              loaded cost for W-2 staff. Powers the agency-invoice + savings calc. */}
+          <SectionDivider label="Cost Analysis (optional)" />
+          <Field label="All-In Cost ($/hr)">
+            <input style={inputStyle} type="number" min="0" step="0.01" value={form.allInCostPerHour} onChange={(e) => setF('allInCostPerHour', e.target.value)} placeholder="Fully-loaded cost to the facility — e.g. 240" />
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+              Leave blank unless you track it. For agency-staffed providers this is what you owe the agency all-in (pay + malpractice + margin).
+            </div>
+          </Field>
 
           {/* Shared preference fields */}
           <SectionDivider label="Scheduling Preferences" />

@@ -174,11 +174,17 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
         // take the first non-null value seen for the location.
         const byLocation = {}
         const ratioByLocation = {}
+        const windowByLocation = {}
         for (const d of t.days) {
           if (!byLocation[d.location]) byLocation[d.location] = Array(7).fill(0)
           byLocation[d.location][d.dayOfWeek] = d.roomsRequired
           if (d.supervisionRatio != null && ratioByLocation[d.location] == null) {
             ratioByLocation[d.location] = d.supervisionRatio
+          }
+          // Default shift window is per-location in the UI (usually consistent
+          // across days); take the first non-null window seen for the location.
+          if (d.defaultStartTime && !windowByLocation[d.location]) {
+            windowByLocation[d.location] = { start: d.defaultStartTime, end: d.defaultEndTime || '' }
           }
         }
         setRows(
@@ -191,6 +197,8 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
               // set (legacy days). null in the data = legacy role-agnostic;
               // the UI surfaces it as MD-only so saving makes it explicit.
               supervisionRatio: ratioByLocation[loc] ?? 0,
+              defaultStartTime: windowByLocation[loc]?.start || '',
+              defaultEndTime: windowByLocation[loc]?.end || '',
             }))
         )
       })
@@ -216,6 +224,14 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
     })
   }
 
+  function updateWindow(rowIdx, field, value) {
+    setRows((current) => {
+      const next = current.map((r) => ({ ...r, counts: [...r.counts] }))
+      next[rowIdx][field] = value
+      return next
+    })
+  }
+
   function addLocation() {
     const trimmed = newLocation.trim()
     if (!trimmed) return
@@ -223,7 +239,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       setError(`"${trimmed}" is already in this template.`)
       return
     }
-    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0 }])
+    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0, defaultStartTime: '', defaultEndTime: '' }])
     setNewLocation('')
     setError(null)
   }
@@ -242,8 +258,11 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
             location: r.location,
             dayOfWeek: dow,
             roomsRequired: rooms,
-            // Apply the location's coverage model to every active day.
+            // Apply the location's coverage model + default shift window to
+            // every active day.
             supervisionRatio: r.supervisionRatio ?? null,
+            defaultStartTime: r.defaultStartTime || null,
+            defaultEndTime: r.defaultEndTime || null,
           })
         }
       }
@@ -299,8 +318,9 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
         <table style={styles.grid}>
           <thead>
             <tr>
-              <th style={{ ...styles.gridTh, textAlign: 'left', width: '22%' }}>Location</th>
-              <th style={{ ...styles.gridTh, width: '130px' }}>Coverage</th>
+              <th style={{ ...styles.gridTh, textAlign: 'left', width: '20%' }}>Location</th>
+              <th style={{ ...styles.gridTh, width: '120px' }}>Coverage</th>
+              <th style={{ ...styles.gridTh, width: '150px' }}>Default Hours</th>
               {DAY_LABELS.map((d) => (
                 <th key={d} style={styles.gridTh}>{d}</th>
               ))}
@@ -322,6 +342,25 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
                     <option value="4">Team 1:4</option>
                   </select>
                 </td>
+                <td style={styles.gridCell}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'center' }}>
+                    <input
+                      type="time"
+                      value={row.defaultStartTime || ''}
+                      onChange={(e) => updateWindow(idx, 'defaultStartTime', e.target.value)}
+                      style={{ ...styles.stepperInput, width: 64, padding: '4px 2px' }}
+                      title="Default shift start"
+                    />
+                    <span style={{ color: '#94A3B8', fontSize: 11 }}>–</span>
+                    <input
+                      type="time"
+                      value={row.defaultEndTime || ''}
+                      onChange={(e) => updateWindow(idx, 'defaultEndTime', e.target.value)}
+                      style={{ ...styles.stepperInput, width: 64, padding: '4px 2px' }}
+                      title="Default shift end"
+                    />
+                  </div>
+                </td>
                 {row.counts.map((count, dow) => (
                   <td key={dow} style={styles.gridCell}>
                     <input
@@ -341,7 +380,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ ...styles.gridCell, color: '#94A3B8', textAlign: 'center', padding: 24 }}>
+                <td colSpan={11} style={{ ...styles.gridCell, color: '#94A3B8', textAlign: 'center', padding: 24 }}>
                   No locations yet. Add one below.
                 </td>
               </tr>

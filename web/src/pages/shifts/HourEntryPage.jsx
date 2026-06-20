@@ -1,0 +1,162 @@
+import React, { useState, useEffect, useCallback } from 'react'
+import { payrollAPI } from '../../api.js'
+
+// ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
+const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
+const primaryBtn = { padding: '10px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const ghostBtn = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
+const inputStyle = { padding: '7px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#0F172A' }
+const th = { textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #E2E8F0' }
+const td = { padding: '5px 8px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid #F1F5F9' }
+
+const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '')
+function defaultPeriod() {
+  const today = new Date()
+  const end = new Date(today)
+  end.setDate(today.getDate() - ((today.getDay() + 1) % 7))
+  const start = new Date(end)
+  start.setDate(end.getDate() - 13)
+  return { start: fmtDate(start), end: fmtDate(end) }
+}
+
+export default function HourEntryPage({ onNavigate }) {
+  const [period, setPeriod] = useState(defaultPeriod())
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const [data, setData] = useState(null) // { providers, pendingProviders }
+
+  const load = useCallback(async () => {
+    if (!period.start || !period.end) return
+    setLoading(true); setError('')
+    try {
+      setData(await payrollAPI.getHourEntries({ periodStart: period.start, periodEnd: period.end }))
+    } catch (err) {
+      setError(err.message || 'Failed to load'); setData(null)
+    } finally { setLoading(false) }
+  }, [period.start, period.end])
+
+  useEffect(() => { load() }, [load])
+
+  async function run(key, fn) {
+    setBusy(key); setError('')
+    try { const res = await fn(); if (res?.providers) setData(res); else await load() }
+    catch (err) { setError(err.message || 'Action failed') }
+    finally { setBusy('') }
+  }
+
+  const seed = () => run('seed', () => payrollAPI.seedHourEntries({ periodStart: period.start, periodEnd: period.end }))
+  const submitAll = () => run('submit', () => payrollAPI.submitHourEntries({ periodStart: period.start, periodEnd: period.end }))
+  const submitProvider = (rid) => run('submit-' + rid, () => payrollAPI.submitHourEntries({ periodStart: period.start, periodEnd: period.end, rosterEntryId: rid }))
+
+  // Inline edit of a row's start/end (hours recompute server-side) or hours.
+  async function editRow(id, patch) {
+    try {
+      await payrollAPI.updateHourEntry(id, patch)
+      await load()
+    } catch (err) { setError(err.message || 'Update failed') }
+  }
+
+  const providers = data?.providers || []
+
+  return (
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '8px 4px' }}>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>⏱ Provider Hours</h1>
+      <p style={{ fontSize: 14, color: '#64748B', marginTop: 6, marginBottom: 20 }}>
+        Confirm worked hours for 1099 / per-diem providers before running payroll or the agency invoice.
+        Seed pulls each provider's scheduled days pre-filled with the location's default shift window —
+        just adjust exceptions, then submit.
+      </p>
+
+      {/* Controls */}
+      <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'flex-end', marginBottom: 18, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
+          Period start
+          <input style={inputStyle} type="date" value={period.start} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
+          Period end
+          <input style={inputStyle} type="date" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} />
+        </label>
+        <button style={ghostBtn} onClick={seed} disabled={!!busy}>{busy === 'seed' ? 'Seeding…' : '↻ Seed from schedule'}</button>
+        <button style={primaryBtn} onClick={submitAll} disabled={!!busy}>{busy === 'submit' ? 'Submitting…' : '✓ Submit all'}</button>
+      </div>
+
+      {error && <div style={{ ...card, borderColor: '#FCA5A5', background: '#FEF2F2', color: '#B91C1C', marginBottom: 18 }}>{error}</div>}
+
+      {data && data.pendingProviders > 0 && (
+        <div style={{ ...card, borderColor: '#FCD34D', background: '#FFFBEB', color: '#92400E', marginBottom: 18, fontSize: 14 }}>
+          ⚠️ {data.pendingProviders} provider{data.pendingProviders !== 1 ? 's have' : ' has'} unsubmitted hours.
+          Payroll and the agency invoice only count <strong>submitted</strong> hours.
+        </div>
+      )}
+
+      {loading && <div style={{ color: '#64748B', fontSize: 14 }}>Loading…</div>}
+
+      {!loading && providers.length === 0 && (
+        <div style={{ ...card, color: '#64748B', textAlign: 'center' }}>
+          No hours yet for this period. Click <strong>Seed from schedule</strong> to pull scheduled days,
+          or add days manually once providers are scheduled.
+        </div>
+      )}
+
+      {!loading && providers.map((p) => (
+        <div key={p.rosterEntryId} style={{ ...card, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{p.providerName}</span>
+              <span style={{ marginLeft: 10, fontSize: 12, color: '#64748B' }}>
+                {p.submittedHours} submitted / {p.totalHours} total hrs
+                {p.pendingCount > 0 && <span style={{ color: '#B45309', fontWeight: 700 }}> · {p.pendingCount} pending</span>}
+              </span>
+            </div>
+            {p.pendingCount > 0 && (
+              <button style={ghostBtn} onClick={() => submitProvider(p.rosterEntryId)} disabled={!!busy}>
+                {busy === 'submit-' + p.rosterEntryId ? 'Submitting…' : 'Submit provider'}
+              </button>
+            )}
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Date</th>
+                <th style={th}>Location</th>
+                <th style={th}>Start</th>
+                <th style={th}>End</th>
+                <th style={{ ...th, textAlign: 'right' }}>Hours</th>
+                <th style={{ ...th, textAlign: 'center' }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.rows.map((r) => (
+                <tr key={r.id}>
+                  <td style={td}>{r.date}</td>
+                  <td style={td}>{r.location || '—'}</td>
+                  <td style={td}>
+                    <input style={{ ...inputStyle, width: 90 }} type="time" defaultValue={r.startTime || ''}
+                      onBlur={(e) => e.target.value !== (r.startTime || '') && editRow(r.id, { startTime: e.target.value })} />
+                  </td>
+                  <td style={td}>
+                    <input style={{ ...inputStyle, width: 90 }} type="time" defaultValue={r.endTime || ''}
+                      onBlur={(e) => e.target.value !== (r.endTime || '') && editRow(r.id, { endTime: e.target.value })} />
+                  </td>
+                  <td style={{ ...td, textAlign: 'right' }}>
+                    <input style={{ ...inputStyle, width: 64, textAlign: 'right' }} type="number" step="0.25" min="0" defaultValue={r.hours}
+                      onBlur={(e) => Number(e.target.value) !== r.hours && editRow(r.id, { hours: Number(e.target.value) })} />
+                  </td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                      background: r.status === 'SUBMITTED' ? '#DCFCE7' : '#FEF9C3',
+                      color: r.status === 'SUBMITTED' ? '#166534' : '#854D0E' }}>
+                      {r.status === 'SUBMITTED' ? 'Submitted' : 'Draft'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  )
+}
