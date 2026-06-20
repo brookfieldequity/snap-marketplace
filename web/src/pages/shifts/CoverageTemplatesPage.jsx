@@ -345,9 +345,9 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
               <tr key={row.location}>
                 <td style={styles.gridLocCell}>
                   <div>{row.location}</div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, color: row.isExternal ? '#B45309' : '#94A3B8', marginTop: 4 }} title="A non-CAPA site (e.g. an APNE site). Hours here are excluded from the CAPA agency invoice.">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, color: row.isExternal ? '#B45309' : '#94A3B8', marginTop: 4 }} title="An external site not owned by this facility (e.g. an agency site). Hours worked here are excluded from the facility's agency invoice.">
                     <input type="checkbox" checked={!!row.isExternal} onChange={(e) => toggleExternal(idx, e.target.checked)} />
-                    Non-CAPA site
+                    External site
                   </label>
                 </td>
                 <td style={styles.gridCell}>

@@ -1056,7 +1056,7 @@ export default function InternalRosterPage({ onNavigate }) {
               </select>
             </Field>
             <Field label="Employer">
-              <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="APNE / CAPA / JJM" />
+              <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="Staffing group or practice" />
             </Field>
             <Field label="Tax Status">
               <select style={inputStyle} value={form.taxStatus} onChange={(e) => setF('taxStatus', e.target.value)}>
@@ -1090,7 +1090,7 @@ export default function InternalRosterPage({ onNavigate }) {
             <Field label="Dual employment">
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
                 <input type="checkbox" checked={form.dualEmployment} onChange={(e) => setF('dualEmployment', e.target.checked)} />
-                W-2 at one employer AND 1099 at another (e.g. W-2 at CAPA + 1099 at APNE)
+                W-2 at one employer AND 1099 at another (e.g. W-2 at the facility + 1099 via an agency)
               </label>
             </Field>
             {form.dualEmployment && (
@@ -1100,10 +1100,10 @@ export default function InternalRosterPage({ onNavigate }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <Field label="W-2 paid by">
-                    <input style={inputStyle} value={form.w2Employer} onChange={(e) => setF('w2Employer', e.target.value)} placeholder="e.g. CAPA" />
+                    <input style={inputStyle} value={form.w2Employer} onChange={(e) => setF('w2Employer', e.target.value)} placeholder="e.g. the facility" />
                   </Field>
                   <Field label="1099 paid by">
-                    <input style={inputStyle} value={form.contractorEmployer} onChange={(e) => setF('contractorEmployer', e.target.value)} placeholder="e.g. APNE" />
+                    <input style={inputStyle} value={form.contractorEmployer} onChange={(e) => setF('contractorEmployer', e.target.value)} placeholder="e.g. the agency" />
                   </Field>
                 </div>
                 <Field label="1099 Pay Rate ($/hr)">

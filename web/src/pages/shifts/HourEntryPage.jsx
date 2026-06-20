@@ -69,9 +69,9 @@ export default function HourEntryPage({ onNavigate }) {
     } catch (err) { setError(err.message || 'Update failed') }
   }
 
-  // Bulk manual entry — e.g. a fixed-rate 1099 line not tied to a shift
-  // (the Brookfield case). Date defaults to period end; blank location = CAPA
-  // site (billable). Mark SUBMITTED so it counts immediately.
+  // Bulk manual entry — e.g. a fixed-rate 1099 line not tied to a shift (a
+  // business-name contractor paid a set number of hours). Date defaults to
+  // period end; blank location = facility site (billable).
   async function addManual() {
     if (!addForm.rosterEntryId || addForm.hours === '') { setError('Pick a provider and enter hours.'); return }
     setBusy('add'); setError('')
@@ -138,13 +138,13 @@ export default function HourEntryPage({ onNavigate }) {
             <input style={{ ...inputStyle, width: 90 }} type="number" step="0.25" min="0" value={addForm.hours} onChange={(e) => setAddForm((f) => ({ ...f, hours: e.target.value }))} placeholder="e.g. 76" />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
-            Location (blank = CAPA site)
+            Location (blank = facility site)
             <input style={{ ...inputStyle, width: 150 }} value={addForm.location} onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value }))} placeholder="optional" />
           </label>
           <button style={ghostBtn} onClick={addManual} disabled={!!busy}>{busy === 'add' ? 'Adding…' : '+ Add line'}</button>
         </div>
         <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8 }}>
-          Adds a draft line dated to the period end — adjust hours, then Submit. Blank location bills to CAPA; a non-CAPA site is excluded from the invoice.
+          Adds a draft line dated to the period end — adjust hours, then Submit. Blank location bills to the facility; an external (agency) site is excluded from the invoice.
         </div>
       </div>
 

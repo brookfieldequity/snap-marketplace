@@ -483,7 +483,7 @@ router.get('/agency-invoice/export', async (req, res) => {
       [`${invoice.employerName || 'Agency'} → ${req.facility.name} Invoice`],
       [`${fmtDate(periodStart)} to ${fmtDate(periodEnd)}`],
       [],
-      ['contractor_type', 'payee', 'hours_worked', 'CAPA rate', 'amount'],
+      ['contractor_type', 'payee', 'hours_worked', 'all_in_rate', 'amount'],
       ...invoice.lines.map((l) => [l.contractorType, l.payeeName, l.hours, l.capaRate, l.amount]),
       [],
       ['', '', '', 'Total', invoice.total],

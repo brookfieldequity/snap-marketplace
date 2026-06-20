@@ -116,7 +116,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
                 <th style={th}>Type</th>
                 <th style={th}>Payee</th>
                 <th style={{ ...th, textAlign: 'right' }}>Hours</th>
-                <th style={{ ...th, textAlign: 'right' }}>CAPA rate</th>
+                <th style={{ ...th, textAlign: 'right' }}>All-in rate</th>
                 <th style={{ ...th, textAlign: 'right' }}>Amount</th>
               </tr>
             </thead>
