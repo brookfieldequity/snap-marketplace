@@ -91,7 +91,8 @@ async function gatherWorkedDays({ facilityId, periodStart, periodEnd, roster }) 
 // coordinator/provider edits + SUBMITTED rows are preserved). Returns counts.
 async function seedHourEntries({ facilityId, periodStart, periodEnd }) {
   const roster = await prisma.internalRosterEntry.findMany({
-    where: { facilityId, is1099: true },
+    // Pure 1099s AND dual-employment providers need hour entry (their 1099 side).
+    where: { facilityId, OR: [{ is1099: true }, { dualEmployment: true }] },
     select: { id: true, providerName: true },
   });
   if (!roster.length) return { seeded: 0, skipped: 0 };
@@ -178,13 +179,24 @@ async function getEntries({ facilityId, periodStart, periodEnd }) {
 async function submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd }) {
   const start = new Date(periodStart);
   const end = new Date(new Date(periodEnd).getTime() + 86399999);
-  const rows = await prisma.providerHourEntry.findMany({
-    where: { facilityId, status: 'SUBMITTED', date: { gte: start, lte: end } },
-    select: { rosterEntryId: true, date: true, hours: true },
-  });
+  const [rows, sites] = await Promise.all([
+    prisma.providerHourEntry.findMany({
+      where: { facilityId, status: 'SUBMITTED', date: { gte: start, lte: end } },
+      select: { rosterEntryId: true, date: true, hours: true, location: true },
+    }),
+    prisma.facilityLocation.findMany({ where: { facilityId, isExternal: true }, select: { siteName: true } }),
+  ]);
+  // Non-CAPA (external) site names — hours there are excluded from the facility's
+  // agency invoice (the agency pays them), but still count for agency payroll.
+  const externalSites = new Set(sites.map((s) => s.siteName));
   const map = {};
   for (const r of rows) {
-    (map[r.rosterEntryId] = map[r.rosterEntryId] || []).push({ date: ymd(r.date), hours: Number(r.hours || 0) });
+    (map[r.rosterEntryId] = map[r.rosterEntryId] || []).push({
+      date: ymd(r.date),
+      hours: Number(r.hours || 0),
+      location: r.location || null,
+      isExternal: r.location ? externalSites.has(r.location) : false,
+    });
   }
   return map;
 }

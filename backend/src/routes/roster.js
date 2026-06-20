@@ -216,6 +216,7 @@ router.post('/', facilityAuth, async (req, res) => {
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
       businessName, useBusinessNameForPayroll, payeeType, ein,
+      dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
     } = req.body;
 
     const linkFields = await resolveLinkFields({ npi, email: snapAccountEmail });
@@ -255,6 +256,10 @@ router.post('/', facilityAuth, async (req, res) => {
         useBusinessNameForPayroll: useBusinessNameForPayroll === true,
         payeeType: payeeType || null,
         ein: ein || null,
+        dualEmployment: dualEmployment === true,
+        w2Employer: w2Employer || null,
+        contractorEmployer: contractorEmployer || null,
+        contractorPayRate: contractorPayRate != null && contractorPayRate !== '' ? parseFloat(contractorPayRate) : null,
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -288,6 +293,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       contractStart, contractEnd, locations,
       employer, is1099, isFullTime,
       businessName, useBusinessNameForPayroll, payeeType, ein,
+      dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
       ptoDaysAnnual, ptoEligible, seniorityRank,
     } = req.body;
 
@@ -336,6 +342,10 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(useBusinessNameForPayroll !== undefined && { useBusinessNameForPayroll: useBusinessNameForPayroll === true }),
         ...(payeeType !== undefined && { payeeType: payeeType || null }),
         ...(ein !== undefined && { ein: ein || null }),
+        ...(dualEmployment !== undefined && { dualEmployment: dualEmployment === true }),
+        ...(w2Employer !== undefined && { w2Employer: w2Employer || null }),
+        ...(contractorEmployer !== undefined && { contractorEmployer: contractorEmployer || null }),
+        ...(contractorPayRate !== undefined && { contractorPayRate: contractorPayRate != null && contractorPayRate !== '' ? parseFloat(contractorPayRate) : null }),
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),

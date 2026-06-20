@@ -365,6 +365,7 @@ model Facility {
   selfEmployer        Employer?              @relation("FacilitySelfEmployer")
   employerLinks       EmployerFacilityLink[]
   hourEntries         ProviderHourEntry[]
+  locations           FacilityLocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -772,6 +773,17 @@ model InternalRosterEntry {
   // built (then encrypted-at-rest or last-4 only). See eor-model-spec.md.
   payeeType                 String? // "Business" | "Individual"
   ein                       String?
+  // Dual employment: same person is W-2 at one employer AND 1099 at another
+  // (e.g. W-2 at CAPA + 1099 at APNE). When true, the W-2 side uses annualRate
+  // (salary) and w2Employer; the 1099 side uses contractorPayRate + the payee
+  // identity above (payeeType/businessName/ein) + allInCostPerHour (the rate the
+  // CAPA-site 1099 hours are billed at) + contractorEmployer. hourlyRate stays
+  // free for W-2-hourly staff so the dual 1099 rate never pollutes W-2 payroll.
+  // See eor-model-spec.md (site-ownership + dual-employment section).
+  dualEmployment            Boolean @default(false)
+  w2Employer                String? // who pays the W-2 salary (e.g. "CAPA")
+  contractorEmployer        String? // who pays the 1099 (e.g. "APNE")
+  contractorPayRate         Float?  // 1099 pay rate for a DUAL provider
   // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
   // false = W-2 employee, null = unknown. Surfaced on the roster card so the
   // coordinator can see "1099 · FT" at a glance for cost attribution.
@@ -1871,6 +1883,24 @@ model RosterRateHistory {
   createdAt     DateTime            @default(now())
 
   @@index([rosterEntryId, effectiveDate])
+}
+
+// Per-site settings registry. Locations are otherwise free-text strings across
+// the schedule/coverage/hour models; this holds site-level attributes keyed by
+// (facility, siteName). `isExternal` = a NON-CAPA site (e.g. an APNE site like
+// Melrose): it can still appear on the master schedule, but hours worked there
+// are EXCLUDED from the facility's agency invoice (the agency, not the facility,
+// pays them). Default false = a normal facility-owned site.
+model FacilityLocation {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  siteName   String
+  isExternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([facilityId, siteName])
 }
 
 // Provider worked-hours entry. The per-day actual hours a 1099/per-diem provider

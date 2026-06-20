@@ -84,6 +84,21 @@ function normalizeTime(v) {
   return `${String(h).padStart(2, '0')}:${m[2]}`;
 }
 
+// Upsert per-site settings (currently just the non-CAPA `isExternal` flag) for
+// every location in the template. `externalLocations` is the list of site names
+// the coordinator marked non-CAPA. Runs inside the save transaction.
+async function syncFacilityLocations(tx, facilityId, days, externalLocations) {
+  const ext = new Set((externalLocations || []).map((s) => String(s).trim()));
+  const sites = [...new Set(days.map((d) => d.location))];
+  for (const siteName of sites) {
+    await tx.facilityLocation.upsert({
+      where: { facilityId_siteName: { facilityId, siteName } },
+      update: { isExternal: ext.has(siteName) },
+      create: { facilityId, siteName, isExternal: ext.has(siteName) },
+    });
+  }
+}
+
 // ── Routes ──────────────────────────────────────────────────────────────────
 
 /**
@@ -128,7 +143,12 @@ router.get('/:id', facilityAuth, async (req, res) => {
     if (!template || template.facilityId !== req.facility.id) {
       return res.status(404).json({ error: 'Template not found.' });
     }
-    res.json({ template });
+    // Site flags so the editor can show which locations are non-CAPA.
+    const locations = await prisma.facilityLocation.findMany({
+      where: { facilityId: req.facility.id },
+      select: { siteName: true, isExternal: true },
+    });
+    res.json({ template, locations });
   } catch (err) {
     console.error('[coverage-templates] get failed:', err);
     res.status(500).json({ error: 'Failed to load template.' });
@@ -143,7 +163,7 @@ router.get('/:id', facilityAuth, async (req, res) => {
  */
 router.post('/', facilityAuth, async (req, res) => {
   try {
-    const { name, isDefault, days = [] } = req.body || {};
+    const { name, isDefault, days = [], externalLocations = [] } = req.body || {};
     const trimmedName = String(name || '').trim();
     if (!trimmedName) return res.status(400).json({ error: 'Template name is required.' });
 
@@ -163,7 +183,7 @@ router.post('/', facilityAuth, async (req, res) => {
           data: { isDefault: false },
         });
       }
-      return tx.coverageTemplate.create({
+      const created = await tx.coverageTemplate.create({
         data: {
           facilityId: req.facility.id,
           name: trimmedName,
@@ -172,6 +192,8 @@ router.post('/', facilityAuth, async (req, res) => {
         },
         include: { days: true },
       });
+      await syncFacilityLocations(tx, req.facility.id, normalizedDays, externalLocations);
+      return created;
     });
 
     res.status(201).json({ template: result });
@@ -198,7 +220,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       return res.status(404).json({ error: 'Template not found.' });
     }
 
-    const { name, isDefault, days } = req.body || {};
+    const { name, isDefault, days, externalLocations } = req.body || {};
     const data = {};
     if (typeof name === 'string') {
       const trimmed = name.trim();
@@ -232,6 +254,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         await tx.coverageTemplateDay.createMany({
           data: normalizedDays.map((d) => ({ ...d, templateId: req.params.id })),
         });
+        await syncFacilityLocations(tx, req.facility.id, normalizedDays, externalLocations);
       }
       return tx.coverageTemplate.update({
         where: { id: req.params.id },

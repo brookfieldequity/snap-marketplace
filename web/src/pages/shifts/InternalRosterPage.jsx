@@ -44,6 +44,9 @@ const BLANK_FORM = {
   businessName: '', useBusinessNameForPayroll: false,
   // Payee identity for the payroll feed (groundwork). SSN intentionally not held.
   payeeType: '', ein: '',
+  // Dual employment (W-2 at one employer + 1099 at another). When on, the payee
+  // type / business / EIN / All-In Cost above describe the 1099 side.
+  dualEmployment: false, w2Employer: '', contractorEmployer: '', contractorPayRate: '',
   // PTO. ptoDaysAnnual '' = use system default; ptoEligible '' = derive from
   // employment (W-2 / full-time eligible); seniorityRank '' = unset.
   ptoDaysAnnual: '', ptoEligible: '', seniorityRank: '',
@@ -296,6 +299,10 @@ export default function InternalRosterPage({ onNavigate }) {
       useBusinessNameForPayroll: !!p.useBusinessNameForPayroll,
       payeeType: p.payeeType || '',
       ein: p.ein || '',
+      dualEmployment: !!p.dualEmployment,
+      w2Employer: p.w2Employer || '',
+      contractorEmployer: p.contractorEmployer || '',
+      contractorPayRate: p.contractorPayRate ?? '',
       ptoDaysAnnual: p.ptoDaysAnnual ?? '',
       ptoEligible: p.ptoEligible == null ? '' : (p.ptoEligible ? 'YES' : 'NO'),
       seniorityRank: p.seniorityRank ?? '',
@@ -338,6 +345,10 @@ export default function InternalRosterPage({ onNavigate }) {
         useBusinessNameForPayroll: !!form.useBusinessNameForPayroll,
         payeeType: form.payeeType || null,
         ein: form.ein.trim() || null,
+        dualEmployment: !!form.dualEmployment,
+        w2Employer: form.w2Employer.trim() || null,
+        contractorEmployer: form.contractorEmployer.trim() || null,
+        contractorPayRate: form.contractorPayRate !== '' ? parseFloat(form.contractorPayRate) : null,
         // taxStatus/hoursStatus are tri-state strings in form land; map to
         // booleans for the API. Empty string → null (unknown).
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
@@ -1074,6 +1085,32 @@ export default function InternalRosterPage({ onNavigate }) {
             <Field label="EIN (business payees)">
               <input style={inputStyle} value={form.ein} onChange={(e) => setF('ein', e.target.value)} placeholder="e.g. 92-0725051" />
             </Field>
+
+            {/* Dual employment — W-2 at one employer + 1099 at another. */}
+            <Field label="Dual employment">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
+                <input type="checkbox" checked={form.dualEmployment} onChange={(e) => setF('dualEmployment', e.target.checked)} />
+                W-2 at one employer AND 1099 at another (e.g. W-2 at CAPA + 1099 at APNE)
+              </label>
+            </Field>
+            {form.dualEmployment && (
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                  W-2 salary uses the Annual Base Rate above. The Payee Type / Business Name / EIN / All-In Cost above describe the <strong>1099</strong> side.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                  <Field label="W-2 paid by">
+                    <input style={inputStyle} value={form.w2Employer} onChange={(e) => setF('w2Employer', e.target.value)} placeholder="e.g. CAPA" />
+                  </Field>
+                  <Field label="1099 paid by">
+                    <input style={inputStyle} value={form.contractorEmployer} onChange={(e) => setF('contractorEmployer', e.target.value)} placeholder="e.g. APNE" />
+                  </Field>
+                </div>
+                <Field label="1099 Pay Rate ($/hr)">
+                  <input style={inputStyle} type="number" min="0" step="0.01" value={form.contractorPayRate} onChange={(e) => setF('contractorPayRate', e.target.value)} placeholder="What the 1099 side pays this provider/hr" />
+                </Field>
+              </div>
+            )}
             <Field label="Payroll Name">
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: form.businessName.trim() ? '#374151' : '#94A3B8' }}>
                 <input

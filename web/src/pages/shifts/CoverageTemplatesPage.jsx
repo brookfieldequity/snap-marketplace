@@ -169,6 +169,9 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
         const t = res.template
         setName(t.name)
         setIsDefault(t.isDefault)
+        // Non-CAPA site flags (per FacilityLocation), keyed by site name.
+        const extByLoc = {}
+        for (const l of res.locations || []) extByLoc[l.siteName] = !!l.isExternal
         // Pivot days[] into rows by location. supervisionRatio is a
         // per-location setting in the UI (usually consistent across days);
         // take the first non-null value seen for the location.
@@ -199,6 +202,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
               supervisionRatio: ratioByLocation[loc] ?? 0,
               defaultStartTime: windowByLocation[loc]?.start || '',
               defaultEndTime: windowByLocation[loc]?.end || '',
+              isExternal: !!extByLoc[loc],
             }))
         )
       })
@@ -232,6 +236,14 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
     })
   }
 
+  function toggleExternal(rowIdx, value) {
+    setRows((current) => {
+      const next = current.map((r) => ({ ...r, counts: [...r.counts] }))
+      next[rowIdx].isExternal = value
+      return next
+    })
+  }
+
   function addLocation() {
     const trimmed = newLocation.trim()
     if (!trimmed) return
@@ -239,7 +251,7 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       setError(`"${trimmed}" is already in this template.`)
       return
     }
-    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0, defaultStartTime: '', defaultEndTime: '' }])
+    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0, defaultStartTime: '', defaultEndTime: '', isExternal: false }])
     setNewLocation('')
     setError(null)
   }
@@ -278,12 +290,13 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
     const days = flattenForSave()
     if (days.length === 0) return setError('Set at least one day with rooms > 0.')
 
+    const externalLocations = rows.filter((r) => r.isExternal).map((r) => r.location)
     setSaving(true)
     try {
       if (isNew) {
-        await facilityAPI.createCoverageTemplate({ name: trimmedName, isDefault, days })
+        await facilityAPI.createCoverageTemplate({ name: trimmedName, isDefault, days, externalLocations })
       } else {
-        await facilityAPI.updateCoverageTemplate(templateId, { name: trimmedName, isDefault, days })
+        await facilityAPI.updateCoverageTemplate(templateId, { name: trimmedName, isDefault, days, externalLocations })
       }
       onSaved()
     } catch (err) {
@@ -330,7 +343,13 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
           <tbody>
             {rows.map((row, idx) => (
               <tr key={row.location}>
-                <td style={styles.gridLocCell}>{row.location}</td>
+                <td style={styles.gridLocCell}>
+                  <div>{row.location}</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, color: row.isExternal ? '#B45309' : '#94A3B8', marginTop: 4 }} title="A non-CAPA site (e.g. an APNE site). Hours here are excluded from the CAPA agency invoice.">
+                    <input type="checkbox" checked={!!row.isExternal} onChange={(e) => toggleExternal(idx, e.target.checked)} />
+                    Non-CAPA site
+                  </label>
+                </td>
                 <td style={styles.gridCell}>
                   <select
                     value={String(row.supervisionRatio ?? 0)}

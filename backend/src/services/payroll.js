@@ -304,7 +304,11 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
   const roster = await prisma.internalRosterEntry.findMany({
     where: {
       facilityId,
-      ...(payClass === 'CONTRACTOR' ? { is1099: true } : { NOT: { is1099: true } }),
+      // CONTRACTOR run = pure-1099s + dual providers' 1099 side.
+      // W-2 run = everyone not pure-1099, plus dual providers (for their salary).
+      ...(payClass === 'CONTRACTOR'
+        ? { OR: [{ is1099: true }, { dualEmployment: true }] }
+        : { OR: [{ NOT: { is1099: true } }, { dualEmployment: true }] }),
     },
   });
 
@@ -346,7 +350,13 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const { regularHours, otHours } = splitRegularOt(shiftDetail);
-    const hourlyRate = entry.hourlyRate ?? null;
+    // CONTRACTOR run for a dual provider uses their 1099 rate (contractorPayRate),
+    // not hourlyRate (which is reserved for W-2-hourly staff). Everyone else uses
+    // hourlyRate as before. annualRate (W-2 salary) only matters in the W-2 run.
+    const hourlyRate =
+      payClass === 'CONTRACTOR' && entry.dualEmployment
+        ? (entry.contractorPayRate ?? null)
+        : (entry.hourlyRate ?? null);
     const annualRate = entry.annualRate ?? null;
     const grossPay = computeGross({ regularHours, otHours, hourlyRate, annualRate });
 

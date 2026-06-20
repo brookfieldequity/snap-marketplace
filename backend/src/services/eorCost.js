@@ -255,10 +255,14 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
   const submittedByRoster = await submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd });
 
   const providerCosts = roster.map((entry) => {
-    const submitted = entry.is1099 ? submittedByRoster[entry.id] : null;
+    // A provider has a 1099/agency side if pure-1099 OR dual-employment.
+    const isAgency = entry.is1099 === true || entry.dualEmployment === true;
+    const submitted = isAgency ? submittedByRoster[entry.id] : null;
     let shiftDetail;
     if (submitted && submitted.length) {
-      shiftDetail = submitted;
+      // CAPA invoice bills only NON-external (facility-site) hours. Hours at a
+      // non-CAPA site (e.g. an APNE site) are the agency's to pay — excluded here.
+      shiftDetail = submitted.filter((s) => !s.isExternal).map((s) => ({ date: s.date, hours: s.hours }));
     } else {
       const key = buildNameKey(entry.providerName);
       const recs = (key && recsByKey[key]) || [];
@@ -269,8 +273,9 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
     }
     const { regularHours, otHours } = splitRegularOt(shiftDetail);
 
-    const employerKind =
-      entry.employerRef?.kind || (entry.is1099 ? 'STAFFING_AGENCY' : 'FACILITY_SELF');
+    // For the invoice, the 1099/agency nature wins (a dual provider's W-2 side
+    // never appears here — it has no billable hours and is paid as salary).
+    const employerKind = isAgency ? 'STAFFING_AGENCY' : (entry.employerRef?.kind || 'FACILITY_SELF');
 
     const cost = computeProviderCost({
       employerKind,
@@ -295,7 +300,11 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
       is1099: entry.is1099 ?? null,
       allInCostPerHour: entry.allInCostPerHour ?? null,
       employerId: entry.employerId || null,
-      employerName: entry.employerRef?.name || entry.employer || null,
+      // The agency that bills the facility: for a dual provider it's the 1099
+      // employer (e.g. APNE / their business), not their W-2 employer.
+      employerName: entry.dualEmployment
+        ? (entry.contractorEmployer || entry.employer || null)
+        : (entry.employerRef?.name || entry.employer || null),
       ...cost,
     };
   });
