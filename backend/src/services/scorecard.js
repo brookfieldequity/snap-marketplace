@@ -132,13 +132,13 @@ async function getScorecard() {
       source: mrrIsManual ? 'manual' : 'estimate (no billing yet)',
     },
     {
-      key: 'capaBackupReduction', label: 'CAPA Backup Staffing Reduction', unit: '%',
+      key: 'capaBackupReduction', label: 'Facility Backup Staffing Reduction', unit: '%',
       value: capa.pct, target: 20, status: rag(capa.pct, 20),
       secondary: capa.facilityName ? `via ${capa.facilityName} ROI` : 'no baseline yet',
       source: 'auto (ROI)',
     },
     {
-      key: 'capaNps', label: 'CAPA Administrator NPS', unit: '/10',
+      key: 'capaNps', label: 'Facility Administrator NPS', unit: '/10',
       value: manual?.capaNps ?? null, target: 8, status: rag(manual?.capaNps ?? null, 8),
       source: 'manual (no survey yet)',
     },

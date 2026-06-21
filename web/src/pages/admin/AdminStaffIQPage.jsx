@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
 // Set this to the contract PDF URL before presenting
-const CAPA_AGREEMENT_URL = ''
+const AGREEMENT_URL = ''
 
 function fmt$(n) {
   if (n == null) return '—'
@@ -12,7 +12,7 @@ function fmt$(n) {
 const TOTAL_SLIDES = 8
 
 // ─── Slide 1: Opening ─────────────────────────────────────────────────────────
-function CAPASlide1() {
+function Slide1() {
   const products = [
     {
       name: 'SNAP Shifts',
@@ -37,10 +37,10 @@ function CAPASlide1() {
   return (
     <div style={{ width: '100%', maxWidth: 860, textAlign: 'center' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
-        SNAP Medical — CAPA Pitch Deck
+        SNAP Medical — Facility Pitch Deck
       </div>
       <h2 style={{ fontSize: 42, fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: 16 }}>
-        What We Built for CAPA
+        What We Built for Your Facility
       </h2>
       <p style={{ fontSize: 17, color: '#94A3B8', marginBottom: 48, lineHeight: 1.6 }}>
         A complete anesthesia workforce management platform — built around the specific inefficiencies we identified in your facilities.
@@ -59,7 +59,7 @@ function CAPASlide1() {
 }
 
 // ─── Slide 2: Problem ─────────────────────────────────────────────────────────
-function CAPASlide2() {
+function Slide2() {
   const metrics = [
     { location: 'Kenmore', pct: 27, est: '$120,000', label: 'team model inefficiency' },
     { location: 'Weymouth', pct: 36, est: '$160,000', label: 'team model inefficiency' },
@@ -72,7 +72,7 @@ function CAPASlide2() {
         The Problem We Identified
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 44, lineHeight: 1.6 }}>
-        Before building anything, we analyzed CAPA's scheduling patterns. Here's what we found.
+        Before building anything, we analyzed your facility's scheduling patterns. Here's what we found.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
         {metrics.map((m, i) => (
@@ -102,7 +102,7 @@ function CAPASlide2() {
 }
 
 // ─── Slide 3: Team Model Inefficiency ────────────────────────────────────────
-function CAPASlide3() {
+function Slide3() {
   const rows = [
     { label: 'Supervision Ratio', current: '1:2 (1 ANES / 2 CRNA)', optimal: '1:3 (1 ANES / 3 CRNA)' },
     { label: 'Anesthesiologist Cost', current: '$390/hr × excess rooms', optimal: 'Right-sized coverage' },
@@ -116,7 +116,7 @@ function CAPASlide3() {
         The Team Model Problem
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 36, textAlign: 'center', lineHeight: 1.6 }}>
-        CAPA is over-relying on anesthesiologists where CRNAs can provide the same coverage at significantly lower cost.
+        Your facility is over-relying on anesthesiologists where CRNAs can provide the same coverage at significantly lower cost.
       </p>
       <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'rgba(37,99,235,0.15)', padding: '14px 24px' }}>
@@ -172,7 +172,7 @@ function GaugeChart({ score = 70 }) {
   )
 }
 
-function CAPASlide4() {
+function Slide4() {
   const zones = [
     { color: '#EF4444', label: '0–40', name: 'Critical' },
     { color: '#F59E0B', label: '41–70', name: 'Needs Work' },
@@ -183,7 +183,7 @@ function CAPASlide4() {
   return (
     <div style={{ width: '100%', maxWidth: 860, textAlign: 'center' }}>
       <h2 style={{ fontSize: 38, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>
-        CAPA's StaffIQ Score
+        Your StaffIQ Score
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 32, lineHeight: 1.6 }}>
         Based on team model analysis and historical scheduling data.
@@ -217,7 +217,7 @@ function CAPASlide4() {
 }
 
 // ─── Slide 5: Solution ───────────────────────────────────────────────────────
-function CAPASlide5() {
+function Slide5() {
   const products = [
     {
       name: 'SNAP Shifts',
@@ -257,7 +257,7 @@ function CAPASlide5() {
         How SNAP Solves It
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 36, textAlign: 'center', lineHeight: 1.6 }}>
-        Three integrated tools, one platform. Each module addresses a distinct layer of CAPA's staffing challenge.
+        Three integrated tools, one platform. Each module addresses a distinct layer of your staffing challenge.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
         {products.map(p => (
@@ -279,7 +279,7 @@ function CAPASlide5() {
 }
 
 // ─── Slide 6: Provider Experience ────────────────────────────────────────────
-function CAPASlide6() {
+function Slide6() {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
   const weeks = [
     ['avail', 'avail', 'off', 'avail', 'off'],
@@ -358,7 +358,7 @@ function CAPASlide6() {
 }
 
 // ─── Slide 7: ROI ────────────────────────────────────────────────────────────
-function CAPASlide7() {
+function Slide7() {
   const rows = [
     { label: 'Team Model Optimization', min: 150000, max: 200000 },
     { label: 'Friday Coverage Efficiency', min: 50000, max: 90000 },
@@ -378,7 +378,7 @@ function CAPASlide7() {
         The Financial Case
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 36, textAlign: 'center', lineHeight: 1.6 }}>
-        Conservative estimates based on CAPA's current utilization data.
+        Conservative estimates based on your current utilization data.
       </p>
 
       {/* Savings rows */}
@@ -417,18 +417,18 @@ function CAPASlide7() {
 }
 
 // ─── Slide 8: Offer ──────────────────────────────────────────────────────────
-function CAPASlide8() {
+function Slide8() {
   const benefits = [
-    'Full platform access across all CAPA facilities',
-    'CAPA-specific StaffIQ baseline report and ROI analysis',
+    'Full platform access across all your facilities',
+    'A StaffIQ baseline report and ROI analysis for your facility',
     'White-glove onboarding and historical data migration',
     'Founding partner pricing locked for 3 years',
     'Direct input on SNAP product roadmap',
   ]
 
   function handleSign() {
-    if (CAPA_AGREEMENT_URL) {
-      window.open(CAPA_AGREEMENT_URL, '_blank')
+    if (AGREEMENT_URL) {
+      window.open(AGREEMENT_URL, '_blank')
     }
   }
 
@@ -438,7 +438,7 @@ function CAPASlide8() {
         Exclusive Offer
       </div>
       <h2 style={{ fontSize: 38, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: 12 }}>
-        CAPA Founding Customer Agreement
+        Founding Customer Agreement
       </h2>
       <p style={{ fontSize: 15, color: '#94A3B8', marginBottom: 36, lineHeight: 1.6 }}>
         Partner with SNAP Medical from the ground floor. Founding customers shape how this platform evolves.
@@ -462,17 +462,17 @@ function CAPASlide8() {
         </div>
         <button
           onClick={handleSign}
-          disabled={!CAPA_AGREEMENT_URL}
+          disabled={!AGREEMENT_URL}
           style={{
             padding: '18px 36px',
-            background: CAPA_AGREEMENT_URL ? 'linear-gradient(135deg, #2563EB, #1E40AF)' : 'rgba(37,99,235,0.3)',
+            background: AGREEMENT_URL ? 'linear-gradient(135deg, #2563EB, #1E40AF)' : 'rgba(37,99,235,0.3)',
             border: 'none',
             borderRadius: 14,
             fontSize: 17,
             fontWeight: 800,
             color: '#fff',
-            cursor: CAPA_AGREEMENT_URL ? 'pointer' : 'default',
-            boxShadow: CAPA_AGREEMENT_URL ? '0 6px 24px rgba(37,99,235,0.5)' : 'none',
+            cursor: AGREEMENT_URL ? 'pointer' : 'default',
+            boxShadow: AGREEMENT_URL ? '0 6px 24px rgba(37,99,235,0.5)' : 'none',
             letterSpacing: '-0.01em',
           }}
         >
@@ -484,7 +484,7 @@ function CAPASlide8() {
 }
 
 // ─── Slide registry ──────────────────────────────────────────────────────────
-const SLIDES = [CAPASlide1, CAPASlide2, CAPASlide3, CAPASlide4, CAPASlide5, CAPASlide6, CAPASlide7, CAPASlide8]
+const SLIDES = [Slide1, Slide2, Slide3, Slide4, Slide5, Slide6, Slide7, Slide8]
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminStaffIQPage() {
@@ -531,7 +531,7 @@ export default function AdminStaffIQPage() {
           {/* Header */}
           <div style={{ padding: '28px 60px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB', letterSpacing: '0.1em', textTransform: 'uppercase' }}>SNAP Medical</div>
-            <div style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>CAPA Pitch Deck</div>
+            <div style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>Facility Pitch Deck</div>
           </div>
 
           {/* Slide content */}

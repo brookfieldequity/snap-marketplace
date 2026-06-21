@@ -125,7 +125,7 @@ export default function AdminCredentialUsersPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Facility Name</label>
-                <input style={inp()} value={form.facilityName} onChange={e => set('facilityName', e.target.value)} placeholder="CAPA Surgical Center" required />
+                <input style={inp()} value={form.facilityName} onChange={e => set('facilityName', e.target.value)} placeholder="Surgical Center name" required />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Permission Level</label>

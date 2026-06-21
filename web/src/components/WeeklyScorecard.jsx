@@ -88,14 +88,14 @@ export default function WeeklyScorecard() {
         <div style={{ marginTop: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Manual inputs</div>
           <div style={{ fontSize: 11, color: '#64748B', marginBottom: 12 }}>
-            MRR (until billing exists), pipeline + days-to-close (from HubSpot), and CAPA NPS (until a survey exists). Leave blank to use the auto estimate / show no data.
+            MRR (until billing exists), pipeline + days-to-close (from HubSpot), and Facility NPS (until a survey exists). Leave blank to use the auto estimate / show no data.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
             {[
               { k: 'mrrMonthly', label: 'MRR ($/mo)' },
               { k: 'pipelineActive', label: 'Active pipeline (#)' },
               { k: 'avgDaysToClose', label: 'Avg days to close' },
-              { k: 'capaNps', label: 'CAPA NPS (1-10)' },
+              { k: 'capaNps', label: 'Facility NPS (1-10)' },
             ].map(({ k, label }) => (
               <label key={k} style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>
                 {label}

@@ -814,9 +814,9 @@ router.get('/staffiq/facility-pitch', adminAuth, async (req, res) => {
     });
 
     if (!facility) {
-      // Return hardcoded presentation data if CAPA not found or no uploads
+      // Return hardcoded presentation data if no matching facility / no uploads
       return res.json({
-        facilityName: 'CAPA',
+        facilityName: 'Your Facility',
         page1: {
           title: 'What StaffIQ Found in Your June Schedule',
           metrics: [

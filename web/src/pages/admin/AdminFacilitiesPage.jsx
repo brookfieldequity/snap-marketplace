@@ -374,10 +374,10 @@ function NewFacilityModal({ onClose, onCreated }) {
       maxWidth={560}
     >
       <form onSubmit={submit}>
-        <Field label="Facility name *" hint="e.g. CAPA Pilot, Atrius Health Surgical Center">
+        <Field label="Facility name *" hint="e.g. Atrius Health Surgical Center">
           <input
             type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus
-            placeholder="CAPA Pilot"
+            placeholder="Surgical Center name"
             style={inputStyle}
           />
         </Field>
