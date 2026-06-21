@@ -931,6 +931,12 @@ export default function InternalRosterPage({ onNavigate }) {
                     {p.employer && (
                       <Badge bg="#FEF3C7" color="#92400E" label={`🏢 ${p.employer}`} />
                     )}
+                    {p.scheduleAccessRevoked && p.scheduleAccessRequested && (
+                      <Badge bg="#FEE2E2" color="#B91C1C" label="🙋 Schedule access requested" />
+                    )}
+                    {p.scheduleAccessRevoked && !p.scheduleAccessRequested && (
+                      <Badge bg="#F1F5F9" color="#64748B" label="🔒 Schedule access revoked" />
+                    )}
                   </div>
                 </div>
 

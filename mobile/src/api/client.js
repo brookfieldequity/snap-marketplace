@@ -161,6 +161,9 @@ export const scheduleAPI = {
   getDailyAtFacility: (facilityId, date) =>
     api.get(`/schedule/today-at/${facilityId}`, { params: date ? { date } : {} }),
 
+  /** Request schedule access to a facility whose access was revoked. */
+  requestAccess: (facilityId) => api.post('/schedule/request-access', { facilityId }),
+
   /** Return iCal subscription URLs (mints a token on first call). */
   getIcalSubscriptions: () => api.post('/schedule/ical-subscribe', {}),
 

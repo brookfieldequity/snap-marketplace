@@ -7,6 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleAPI } from '../api/client';
@@ -41,6 +43,21 @@ function prettyDate(dateStr) {
     weekday: 'long', month: 'long', day: 'numeric',
   });
 }
+// Build a 6x7 day grid for a given year/month (0-based month). Leading/trailing
+// cells are null. Used by the dep-free date-picker modal.
+function monthGrid(year, month) {
+  const first = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first; i++) cells.push(null);
+  for (let d = 1; d <= days; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+function monthLabel(year, month) {
+  return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
 function prettyRole(r) {
   if (r === 'CRNA_ROOM') return 'CRNA';
   if (r === 'SOLO_MD_ROOM') return 'MD';
@@ -58,6 +75,9 @@ export default function TodayScreen() {
   const [date, setDate] = useState(ymd(new Date()));
   const [memberships, setMemberships] = useState([]);
   const [facilityId, setFacilityId] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const [requested, setRequested] = useState({}); // facilityId → true after request
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,11 +93,13 @@ export default function TodayScreen() {
     scheduleAPI.getMyMonth(now.getFullYear(), now.getMonth() + 1)
       .then((res) => {
         if (cancelled) return;
-        // Hide facilities that have revoked this provider's schedule access.
-        const m = (res.data?.memberships || []).filter((x) => x.scheduleAccessRevoked !== true);
+        // Keep all credentialed facilities; revoked ones show a "Request access"
+        // chip instead of loading the board. Default to the first OPEN facility.
+        const m = res.data?.memberships || [];
         setMemberships(m);
-        if (m.length > 0 && !facilityId) setFacilityId(m[0].facilityId);
-        if (m.length === 0) setLoading(false);
+        const firstOpen = m.find((x) => x.scheduleAccessRevoked !== true);
+        if (firstOpen && !facilityId) setFacilityId(firstOpen.facilityId);
+        if (m.length === 0 || !firstOpen) setLoading(false);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -112,6 +134,23 @@ export default function TodayScreen() {
 
   const isToday = date === ymd(new Date());
   const activeFacility = memberships.find((m) => m.facilityId === facilityId);
+  const myRosterId = activeFacility?.id || null; // to highlight my own row on the board
+
+  async function handleRequestAccess(fid, name) {
+    try {
+      await scheduleAPI.requestAccess(fid);
+      setRequested((r) => ({ ...r, [fid]: true }));
+      Alert.alert('Request sent', `Asked ${name || 'the facility'} for schedule access. They'll grant it on their end.`);
+    } catch (e) {
+      Alert.alert('Could not send request', e.response?.data?.error || e.message || 'Try again later.');
+    }
+  }
+
+  function pickDate(day) {
+    if (!day) return;
+    setDate(ymd(new Date(pickerMonth.y, pickerMonth.m, day)));
+    setShowPicker(false);
+  }
   const totalAssignments = sites.reduce((s, site) => s + site.assignments.filter((a) => a.provider).length, 0);
   const totalRooms = sites.reduce((s, site) => s + (site.roomsRequired || 0), 0);
 
@@ -122,15 +161,31 @@ export default function TodayScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Today</Text>
+          <Text style={styles.title}>Facility Daily Schedule</Text>
           {totalRooms > 0 && (
             <Text style={styles.fill}>{totalAssignments}/{totalRooms} rooms staffed</Text>
           )}
         </View>
 
-        {memberships.length > 1 && (
+        {memberships.length > 0 && (
           <View style={styles.facilityPicker}>
             {memberships.map((m) => {
+              const name = m.facility?.name || 'Facility';
+              if (m.scheduleAccessRevoked) {
+                const asked = requested[m.facilityId];
+                return (
+                  <TouchableOpacity
+                    key={m.facilityId}
+                    onPress={() => !asked && handleRequestAccess(m.facilityId, name)}
+                    style={[styles.facilityChip, styles.facilityChipLocked]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.facilityChipLockedText} numberOfLines={1}>
+                      {asked ? `${name} · requested` : `🔒 ${name} · request access`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
               const active = m.facilityId === facilityId;
               return (
                 <TouchableOpacity
@@ -140,21 +195,23 @@ export default function TodayScreen() {
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.facilityChipText, active && styles.facilityChipTextActive]} numberOfLines={1}>
-                    {m.facility?.name || 'Facility'}
+                    {name}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         )}
-        {memberships.length === 1 && activeFacility?.facility?.name && (
-          <Text style={styles.subFacility}>{activeFacility.facility.name}</Text>
-        )}
 
         <View style={styles.dateNav}>
           <TouchableOpacity onPress={() => setDate(addDays(date, -1))} style={styles.dateBtn}><Text style={styles.dateBtnText}>‹</Text></TouchableOpacity>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.dateLabel}>{prettyDate(date)}</Text>
+            <TouchableOpacity
+              onPress={() => { const d = new Date(date + 'T00:00:00'); setPickerMonth({ y: d.getFullYear(), m: d.getMonth() }); setShowPicker(true); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dateLabel}>{prettyDate(date)} ▾</Text>
+            </TouchableOpacity>
             {!isToday && (
               <TouchableOpacity onPress={() => setDate(ymd(new Date()))}>
                 <Text style={styles.jumpToday}>Jump to today</Text>
@@ -195,10 +252,11 @@ export default function TodayScreen() {
               ) : (
                 site.assignments.map((a) => {
                   const badge = typeBadge(a.provider?.type);
+                  const isMe = a.provider?.id && a.provider.id === myRosterId;
                   return (
-                    <View key={`${site.location}-${a.roomNumber}`} style={styles.assignmentRow}>
+                    <View key={`${site.location}-${a.roomNumber}`} style={[styles.assignmentRow, isMe && styles.assignmentRowMe]}>
                       <Text style={styles.roomLabel}>
-                        {a.roomNumber >= 900 ? 'Supervisor' : `Room ${a.roomNumber}`}
+                        {a.roomNumber >= 900 ? '' : `Room ${a.roomNumber}`}
                       </Text>
                       {a.provider ? (
                         <View style={styles.providerRow}>
@@ -206,9 +264,7 @@ export default function TodayScreen() {
                             <Text style={[styles.typePillText, { color: badge.color }]}>{badge.label}</Text>
                           </View>
                           <Text style={styles.providerName} numberOfLines={1}>{a.provider.name}</Text>
-                          {a.role === 'SUPERVISING_MD' && (
-                            <Text style={styles.roleHint}> · supervising</Text>
-                          )}
+                          {isMe && <Text style={styles.youTag}>You</Text>}
                         </View>
                       ) : (
                         <Text style={styles.unstaffed}>Open</Text>
@@ -221,6 +277,34 @@ export default function TodayScreen() {
           ))
         )}
       </ScrollView>
+
+      <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPicker(false)}>
+          <View style={styles.pickerCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setPickerMonth((p) => { const d = new Date(p.y, p.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })} style={styles.pickerNavBtn}><Text style={styles.pickerNavText}>‹</Text></TouchableOpacity>
+              <Text style={styles.pickerMonthLabel}>{monthLabel(pickerMonth.y, pickerMonth.m)}</Text>
+              <TouchableOpacity onPress={() => setPickerMonth((p) => { const d = new Date(p.y, p.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })} style={styles.pickerNavBtn}><Text style={styles.pickerNavText}>›</Text></TouchableOpacity>
+            </View>
+            <View style={styles.pickerDow}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <Text key={i} style={styles.pickerDowText}>{d}</Text>)}
+            </View>
+            <View style={styles.pickerGrid}>
+              {monthGrid(pickerMonth.y, pickerMonth.m).map((day, i) => {
+                const cellYmd = day ? ymd(new Date(pickerMonth.y, pickerMonth.m, day)) : null;
+                const selected = cellYmd === date;
+                return (
+                  <TouchableOpacity key={i} disabled={!day} onPress={() => pickDate(day)} style={styles.pickerCell}>
+                    <View style={[styles.pickerCellInner, selected && styles.pickerCellSelected]}>
+                      <Text style={[styles.pickerCellText, selected && styles.pickerCellTextSelected]}>{day || ''}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -236,6 +320,8 @@ const styles = StyleSheet.create({
   facilityChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   facilityChipText: { fontSize: 12, color: COLORS.textDark, fontWeight: '600' },
   facilityChipTextActive: { color: '#fff' },
+  facilityChipLocked: { backgroundColor: '#F8FAFC', borderStyle: 'dashed', borderColor: '#CBD5E1' },
+  facilityChipLockedText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, marginBottom: 14 },
   dateBtn: { padding: 10, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, minWidth: 44, alignItems: 'center' },
   dateBtnText: { fontSize: 18, color: COLORS.textDark },

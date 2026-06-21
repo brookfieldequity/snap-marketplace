@@ -323,6 +323,12 @@ model Facility {
   // "old manual process" baseline the SNAP-built schedule is compared against
   // on the Schedule Builder (baseline = rate x room-days covered).
   industryRoomRatePerDay Float?
+  // Out-List Builder rule set (admin-configured). JSON blob:
+  //   { lateSites: string[], lateSiteNoCloseAdjacent: bool,
+  //     closerFirstOutNextDay: bool, noBackToBackClosing: bool }
+  // Drives the one-click "auto-build out lists" for a week/month. null =
+  // use defaults. See services/outListRules.js.
+  outListRules           Json?
 
   users               FacilityUser[]
   subscription        FacilitySubscription?
@@ -802,11 +808,13 @@ model InternalRosterEntry {
   notes                  String?
   snapAccountLinked      Boolean             @default(false)
   linkedProviderId       String?
-  // Provider schedule access (v1). A linked provider can view this facility's
-  // daily board in their app BY DEFAULT; the facility revokes per provider by
-  // setting this true. (v1.1 will add a provider-initiated request/grant flow.)
-  // See eor-model-spec.md / provider↔facility schedule access.
+  // Provider schedule access. A linked provider can view this facility's daily
+  // board in their app BY DEFAULT; the facility revokes per provider by setting
+  // scheduleAccessRevoked. v1.1: if access is revoked, the provider can REQUEST
+  // it back (scheduleAccessRequested=true) → the facility sees the request and
+  // grants (un-revokes). See eor-model-spec.md / provider↔facility schedule access.
   scheduleAccessRevoked  Boolean             @default(false)
+  scheduleAccessRequested Boolean            @default(false)
   inviteSentAt           DateTime?
   // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
   // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator
@@ -1020,6 +1028,11 @@ model ScheduleDay {
   // MD-only; 3 = team 1:3; 4 = team 1:4. See CoverageTemplateDay.
   supervisionRatio Int?
   publishedAt      DateTime?
+  // Out-List Builder: when the day's release order ("who leaves first … who
+  // closes") was finalized for the on-site floor runner. null = not yet set.
+  // Layered on AFTER publish — it never gates publishing. The order itself
+  // lives on ScheduleAssignment.outRank.
+  outListPublishedAt DateTime?
   facility         Facility  @relation(fields: [facilityId], references: [id])
 
   assignments ScheduleAssignment[]
@@ -1039,6 +1052,11 @@ model ScheduleAssignment {
   // CRNA_ROOM / SOLO_MD_ROOM = a real OR room; SUPERVISING_MD = an
   // anesthesiologist supervising CRNA rooms (stored at roomNumber >= 900).
   role          String?
+  // Out-List Builder: release order for the day (1 = leaves first … highest =
+  // closes the facility). Scoped to the assignment's ScheduleDay (per site,
+  // per date). null = not yet ranked. Only staffed slots (rosterId != null)
+  // are ranked. See GET/PUT /schedule/days/:dayId/out-list.
+  outRank       Int?
   createdAt     DateTime             @default(now())
 
   costComponents AssignmentCostComponent[] // EOR one-off pass-throughs (Phase 0)

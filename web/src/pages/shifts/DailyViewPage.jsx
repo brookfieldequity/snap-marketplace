@@ -17,6 +17,27 @@ function coverageLabel(ratio) {
   return null
 }
 
+// Order a day's staffed assignments for release (index 0 = leaves first),
+// mirroring the backend's orderForRelease: honor outRank, then fall back to
+// role (CRNA → solo MD → supervisor) and room number.
+function rolePriority(a) {
+  if (a.role === 'SUPERVISING_MD' || a.roomNumber >= 900) return 3
+  if (a.role === 'SOLO_MD_ROOM') return 2
+  if (a.role === 'CRNA_ROOM') return 1
+  return 1.5
+}
+function orderForRelease(assignments) {
+  return [...assignments].sort((a, b) => {
+    const ar = a.outRank, br = b.outRank
+    if (ar != null && br != null && ar !== br) return ar - br
+    if (ar != null && br == null) return -1
+    if (ar == null && br != null) return 1
+    const pa = rolePriority(a), pb = rolePriority(b)
+    if (pa !== pb) return pa - pb
+    return a.roomNumber - b.roomNumber
+  })
+}
+
 function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -77,6 +98,34 @@ function LocationCard({ row }) {
           )
         })}
       </div>
+
+      {row.outListPublishedAt && (() => {
+        const release = orderForRelease(assignments.filter((a) => a.rosterId))
+        if (release.length === 0) return null
+        return (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              🚪 Release order
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {release.map((a, i) => {
+                const isLast = i === release.length - 1
+                const isSup = a.role === 'SUPERVISING_MD' || a.roomNumber >= 900
+                return (
+                  <div key={a.id || a.roomNumber} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: '50%', background: isLast ? '#0F172A' : '#2563EB', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                    <span style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 600 }}>
+                      {EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName || 'Provider'}
+                    </span>
+                    <span style={{ fontSize: 10.5, color: '#94A3B8' }}>{isSup ? 'Supervisor' : `Room ${a.roomNumber}`}</span>
+                    {isLast && <span style={{ fontSize: 10, fontWeight: 700, color: '#0F172A' }}>closes 🔒</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {(supervisors.length > 0 || row.supervisionRatio === 3 || row.supervisionRatio === 4) && (
         <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px dashed #CBD5E1' }}>

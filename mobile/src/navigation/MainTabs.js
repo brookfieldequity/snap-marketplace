@@ -13,7 +13,7 @@ import TodayScreen from '../screens/TodayScreen';
 // less frequently used. Profile anchors the right edge.
 const TABS = [
   { key: 'mySchedule', label: 'My Schedule', icon: '🗓️' },
-  { key: 'today', label: 'Today', icon: '🏥' },
+  { key: 'today', label: 'Daily', icon: '🏥' },
   { key: 'calendar', label: 'Availability', icon: '✅' },
   { key: 'marketplace', label: 'Marketplace', icon: '🧭' },
   { key: 'profile', label: 'Profile', icon: '👤' },

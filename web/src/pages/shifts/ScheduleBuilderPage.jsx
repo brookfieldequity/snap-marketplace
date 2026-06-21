@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { facilityAPI } from '../../api.js'
 import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
 import StaffIQRecommendations from './StaffIQRecommendations.jsx'
+import OutListModal from './OutListModal.jsx'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
@@ -379,6 +380,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [savingLoc, setSavingLoc] = useState(false)
 
   const [dayDetailModal, setDayDetailModal] = useState(null) // dateStr
+  const [outListModal, setOutListModal] = useState(null) // { dayId, title }
   const [assignLoading, setAssignLoading] = useState({})
   const [editingLocation, setEditingLocation] = useState(null)
   const [deletingLocation, setDeletingLocation] = useState(null)
@@ -1194,6 +1196,20 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         <span style={{ fontSize: 11, color: '#64748B', marginLeft: 2 }}>rooms</span>
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled</div>
+                      {/* Out-List Builder: post-publish release order for this
+                          site/day. Available once anyone is staffed. */}
+                      {(filled > 0 || supervisors.length > 0) && (
+                        <button
+                          onClick={() => setOutListModal({
+                            dayId: row.id,
+                            title: `${row.location} · ${new Date(dayDetailModal + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`,
+                          })}
+                          title="Set the release order (who leaves first, who closes)"
+                          style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${row.outListPublishedAt ? '#A7F3D0' : '#CBD5E1'}`, background: row.outListPublishedAt ? '#ECFDF5' : '#fff', color: row.outListPublishedAt ? '#047857' : '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                        >
+                          🚪 Out List{row.outListPublishedAt ? ' ✓' : ''}
+                        </button>
+                      )}
                       {/* Delete location */}
                       <button
                         onClick={() => handleDeleteLocation(row)}
@@ -1355,6 +1371,16 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Out-List Builder (release order for one site/day) */}
+      {outListModal && (
+        <OutListModal
+          dayId={outListModal.dayId}
+          title={outListModal.title}
+          onClose={() => setOutListModal(null)}
+          onSaved={load}
+        />
       )}
 
       {/* Add Location Modal */}

@@ -47,6 +47,43 @@ function monthRange(year, month) {
   return { start, end };
 }
 
+// ── Out-List Builder ─────────────────────────────────────────────────────────
+
+const SUPERVISOR_ROOM_BASE = 900;
+
+/**
+ * Default "release order" rank for a staffed assignment — lower leaves first.
+ * Rule of thumb on the OR floor: CRNA rooms break first, then solo-MD rooms,
+ * and the supervising anesthesiologist closes the site last. Coordinators can
+ * override any of this by hand in the Out-List Builder; this only seeds the
+ * suggested order when nothing has been set yet.
+ */
+function outOrderPriority(assignment) {
+  if (assignment.role === 'SUPERVISING_MD' || assignment.roomNumber >= SUPERVISOR_ROOM_BASE) return 3;
+  if (assignment.role === 'SOLO_MD_ROOM') return 2;
+  if (assignment.role === 'CRNA_ROOM') return 1;
+  return 1.5; // legacy / role-agnostic rooms sit in the middle
+}
+
+/**
+ * Given a day's staffed assignments, return them ordered for release
+ * (index 0 = leaves first). Respects an existing outRank when present,
+ * otherwise falls back to the role-based default, breaking ties by room.
+ */
+function orderForRelease(assignments) {
+  return [...assignments].sort((a, b) => {
+    const ar = a.outRank;
+    const br = b.outRank;
+    if (ar != null && br != null && ar !== br) return ar - br;
+    if (ar != null && br == null) return -1;
+    if (ar == null && br != null) return 1;
+    const pa = outOrderPriority(a);
+    const pb = outOrderPriority(b);
+    if (pa !== pb) return pa - pb;
+    return a.roomNumber - b.roomNumber;
+  });
+}
+
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
 // GET /exists — has this facility ever built a schedule? Powers the dashboard
@@ -359,6 +396,119 @@ router.post('/publish', facilityAuth, async (req, res) => {
     })();
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /days/:dayId/out-list — the release order for a single ScheduleDay (one
+// site, one date). Returns the staffed assignments ordered for release plus a
+// `suggested` order the UI can apply when nothing has been set yet. This is a
+// post-publish, never-blocking layer on top of the built schedule.
+router.get('/days/:dayId/out-list', facilityAuth, async (req, res) => {
+  try {
+    const day = await prisma.scheduleDay.findUnique({
+      where: { id: req.params.dayId },
+      include: {
+        assignments: {
+          where: { rosterId: { not: null } },
+          include: { rosterEntry: { select: { providerName: true, providerType: true, employmentCategory: true } } },
+        },
+      },
+    });
+    if (!day || day.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const ordered = orderForRelease(day.assignments).map((a, i) => ({
+      assignmentId: a.id,
+      roomNumber: a.roomNumber,
+      role: a.role,
+      outRank: a.outRank,
+      // Position the row would occupy in the suggested/current order (1-based).
+      position: i + 1,
+      isSupervisor: a.role === 'SUPERVISING_MD' || a.roomNumber >= SUPERVISOR_ROOM_BASE,
+      providerName: a.rosterEntry?.providerName || null,
+      providerType: a.rosterEntry?.providerType || null,
+      employmentCategory: a.rosterEntry?.employmentCategory || null,
+    }));
+
+    res.json({
+      dayId: day.id,
+      date: day.date,
+      location: day.location,
+      outListPublishedAt: day.outListPublishedAt,
+      // True once at least one staffed slot carries an explicit rank.
+      hasOrder: day.assignments.some((a) => a.outRank != null),
+      assignments: ordered,
+      // assignmentIds in role-based default order — the UI's "Suggest" button.
+      suggested: orderForRelease(day.assignments.map((a) => ({ ...a, outRank: null }))).map((a) => a.id),
+    });
+  } catch (err) {
+    console.error('[schedule] get out-list failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /days/:dayId/out-list — persist the release order for a ScheduleDay.
+// Body: { order: [assignmentId, ...] (1 = leaves first … last = closes),
+//         publish?: boolean (mark it visible to the floor runner) }.
+// outRank is written as the 1-based position in `order`. Any staffed slot
+// omitted from `order` has its rank cleared.
+router.put('/days/:dayId/out-list', facilityAuth, async (req, res) => {
+  try {
+    const { order, publish } = req.body;
+    if (!Array.isArray(order)) {
+      return res.status(400).json({ error: 'order must be an array of assignment ids' });
+    }
+
+    const day = await prisma.scheduleDay.findUnique({
+      where: { id: req.params.dayId },
+      include: { assignments: { select: { id: true, rosterId: true } } },
+    });
+    if (!day || day.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Only staffed slots can be ranked, and every id must belong to this day.
+    const staffedIds = new Set(day.assignments.filter((a) => a.rosterId).map((a) => a.id));
+    const seen = new Set();
+    for (const id of order) {
+      if (!staffedIds.has(id)) {
+        return res.status(400).json({ error: 'order contains an assignment not on this day (or unstaffed)' });
+      }
+      if (seen.has(id)) {
+        return res.status(400).json({ error: 'order contains a duplicate assignment' });
+      }
+      seen.add(id);
+    }
+
+    const rankById = new Map(order.map((id, i) => [id, i + 1]));
+
+    await prisma.$transaction([
+      // Clear ranks on staffed slots not included in this order.
+      prisma.scheduleAssignment.updateMany({
+        where: { scheduleDayId: day.id, id: { notIn: order.length ? order : ['__none__'] } },
+        data: { outRank: null },
+      }),
+      ...order.map((id) =>
+        prisma.scheduleAssignment.update({ where: { id }, data: { outRank: rankById.get(id) } })
+      ),
+      prisma.scheduleDay.update({
+        where: { id: day.id },
+        // publish === true sets the timestamp; publish === false explicitly
+        // unpublishes; omitted leaves it untouched.
+        data:
+          publish === true
+            ? { outListPublishedAt: new Date() }
+            : publish === false
+              ? { outListPublishedAt: null }
+              : {},
+      }),
+    ]);
+
+    res.json({ success: true, ranked: order.length, published: publish === true });
+  } catch (err) {
+    console.error('[schedule] save out-list failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1201,9 +1351,31 @@ async function rosterEntriesForProvider(userId) {
   if (!provider) return [];
   return prisma.internalRosterEntry.findMany({
     where: { linkedProviderId: provider.id },
-    select: { id: true, facilityId: true, providerName: true, scheduleAccessRevoked: true, facility: { select: { id: true, name: true } } },
+    select: { id: true, facilityId: true, providerName: true, scheduleAccessRevoked: true, scheduleAccessRequested: true, facility: { select: { id: true, name: true } } },
   });
 }
+
+// POST /request-access { facilityId } — a provider whose schedule access was
+// revoked requests it back. Flags their roster row; the facility sees the request
+// and grants (un-revokes). Only valid for a facility they're credentialed at.
+router.post('/request-access', auth, async (req, res) => {
+  try {
+    const { facilityId } = req.body || {};
+    if (!facilityId) return res.status(400).json({ error: 'facilityId is required' });
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId }, select: { id: true } });
+    if (!provider) return res.status(403).json({ error: 'No provider profile' });
+    const entry = await prisma.internalRosterEntry.findFirst({
+      where: { facilityId, linkedProviderId: provider.id },
+      select: { id: true, scheduleAccessRevoked: true },
+    });
+    if (!entry) return res.status(404).json({ error: 'You are not on this facility roster' });
+    await prisma.internalRosterEntry.update({ where: { id: entry.id }, data: { scheduleAccessRequested: true } });
+    res.json({ ok: true, requested: true });
+  } catch (err) {
+    console.error('[schedule] request-access failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /my-month?year=&month= — provider's own assignments for the month.
 router.get('/my-month', auth, async (req, res) => {
@@ -1291,18 +1463,38 @@ router.get('/today-at/:facilityId', auth, async (req, res) => {
 
     res.json({
       date: dateStr,
-      sites: days.map((d) => ({
-        location: d.location,
-        roomsRequired: d.roomsRequired,
-        supervisionRatio: d.supervisionRatio,
-        assignments: d.assignments.map((a) => ({
-          roomNumber: a.roomNumber,
-          role: a.role,
-          provider: a.rosterEntry
-            ? { id: a.rosterEntry.id, name: a.rosterEntry.providerName, type: a.rosterEntry.providerType }
-            : null,
-        })),
-      })),
+      sites: days.map((d) => {
+        // Release order ("out list") for the floor runner — only surfaced once
+        // the coordinator has published it for this day. Lists staffed slots
+        // first-out → closes-last.
+        const releaseOrder =
+          d.outListPublishedAt
+            ? orderForRelease(d.assignments.filter((a) => a.rosterId)).map((a, i) => ({
+                position: i + 1,
+                roomNumber: a.roomNumber,
+                role: a.role,
+                isSupervisor: a.role === 'SUPERVISING_MD' || a.roomNumber >= SUPERVISOR_ROOM_BASE,
+                provider: a.rosterEntry
+                  ? { id: a.rosterEntry.id, name: a.rosterEntry.providerName, type: a.rosterEntry.providerType }
+                  : null,
+              }))
+            : null;
+        return {
+          location: d.location,
+          roomsRequired: d.roomsRequired,
+          supervisionRatio: d.supervisionRatio,
+          outListPublishedAt: d.outListPublishedAt,
+          releaseOrder,
+          assignments: d.assignments.map((a) => ({
+            roomNumber: a.roomNumber,
+            role: a.role,
+            outRank: a.outRank,
+            provider: a.rosterEntry
+              ? { id: a.rosterEntry.id, name: a.rosterEntry.providerName, type: a.rosterEntry.providerType }
+              : null,
+          })),
+        };
+      }),
     });
   } catch (err) {
     console.error('[schedule] today-at failed:', err);

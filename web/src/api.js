@@ -224,6 +224,9 @@ export const facilityAPI = {
   getScheduleIntelligence: () => apiFetch(`${BASE}/schedule/intelligence`, { headers: facilityHeaders() }),
   assignProvider: (dayId, roomNumber, rosterId, role) => apiFetch(`${BASE}/schedule/days/${dayId}/assignments/${roomNumber}`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify(role !== undefined ? { rosterId, role } : { rosterId }) }),
   publishSchedule: (year, month) => apiFetch(`${BASE}/schedule/publish`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month }) }),
+  // Out-List Builder (release order). order = [assignmentId, …] 1=leaves first.
+  getOutList: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}/out-list`, { headers: facilityHeaders() }),
+  saveOutList: (dayId, order, publish) => apiFetch(`${BASE}/schedule/days/${dayId}/out-list`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ order, publish }) }),
   exportSchedule: (year, month) => apiFetch(`${BASE}/schedule/export?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   getScheduleSummary: (year, month) => apiFetch(`${BASE}/schedule/summary?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   // Materialize ScheduleDay rows for a month from a Coverage Template.

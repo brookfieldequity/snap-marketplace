@@ -347,7 +347,11 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(w2Employer !== undefined && { w2Employer: w2Employer || null }),
         ...(contractorEmployer !== undefined && { contractorEmployer: contractorEmployer || null }),
         ...(contractorPayRate !== undefined && { contractorPayRate: contractorPayRate != null && contractorPayRate !== '' ? parseFloat(contractorPayRate) : null }),
-        ...(scheduleAccessRevoked !== undefined && { scheduleAccessRevoked: scheduleAccessRevoked === true }),
+        ...(scheduleAccessRevoked !== undefined && {
+          scheduleAccessRevoked: scheduleAccessRevoked === true,
+          // Granting (revoked → false) clears any pending access request.
+          ...(scheduleAccessRevoked === false ? { scheduleAccessRequested: false } : {}),
+        }),
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),
