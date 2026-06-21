@@ -311,6 +311,7 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
       // separate APNE-site bucket (never billed to the facility).
       reimbursement: isAgency ? round2(extrasByRoster[entry.id]?.reimbursement || 0) : 0,
       apneSiteBonus: isAgency ? round2(extrasByRoster[entry.id]?.bonus || 0) : 0,
+      payRate: entry.hourlyRate ?? null, // what the agency pays this provider/hr
       ...cost,
     };
   });

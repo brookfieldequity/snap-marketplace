@@ -414,6 +414,10 @@ export const payrollAPI = {
     apiFetch(`${BASE}/payroll/agency-invoice?periodStart=${periodStart}&periodEnd=${periodEnd}`, {
       headers: facilityHeaders(),
     }),
+  getAgencyMetrics: ({ periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/payroll/agency-metrics?periodStart=${periodStart}&periodEnd=${periodEnd}`, {
+      headers: facilityHeaders(),
+    }),
   // Download one agency's invoice as .xlsx (auth header → blob → save).
   downloadAgencyInvoice: async ({ periodStart, periodEnd, employerId, fileName }) => {
     const qs = new URLSearchParams({ periodStart, periodEnd, ...(employerId ? { employerId } : {}) })

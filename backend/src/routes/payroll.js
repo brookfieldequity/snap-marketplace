@@ -503,4 +503,65 @@ router.get('/agency-invoice/export', async (req, res) => {
   }
 });
 
+// ── Agency profitability / ROI + Gusto reconciliation ───────────────────────────
+// For an agency tenant (e.g. APNE): per-provider payroll cost vs. CAPA all-in
+// cost (= margin), the separate APNE-site bonus bucket, and SNAP's computed total
+// payout to reconcile against Gusto (a mismatch = a roster-card or Gusto rate
+// drifted). GET /agency-metrics?periodStart&periodEnd
+router.get('/agency-metrics', async (req, res) => {
+  const { periodStart, periodEnd } = req.query;
+  if (!periodStart || !periodEnd) {
+    return res.status(400).json({ error: 'periodStart and periodEnd are required' });
+  }
+  const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  try {
+    const { providerCosts } = await eorCost.buildFacilityCostForPeriod({
+      facilityId: req.facility.id,
+      periodStart,
+      periodEnd,
+    });
+    const providers = providerCosts
+      .filter((p) => p.employerKind === 'STAFFING_AGENCY' && (p.hours > 0 || p.reimbursement > 0 || p.apneSiteBonus > 0))
+      .map((p) => ({
+        rosterEntryId: p.rosterEntryId,
+        name: p.payeeType === 'Business' && p.businessName ? p.businessName : p.providerName,
+        hours: p.hours,
+        payRate: p.payRate,
+        payrollCost: p.payroll, // CAPA hours × pay rate
+        capaAllIn: p.facilityAllIn, // CAPA hours × all-in rate
+        capaMargin: p.margin, // all-in − pay (CAPA-engagement profit)
+        reimbursement: p.reimbursement,
+        apneSiteBonus: p.apneSiteBonus, // separate bucket, not in CAPA margin
+        apnePayout: round2(p.payroll + p.apneSiteBonus + p.reimbursement),
+        missingRate: p.payRate == null,
+      }))
+      .sort((a, b) => b.capaMargin - a.capaMargin);
+
+    const sum = (k) => round2(providers.reduce((s, p) => s + (p[k] || 0), 0));
+    const totals = {
+      providers: providers.length,
+      hours: sum('hours'),
+      payrollCost: sum('payrollCost'),
+      capaAllIn: sum('capaAllIn'),
+      capaMargin: sum('capaMargin'),
+      reimbursement: sum('reimbursement'),
+      apneSiteBonus: sum('apneSiteBonus'),
+      apnePayout: sum('apnePayout'),
+    };
+    totals.marginPct = totals.capaAllIn > 0 ? round2((totals.capaMargin / totals.capaAllIn) * 100) : 0;
+
+    res.json({
+      periodStart,
+      periodEnd,
+      providers,
+      totals,
+      // SNAP's computed total payout, to compare against Gusto's run total.
+      reconciliation: { snapPayrollTotal: totals.apnePayout },
+    });
+  } catch (err) {
+    console.error('[payroll/agency-metrics]', err.message);
+    res.status(500).json({ error: 'Failed to build agency metrics' });
+  }
+});
+
 module.exports = router;

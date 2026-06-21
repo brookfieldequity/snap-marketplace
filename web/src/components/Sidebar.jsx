@@ -27,6 +27,7 @@ const SHIFTS_ITEMS = [
   { key: 'payroll',           label: 'Payroll Builder',     icon: '💵', flag: 'payroll_builder' },
   { key: 'payroll-history',   label: 'Payroll History',     icon: '🧾', flag: 'payroll_builder' },
   { key: 'agency-invoice',    label: 'Agency Invoice',      icon: '📑', flag: 'payroll_builder' },
+  { key: 'agency-metrics',    label: 'Profitability',       icon: '📈', flag: 'payroll_builder' },
   { key: 'calculator',        label: 'Calculator',          icon: '🧮' },
 ]
 

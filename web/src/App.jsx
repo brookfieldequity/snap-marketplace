@@ -7,6 +7,7 @@ import PayrollBuilderPage from './pages/shifts/PayrollBuilderPage.jsx'
 import PayrollHistoryPage from './pages/shifts/PayrollHistoryPage.jsx'
 import AgencyInvoicePage from './pages/shifts/AgencyInvoicePage.jsx'
 import HourEntryPage from './pages/shifts/HourEntryPage.jsx'
+import AgencyMetricsPage from './pages/shifts/AgencyMetricsPage.jsx'
 import PtoBuilderPage from './pages/shifts/PtoBuilderPage.jsx'
 import PtoRankPage from './pages/PtoRankPage.jsx'
 
@@ -330,6 +331,9 @@ export default function App() {
             )}
             {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'hour-entry' && (
               <HourEntryPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'agency-metrics' && (
+              <AgencyMetricsPage onNavigate={setFacilityPage} />
             )}
 
             {/* SNAP Marketplace pages */}
