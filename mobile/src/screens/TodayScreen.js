@@ -73,7 +73,8 @@ export default function TodayScreen() {
     scheduleAPI.getMyMonth(now.getFullYear(), now.getMonth() + 1)
       .then((res) => {
         if (cancelled) return;
-        const m = res.data?.memberships || [];
+        // Hide facilities that have revoked this provider's schedule access.
+        const m = (res.data?.memberships || []).filter((x) => x.scheduleAccessRevoked !== true);
         setMemberships(m);
         if (m.length > 0 && !facilityId) setFacilityId(m[0].facilityId);
         if (m.length === 0) setLoading(false);

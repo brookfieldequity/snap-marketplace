@@ -1201,7 +1201,7 @@ async function rosterEntriesForProvider(userId) {
   if (!provider) return [];
   return prisma.internalRosterEntry.findMany({
     where: { linkedProviderId: provider.id },
-    select: { id: true, facilityId: true, providerName: true, facility: { select: { id: true, name: true } } },
+    select: { id: true, facilityId: true, providerName: true, scheduleAccessRevoked: true, facility: { select: { id: true, name: true } } },
   });
 }
 
@@ -1265,8 +1265,10 @@ router.get('/today-at/:facilityId', auth, async (req, res) => {
     // pilot's internal-staff model). Cross-facility marketplace providers
     // who aren't on the roster can't see this — fine for v1.
     const memberships = await rosterEntriesForProvider(req.user.userId);
-    if (!memberships.some((m) => m.facilityId === facilityId)) {
-      return res.status(403).json({ error: 'Not on this facility roster' });
+    // Schedule access is granted to linked roster members unless the facility
+    // revoked it (scheduleAccessRevoked) — that toggle gates the daily board.
+    if (!memberships.some((m) => m.facilityId === facilityId && !m.scheduleAccessRevoked)) {
+      return res.status(403).json({ error: 'No schedule access for this facility' });
     }
 
     const dayStart = new Date(dateStr + 'T00:00:00.000Z');
