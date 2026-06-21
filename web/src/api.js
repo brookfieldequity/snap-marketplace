@@ -387,6 +387,20 @@ export const payrollAPI = {
     apiFetch(`${BASE}/hour-entry?periodStart=${periodStart}&periodEnd=${periodEnd}`, { headers: facilityHeaders() }),
   seedHourEntries: ({ periodStart, periodEnd }) =>
     apiFetch(`${BASE}/hour-entry/seed`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd }) }),
+  // Ingest an APNE Gusto-format 1099 payroll sheet for a period (seeds roster +
+  // records CAPA hours + bonus + reimbursement).
+  importPayrollSheet: async ({ periodStart, periodEnd, file }) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('periodStart', periodStart)
+    fd.append('periodEnd', periodEnd)
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/hour-entry/import-payroll-sheet`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
   addHourEntry: (payload) =>
     apiFetch(`${BASE}/hour-entry`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
   updateHourEntry: (id, patch) =>

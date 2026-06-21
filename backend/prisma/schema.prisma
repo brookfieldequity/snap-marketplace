@@ -1926,9 +1926,20 @@ model ProviderHourEntry {
   // DRAFT = seeded/in-progress; SUBMITTED = confirmed, ready for payroll/invoice.
   status    String @default("DRAFT") // DRAFT | SUBMITTED
   // Where the row originated, for provenance/dedup. SCHEDULE = SNAP scheduler;
-  // UPLOAD = ingested SchedulingRecord; MANUAL = added by hand.
-  source    String @default("MANUAL") // SCHEDULE | UPLOAD | MANUAL
+  // UPLOAD = ingested SchedulingRecord; MANUAL = added by hand; PAYROLL_SHEET =
+  // ingested from an APNE-style Gusto 1099 payroll sheet.
+  source    String @default("MANUAL") // SCHEDULE | UPLOAD | MANUAL | PAYROLL_SHEET
   enteredBy String? // 'coordinator' | 'provider' | a user id, for audit
+
+  // APNE payroll-sheet extras (period-level, from the Gusto 1099 feed):
+  // reimbursementAmount = a facility-reimbursed pass-through (e.g. mileage) → ADDED
+  //   to the agency invoice. bonusAmount = APNE-SITE work (NOT billed to the
+  //   facility) — a separate bucket for APNE profitability metrics. bonusDetail
+  //   stores the source formula (e.g. "(24*300)+(14*64)") so APNE-site hours/rates
+  //   stay recoverable. See eor-model-spec.md / APNE bridge.
+  reimbursementAmount Float?
+  bonusAmount         Float?
+  bonusDetail         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

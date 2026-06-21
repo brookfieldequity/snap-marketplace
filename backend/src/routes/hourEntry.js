@@ -3,14 +3,45 @@
 // Provider self-service routes are Stage 2 (separate auth).
 
 const express = require('express');
+const multer = require('multer');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { requireFlag } = require('../config/featureFlags');
-const { seedHourEntries, getEntries, hoursFromWindow } = require('../services/hourEntry');
+const { seedHourEntries, getEntries, hoursFromWindow, importApnePayrollSheet } = require('../services/hourEntry');
 
 const router = express.Router();
 router.use(facilityAuth);
 router.use(requireFlag('payroll_builder'));
+
+const payrollUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(csv|xlsx|xls)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Only .csv, .xlsx, or .xls files are accepted.'), ok);
+  },
+});
+
+// POST /import-payroll-sheet — ingest an APNE Gusto-format 1099 payroll sheet for
+// a pay period: seed/match roster cards, record CAPA hours + bonus + reimbursement.
+// Multipart: file + periodStart + periodEnd.
+router.post('/import-payroll-sheet', payrollUpload.single('file'), async (req, res) => {
+  const { periodStart, periodEnd } = req.body || {};
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  if (!periodStart || !periodEnd) return res.status(400).json({ error: 'periodStart and periodEnd are required.' });
+  try {
+    const result = await importApnePayrollSheet({
+      facilityId: req.facility.id,
+      buffer: req.file.buffer,
+      periodStart,
+      periodEnd,
+    });
+    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.` });
+  } catch (err) {
+    console.error('[hour-entry/import-payroll-sheet]', err.message);
+    res.status(500).json({ error: err.message || 'Failed to import payroll sheet' });
+  }
+});
 
 // GET /?periodStart&periodEnd — entries for the period, grouped by 1099 provider.
 router.get('/', async (req, res) => {

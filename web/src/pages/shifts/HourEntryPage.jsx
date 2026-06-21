@@ -57,6 +57,20 @@ export default function HourEntryPage({ onNavigate }) {
     finally { setBusy('') }
   }
 
+  // Import an APNE Gusto-format 1099 payroll sheet for the selected period.
+  async function importSheet(file) {
+    if (!file) return
+    setBusy('import'); setError('')
+    try {
+      const res = await payrollAPI.importPayrollSheet({ periodStart: period.start, periodEnd: period.end, file })
+      setError('') // clear; show a transient note via the data reload
+      await load()
+      window.alert(res.message || 'Payroll sheet imported.')
+    } catch (err) {
+      setError(err.message || 'Import failed')
+    } finally { setBusy('') }
+  }
+
   const seed = () => run('seed', () => payrollAPI.seedHourEntries({ periodStart: period.start, periodEnd: period.end }))
   const submitAll = () => run('submit', () => payrollAPI.submitHourEntries({ periodStart: period.start, periodEnd: period.end }))
   const submitProvider = (rid) => run('submit-' + rid, () => payrollAPI.submitHourEntries({ periodStart: period.start, periodEnd: period.end, rosterEntryId: rid }))
@@ -110,6 +124,11 @@ export default function HourEntryPage({ onNavigate }) {
           <input style={inputStyle} type="date" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} />
         </label>
         <button style={ghostBtn} onClick={seed} disabled={!!busy}>{busy === 'seed' ? 'Seeding…' : '↻ Seed from schedule'}</button>
+        <label style={{ ...ghostBtn, display: 'inline-block', textAlign: 'center' }}>
+          {busy === 'import' ? 'Importing…' : '⬆ Import payroll sheet'}
+          <input type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} disabled={!!busy}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; importSheet(f) }} />
+        </label>
         <button style={primaryBtn} onClick={submitAll} disabled={!!busy}>{busy === 'submit' ? 'Submitting…' : '✓ Submit all'}</button>
       </div>
 

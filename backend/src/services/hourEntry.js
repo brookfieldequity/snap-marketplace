@@ -7,8 +7,14 @@
 // window (CoverageTemplateDay), and adjusted/added by hand. SUBMITTED rows are
 // what the Payroll Builder + Agency Invoice consume for 1099s.
 
+const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const { buildNameKey } = require('./nameKey');
+
+// Normalize a business name for matching (ignore case/punctuation/spacing).
+function normBiz(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
 // "HH:MM" → minutes since midnight, or null.
 function minutesOf(hhmm) {
@@ -201,6 +207,169 @@ async function submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd
   return map;
 }
 
+// rosterEntryId → { reimbursement, bonus } of SUBMITTED entries in the period.
+// reimbursement is CAPA-billable (added to the invoice); bonus is APNE-site
+// (separate bucket, never on the invoice).
+async function submittedExtrasByRoster({ facilityId, periodStart, periodEnd }) {
+  const start = new Date(periodStart);
+  const end = new Date(new Date(periodEnd).getTime() + 86399999);
+  const rows = await prisma.providerHourEntry.findMany({
+    where: { facilityId, status: 'SUBMITTED', date: { gte: start, lte: end } },
+    select: { rosterEntryId: true, reimbursementAmount: true, bonusAmount: true },
+  });
+  const map = {};
+  for (const r of rows) {
+    const g = (map[r.rosterEntryId] = map[r.rosterEntryId] || { reimbursement: 0, bonus: 0 });
+    g.reimbursement = Math.round((g.reimbursement + Number(r.reimbursementAmount || 0)) * 100) / 100;
+    g.bonus = Math.round((g.bonus + Number(r.bonusAmount || 0)) * 100) / 100;
+  }
+  return map;
+}
+
+// ── APNE Gusto-format 1099 payroll-sheet ingest (the bridge) ────────────────────
+// Parses an APNE-style payroll sheet (contractor_type / first_name / last_name /
+// business_name / ein / hours_worked / reimbursement / bonus). The `bonus` cell is
+// a FORMULA (APNE-site hours×rate) — we capture both the value and the formula
+// text. hours_worked = CAPA-billable hours; reimbursement → CAPA invoice; bonus →
+// APNE-site bucket. See eor-model-spec.md / APNE bridge.
+function parseApnePayrollSheet(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer' }); // default keeps formulas in cell.f
+  // Pick the sheet whose header row has contractor_type + hours_worked.
+  let ws = null;
+  for (const name of wb.SheetNames) {
+    const s = wb.Sheets[name];
+    const hdr = (XLSX.utils.sheet_to_json(s, { header: 1, defval: '', raw: false })[0] || [])
+      .map((h) => String(h).trim().toLowerCase());
+    if (hdr.includes('contractor_type') && hdr.includes('hours_worked')) { ws = s; break; }
+  }
+  if (!ws) return [];
+
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+  const hdr = rows[0].map((h) => String(h).trim().toLowerCase());
+  const ci = {
+    type: hdr.indexOf('contractor_type'),
+    first: hdr.indexOf('first_name'),
+    last: hdr.indexOf('last_name'),
+    business: hdr.indexOf('business_name'),
+    ein: hdr.indexOf('ein'),
+    hours: hdr.indexOf('hours_worked'),
+    reimb: hdr.indexOf('reimbursement'),
+    bonus: hdr.indexOf('bonus'),
+  };
+  const cell = (r, c) => (c >= 0 ? rows[r][c] : '');
+
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const businessName = String(cell(r, ci.business) || '').trim();
+    const firstName = String(cell(r, ci.first) || '').trim();
+    const lastName = String(cell(r, ci.last) || '').trim();
+    if (!businessName && !firstName && !lastName) continue; // blank row
+
+    const payeeType = String(cell(r, ci.type) || '').trim() || (businessName ? 'Business' : 'Individual');
+    const hoursWorked = Number(cell(r, ci.hours) || 0) || 0;
+    const reimbursement = ci.reimb >= 0 ? Number(cell(r, ci.reimb) || 0) || 0 : 0;
+
+    // Bonus: capture the computed value AND the source formula from the cell.
+    let bonusAmount = 0;
+    let bonusDetail = null;
+    if (ci.bonus >= 0) {
+      const addr = XLSX.utils.encode_cell({ c: ci.bonus, r });
+      const bc = ws[addr];
+      if (bc) {
+        if (typeof bc.v === 'number') bonusAmount = bc.v;
+        else bonusAmount = Number(cell(r, ci.bonus) || 0) || 0;
+        if (bc.f) bonusDetail = String(bc.f);
+      }
+    }
+
+    out.push({
+      payeeType,
+      firstName,
+      lastName,
+      businessName,
+      ein: String(cell(r, ci.ein) || '').trim(),
+      hoursWorked,
+      reimbursement,
+      bonusAmount,
+      bonusDetail,
+    });
+  }
+  return out;
+}
+
+// Ingest a parsed APNE payroll sheet: match/seed roster cards, then upsert one
+// SUBMITTED ProviderHourEntry per provider for the period (CAPA hours + bonus +
+// reimbursement). Returns a summary.
+async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodEnd, enteredBy = 'coordinator' }) {
+  const parsed = parseApnePayrollSheet(buffer);
+  if (!parsed.length) throw new Error('No payroll rows found (need contractor_type + hours_worked columns).');
+  const periodDate = new Date(periodEnd);
+
+  const roster = await prisma.internalRosterEntry.findMany({
+    where: { facilityId },
+    select: { id: true, providerName: true, businessName: true },
+  });
+  const byNameKey = new Map();
+  const byBiz = new Map();
+  for (const e of roster) {
+    const nk = buildNameKey(e.providerName);
+    if (nk) byNameKey.set(nk, e.id);
+    if (e.businessName) byBiz.set(normBiz(e.businessName), e.id);
+  }
+
+  let seeded = 0;
+  let matched = 0;
+  let recorded = 0;
+  for (const row of parsed) {
+    const isBiz = row.payeeType === 'Business' && row.businessName;
+    const displayName = isBiz ? row.businessName : `${row.firstName} ${row.lastName}`.trim();
+    if (!displayName) continue;
+
+    let rosterId = isBiz ? byBiz.get(normBiz(row.businessName)) : null;
+    if (!rosterId) rosterId = byNameKey.get(buildNameKey(displayName)) || null;
+
+    if (!rosterId) {
+      const created = await prisma.internalRosterEntry.create({
+        data: {
+          facilityId,
+          providerName: displayName,
+          is1099: true,
+          payeeType: row.payeeType || null,
+          businessName: row.businessName || null,
+          useBusinessNameForPayroll: !!isBiz,
+          ein: row.ein || null,
+        },
+      });
+      rosterId = created.id;
+      seeded += 1;
+      const nk = buildNameKey(displayName);
+      if (nk) byNameKey.set(nk, rosterId);
+      if (row.businessName) byBiz.set(normBiz(row.businessName), rosterId);
+    } else {
+      matched += 1;
+    }
+
+    const data = {
+      hours: row.hoursWorked,
+      status: 'SUBMITTED',
+      source: 'PAYROLL_SHEET',
+      enteredBy,
+      reimbursementAmount: row.reimbursement || null,
+      bonusAmount: row.bonusAmount || null,
+      bonusDetail: row.bonusDetail || null,
+    };
+    const existing = await prisma.providerHourEntry.findFirst({
+      where: { rosterEntryId: rosterId, date: periodDate, location: null },
+      select: { id: true },
+    });
+    if (existing) await prisma.providerHourEntry.update({ where: { id: existing.id }, data });
+    else await prisma.providerHourEntry.create({ data: { facilityId, rosterEntryId: rosterId, date: periodDate, location: null, ...data } });
+    recorded += 1;
+  }
+
+  return { rows: parsed.length, seeded, matched, recorded, periodStart, periodEnd };
+}
+
 module.exports = {
   minutesOf,
   hoursFromWindow,
@@ -208,4 +377,7 @@ module.exports = {
   seedHourEntries,
   getEntries,
   submittedShiftDetailByRoster,
+  submittedExtrasByRoster,
+  parseApnePayrollSheet,
+  importApnePayrollSheet,
 };

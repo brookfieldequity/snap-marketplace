@@ -38,7 +38,7 @@
 const prisma = require('../config/db');
 const { buildNameKey } = require('./nameKey');
 const { computeGross, splitRegularOt, fmtDate } = require('./payroll');
-const { submittedShiftDetailByRoster } = require('./hourEntry');
+const { submittedShiftDetailByRoster, submittedExtrasByRoster } = require('./hourEntry');
 
 function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
@@ -253,6 +253,8 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
   // SUBMITTED provider hour entries override raw schedule hours for 1099s — the
   // confirmed worked hours are authoritative for billing. Empty → falls back.
   const submittedByRoster = await submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd });
+  // CAPA-billable reimbursements (e.g. mileage) + APNE-site bonus, per provider.
+  const extrasByRoster = await submittedExtrasByRoster({ facilityId, periodStart, periodEnd });
 
   const providerCosts = roster.map((entry) => {
     // A provider has a 1099/agency side if pure-1099 OR dual-employment.
@@ -305,6 +307,10 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
       employerName: entry.dualEmployment
         ? (entry.contractorEmployer || entry.employer || null)
         : (entry.employerRef?.name || entry.employer || null),
+      // Period extras: reimbursement is CAPA-billable; apneSiteBonus is the
+      // separate APNE-site bucket (never billed to the facility).
+      reimbursement: isAgency ? round2(extrasByRoster[entry.id]?.reimbursement || 0) : 0,
+      apneSiteBonus: isAgency ? round2(extrasByRoster[entry.id]?.bonus || 0) : 0,
       ...cost,
     };
   });
@@ -329,7 +335,11 @@ function composeAgencyInvoices({ providerCosts = [], periodStart, periodEnd }) {
   const byEmployer = {};
   for (const r of providerCosts) {
     if (r.employerKind !== 'STAFFING_AGENCY') continue;
-    if (!r.allInTracked || !(r.hours > 0)) continue;
+    const reimbursement = round2(r.reimbursement || 0);
+    const hasHours = r.allInTracked && r.hours > 0;
+    // Include a provider if they have billable hours OR a CAPA reimbursement
+    // (e.g. a mileage-only line).
+    if (!hasHours && !(reimbursement > 0)) continue;
     const key = r.employerId || r.employerName || 'UNASSIGNED';
     const inv = (byEmployer[key] = byEmployer[key] || {
       employerId: r.employerId || null,
@@ -339,13 +349,15 @@ function composeAgencyInvoices({ providerCosts = [], periodStart, periodEnd }) {
       lines: [],
       total: 0,
     });
-    const amount = round2(r.facilityAllIn);
+    const laborAmount = hasHours ? round2(r.facilityAllIn) : 0;
+    const amount = round2(laborAmount + reimbursement); // hours×rate + reimbursement
     inv.lines.push({
       rosterEntryId: r.rosterEntryId,
       payeeName: r.payeeType === 'Business' && r.businessName ? r.businessName : r.providerName,
       contractorType: r.payeeType,
       hours: round2(r.hours),
       capaRate: r.allInCostPerHour,
+      reimbursement,
       amount,
     });
     inv.total = round2(inv.total + amount);
