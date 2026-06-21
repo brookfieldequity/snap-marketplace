@@ -4,7 +4,7 @@ const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { logAutomationEvent } = require('../services/automationEvents');
-const { resolveNpi, lookupByNumber, specialtyFromTaxonomy, searchByName, splitName: splitNppesName } = require('../services/nppesLookup');
+const { resolveNpi, resolveNpiByLastName, lookupByNumber, specialtyFromTaxonomy, searchByName, splitName: splitNppesName } = require('../services/nppesLookup');
 const passportClient = require('../services/passportClient');
 const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS, sendEmail } = require('../services/notifications');
@@ -518,12 +518,30 @@ router.post('/:id/resolve-npi', facilityAuth, async (req, res) => {
       const profile = await prisma.providerProfile
         .findUnique({ where: { npiNumber: cleaned } })
         .catch(() => null);
+
+      // Name upgrade: QGenda imports store a last-name-only placeholder. When the
+      // coordinator picks an NPI, fill in the full name — from an explicit body
+      // `name`, else from the chosen candidate in the stored lookup list — but
+      // only when the current name has no space (i.e. is a last-name placeholder).
+      const nameUpdate = {};
+      const bodyName = req.body && req.body.name ? String(req.body.name).trim() : '';
+      const curIsPlaceholder = !String(existing.providerName || '').trim().includes(' ');
+      if (bodyName) {
+        nameUpdate.providerName = bodyName;
+      } else if (curIsPlaceholder) {
+        const cands = Array.isArray(existing.npiLookupCandidates) ? existing.npiLookupCandidates : [];
+        const chosen = cands.find((c) => String(c.npi) === cleaned);
+        const full = chosen ? [chosen.firstName, chosen.lastName].filter(Boolean).join(' ') : '';
+        if (full) nameUpdate.providerName = full;
+      }
+
       const updated = await prisma.internalRosterEntry.update({
         where: { id: req.params.id },
         data: {
           npi: cleaned,
           npiLookupStatus: null,
           npiLookupCandidates: null,
+          ...nameUpdate,
           ...(profile ? { snapAccountLinked: true, linkedProviderId: profile.id } : {}),
         },
       });
@@ -1707,14 +1725,189 @@ async function handleMultiSheetUpload(workbook, req, res) {
   });
 }
 
+// ── QGenda "Daily Worksheet" import ─────────────────────────────────────────
+// QGenda exports a daily grid with column-groups (Physician | CRNA | None),
+// each [Staff, Assignment, Rooms, Notes, name], where Staff is a LAST NAME only
+// (sometimes "Last, Initial"). The "None" group holds agency providers. We pull
+// distinct people, infer role from the group, mark None-group people as agency,
+// and resolve each last name against NPPES (role+state narrowed) — auto-matching
+// when unambiguous, else flagging for the NPI review queue. See the Tufts-Melrose
+// QGenda discussion. Hours/schedule parsing is a later (payroll) job.
+
+// A "Staff" cell that's actually a summary line ("Att - Clinical: 18",
+// "CRNA - Available: 17", "None: 1") or a stray header, not a person.
+function isQgendaSummaryCell(s) {
+  const t = String(s || '').trim();
+  if (!t) return true;
+  if (/:\s*\d+\s*$/.test(t)) return true; // "... : 18"
+  return ['none', 'staff', 'physician'].includes(t.toLowerCase());
+}
+
+// "Bushman" → {last:'Bushman'}; "Berman, M" → {last:'Berman', initial:'M'};
+// "O'BrienA" → {last:"O'Brien", initial:'A'} (trailing glued initial).
+function parseQgendaName(raw) {
+  const s = String(raw || '').trim().replace(/\s+/g, ' ');
+  if (!s) return { lastName: '', firstInitial: null };
+  let m = /^(.+?),\s*([A-Za-z])\.?$/.exec(s);
+  if (m) return { lastName: m[1].trim(), firstInitial: m[2].toUpperCase() };
+  m = /^(.*[a-z'’])([A-Z])$/.exec(s); // glued trailing initial
+  if (m) return { lastName: m[1].trim(), firstInitial: m[2].toUpperCase() };
+  return { lastName: s, firstInitial: null };
+}
+
+function qgendaRoleFor(groupLabel, assignment) {
+  const g = String(groupLabel || '').toLowerCase();
+  if (g.includes('crna') || g.includes('nurse anesthetist')) return 'CRNA';
+  if (g.includes('physician') || g.includes('anesthesiolog')) return 'ANESTHESIOLOGIST';
+  // "None" (agency) group — infer from the assignment text prefix.
+  if (/^\s*crna/i.test(assignment)) return 'CRNA';
+  return 'ANESTHESIOLOGIST';
+}
+
+function isQgendaWorkbook(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!sheet) return false;
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }).slice(0, 8);
+  const flat = rows.map((r) => r.map((c) => String(c).trim().toLowerCase()));
+  const hasGroupHdr = flat.some((r) => r.some((c) => c === 'physician' || c.includes('certified registered nurse anesthetist')));
+  const hasSubHdr = flat.some((r) => r.includes('staff') && r.includes('assignment'));
+  return hasGroupHdr && hasSubHdr;
+}
+
+// Extract distinct people from a QGenda daily worksheet.
+function parseQgendaDailyWorksheet(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+  // Sub-header row = the one with 'Staff' + 'Assignment'.
+  let hdrIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const lc = rows[i].map((c) => String(c).trim().toLowerCase());
+    if (lc.includes('staff') && lc.includes('assignment')) { hdrIdx = i; break; }
+  }
+  if (hdrIdx < 0) return [];
+
+  const hdr = rows[hdrIdx].map((c) => String(c).trim().toLowerCase());
+  const groupHdr = hdrIdx > 0 ? rows[hdrIdx - 1].map((c) => String(c).trim()) : [];
+  const groups = [];
+  hdr.forEach((c, idx) => {
+    if (c !== 'staff') return;
+    const assignIdx = hdr.indexOf('assignment', idx);
+    groups.push({ staffIdx: idx, assignIdx: assignIdx >= 0 ? assignIdx : idx + 1, label: groupHdr[idx] || '' });
+  });
+
+  const people = [];
+  const seen = new Set();
+  for (let r = hdrIdx + 1; r < rows.length; r++) {
+    for (const g of groups) {
+      const staff = String(rows[r][g.staffIdx] || '').trim();
+      if (isQgendaSummaryCell(staff)) continue;
+      const assignment = String(rows[r][g.assignIdx] || '').trim();
+      const { lastName, firstInitial } = parseQgendaName(staff);
+      if (!lastName) continue;
+      const role = qgendaRoleFor(g.label, assignment);
+      const isAgency = String(g.label).trim().toLowerCase() === 'none';
+      const key = `${lastName.toLowerCase()}|${(firstInitial || '').toLowerCase()}|${role}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      people.push({ lastName, firstInitial, role, is1099: isAgency, rawName: staff, assignment });
+    }
+  }
+  return people;
+}
+
+async function handleQgendaUpload(workbook, req, res) {
+  const people = parseQgendaDailyWorksheet(workbook);
+  if (!people.length) {
+    return res.status(400).json({ error: 'No providers found in the QGenda worksheet.' });
+  }
+
+  const existing = await prisma.internalRosterEntry.findMany({
+    where: { facilityId: req.facility.id },
+    select: { providerName: true },
+  });
+  const existingFp = new Set(existing.map((e) => buildNameKey(e.providerName)).filter(Boolean));
+  const existingNames = new Set(existing.map((e) => String(e.providerName || '').trim().toLowerCase()));
+
+  let createdCount = 0;
+  let autoMatched = 0;
+  let needsReview = 0;
+  let skippedDuplicates = 0;
+
+  for (const p of people) {
+    // Resolve the last name against NPPES, narrowed by role + state (MA).
+    let resolved;
+    try {
+      resolved = await resolveNpiByLastName({ lastName: p.lastName, firstInitial: p.firstInitial, state: 'MA', role: p.role });
+    } catch {
+      resolved = { decision: 'NO_MATCH', matches: [], npi: null };
+    }
+
+    let providerName;
+    let npi = null;
+    let npiLookupStatus = null;
+    let npiLookupCandidates = null;
+    if (resolved.decision === 'AUTO_MATCHED' && resolved.matches[0]) {
+      const m = resolved.matches[0];
+      providerName = [m.firstName, m.lastName].filter(Boolean).join(' ') || p.rawName;
+      npi = resolved.npi;
+    } else {
+      providerName = p.firstInitial ? `${p.lastName}, ${p.firstInitial}` : p.lastName;
+      npiLookupStatus = resolved.decision; // NEEDS_DISAMBIGUATION | NO_MATCH | INVALID_NAME
+      npiLookupCandidates = resolved.matches && resolved.matches.length ? resolved.matches : null;
+    }
+
+    const fp = buildNameKey(providerName);
+    if ((fp && existingFp.has(fp)) || existingNames.has(providerName.toLowerCase())) {
+      skippedDuplicates += 1;
+      continue;
+    }
+    if (fp) existingFp.add(fp);
+    existingNames.add(providerName.toLowerCase());
+
+    let linkedProviderId = null;
+    let snapAccountLinked = false;
+    if (npi) {
+      const profile = await prisma.providerProfile.findUnique({ where: { npiNumber: npi } }).catch(() => null);
+      if (profile) { linkedProviderId = profile.id; snapAccountLinked = true; }
+    }
+
+    await prisma.internalRosterEntry.create({
+      data: {
+        facilityId: req.facility.id,
+        providerName,
+        providerType: p.role,
+        is1099: !!p.is1099, // None-group = agency (1099); employed otherwise
+        employer: p.is1099 ? 'Agency' : null,
+        npi,
+        npiLookupStatus,
+        npiLookupCandidates,
+        ...(linkedProviderId ? { linkedProviderId, snapAccountLinked } : {}),
+      },
+    });
+    createdCount += 1;
+    if (npi) autoMatched += 1; else needsReview += 1;
+  }
+
+  return res.json({
+    format: 'qgenda',
+    createdCount,
+    autoMatched,
+    needsReview,
+    skippedDuplicates,
+    message:
+      `Imported ${createdCount} providers from QGenda. ${autoMatched} auto-matched to an NPI; ` +
+      `${needsReview} need NPI review${skippedDuplicates ? `; ${skippedDuplicates} duplicates skipped` : ''}.`,
+  });
+}
+
 /**
  * POST /upload — parse a CSV/XLSX, create roster entries, link by NPI.
  *
- * Two paths:
+ * Three paths:
  *   1. Multi-sheet (CAPA-style) — workbook has Staff + Payroll sheets.
- *      Runs handleMultiSheetUpload above (joins by Initials, NPPES lookup,
- *      reads Facilities + Coverage sheets for ProviderLocation rows).
- *   2. Single-sheet (flat CSV/XLSX) — original behavior.
+ *   2. QGenda daily worksheet — last-name grid, resolved via NPPES.
+ *   3. Single-sheet (flat CSV/XLSX) — original behavior.
  */
 router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, res) => {
   try {
@@ -1724,6 +1917,11 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
     // Multi-sheet detection: file has Staff + Payroll sheets
     if (workbook.SheetNames.includes('Staff') && workbook.SheetNames.includes('Payroll')) {
       return handleMultiSheetUpload(workbook, req, res);
+    }
+
+    // QGenda daily worksheet detection
+    if (isQgendaWorkbook(workbook)) {
+      return handleQgendaUpload(workbook, req, res);
     }
 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1915,3 +2113,5 @@ router.get('/upload/template', facilityAuth, (req, res) => {
 });
 
 module.exports = router;
+// Exposed for unit tests (pure helpers; no side effects).
+module.exports.__qgenda = { isQgendaWorkbook, parseQgendaDailyWorksheet, parseQgendaName };

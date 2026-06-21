@@ -100,6 +100,102 @@ async function searchByName({ firstName, lastName, state, limit = 5 }) {
     }));
 }
 
+// NPPES taxonomy_description filter per SNAP role — used to narrow a noisy
+// last-name-only search (e.g. QGenda exports that give last names only).
+const TAXONOMY_BY_ROLE = {
+  ANESTHESIOLOGIST: 'Anesthesiology',
+  CRNA: 'Nurse Anesthetist',
+  ANESTHESIA_ASSISTANT: 'Anesthesiologist Assistant',
+};
+
+/**
+ * Last-name-only search. Lower precision than full name, so we lean on state +
+ * taxonomy to narrow. Returns the same normalized match shape as searchByName.
+ */
+async function searchByLastName({ lastName, state, taxonomyDesc, limit = 25 }) {
+  const ln = String(lastName || '').trim();
+  if (ln.length < 2) return [];
+
+  const params = new URLSearchParams({
+    version: '2.1',
+    last_name: ln,
+    enumeration_type: 'NPI-1',
+    limit: String(limit),
+  });
+  if (state) params.set('state', state);
+  if (taxonomyDesc) params.set('taxonomy_description', taxonomyDesc);
+
+  const data = await nppesGet(params);
+  if (!data) return [];
+  const results = Array.isArray(data.results) ? data.results : [];
+  return results
+    .filter((r) => r.basic)
+    .map((r) => ({
+      npi: r.number,
+      firstName: r.basic.first_name || null,
+      lastName: r.basic.last_name || null,
+      middleName: r.basic.middle_name || null,
+      credential: r.basic.credential || null,
+      status: r.basic.status || null,
+      primaryTaxonomy: (r.taxonomies || []).find((t) => t.primary)?.desc || null,
+      primaryAddress: (r.addresses || [])
+        .filter((a) => a.address_purpose === 'LOCATION' || a.address_purpose === 'MAILING')
+        .map((a) => ({ city: a.city, state: a.state }))[0] || null,
+    }));
+}
+
+/**
+ * Resolve an NPI from a LAST NAME (+ optional first initial), narrowed by role
+ * (→ taxonomy) and state. Same decision contract as resolveNpi. For QGenda-style
+ * imports where only last names are available.
+ */
+// New-England neighbors used to rank near-by providers (clinicians often
+// register an out-of-state home/billing address — e.g. a Melrose CRNA whose
+// NPPES address is Concord, NH). State is a RANKING signal, never a hard filter.
+const NEIGHBOR_STATES = { MA: ['NH', 'RI', 'VT', 'CT', 'ME'] };
+
+async function resolveNpiByLastName({ lastName, firstInitial, state = 'MA', role } = {}) {
+  const ln = String(lastName || '').trim();
+  if (ln.length < 2) return { decision: 'INVALID_NAME', matches: [], npi: null };
+
+  // Narrow by role (taxonomy), NOT by state — state-filtering produces false
+  // NO_MATCHes (the provider's registered address is frequently out of state).
+  const taxonomyDesc = role ? TAXONOMY_BY_ROLE[role] : null;
+  const matches = await searchByLastName({ lastName: ln, taxonomyDesc, limit: 50 });
+  let active = matches.filter((m) => m.status === 'A');
+  if (role) {
+    const byRole = active.filter((m) => specialtyFromTaxonomy(m.primaryTaxonomy) === role);
+    if (byRole.length) active = byRole;
+  }
+  // If a first initial is known, prefer those — but only if it doesn't wipe out
+  // every candidate (initials in QGenda can be unreliable).
+  if (firstInitial && active.length > 1) {
+    const init = String(firstInitial).toUpperCase();
+    const byInit = active.filter((m) => (m.firstName || '').toUpperCase().startsWith(init));
+    if (byInit.length) active = byInit;
+  }
+
+  if (active.length === 0) return { decision: 'NO_MATCH', matches: [], npi: null, searched: { lastName: ln, firstInitial } };
+
+  // Rank: same state, then a neighboring state, first.
+  const neighbors = NEIGHBOR_STATES[state] || [];
+  const rank = (m) => {
+    const st = m.primaryAddress?.state;
+    if (st === state) return 2;
+    if (neighbors.includes(st)) return 1;
+    return 0;
+  };
+  active.sort((a, b) => rank(b) - rank(a));
+
+  const inState = active.filter((m) => m.primaryAddress?.state === state);
+  // Auto-match only when confident: a single role-match overall, or a single
+  // in-state role-match. Otherwise let the coordinator pick (with city/state
+  // shown) — including when all candidates are out of state.
+  if (active.length === 1) return { decision: 'AUTO_MATCHED', matches: active, npi: active[0].npi };
+  if (inState.length === 1) return { decision: 'AUTO_MATCHED', matches: [inState[0]], npi: inState[0].npi };
+  return { decision: 'NEEDS_DISAMBIGUATION', matches: active.slice(0, 10), npi: null, searched: { lastName: ln, firstInitial } };
+}
+
 /**
  * Parse "Jane Q Smith" -> { firstName: "Jane", lastName: "Smith" }.
  * Strategy: last token is lastName; first token is firstName; middle tokens
@@ -199,4 +295,4 @@ function specialtyFromTaxonomy(desc) {
   return null;
 }
 
-module.exports = { searchByName, splitName, resolveNpi, lookupByNumber, specialtyFromTaxonomy };
+module.exports = { searchByName, searchByLastName, splitName, resolveNpi, resolveNpiByLastName, lookupByNumber, specialtyFromTaxonomy };
