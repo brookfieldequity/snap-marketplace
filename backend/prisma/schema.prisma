@@ -802,6 +802,11 @@ model InternalRosterEntry {
   notes                  String?
   snapAccountLinked      Boolean             @default(false)
   linkedProviderId       String?
+  // Provider schedule access (v1). A linked provider can view this facility's
+  // daily board in their app BY DEFAULT; the facility revokes per provider by
+  // setting this true. (v1.1 will add a provider-initiated request/grant flow.)
+  // See eor-model-spec.md / provider↔facility schedule access.
+  scheduleAccessRevoked  Boolean             @default(false)
   inviteSentAt           DateTime?
   // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
   // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator

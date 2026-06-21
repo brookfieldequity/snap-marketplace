@@ -294,6 +294,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       employer, is1099, isFullTime,
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
+      scheduleAccessRevoked,
       ptoDaysAnnual, ptoEligible, seniorityRank,
     } = req.body;
 
@@ -346,6 +347,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(w2Employer !== undefined && { w2Employer: w2Employer || null }),
         ...(contractorEmployer !== undefined && { contractorEmployer: contractorEmployer || null }),
         ...(contractorPayRate !== undefined && { contractorPayRate: contractorPayRate != null && contractorPayRate !== '' ? parseFloat(contractorPayRate) : null }),
+        ...(scheduleAccessRevoked !== undefined && { scheduleAccessRevoked: scheduleAccessRevoked === true }),
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),

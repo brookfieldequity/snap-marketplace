@@ -47,6 +47,9 @@ const BLANK_FORM = {
   // Dual employment (W-2 at one employer + 1099 at another). When on, the payee
   // type / business / EIN / All-In Cost above describe the 1099 side.
   dualEmployment: false, w2Employer: '', contractorEmployer: '', contractorPayRate: '',
+  // Provider schedule access (v1): linked providers see the daily board by
+  // default; check to revoke for this provider.
+  scheduleAccessRevoked: false,
   // PTO. ptoDaysAnnual '' = use system default; ptoEligible '' = derive from
   // employment (W-2 / full-time eligible); seniorityRank '' = unset.
   ptoDaysAnnual: '', ptoEligible: '', seniorityRank: '',
@@ -303,6 +306,7 @@ export default function InternalRosterPage({ onNavigate }) {
       w2Employer: p.w2Employer || '',
       contractorEmployer: p.contractorEmployer || '',
       contractorPayRate: p.contractorPayRate ?? '',
+      scheduleAccessRevoked: !!p.scheduleAccessRevoked,
       ptoDaysAnnual: p.ptoDaysAnnual ?? '',
       ptoEligible: p.ptoEligible == null ? '' : (p.ptoEligible ? 'YES' : 'NO'),
       seniorityRank: p.seniorityRank ?? '',
@@ -349,6 +353,7 @@ export default function InternalRosterPage({ onNavigate }) {
         w2Employer: form.w2Employer.trim() || null,
         contractorEmployer: form.contractorEmployer.trim() || null,
         contractorPayRate: form.contractorPayRate !== '' ? parseFloat(form.contractorPayRate) : null,
+        scheduleAccessRevoked: !!form.scheduleAccessRevoked,
         // taxStatus/hoursStatus are tri-state strings in form land; map to
         // booleans for the API. Empty string → null (unknown).
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
@@ -1121,6 +1126,15 @@ export default function InternalRosterPage({ onNavigate }) {
                 />
                 Pay under the business name (payroll only — used everywhere else by their name)
               </label>
+            </Field>
+            <Field label="Schedule access">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
+                <input type="checkbox" checked={form.scheduleAccessRevoked} onChange={(e) => setF('scheduleAccessRevoked', e.target.checked)} />
+                Revoke this provider's access to the facility's daily schedule
+              </label>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                Linked providers can view this facility's daily board in their app by default. Check to revoke.
+              </div>
             </Field>
             <Field label="SNAP Account Email">
               <input style={inputStyle} type="email" value={form.snapEmail} onChange={(e) => setF('snapEmail', e.target.value)} placeholder="provider@example.com" />
