@@ -227,6 +227,10 @@ export const facilityAPI = {
   // Out-List Builder (release order). order = [assignmentId, …] 1=leaves first.
   getOutList: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}/out-list`, { headers: facilityHeaders() }),
   saveOutList: (dayId, order, publish) => apiFetch(`${BASE}/schedule/days/${dayId}/out-list`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ order, publish }) }),
+  // Out-List rule set (admin) + one-click auto-build over a week/month.
+  getOutListRules: () => apiFetch(`${BASE}/schedule/out-list-rules`, { headers: facilityHeaders() }),
+  saveOutListRules: (rules) => apiFetch(`${BASE}/schedule/out-list-rules`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ rules }) }),
+  autoBuildOutList: (body) => apiFetch(`${BASE}/schedule/out-list/auto`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
   exportSchedule: (year, month) => apiFetch(`${BASE}/schedule/export?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   getScheduleSummary: (year, month) => apiFetch(`${BASE}/schedule/summary?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   // Materialize ScheduleDay rows for a month from a Coverage Template.

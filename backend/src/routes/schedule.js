@@ -7,6 +7,7 @@ const auth = require('../middleware/auth');
 const { sendSMS } = require('../services/notifications');
 const { logAutomationEvent } = require('../services/automationEvents');
 const { resolveDayAvailability } = require('../services/availability');
+const outListRules = require('../services/outListRules');
 
 const router = express.Router();
 const expo = new Expo();
@@ -509,6 +510,138 @@ router.put('/days/:dayId/out-list', facilityAuth, async (req, res) => {
     res.json({ success: true, ranked: order.length, published: publish === true });
   } catch (err) {
     console.error('[schedule] save out-list failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /out-list-rules — the facility's Out-List Builder rule set (normalized,
+// with defaults applied) plus the list of known site names for the late-site
+// picker.
+router.get('/out-list-rules', facilityAuth, async (req, res) => {
+  try {
+    const rules = outListRules.normalizeRules(req.facility.outListRules);
+    const sites = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id },
+      distinct: ['location'],
+      select: { location: true },
+      orderBy: { location: 'asc' },
+    });
+    res.json({ rules, knownSites: sites.map((s) => s.location) });
+  } catch (err) {
+    console.error('[schedule] get out-list-rules failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /out-list-rules — save the rule set. Body: { rules: {...} }.
+router.put('/out-list-rules', facilityAuth, async (req, res) => {
+  try {
+    const rules = outListRules.normalizeRules(req.body.rules);
+    await prisma.facility.update({
+      where: { id: req.facility.id },
+      data: { outListRules: rules },
+    });
+    res.json({ success: true, rules });
+  } catch (err) {
+    console.error('[schedule] save out-list-rules failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /out-list/auto — one-click: compute the release order for every day in a
+// window (a week or a whole month) from the facility's rules, and persist
+// outRank on every staffed assignment. Optionally publishes them to the floor
+// runner. Body: { scope: 'month'|'week', year, month, weekStart?, publish? }.
+router.post('/out-list/auto', facilityAuth, async (req, res) => {
+  try {
+    const { scope, weekStart, publish } = req.body;
+
+    // Resolve the [start, endExclusive) window in local time, mirroring
+    // monthRange so @db.Date filtering matches the rest of this router.
+    let start;
+    let endExclusive;
+    if (scope === 'week') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart || '')) {
+        return res.status(400).json({ error: 'weekStart (YYYY-MM-DD) is required for a weekly run' });
+      }
+      const [wy, wm, wd] = weekStart.split('-').map(Number);
+      start = new Date(wy, wm - 1, wd);
+      endExclusive = new Date(wy, wm - 1, wd + 7);
+    } else {
+      const year = parseInt(req.body.year, 10);
+      const month = parseInt(req.body.month, 10);
+      if (!year || !month || month < 1 || month > 12) {
+        return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+      }
+      ({ start, end: endExclusive } = monthRange(year, month));
+    }
+
+    // Load the window ± 1 day so adjacency rules (late site the day before /
+    // after) and the weekly seed can see just outside the window.
+    const ctxStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    const ctxEnd = new Date(endExclusive.getTime() + 24 * 60 * 60 * 1000);
+    const ctxDays = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id, date: { gte: ctxStart, lt: ctxEnd } },
+      include: {
+        assignments: {
+          where: { rosterId: { not: null } },
+          include: { rosterEntry: { select: { providerName: true, providerType: true } } },
+        },
+      },
+      orderBy: [{ date: 'asc' }, { location: 'asc' }],
+    });
+
+    const inWindow = (d) => d.date >= start && d.date < endExclusive;
+    const daysInWindow = ctxDays.filter(inWindow);
+    if (daysInWindow.length === 0) {
+      return res.status(400).json({ error: 'No schedule days in this window. Build the schedule first.' });
+    }
+
+    // Seed who closed the day immediately before the window (if that day was
+    // already ranked) so a weekly run stays continuous with the prior week.
+    const startKey = outListRules.dateKey(start);
+    const prevKey = outListRules.addDays(startKey, -1);
+    const prevDays = ctxDays.filter((d) => outListRules.dateKey(d.date) === prevKey);
+    const seedClosers = outListRules.closersFromRankedDay(prevDays);
+
+    const { ranks, warnings } = outListRules.computeOutLists({
+      daysInWindow,
+      contextDays: ctxDays,
+      rules: req.facility.outListRules,
+      seedClosers,
+    });
+
+    const dayIds = daysInWindow.map((d) => d.id);
+    const ops = [
+      // Clear any stale ranks on staffed slots in the window first, so a
+      // re-run never leaves orphaned numbers behind.
+      prisma.scheduleAssignment.updateMany({
+        where: { scheduleDayId: { in: dayIds }, rosterId: { not: null } },
+        data: { outRank: null },
+      }),
+      ...[...ranks.entries()].map(([id, rank]) =>
+        prisma.scheduleAssignment.update({ where: { id }, data: { outRank: rank } })
+      ),
+    ];
+    if (publish === true) {
+      ops.push(
+        prisma.scheduleDay.updateMany({
+          where: { id: { in: dayIds } },
+          data: { outListPublishedAt: new Date() },
+        })
+      );
+    }
+    await prisma.$transaction(ops, { timeout: 60000 });
+
+    res.json({
+      success: true,
+      daysProcessed: dayIds.length,
+      assignmentsRanked: ranks.size,
+      published: publish === true,
+      warnings,
+    });
+  } catch (err) {
+    console.error('[schedule] auto out-list failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

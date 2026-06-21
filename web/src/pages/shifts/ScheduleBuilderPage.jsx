@@ -3,6 +3,7 @@ import { facilityAPI } from '../../api.js'
 import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
 import StaffIQRecommendations from './StaffIQRecommendations.jsx'
 import OutListModal from './OutListModal.jsx'
+import OutListRulesModal from './OutListRulesModal.jsx'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
@@ -381,6 +382,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
   const [dayDetailModal, setDayDetailModal] = useState(null) // dateStr
   const [outListModal, setOutListModal] = useState(null) // { dayId, title }
+  const [showOutListRules, setShowOutListRules] = useState(false)
   const [assignLoading, setAssignLoading] = useState({})
   const [editingLocation, setEditingLocation] = useState(null)
   const [deletingLocation, setDeletingLocation] = useState(null)
@@ -814,6 +816,9 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </button>
           <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
             {publishing ? 'Publishing...' : '📢 Publish Schedule'}
+          </button>
+          <button onClick={() => setShowOutListRules(true)} title="Set out-list rules and one-click build the release order" style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+            🚪 Out Lists
           </button>
           <button onClick={handleExport} disabled={exporting} style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer', color: '#374151' }}>
             {exporting ? 'Exporting...' : '⬇️ Export CSV'}
@@ -1380,6 +1385,17 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           title={outListModal.title}
           onClose={() => setOutListModal(null)}
           onSaved={load}
+        />
+      )}
+
+      {/* Out-List Rules + one-click auto-build for the week/month */}
+      {showOutListRules && (
+        <OutListRulesModal
+          year={year}
+          month={month}
+          monthName={monthName}
+          onClose={() => setShowOutListRules(false)}
+          onDone={load}
         />
       )}
 
