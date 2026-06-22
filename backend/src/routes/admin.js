@@ -275,7 +275,8 @@ router.patch('/facilities/:id/subscription', adminAuth, async (req, res) => {
     });
     res.json(sub);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update subscription' });
+    console.error('[admin] update subscription failed:', err);
+    res.status(500).json({ error: 'Failed to update subscription', details: err.message });
   }
 });
 
@@ -1405,6 +1406,45 @@ router.post('/facilities', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[admin] create facility failed:', err);
     res.status(500).json({ error: 'Failed to create facility', details: err.message });
+  }
+});
+
+// PATCH /admin/facilities/:id — edit a facility's core details after creation.
+// Only the fields present in the body are changed. Tier is managed separately
+// via /facilities/:id/subscription.
+router.patch('/facilities/:id', adminAuth, async (req, res) => {
+  try {
+    const { name, facilityType, address, zipCode, state } = req.body || {};
+    if (name !== undefined && !String(name).trim()) {
+      return res.status(400).json({ error: 'Facility name cannot be blank.' });
+    }
+    const data = {};
+    if (name !== undefined) data.name = String(name).trim();
+    if (facilityType !== undefined) data.facilityType = normalizeFacilityType(facilityType);
+    if (address !== undefined) data.address = address || null;
+    if (zipCode !== undefined) data.zipCode = zipCode || null;
+    if (state !== undefined) data.state = state || null;
+
+    const facility = await prisma.facility.update({
+      where: { id: req.params.id },
+      data,
+      include: { subscription: true },
+    });
+    res.json({
+      ok: true,
+      facility: {
+        id: facility.id,
+        name: facility.name,
+        facilityType: facility.facilityType,
+        address: facility.address,
+        zipCode: facility.zipCode,
+        state: facility.state,
+        tier: facility.subscription?.tier || 'BASIC',
+      },
+    });
+  } catch (err) {
+    console.error('[admin] edit facility failed:', err);
+    res.status(500).json({ error: 'Failed to update facility', details: err.message });
   }
 });
 

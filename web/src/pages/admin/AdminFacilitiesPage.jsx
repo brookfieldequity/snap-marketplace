@@ -35,6 +35,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
   const [showNew, setShowNew]       = useState(false)
   const [inviteTarget, setInviteTarget] = useState(null)  // facility row to invite into
   const [invitesTarget, setInvitesTarget] = useState(null)  // facility row to view invites
+  const [editTarget, setEditTarget] = useState(null)  // facility row to edit
 
   const load = useCallback(() => {
     setLoading(true)
@@ -240,6 +241,13 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                 >
                   📋 Invites
                 </button>
+                <button
+                  onClick={() => setEditTarget(f)}
+                  title="Edit this facility's details"
+                  style={{ padding: '6px 10px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ✏️ Edit
+                </button>
                 {onOpenRoi && (
                   <button
                     onClick={() => onOpenRoi(f.id)}
@@ -282,6 +290,14 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
         <InvitesListModal
           facility={invitesTarget}
           onClose={() => setInvitesTarget(null)}
+        />
+      )}
+
+      {editTarget && (
+        <EditFacilityModal
+          facility={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); load() }}
         />
       )}
     </div>
@@ -447,6 +463,82 @@ function NewFacilityModal({ onClose, onCreated }) {
           </button>
           <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
             {submitting ? 'Creating…' : 'Create Facility'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+function EditFacilityModal({ facility, onClose, onSaved }) {
+  const [name, setName]                 = useState(facility.name || facility._name || '')
+  const [facilityType, setFacilityType] = useState(facility.facilityType || '')
+  const [address, setAddress]           = useState(facility.address || '')
+  const [zipCode, setZipCode]           = useState(facility.zipCode || '')
+  const [state, setState]               = useState(facility.state || 'MA')
+  const [submitting, setSubmitting]     = useState(false)
+  const [error, setError]               = useState(null)
+
+  async function submit(e) {
+    e?.preventDefault()
+    setError(null)
+    if (!name.trim()) { setError('Facility name is required.'); return }
+    setSubmitting(true)
+    try {
+      await adminAPI.updateFacility(facility.id, {
+        name: name.trim(),
+        facilityType: facilityType || null,
+        address: address.trim() || null,
+        zipCode: zipCode.trim() || null,
+        state: state.trim() || null,
+      })
+      onSaved()
+    } catch (err) {
+      setError(err.message || 'Could not update facility.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Edit Facility"
+      subtitle="Tier is changed from the Update Tier dropdown on the facility row."
+      onClose={onClose}
+      maxWidth={560}
+    >
+      <form onSubmit={submit}>
+        <Field label="Facility name *">
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus style={inputStyle} />
+        </Field>
+
+        <Field label="Type">
+          <select value={facilityType} onChange={(e) => setFacilityType(e.target.value)} style={inputStyle}>
+            {FACILITY_TYPES.map((t) => <option key={t.value || 'none'} value={t.value}>{t.label}</option>)}
+          </select>
+        </Field>
+
+        <Field label="Address">
+          <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St" style={inputStyle} />
+        </Field>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12 }}>
+          <Field label="ZIP">
+            <input type="text" value={zipCode} onChange={(e) => setZipCode(e.target.value)} placeholder="02101" style={inputStyle} />
+          </Field>
+          <Field label="State">
+            <input type="text" value={state} onChange={(e) => setState(e.target.value)} maxLength={2} style={{ ...inputStyle, textTransform: 'uppercase' }} />
+          </Field>
+        </div>
+
+        {error && <div style={{ padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, color: '#B91C1C', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+          <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Cancel
+          </button>
+          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </form>

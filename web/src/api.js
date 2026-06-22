@@ -621,9 +621,17 @@ export const adminAPI = {
 
   updateSubscription: (facilityId, tier) =>
     apiFetch(`${BASE}/admin/facilities/${facilityId}/subscription`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: adminHeaders(),
       body: JSON.stringify({ tier }),
+    }),
+
+  // Edit a facility's core details after creation (name, type, address, etc.).
+  updateFacility: (facilityId, data) =>
+    apiFetch(`${BASE}/admin/facilities/${facilityId}`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify(data),
     }),
 
   // Facility invite + claim flow — see capa-pilot/facility-invite-spec.md
