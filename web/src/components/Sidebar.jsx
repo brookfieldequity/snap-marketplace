@@ -34,21 +34,6 @@ const SHIFTS_NAV = [
       { key: 'calculator',     label: 'Calculator',         icon: '🧮' },
     ],
   },
-  {
-    // The whole Payroll group is gated behind the payroll_builder feature flag.
-    type: 'group',
-    id: 'payroll',
-    label: 'Payroll',
-    icon: '💵',
-    flag: 'payroll_builder',
-    items: [
-      { key: 'hour-entry',     label: 'Provider Hours',  icon: '⏱' },
-      { key: 'payroll',        label: 'Payroll Builder', icon: '💵' },
-      { key: 'payroll-history',label: 'Payroll History', icon: '🧾' },
-      { key: 'agency-invoice', label: 'Agency Invoice',  icon: '📑' },
-      { key: 'agency-metrics', label: 'Profitability',   icon: '📈' },
-    ],
-  },
   { type: 'item', key: 'roster', label: 'Internal Roster', icon: '👥' },
 ]
 
@@ -56,6 +41,16 @@ const MARKETPLACE_ITEMS = [
   { key: 'dashboard',  label: 'Dashboard',   icon: '🏠' },
   { key: 'post-shift', label: 'Post a Shift', icon: '➕' },
   { key: 'shifts',     label: 'My Shifts',   icon: '📋' },
+]
+
+// SNAP Ops (practice management) — payroll + agency back-office. Its own
+// top-level capability, toggled from the header; shown when payroll_builder is on.
+const OPS_ITEMS = [
+  { key: 'hour-entry',     label: 'Provider Hours',  icon: '⏱' },
+  { key: 'payroll',        label: 'Payroll Builder', icon: '💵' },
+  { key: 'payroll-history',label: 'Payroll History', icon: '🧾' },
+  { key: 'agency-invoice', label: 'Agency Invoice',  icon: '📑' },
+  { key: 'agency-metrics', label: 'Profitability',   icon: '📈' },
 ]
 
 const SHARED_ITEMS = [
@@ -218,10 +213,9 @@ function Divider() {
   )
 }
 
-export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, snapMode, featureFlags = {} }) {
-  const isShiftsMode = snapMode === 'SHIFTS' || snapMode === 'BOTH'
-  const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
-
+export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, activeTab, featureFlags = {} }) {
+  // The header toggle picks one capability at a time; the sidebar shows just
+  // that tab's nav (+ the always-on Account section) for a tidy menu.
   const shiftsNav = filterShiftsNav(featureFlags)
 
   // Track which collapsible groups are open. Default: everything collapsed
@@ -285,7 +279,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
       {/* Nav */}
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         {/* SNAP Shifts section */}
-        {isShiftsMode && (
+        {activeTab === 'shifts' && (
           <>
             <SectionHeader label="SNAP Shifts" />
             {shiftsNav.map((node) => {
@@ -327,10 +321,26 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         )}
 
         {/* SNAP Marketplace section */}
-        {isMarketplaceMode && (
+        {activeTab === 'marketplace' && (
           <>
             <SectionHeader label="SNAP Marketplace" />
             {MARKETPLACE_ITEMS.map((item) => (
+              <NavItem
+                key={item.key}
+                item={item}
+                isActive={activePage === item.key}
+                onNavigate={onNavigate}
+              />
+            ))}
+            <Divider />
+          </>
+        )}
+
+        {/* SNAP Ops section (practice management) */}
+        {activeTab === 'ops' && (
+          <>
+            <SectionHeader label="SNAP Ops" />
+            {OPS_ITEMS.map((item) => (
               <NavItem
                 key={item.key}
                 item={item}

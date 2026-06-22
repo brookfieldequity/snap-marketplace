@@ -101,6 +101,9 @@ export default function App() {
   // which nav items / pages render. Defaults to empty (everything gated off)
   // until loaded.
   const [featureFlags, setFeatureFlags] = useState({})
+  // The active top-level capability tab: 'shifts' | 'marketplace' | 'ops'.
+  // null until capabilities (snapMode + flags) load, then reconciled below.
+  const [activeTab, setActiveTab] = useState(null)
 
   // Admin-side state
   const [adminPage, setAdminPage] = useState('overview')
@@ -134,6 +137,37 @@ export default function App() {
         // Silently ignore — flags stay off (features hidden) on failure
       })
   }, [facilityToken])
+
+  // Top-level capability tabs (header toggle), derived from snapMode + flags.
+  // SNAP Ops = practice management (payroll), gated by the payroll_builder flag.
+  const TAB_META = {
+    shifts:      { label: 'SNAP Shifts',      page: 'shifts-dashboard' },
+    marketplace: { label: 'SNAP Marketplace', page: 'dashboard' },
+    ops:         { label: 'SNAP Ops',         page: 'hour-entry' },
+  }
+  const availableTabs = [
+    (snapMode === 'SHIFTS' || snapMode === 'BOTH') && 'shifts',
+    (snapMode === 'MARKETPLACE' || snapMode === 'BOTH') && 'marketplace',
+    featureFlags.payroll_builder && 'ops',
+  ].filter(Boolean)
+
+  // Once capabilities load, ensure the active tab is one the facility actually
+  // has and align the visible page with it (so a Shifts-only facility doesn't
+  // land on the marketplace dashboard).
+  useEffect(() => {
+    if (!facilityToken || availableTabs.length === 0) return
+    if (!activeTab || !availableTabs.includes(activeTab)) {
+      const t = availableTabs[0]
+      setActiveTab(t)
+      setFacilityPage(TAB_META[t].page)
+    }
+  }, [facilityToken, snapMode, featureFlags]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Switch the header tab: change the visible capability and jump to its home page.
+  function navigateTab(tab) {
+    setActiveTab(tab)
+    setFacilityPage(TAB_META[tab].page)
+  }
 
   function handleFacilityLogin(token, name) {
     localStorage.setItem('snapFacilityToken', token)
@@ -175,6 +209,7 @@ export default function App() {
   if (facilityToken) {
     const isShiftsMode = snapMode === 'SHIFTS' || snapMode === 'BOTH'
     const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
+    const isOpsMode = !!featureFlags.payroll_builder
 
     return (
       <div style={{ minHeight: '100vh' }}>
@@ -201,50 +236,39 @@ export default function App() {
             <img src="/snappy-mascot.png" alt="" style={{ height: 42, width: 'auto', display: 'block' }} />
           </div>
 
-          {/* Center: mode toggle pills */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0,
-              background: '#F1F5F9',
-              borderRadius: 999,
-              padding: 3,
-            }}
-          >
-            <button
-              onClick={() => handleModeSwitch('SHIFTS')}
+          {/* Center: capability toggle pills (only the tabs this facility has) */}
+          {availableTabs.length > 1 && (
+            <div
               style={{
-                padding: '6px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0,
+                background: '#F1F5F9',
                 borderRadius: 999,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                background: snapMode === 'SHIFTS' || snapMode === 'BOTH' ? '#2563EB' : 'transparent',
-                color: snapMode === 'SHIFTS' || snapMode === 'BOTH' ? '#fff' : '#64748B',
+                padding: 3,
               }}
             >
-              SNAP Shifts
-            </button>
-            <button
-              onClick={() => handleModeSwitch('MARKETPLACE')}
-              style={{
-                padding: '6px 20px',
-                borderRadius: 999,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                background: snapMode === 'MARKETPLACE' || snapMode === 'BOTH' ? '#2563EB' : 'transparent',
-                color: snapMode === 'MARKETPLACE' || snapMode === 'BOTH' ? '#fff' : '#64748B',
-              }}
-            >
-              SNAP Marketplace
-            </button>
-          </div>
+              {availableTabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => navigateTab(tab)}
+                  style={{
+                    padding: '6px 20px',
+                    borderRadius: 999,
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    background: activeTab === tab ? '#2563EB' : 'transparent',
+                    color: activeTab === tab ? '#fff' : '#64748B',
+                  }}
+                >
+                  {TAB_META[tab].label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Right: facility name */}
           <div
@@ -270,7 +294,7 @@ export default function App() {
             onNavigate={setFacilityPage}
             facilityName={facilityName}
             onLogout={handleFacilityLogout}
-            snapMode={snapMode}
+            activeTab={activeTab}
             featureFlags={featureFlags}
           />
           <main style={{ flex: 1, marginLeft: 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
@@ -320,19 +344,19 @@ export default function App() {
             {isShiftsMode && facilityPage === 'data-upload' && (
               <DataUploadPage onNavigate={setFacilityPage} />
             )}
-            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'payroll' && (
+            {isOpsMode && facilityPage ==='payroll' && (
               <PayrollBuilderPage onNavigate={setFacilityPage} />
             )}
-            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'payroll-history' && (
+            {isOpsMode && facilityPage ==='payroll-history' && (
               <PayrollHistoryPage onNavigate={setFacilityPage} />
             )}
-            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'agency-invoice' && (
+            {isOpsMode && facilityPage ==='agency-invoice' && (
               <AgencyInvoicePage onNavigate={setFacilityPage} />
             )}
-            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'hour-entry' && (
+            {isOpsMode && facilityPage ==='hour-entry' && (
               <HourEntryPage onNavigate={setFacilityPage} />
             )}
-            {isShiftsMode && featureFlags.payroll_builder && facilityPage === 'agency-metrics' && (
+            {isOpsMode && facilityPage ==='agency-metrics' && (
               <AgencyMetricsPage onNavigate={setFacilityPage} />
             )}
 
