@@ -43,14 +43,15 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
     return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
   }
 
-  const needleDeg = -180 + (score / 100) * 180;
+  const hasScore = score != null;
+  const needleDeg = -180 + ((hasScore ? score : 0) / 100) * 180;
   const needleRad = toRad(needleDeg);
   const needleLen = 85;
   const nx = cx + needleLen * Math.cos(needleRad);
   const ny = cy + needleLen * Math.sin(needleRad);
 
-  const zoneColors = { red: '#EF4444', yellow: '#F59E0B', green: '#10B981', blue: '#3B82F6' };
-  const zoneColor = zoneColors[zone] || '#10B981';
+  const zoneColors = { red: '#EF4444', yellow: '#F59E0B', green: '#10B981', blue: '#3B82F6', neutral: '#94A3B8' };
+  const zoneColor = hasScore ? (zoneColors[zone] || '#10B981') : '#CBD5E1';
 
   return (
     <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0', padding: '24px 28px', width: 360, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -80,17 +81,21 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
         <path d={arcPath(40, 70)} fill="none" stroke="#F59E0B" strokeWidth={20} />
         <path d={arcPath(70, 89)} fill="none" stroke="#10B981" strokeWidth={20} />
         <path d={arcPath(89, 100)} fill="none" stroke="#3B82F6" strokeWidth={20} />
-        {/* Needle */}
-        <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="#0F172A" strokeWidth={3} strokeLinecap="round" />
-        <circle cx={cx} cy={cy} r={6} fill="#0F172A" />
+        {/* Needle — hidden until a real score exists */}
+        {hasScore && (
+          <>
+            <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="#0F172A" strokeWidth={3} strokeLinecap="round" />
+            <circle cx={cx} cy={cy} r={6} fill="#0F172A" />
+          </>
+        )}
         {/* Score text */}
-        <text x={cx} y={cy - 20} textAnchor="middle" fontSize={42} fontWeight={900} fill={zoneColor}>{score}</text>
+        <text x={cx} y={cy - 20} textAnchor="middle" fontSize={42} fontWeight={900} fill={zoneColor}>{hasScore ? score : '—'}</text>
         <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fill="#64748B">StaffIQ Score</text>
       </svg>
 
       {/* Status message */}
       <div style={{ textAlign: 'center', fontSize: 12, color: '#475569', lineHeight: 1.5, marginTop: 4, minHeight: 36 }}>
-        {status}
+        {status || (hasScore ? '' : 'Upload scheduling data and run an analysis to generate your StaffIQ score.')}
       </div>
       <div style={{ textAlign: 'center', fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginTop: 6 }}>
         Powered by StaffIQ™
@@ -286,36 +291,13 @@ function StatCard({ label, value, icon, color = '#2563EB', sub, loading, accent 
 }
 
 // ─── Fallback mock data ───────────────────────────────────────────────────────
-const MOCK_DASHBOARD = {
-  savings: {
-    efficiencyMonth: 8200,
-    efficiencyYtd: 52400,
-    agencyReplacementMonth: 14600,
-    agencyReplacementYtd: 87300,
-    totalMonth: 22800,
-    totalYtd: 139700,
-  },
-  stats: {
-    upcomingShifts14Days: 18,
-    upcomingFilled: 14,
-    predictedGaps30Days: 4,
-    gapDaysUntilCritical: 10,
-    providerUtilizationPct: 76,
-    avgFillLeadTimeDays: 3.2,
-    avgFillLeadTimeLastMonthDays: 4.1,
-    incentiveShiftsThisMonth: 3,
-    incentiveFillRate: 67,
-    escalatedToMarketplace: 1,
-  },
-}
-
 export default function SnapShiftsDashboard({ onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeMsg, setAnalyzeMsg] = useState('')
-  const [staffiqScore, setStaffiqScore] = useState({ score: 84, status: 'Your facility is below industry average efficiency. Significant savings available.', zone: 'yellow', calculationMethod: 'default' })
+  const [staffiqScore, setStaffiqScore] = useState({ score: null, status: '', zone: 'neutral', calculationMethod: 'default' })
   const [scorePeriod, setScorePeriod] = useState('month')
 
   async function loadDashboard() {
@@ -325,8 +307,9 @@ export default function SnapShiftsDashboard({ onNavigate }) {
       const d = await facilityAPI.getStaffIQDashboard()
       setData(d)
     } catch (err) {
-      // Show mock data + a prompt to upload if the API hasn't been seeded yet
-      setData(MOCK_DASHBOARD)
+      // Never show fabricated data — render the empty/zero state and prompt to
+      // upload scheduling data when the API has nothing yet.
+      setData(null)
       if (err.status === 404 || err.status === 422) {
         setError('no-data')
       }
@@ -345,7 +328,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
         if (!res) return;
         // status comes back as { label, message, zone } — flatten it
         setStaffiqScore({
-          score: res.score ?? 84,
+          score: res.score ?? null,
           status: res.status?.message || (typeof res.status === 'string' ? res.status : '') || '',
           zone: res.status?.zone || res.zone || 'yellow',
           calculationMethod: res.calculationMethod || 'default',
@@ -368,9 +351,33 @@ export default function SnapShiftsDashboard({ onNavigate }) {
     }
   }
 
-  const d = data || MOCK_DASHBOARD
-  const savings = d.savings || MOCK_DASHBOARD.savings
-  const stats = d.stats || MOCK_DASHBOARD.stats
+  const d = data || {}
+  // Map the real /staffiq/dashboard response into the flat view-model this
+  // page renders. Backend savings are nested ({internal,agencyReplacement,
+  // total}:{month,ytd}); the stat fields are top-level. Unknown fields stay
+  // null/0 — never fabricated.
+  const rawSavings = d.savings || {}
+  const savings = {
+    efficiencyMonth:        rawSavings.internal?.month || 0,
+    efficiencyYtd:          rawSavings.internal?.ytd || 0,
+    agencyReplacementMonth: rawSavings.agencyReplacement?.month || 0,
+    agencyReplacementYtd:   rawSavings.agencyReplacement?.ytd || 0,
+    totalMonth:             rawSavings.total?.month || 0,
+    totalYtd:               rawSavings.total?.ytd || 0,
+  }
+  const upcoming = d.upcomingShifts || []
+  const stats = {
+    upcomingShifts14Days:         upcoming.length,
+    upcomingFilled:               upcoming.filter((s) => s.fillStatus === 'FILLED').length,
+    predictedGaps30Days:          (d.predictedGaps || []).length,
+    gapDaysUntilCritical:         null, // not provided by the API
+    providerUtilizationPct:       d.utilizationRate ?? null, // already 0–100
+    avgFillLeadTimeDays:          d.avgFillLeadTime ?? null,
+    avgFillLeadTimeLastMonthDays: null, // not provided → no trend shown
+    incentiveShiftsThisMonth:     d.incentiveShiftsThisMonth || 0,
+    incentiveFillRate:            null, // not provided by the API
+    escalatedToMarketplace:       d.escalationsThisMonth || 0,
+  }
 
   const gapColor =
     stats.predictedGaps30Days === 0
