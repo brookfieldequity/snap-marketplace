@@ -11,7 +11,7 @@ const { sendSMS, sendEmail } = require('../services/notifications');
 const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
 const ptoService = require('../services/pto');
 const { applyRosterRateLens, lensRosterEntry } = require('../services/rosterLens');
-const { importAllInRates } = require('../services/hourEntry');
+const { importAllInRates, importPayrollRates } = require('../services/hourEntry');
 
 const router = express.Router();
 
@@ -177,6 +177,20 @@ router.post('/import-all-in-rates', facilityAuth, rosterUpload.single('file'), a
   } catch (err) {
     console.error('[roster/import-all-in-rates]', err.message);
     res.status(400).json({ error: err.message || 'Failed to import all-in rates.' });
+  }
+});
+
+// POST /import-pay-rates — bulk-set each roster card's payroll PAY rate
+// (hourlyRate) from an uploaded sheet (name/business + a "rate" column).
+// Update-only: unrecognized providers are skipped (not added) and reported.
+router.post('/import-pay-rates', facilityAuth, rosterUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const result = await importPayrollRates({ facilityId: req.facility.id, buffer: req.file.buffer });
+    res.json(result);
+  } catch (err) {
+    console.error('[roster/import-pay-rates]', err.message);
+    res.status(400).json({ error: err.message || 'Failed to import pay rates.' });
   }
 });
 

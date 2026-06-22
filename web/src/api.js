@@ -215,6 +215,16 @@ export const facilityAPI = {
       body: fd,
     })
   },
+  importPayRates: async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/roster/import-pay-rates`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
 
   // Availability Windows
   getWindows: () => apiFetch(`${BASE}/windows`, { headers: facilityHeaders() }),

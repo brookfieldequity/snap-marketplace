@@ -380,11 +380,16 @@ const ALL_IN_RATE_HEADERS = new Set([
   'caparate', 'caparatehr', 'allin', 'allinrate', 'allinhourly', 'allinhourlyrate',
   'allincost', 'allincostperhour', 'billrate',
 ]);
+// Payroll PAY rate (what the employer pays the provider) → hourlyRate.
+const PAY_RATE_HEADERS = new Set([
+  'rate', 'payrate', 'payratehr', 'payrollrate', 'hourlyrate', 'hourlyratehr',
+  'contractorrate', 'contractorpayrate',
+]);
 function normHeader(h) {
   return String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function parseAllInRateSheet(buffer) {
+function parseRateSheet(buffer, rateHeaders) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   for (const name of wb.SheetNames) {
     const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: false });
@@ -394,7 +399,7 @@ function parseAllInRateSheet(buffer) {
       const hdr = (grid[h] || []).map(normHeader);
       const ci = {
         headerRow: h,
-        rate: hdr.findIndex((x) => ALL_IN_RATE_HEADERS.has(x)),
+        rate: hdr.findIndex((x) => rateHeaders.has(x)),
         type: hdr.indexOf('contractortype'),
         first: hdr.indexOf('firstname'),
         last: hdr.indexOf('lastname'),
@@ -421,13 +426,14 @@ function parseAllInRateSheet(buffer) {
 }
 
 // Match each parsed row to an existing roster card (Business by business name,
-// Individual by name fingerprint) and set allInCostPerHour. Update-only — never
-// seeds, so a name typo can't create a duplicate card; unmatched rows are
-// reported back so the coordinator can reconcile.
-async function importAllInRates({ facilityId, buffer }) {
-  const parsed = parseAllInRateSheet(buffer);
+// Individual by name fingerprint) and set ONE rate field. Update-only — never
+// seeds, so a name typo can't create a duplicate card and unrecognized
+// (inactive) providers are skipped; unmatched rows are reported so the
+// coordinator can reconcile.
+async function importRates({ facilityId, buffer, rateHeaders, field }) {
+  const parsed = parseRateSheet(buffer, rateHeaders);
   if (!parsed.length) {
-    throw new Error('No rate rows found — need a name/business column and an all-in (CAPA) rate column.');
+    throw new Error('No rate rows found — need a name/business column and a rate column.');
   }
 
   const roster = await prisma.internalRosterEntry.findMany({
@@ -457,13 +463,22 @@ async function importAllInRates({ facilityId, buffer }) {
     if (!rosterId) { unmatched.push(displayName); continue; }
     await prisma.internalRosterEntry.update({
       where: { id: rosterId },
-      data: { allInCostPerHour: row.rate },
+      data: { [field]: row.rate },
     });
     updated += 1;
   }
 
   return { rows: parsed.length, updated, skippedNoRate, unmatched };
 }
+
+// All-in (CAPA bill) rate → allInCostPerHour.
+const parseAllInRateSheet = (buffer) => parseRateSheet(buffer, ALL_IN_RATE_HEADERS);
+const importAllInRates = ({ facilityId, buffer }) =>
+  importRates({ facilityId, buffer, rateHeaders: ALL_IN_RATE_HEADERS, field: 'allInCostPerHour' });
+
+// Payroll PAY rate (what the provider is paid) → hourlyRate.
+const importPayrollRates = ({ facilityId, buffer }) =>
+  importRates({ facilityId, buffer, rateHeaders: PAY_RATE_HEADERS, field: 'hourlyRate' });
 
 module.exports = {
   minutesOf,
@@ -477,4 +492,5 @@ module.exports = {
   importApnePayrollSheet,
   parseAllInRateSheet,
   importAllInRates,
+  importPayrollRates,
 };

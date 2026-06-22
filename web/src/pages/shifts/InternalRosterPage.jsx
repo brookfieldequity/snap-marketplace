@@ -159,6 +159,7 @@ export default function InternalRosterPage({ onNavigate }) {
   const [uploadFile, setUploadFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [allInUploading, setAllInUploading] = useState(false)
+  const [payRateUploading, setPayRateUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null) // { summary, created, errors }
   const [uploadError, setUploadError] = useState(null)
   const [locationInput, setLocationInput] = useState('')
@@ -262,6 +263,27 @@ export default function InternalRosterPage({ onNavigate }) {
       alert(err.message || 'Failed to import all-in rates.')
     } finally {
       setAllInUploading(false)
+    }
+  }
+
+  // Bulk-set each card's payroll PAY rate (hourlyRate) from an uploaded sheet.
+  // Update-only: unrecognized providers are skipped and reported.
+  async function handlePayRateUpload(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPayRateUploading(true)
+    try {
+      const res = await facilityAPI.importPayRates(file)
+      const parts = [`Updated pay rate on ${res.updated} of ${res.rows} cards.`]
+      if (res.skippedNoRate) parts.push(`${res.skippedNoRate} row(s) had no rate.`)
+      if (res.unmatched?.length) parts.push(`Could not match (${res.unmatched.length}): ${res.unmatched.join(', ')}`)
+      alert(parts.join('\n\n'))
+      await load()
+    } catch (err) {
+      alert(err.message || 'Failed to import pay rates.')
+    } finally {
+      setPayRateUploading(false)
     }
   }
 
@@ -678,6 +700,13 @@ export default function InternalRosterPage({ onNavigate }) {
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>💲</span> {allInUploading ? 'Uploading…' : 'Upload All-In Rates'}
             <input type="file" accept=".csv,.xlsx,.xls" onChange={handleAllInUpload} disabled={allInUploading} style={{ display: 'none' }} />
+          </label>
+          <label
+            title="Bulk-set each card's payroll PAY rate from a sheet with a name/business column and a rate column"
+            style={{ padding: '11px 18px', background: '#fff', color: '#7C3AED', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: payRateUploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: payRateUploading ? 0.6 : 1 }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>👤</span> {payRateUploading ? 'Uploading…' : 'Upload Pay Rates'}
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={handlePayRateUpload} disabled={payRateUploading} style={{ display: 'none' }} />
           </label>
           <button
             onClick={openInviteModal}
