@@ -440,11 +440,19 @@ async function importRates({ facilityId, buffer, rateHeaders, field }) {
     where: { facilityId },
     select: { id: true, providerName: true, businessName: true },
   });
+  // Build several lookups per card so matching survives how the name is stored:
+  //   byNameKey   — first-initial+last fingerprint of the provider name (people)
+  //   byBiz       — normalized businessName field (when populated)
+  //   byProvNorm  — normalized provider name (catches businesses whose name
+  //                 lives in providerName rather than the businessName field)
   const byNameKey = new Map();
   const byBiz = new Map();
+  const byProvNorm = new Map();
   for (const e of roster) {
     const nk = buildNameKey(e.providerName);
     if (nk) byNameKey.set(nk, e.id);
+    const pn = normBiz(e.providerName);
+    if (pn) byProvNorm.set(pn, e.id);
     if (e.businessName) byBiz.set(normBiz(e.businessName), e.id);
   }
 
@@ -457,8 +465,13 @@ async function importRates({ facilityId, buffer, rateHeaders, field }) {
     if (!displayName) continue;
     if (row.rate == null) { skippedNoRate += 1; continue; }
 
-    let rosterId = isBiz ? byBiz.get(normBiz(row.businessName)) : null;
-    if (!rosterId) rosterId = byNameKey.get(buildNameKey(displayName)) || null;
+    let rosterId = null;
+    if (isBiz) {
+      const k = normBiz(row.businessName);
+      rosterId = byBiz.get(k) || byProvNorm.get(k) || byNameKey.get(buildNameKey(row.businessName)) || null;
+    } else {
+      rosterId = byNameKey.get(buildNameKey(displayName)) || byProvNorm.get(normBiz(displayName)) || null;
+    }
 
     if (!rosterId) { unmatched.push(displayName); continue; }
     await prisma.internalRosterEntry.update({
