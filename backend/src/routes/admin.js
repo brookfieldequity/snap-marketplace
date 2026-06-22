@@ -1566,4 +1566,93 @@ router.get('/facilities/:id/invites', adminAuth, async (req, res) => {
 });
 
 
+// ── EOR employer-of-record setup + backfill ─────────────────────────────────
+//
+// Wires the rate firewall: ensures Employer records exist and tags a facility's
+// roster rows with an employerId so services/rosterLens.js can strip agency
+// payroll rates from the facility's lens.
+//
+// POST /admin/eor/tag
+//   {
+//     facilityId,                        // whose roster to tag (e.g. CAPA)
+//     agencyName,                        // staffing-agency employer name (e.g. "APNE")
+//     agencyOwnerFacilityId?,            // the agency's own SNAP facility account (set once it exists)
+//     matchEmployerNames?: ["APNE"],     // roster rows whose free-form `employer` matches → agency
+//     matchIs1099?: false,               // also treat is1099 rows as agency-employed
+//     tagOwnStaff?: true,                 // tag the remaining rows to the facility's FACILITY_SELF employer
+//   }
+router.post('/eor/tag', adminAuth, async (req, res) => {
+  try {
+    const {
+      facilityId,
+      agencyName,
+      agencyOwnerFacilityId = null,
+      matchEmployerNames = [],
+      matchIs1099 = false,
+      tagOwnStaff = true,
+    } = req.body || {};
+
+    if (!facilityId) return res.status(400).json({ error: 'facilityId is required.' });
+
+    const facility = await prisma.facility.findUnique({ where: { id: facilityId }, select: { id: true, name: true } });
+    if (!facility) return res.status(404).json({ error: 'Facility not found.' });
+
+    // 1. Ensure this facility's own employer-of-record (FACILITY_SELF).
+    let selfEmployer = await prisma.employer.findUnique({ where: { ownerFacilityId: facility.id } });
+    if (!selfEmployer) {
+      selfEmployer = await prisma.employer.create({
+        data: { name: facility.name || 'Facility', kind: 'FACILITY_SELF', ownerFacilityId: facility.id },
+      });
+    }
+
+    // 2. Ensure the staffing-agency employer (STAFFING_AGENCY), if requested.
+    let agencyEmployer = null;
+    if (agencyName) {
+      agencyEmployer = await prisma.employer.findFirst({ where: { name: agencyName, kind: 'STAFFING_AGENCY' } });
+      if (!agencyEmployer) {
+        agencyEmployer = await prisma.employer.create({
+          data: { name: agencyName, kind: 'STAFFING_AGENCY', ownerFacilityId: agencyOwnerFacilityId || null },
+        });
+      } else if (agencyOwnerFacilityId && agencyEmployer.ownerFacilityId !== agencyOwnerFacilityId) {
+        // Link the agency to its own SNAP account once it exists (one-to-one).
+        agencyEmployer = await prisma.employer.update({
+          where: { id: agencyEmployer.id },
+          data: { ownerFacilityId: agencyOwnerFacilityId },
+        });
+      }
+    }
+
+    // 3. Backfill employerId on the facility's roster.
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: facility.id },
+      select: { id: true, employer: true, is1099: true, employerId: true },
+    });
+    const names = matchEmployerNames.map((n) => String(n).trim().toLowerCase());
+    let taggedAgency = 0;
+    let taggedSelf = 0;
+    for (const e of entries) {
+      const empName = (e.employer || '').trim().toLowerCase();
+      const isAgency = agencyEmployer && ((empName && names.includes(empName)) || (matchIs1099 && e.is1099 === true));
+      const targetId = isAgency ? agencyEmployer.id : (tagOwnStaff ? selfEmployer.id : null);
+      if (!targetId || e.employerId === targetId) continue;
+      // eslint-disable-next-line no-await-in-loop
+      await prisma.internalRosterEntry.update({ where: { id: e.id }, data: { employerId: targetId } });
+      if (isAgency) taggedAgency += 1; else taggedSelf += 1;
+    }
+
+    res.json({
+      facility: facility.name,
+      selfEmployerId: selfEmployer.id,
+      agencyEmployer: agencyEmployer ? { id: agencyEmployer.id, name: agencyEmployer.name, ownerFacilityId: agencyEmployer.ownerFacilityId } : null,
+      taggedAgency,
+      taggedSelf,
+      scanned: entries.length,
+    });
+  } catch (err) {
+    console.error('[admin] eor/tag failed:', err);
+    res.status(500).json({ error: 'Failed to tag employer-of-record.' });
+  }
+});
+
+
 module.exports = router;

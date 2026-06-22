@@ -966,6 +966,12 @@ export default function InternalRosterPage({ onNavigate }) {
 
                 {rateLabel ? (
                   <div style={{ fontSize: 12, color: '#2563EB', fontWeight: 600 }}>{rateLabel}</div>
+                ) : p.payrollMasked ? (
+                  // EOR firewall: this provider is employed by another org, so
+                  // their payroll rate isn't ours to see — only the all-in cost.
+                  <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>
+                    🔒 Payroll via {p.employerName || 'agency'}
+                  </div>
                 ) : needsRate(p) ? (
                   <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No rate — savings demo uses default</div>
                 ) : null}

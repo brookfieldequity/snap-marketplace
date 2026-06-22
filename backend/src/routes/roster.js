@@ -10,6 +10,7 @@ const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS, sendEmail } = require('../services/notifications');
 const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
 const ptoService = require('../services/pto');
+const { applyRosterRateLens, lensRosterEntry } = require('../services/rosterLens');
 
 const router = express.Router();
 
@@ -149,10 +150,15 @@ router.get('/', facilityAuth, async (req, res) => {
   try {
     const entries = await prisma.internalRosterEntry.findMany({
       where: { facilityId: req.facility.id },
-      include: { locations: { select: { facilityName: true, shiftSharePct: true } } },
+      include: {
+        locations: { select: { facilityName: true, shiftSharePct: true } },
+        // employerRef drives the EOR rate firewall — see services/rosterLens.js
+        employerRef: { select: { name: true, kind: true, ownerFacilityId: true } },
+      },
       orderBy: { providerName: 'asc' },
     });
-    res.json(entries);
+    // Strip agency payroll rates the viewing facility isn't entitled to see.
+    res.json(applyRosterRateLens(entries, req.facility.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -250,6 +256,7 @@ router.post('/', facilityAuth, async (req, res) => {
         contractStart: contractStart ? new Date(contractStart) : null,
         contractEnd: contractEnd ? new Date(contractEnd) : null,
         employer: employer || null,
+        employerId: req.body.employerId || null, // employer-of-record (EOR firewall)
         is1099: typeof is1099 === 'boolean' ? is1099 : null,
         isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null,
         businessName: businessName || null,
@@ -265,9 +272,10 @@ router.post('/', facilityAuth, async (req, res) => {
           ? { locations: { create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
           : {}),
       },
+      include: { employerRef: { select: { name: true, kind: true, ownerFacilityId: true } } },
     });
 
-    res.status(201).json(entry);
+    res.status(201).json(lensRosterEntry(entry, req.facility.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -337,6 +345,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(contractStart !== undefined && { contractStart: contractStart ? new Date(contractStart) : null }),
         ...(contractEnd !== undefined && { contractEnd: contractEnd ? new Date(contractEnd) : null }),
         ...(employer !== undefined && { employer: employer || null }),
+        ...(req.body.employerId !== undefined && { employerId: req.body.employerId || null }),
         ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
         ...(businessName !== undefined && { businessName: businessName || null }),
@@ -360,9 +369,10 @@ router.patch('/:id', facilityAuth, async (req, res) => {
           ? { locations: { deleteMany: {}, create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
           : {}),
       },
+      include: { employerRef: { select: { name: true, kind: true, ownerFacilityId: true } } },
     });
 
-    res.json(updated);
+    res.json(lensRosterEntry(updated, req.facility.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
