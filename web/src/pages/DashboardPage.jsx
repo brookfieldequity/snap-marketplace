@@ -163,36 +163,6 @@ function StatCard({ label, value, icon, color = '#2563EB', sub }) {
   )
 }
 
-// ─── Mock data (shown while API loads) ───────────────────────────────────────
-const MOCK = {
-  facilityName: 'Your Facility',
-  savings: {
-    monthAgency: 68400,
-    monthSnap: 41200,
-    ytdAgency: 412000,
-    ytdSnap: 247500,
-  },
-  stats: {
-    totalShifts: 24,
-    fillRate: 87,
-    open: 3,
-    filled: 4,
-    completed: 17,
-  },
-  pendingApplications: [
-    { id: 'a1', shiftId: 's1', providerName: 'Dr. Sarah Kim', specialty: 'CRNA', date: '2026-05-28', applicationId: 'app1' },
-    { id: 'a2', shiftId: 's2', providerName: 'Dr. James Obi', specialty: 'Anesthesiologist', date: '2026-05-30', applicationId: 'app2' },
-  ],
-  upcomingShifts: [
-    { id: 's3', date: '2026-05-24', specialty: 'CRNA', startTime: '07:00', duration: 8, providerName: 'Dr. Lisa Park', status: 'FILLED' },
-    { id: 's4', date: '2026-05-26', specialty: 'Anesthesiologist', startTime: '06:30', duration: 10, providerName: null, status: 'LIVE' },
-    { id: 's5', date: '2026-05-29', specialty: 'CRNA', startTime: '08:00', duration: 6, providerName: 'Dr. Tom Walsh', status: 'FILLED' },
-  ],
-  depositPending: [
-    { id: 's6', date: '2026-06-02', specialty: 'Anesthesiologist', rate: 295, duration: 8, status: 'DEPOSIT_PENDING' },
-  ],
-}
-
 export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMode }) {
   const [data, setData] = useState(null)
   const [facility, setFacility] = useState(null)
@@ -204,16 +174,13 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
       facilityAPI.getDashboard(),
       facilityAPI.getMe(),
     ]).then(([dRes, fRes]) => {
-      if (dRes.status === 'fulfilled') {
-        const d = dRes.value
-        setData(d)
-        if (d.facilityName && onFacilityNameLoaded) onFacilityNameLoaded(d.facilityName)
-      } else {
-        // Fall back to mock data for development
-        setData(MOCK)
-        if (onFacilityNameLoaded) onFacilityNameLoaded(MOCK.facilityName)
+      // Never fabricate data — if the dashboard call fails, render the empty
+      // state rather than placeholder/demo numbers a real customer would see.
+      setData(dRes.status === 'fulfilled' ? dRes.value : null)
+      if (fRes.status === 'fulfilled') {
+        setFacility(fRes.value)
+        if (fRes.value?.name && onFacilityNameLoaded) onFacilityNameLoaded(fRes.value.name)
       }
-      if (fRes.status === 'fulfilled') setFacility(fRes.value)
       setLoading(false)
     })
   }, [])
@@ -246,16 +213,55 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
     }
   }
 
-  const d = data || MOCK
+  const d = data || {}
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const savings = d.savings || {}
+  const facilityName = facility?.name || d.facilityName
   const isShiftsMode = snapMode === 'SHIFTS'
-  const rawMonthSavings = (savings.monthAgency || MOCK.savings.monthAgency) - (savings.monthSnap || MOCK.savings.monthSnap)
-  const rawYtdSavings   = (savings.ytdAgency || MOCK.savings.ytdAgency) - (savings.ytdSnap || MOCK.savings.ytdSnap)
-  const monthSavings = isShiftsMode ? Math.round(rawMonthSavings * 0.75) : rawMonthSavings
-  const ytdSavings   = isShiftsMode ? Math.round(rawYtdSavings * 0.75) : rawYtdSavings
-  const stats = d.stats || MOCK.stats
+
+  // Map the real /me/dashboard response shape:
+  //   { shifts:{total,open,filled,completed,depositPending,fillRate},
+  //     upcoming:[…], pendingApplications:[…],
+  //     savings:{thisMonth:{snapCost,agencyCost,savings}, yearToDate:{…}} }
+  const shiftStats = d.shifts || {}
+  const stats = {
+    totalShifts: shiftStats.total || 0,
+    fillRate:    shiftStats.fillRate || 0,
+    open:        shiftStats.open || 0,
+    filled:      shiftStats.filled || 0,
+    completed:   shiftStats.completed || 0,
+  }
+  const depositCount = shiftStats.depositPending || 0
+
+  const month = (d.savings && d.savings.thisMonth) || {}
+  const ytd   = (d.savings && d.savings.yearToDate) || {}
+  // In SHIFTS mode the savings are StaffIQ-attributed (a portion of the
+  // marketplace-equivalent figure); marketplace mode shows the full delta.
+  const monthSavings = isShiftsMode ? Math.round((month.savings || 0) * 0.75) : (month.savings || 0)
+  const ytdSavings   = isShiftsMode ? Math.round((ytd.savings || 0) * 0.75)   : (ytd.savings || 0)
+
+  const upcomingShifts = (d.upcoming || []).map((s) => ({
+    id: s.id,
+    date: s.date,
+    specialty: s.specialty,
+    startTime: s.startTime,
+    duration: s.durationHours,
+    status: s.status,
+    providerName: s.booking?.provider
+      ? `${s.booking.provider.firstName || ''} ${s.booking.provider.lastName || ''}`.trim()
+      : null,
+  }))
+
+  const pendingApplications = (d.pendingApplications || []).map((a) => ({
+    id: a.id,
+    shiftId: a.shift?.id,
+    applicationId: a.id,
+    providerName: a.provider
+      ? `${a.provider.firstName || ''} ${a.provider.lastName || ''}`.trim()
+      : 'Provider',
+    specialty: a.provider?.specialty || a.shift?.specialty,
+    date: a.shift?.date,
+  }))
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
@@ -264,7 +270,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            {greeting}, {d.facilityName || 'there'} 👋
+            {greeting}, {facilityName || 'there'} 👋
           </h1>
           <p style={{ fontSize: 15, color: '#64748B', marginTop: 4 }}>
             Here's your staffing overview
@@ -335,16 +341,16 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           <SavingsCard
             label="Cost Savings"
             period="This Month"
-            agencyCost={savings.monthAgency || MOCK.savings.monthAgency}
-            snapCost={savings.monthSnap || MOCK.savings.monthSnap}
+            agencyCost={month.agencyCost || 0}
+            snapCost={month.snapCost || 0}
             savings={monthSavings}
             isShiftsMode={isShiftsMode}
           />
           <SavingsCard
             label="Cost Savings"
             period="Year to Date"
-            agencyCost={savings.ytdAgency || MOCK.savings.ytdAgency}
-            snapCost={savings.ytdSnap || MOCK.savings.ytdSnap}
+            agencyCost={ytd.agencyCost || 0}
+            snapCost={ytd.snapCost || 0}
             savings={ytdSavings}
             isShiftsMode={isShiftsMode}
           />
@@ -372,7 +378,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
             </span>
           </div>
           <div style={{ fontSize: 28, fontWeight: 900, color: '#10B981', letterSpacing: '-0.03em' }}>
-            {fmt(ytdSavings + (savings.prevYears || 0))}
+            {fmt(ytdSavings)}
           </div>
         </div>
         {isShiftsMode && (
@@ -398,83 +404,67 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         <StatCard label="COMPLETED"     value={stats.completed || 0}      icon="✅" color="#10B981" />
       </div>
 
-      {/* ── Deposit Pending ────────────────────────────────────────────────── */}
-      {(d.depositPending || MOCK.depositPending).length > 0 && (
+      {/* ── Deposit Required ───────────────────────────────────────────────────
+            The dashboard endpoint returns a count only; per-shift confirmation
+            lives on the Shifts page. Show an actionable banner, never fake rows. */}
+      {depositCount > 0 && (
         <div style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>⚠️</span> Deposit Required
-            <span style={{ background: '#FEF2F2', color: '#DC2626', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #FCA5A5' }}>
-              {(d.depositPending || MOCK.depositPending).length}
-            </span>
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(d.depositPending || MOCK.depositPending).map((shift) => (
-              <div
-                key={shift.id}
-                style={{
-                  background: '#FFF',
-                  border: '1px solid #FCD34D',
-                  borderLeft: '4px solid #F59E0B',
-                  borderRadius: 12,
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 16,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: '#0F172A' }}>
-                    {shift.specialty} — {shift.date}
-                  </div>
-                  <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>
-                    {shift.duration}h @ {fmt(shift.rate)}/hr •{' '}
-                    <strong style={{ color: '#F59E0B' }}>
-                      Deposit due: {fmt(Math.round((shift.rate * shift.duration) * 0.25))}
-                    </strong>
-                    {' '}(25% of {fmt(shift.rate * shift.duration)})
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleConfirmDeposit(shift.id)}
-                  disabled={actionLoading[shift.id]}
-                  style={{
-                    padding: '9px 20px',
-                    background: '#F59E0B',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: actionLoading[shift.id] ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {actionLoading[shift.id] ? 'Processing...' : '✓ Confirm Deposit'}
-                </button>
-              </div>
-            ))}
+          <div
+            style={{
+              background: '#FFF',
+              border: '1px solid #FCD34D',
+              borderLeft: '4px solid #F59E0B',
+              borderRadius: 12,
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <span style={{ fontWeight: 600, fontSize: 15, color: '#0F172A' }}>
+                {depositCount} shift{depositCount === 1 ? '' : 's'} need{depositCount === 1 ? 's' : ''} a deposit to go live
+              </span>
+            </div>
+            <button
+              onClick={() => onNavigate('shifts')}
+              style={{
+                padding: '9px 20px',
+                background: '#F59E0B',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Review in Shifts →
+            </button>
           </div>
         </div>
       )}
 
       {/* ── Pending Applications ────────────────────────────────────────────── */}
-      {(d.pendingApplications || MOCK.pendingApplications).length > 0 && (
+      {pendingApplications.length > 0 && (
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>👤</span> Pending Applications
             <span style={{ background: '#EFF6FF', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #A5B4FC' }}>
-              {(d.pendingApplications || MOCK.pendingApplications).length}
+              {pendingApplications.length}
             </span>
           </h2>
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            {(d.pendingApplications || MOCK.pendingApplications).map((app, i) => (
+            {pendingApplications.map((app, i) => (
               <div
                 key={app.id || i}
                 style={{
                   padding: '16px 20px',
-                  borderBottom: i < (d.pendingApplications || MOCK.pendingApplications).length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < pendingApplications.length - 1 ? '1px solid #F1F5F9' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -556,7 +546,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           <span style={{ fontSize: 18 }}>📅</span> Upcoming Shifts (Next 7 Days)
         </h2>
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-          {(d.upcomingShifts || MOCK.upcomingShifts).length === 0 ? (
+          {upcomingShifts.length === 0 ? (
             <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
               No upcoming shifts in the next 7 days.{' '}
               <button onClick={() => onNavigate('post-shift')} style={{ color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -564,12 +554,12 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
               </button>
             </div>
           ) : (
-            (d.upcomingShifts || MOCK.upcomingShifts).map((shift, i) => (
+            upcomingShifts.map((shift, i) => (
               <div
                 key={shift.id}
                 style={{
                   padding: '16px 20px',
-                  borderBottom: i < (d.upcomingShifts || MOCK.upcomingShifts).length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < upcomingShifts.length - 1 ? '1px solid #F1F5F9' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',

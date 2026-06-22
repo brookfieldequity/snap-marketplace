@@ -6,24 +6,6 @@ function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-const MOCK_SHIFTS = [
-  { id: 's1', date: '2026-05-20', specialty: 'CRNA', startTime: '07:00', duration: 8, payRate: 275, status: 'COMPLETED', surge: false, providerName: 'Dr. Lisa Park' },
-  { id: 's2', date: '2026-05-22', specialty: 'Anesthesiologist', startTime: '06:30', duration: 10, payRate: 310, status: 'COMPLETED', surge: true, providerName: 'Dr. James Obi' },
-  { id: 's3', date: '2026-05-24', specialty: 'CRNA', startTime: '08:00', duration: 6, payRate: 265, status: 'FILLED', surge: false, providerName: 'Dr. Sarah Kim' },
-  { id: 's4', date: '2026-05-26', specialty: 'Anesthesiologist', startTime: '07:00', duration: 8, payRate: 295, status: 'LIVE', surge: false, providerName: null },
-  { id: 's5', date: '2026-05-28', specialty: 'CRNA', startTime: '06:00', duration: 10, payRate: 285, status: 'LIVE', surge: true, providerName: null },
-  { id: 's6', date: '2026-06-02', specialty: 'Anesthesiologist', startTime: '07:30', duration: 8, payRate: 295, status: 'DEPOSIT_PENDING', surge: false, providerName: null },
-  { id: 's7', date: '2026-04-15', specialty: 'CRNA', startTime: '07:00', duration: 8, payRate: 260, status: 'DISPUTED', surge: false, providerName: 'Dr. Tom Walsh' },
-]
-
-// Applicants detail (mock)
-const MOCK_APPLICANTS = {
-  s4: [
-    { id: 'app1', providerName: 'Dr. Priya Nair', specialty: 'Anesthesiologist', rating: 4.9, shiftsWorked: 12 },
-    { id: 'app2', providerName: 'Dr. Marcus Chen', specialty: 'Anesthesiologist', rating: 4.7, shiftsWorked: 8 },
-  ],
-}
-
 export default function ShiftsPage({ onNavigate }) {
   const [shifts, setShifts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +15,7 @@ export default function ShiftsPage({ onNavigate }) {
   useEffect(() => {
     facilityAPI.getShifts()
       .then(setShifts)
-      .catch(() => setShifts(MOCK_SHIFTS))
+      .catch(() => setShifts([]))
       .finally(() => setLoading(false))
   }, [])
 
@@ -158,7 +140,7 @@ export default function ShiftsPage({ onNavigate }) {
 
         {shifts.map((shift, i) => {
           const isExpanded = expandedRow === shift.id
-          const applicants = shift.applicants || MOCK_APPLICANTS[shift.id] || []
+          const applicants = shift.applicants || []
           const total = (shift.payRate || 0) * (shift.duration || 0)
 
           return (

@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../api.js'
 
-const MOCK_PROVIDERS = [
-  { id: 'p1', name: 'Dr. Lisa Park',   specialty: 'CRNA',              credentialed: true,  shiftsWorked: 14, avgRating: 4.9, preferred: true,  vip: true  },
-  { id: 'p2', name: 'Dr. James Obi',   specialty: 'Anesthesiologist',  credentialed: true,  shiftsWorked: 8,  avgRating: 4.7, preferred: true,  vip: false },
-  { id: 'p3', name: 'Dr. Sarah Kim',   specialty: 'CRNA',              credentialed: true,  shiftsWorked: 5,  avgRating: 4.8, preferred: false, vip: false },
-  { id: 'p4', name: 'Dr. Tom Walsh',   specialty: 'CRNA',              credentialed: false, shiftsWorked: 3,  avgRating: 4.2, preferred: false, vip: false },
-  { id: 'p5', name: 'Dr. Priya Nair',  specialty: 'Anesthesiologist',  credentialed: true,  shiftsWorked: 11, avgRating: 4.95,preferred: false, vip: true  },
-  { id: 'p6', name: 'Dr. Marcus Chen', specialty: 'Anesthesia Assistant', credentialed: true, shiftsWorked: 2, avgRating: 4.6, preferred: false, vip: false },
-]
-
 function Stars({ rating }) {
   const full = Math.floor(rating)
   const half = rating % 1 >= 0.5
@@ -33,7 +24,7 @@ export default function ProvidersPage() {
   useEffect(() => {
     facilityAPI.getProviders()
       .then(setProviders)
-      .catch(() => setProviders(MOCK_PROVIDERS))
+      .catch(() => setProviders([]))
       .finally(() => setLoading(false))
   }, [])
 
