@@ -158,6 +158,7 @@ export default function InternalRosterPage({ onNavigate }) {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadFile, setUploadFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [allInUploading, setAllInUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null) // { summary, created, errors }
   const [uploadError, setUploadError] = useState(null)
   const [locationInput, setLocationInput] = useState('')
@@ -240,6 +241,27 @@ export default function InternalRosterPage({ onNavigate }) {
       setUploadError(err.message || 'Upload failed.')
     } finally {
       setUploading(false)
+    }
+  }
+
+  // Bulk-set each card's all-in (CAPA) rate from an uploaded sheet. Matches
+  // existing cards by business name / name; reports what didn't match.
+  async function handleAllInUpload(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let the same file be re-selected later
+    if (!file) return
+    setAllInUploading(true)
+    try {
+      const res = await facilityAPI.importAllInRates(file)
+      const parts = [`Updated all-in rate on ${res.updated} of ${res.rows} cards.`]
+      if (res.skippedNoRate) parts.push(`${res.skippedNoRate} row(s) had no rate.`)
+      if (res.unmatched?.length) parts.push(`Could not match (${res.unmatched.length}): ${res.unmatched.join(', ')}`)
+      alert(parts.join('\n\n'))
+      await load()
+    } catch (err) {
+      alert(err.message || 'Failed to import all-in rates.')
+    } finally {
+      setAllInUploading(false)
     }
   }
 
@@ -650,6 +672,13 @@ export default function InternalRosterPage({ onNavigate }) {
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>📥</span> Upload Roster
           </button>
+          <label
+            title="Bulk-set each card's all-in (CAPA) rate from a sheet with a name/business column and an all-in rate column"
+            style={{ padding: '11px 18px', background: '#fff', color: '#047857', border: '1.5px solid #6EE7B7', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: allInUploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: allInUploading ? 0.6 : 1 }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>💲</span> {allInUploading ? 'Uploading…' : 'Upload All-In Rates'}
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleAllInUpload} disabled={allInUploading} style={{ display: 'none' }} />
+          </label>
           <button
             onClick={openInviteModal}
             style={{ padding: '11px 18px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}

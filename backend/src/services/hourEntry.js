@@ -370,6 +370,101 @@ async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodE
   return { rows: parsed.length, seeded, matched, recorded, periodStart, periodEnd };
 }
 
+// ── All-in (CAPA) rate bulk import ───────────────────────────────────────────
+// Parse a sheet of per-provider all-in rates and set each roster card's
+// allInCostPerHour. Accepts the APNE "all in hourly" layout: a header row with
+// contractor_type / first_name / last_name / business_name and a rate column
+// labelled "CAPA rate" (or all_in / all-in rate / bill rate). The header row may
+// sit a few rows down (title + date rows above it).
+const ALL_IN_RATE_HEADERS = new Set([
+  'caparate', 'caparatehr', 'allin', 'allinrate', 'allinhourly', 'allinhourlyrate',
+  'allincost', 'allincostperhour', 'billrate',
+]);
+function normHeader(h) {
+  return String(h).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function parseAllInRateSheet(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  for (const name of wb.SheetNames) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: false });
+    // Scan the first several rows for a header that has a rate column + a
+    // name/business column (the title/date rows sit above it).
+    for (let h = 0; h < Math.min(grid.length, 10); h++) {
+      const hdr = (grid[h] || []).map(normHeader);
+      const ci = {
+        headerRow: h,
+        rate: hdr.findIndex((x) => ALL_IN_RATE_HEADERS.has(x)),
+        type: hdr.indexOf('contractortype'),
+        first: hdr.indexOf('firstname'),
+        last: hdr.indexOf('lastname'),
+        business: hdr.indexOf('businessname'),
+      };
+      if (ci.rate < 0 || (ci.type < 0 && ci.first < 0 && ci.business < 0)) continue;
+
+      const cell = (r, c) => (c >= 0 ? (grid[r][c] ?? '') : '');
+      const out = [];
+      for (let r = h + 1; r < grid.length; r++) {
+        const businessName = String(cell(r, ci.business) || '').trim();
+        const firstName = String(cell(r, ci.first) || '').trim();
+        const lastName = String(cell(r, ci.last) || '').trim();
+        if (!businessName && !firstName && !lastName) continue; // blank / total row
+        const raw = cell(r, ci.rate);
+        const rate = raw === '' || raw == null ? null : Number(String(raw).replace(/[^0-9.]/g, ''));
+        const payeeType = String(cell(r, ci.type) || '').trim() || (businessName ? 'Business' : 'Individual');
+        out.push({ payeeType, firstName, lastName, businessName, rate: Number.isFinite(rate) ? rate : null });
+      }
+      return out;
+    }
+  }
+  return [];
+}
+
+// Match each parsed row to an existing roster card (Business by business name,
+// Individual by name fingerprint) and set allInCostPerHour. Update-only — never
+// seeds, so a name typo can't create a duplicate card; unmatched rows are
+// reported back so the coordinator can reconcile.
+async function importAllInRates({ facilityId, buffer }) {
+  const parsed = parseAllInRateSheet(buffer);
+  if (!parsed.length) {
+    throw new Error('No rate rows found — need a name/business column and an all-in (CAPA) rate column.');
+  }
+
+  const roster = await prisma.internalRosterEntry.findMany({
+    where: { facilityId },
+    select: { id: true, providerName: true, businessName: true },
+  });
+  const byNameKey = new Map();
+  const byBiz = new Map();
+  for (const e of roster) {
+    const nk = buildNameKey(e.providerName);
+    if (nk) byNameKey.set(nk, e.id);
+    if (e.businessName) byBiz.set(normBiz(e.businessName), e.id);
+  }
+
+  let updated = 0;
+  let skippedNoRate = 0;
+  const unmatched = [];
+  for (const row of parsed) {
+    const isBiz = row.payeeType === 'Business' && row.businessName;
+    const displayName = isBiz ? row.businessName : `${row.firstName} ${row.lastName}`.trim();
+    if (!displayName) continue;
+    if (row.rate == null) { skippedNoRate += 1; continue; }
+
+    let rosterId = isBiz ? byBiz.get(normBiz(row.businessName)) : null;
+    if (!rosterId) rosterId = byNameKey.get(buildNameKey(displayName)) || null;
+
+    if (!rosterId) { unmatched.push(displayName); continue; }
+    await prisma.internalRosterEntry.update({
+      where: { id: rosterId },
+      data: { allInCostPerHour: row.rate },
+    });
+    updated += 1;
+  }
+
+  return { rows: parsed.length, updated, skippedNoRate, unmatched };
+}
+
 module.exports = {
   minutesOf,
   hoursFromWindow,
@@ -380,4 +475,6 @@ module.exports = {
   submittedExtrasByRoster,
   parseApnePayrollSheet,
   importApnePayrollSheet,
+  parseAllInRateSheet,
+  importAllInRates,
 };

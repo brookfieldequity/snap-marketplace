@@ -11,6 +11,7 @@ const { sendSMS, sendEmail } = require('../services/notifications');
 const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
 const ptoService = require('../services/pto');
 const { applyRosterRateLens, lensRosterEntry } = require('../services/rosterLens');
+const { importAllInRates } = require('../services/hourEntry');
 
 const router = express.Router();
 
@@ -162,6 +163,20 @@ router.get('/', facilityAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /import-all-in-rates — bulk-set each roster card's all-in (CAPA) rate
+// from an uploaded sheet (name/business + a "CAPA rate" column). Matches
+// existing cards by business name / name fingerprint; update-only.
+router.post('/import-all-in-rates', facilityAuth, rosterUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const result = await importAllInRates({ facilityId: req.facility.id, buffer: req.file.buffer });
+    res.json(result);
+  } catch (err) {
+    console.error('[roster/import-all-in-rates]', err.message);
+    res.status(400).json({ error: err.message || 'Failed to import all-in rates.' });
   }
 });
 

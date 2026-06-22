@@ -205,6 +205,16 @@ export const facilityAPI = {
   inviteRosterToApp: (id) => apiFetch(`${BASE}/roster/${id}/invite-to-app`, { method: 'POST', headers: facilityHeaders() }),
   bulkInviteRosterToApp: (ids) => apiFetch(`${BASE}/roster/bulk-invite-to-app`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ ids }) }),
   relinkRoster: () => apiFetch(`${BASE}/roster/relink`, { method: 'POST', headers: facilityHeaders() }),
+  importAllInRates: async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/roster/import-all-in-rates`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
 
   // Availability Windows
   getWindows: () => apiFetch(`${BASE}/windows`, { headers: facilityHeaders() }),
