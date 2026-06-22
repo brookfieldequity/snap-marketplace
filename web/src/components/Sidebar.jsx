@@ -1,34 +1,55 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 
-const SHARED_ITEMS = [
-  { key: 'providers',    label: 'Provider Management', icon: '👩‍⚕️' },
-  { key: 'profile',      label: 'Facility Profile',    icon: '🏥' },
-  { key: 'subscription', label: 'Subscription',        icon: '⭐' },
-]
-
-const SHIFTS_ITEMS = [
-  { key: 'shifts-dashboard',  label: 'Dashboard',           icon: '📊' },
-  { key: 'schedule',          label: 'Schedule Builder',    icon: '📅' },
-  { key: 'daily',             label: 'Daily View',          icon: '📍' },
-  { key: 'coverage-templates',label: 'Coverage Templates',  icon: '🧩' },
-  { key: 'roster',            label: 'Internal Roster',     icon: '👥' },
-  { key: 'windows',           label: 'Availability Windows',icon: '🗓' },
-  { key: 'availability',      label: 'Set Availability',    icon: '✅' },
-  { key: 'requests',          label: 'Provider Requests',   icon: '✋' },
-  { key: 'pto-builder',       label: 'PTO Builder',         icon: '🌴', flag: 'pto_builder' },
-  { key: 'requests-notes',    label: 'Requests & Notes',    icon: '🗒️' },
-  { key: 'gaps',              label: 'Gaps & Incentives',   icon: '🔴' },
-  { key: 'staffiq',           label: 'StaffIQ Insights',    icon: '🧠' },
-  { key: 'staffiq-inputs',    label: 'StaffIQ Data Input',  icon: '📝' },
-  { key: 'data-upload',       label: 'Data Upload',         icon: '📤' },
-  // Payroll Builder is feature-flag gated (payroll_builder) — only shown when
-  // the facility's subscription tier / override enables it.
-  { key: 'hour-entry',        label: 'Provider Hours',      icon: '⏱', flag: 'payroll_builder' },
-  { key: 'payroll',           label: 'Payroll Builder',     icon: '💵', flag: 'payroll_builder' },
-  { key: 'payroll-history',   label: 'Payroll History',     icon: '🧾', flag: 'payroll_builder' },
-  { key: 'agency-invoice',    label: 'Agency Invoice',      icon: '📑', flag: 'payroll_builder' },
-  { key: 'agency-metrics',    label: 'Profitability',       icon: '📈', flag: 'payroll_builder' },
-  { key: 'calculator',        label: 'Calculator',          icon: '🧮' },
+// SNAP Shifts navigation — a mix of standalone items and collapsible groups.
+// type 'item'  → a single nav link
+// type 'group' → a collapsible header whose `items` render when expanded
+const SHIFTS_NAV = [
+  { type: 'item', key: 'shifts-dashboard', label: 'Dashboard',  icon: '📊' },
+  { type: 'item', key: 'daily',            label: 'Daily View',  icon: '📍' },
+  {
+    type: 'group',
+    id: 'scheduling',
+    label: 'Scheduling Tools',
+    icon: '📅',
+    items: [
+      { key: 'schedule',          label: 'Schedule Builder',     icon: '📅' },
+      { key: 'coverage-templates',label: 'Coverage Templates',   icon: '🧩' },
+      { key: 'windows',           label: 'Availability Windows', icon: '🗓' },
+      { key: 'availability',      label: 'Set Availability',     icon: '✅' },
+      { key: 'requests',          label: 'Provider Requests',    icon: '✋' },
+      { key: 'requests-notes',    label: 'Requests & Notes',     icon: '🗒️' },
+      { key: 'pto-builder',       label: 'PTO Builder',          icon: '🌴', flag: 'pto_builder' },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'staffiq',
+    label: 'StaffIQ',
+    icon: '🧠',
+    items: [
+      { key: 'staffiq',        label: 'StaffIQ Insights',   icon: '🧠' },
+      { key: 'staffiq-inputs', label: 'StaffIQ Data Input', icon: '📝' },
+      { key: 'gaps',           label: 'Gaps & Incentives',  icon: '🔴' },
+      { key: 'data-upload',    label: 'Data Upload',        icon: '📤' },
+      { key: 'calculator',     label: 'Calculator',         icon: '🧮' },
+    ],
+  },
+  {
+    // The whole Payroll group is gated behind the payroll_builder feature flag.
+    type: 'group',
+    id: 'payroll',
+    label: 'Payroll',
+    icon: '💵',
+    flag: 'payroll_builder',
+    items: [
+      { key: 'hour-entry',     label: 'Provider Hours',  icon: '⏱' },
+      { key: 'payroll',        label: 'Payroll Builder', icon: '💵' },
+      { key: 'payroll-history',label: 'Payroll History', icon: '🧾' },
+      { key: 'agency-invoice', label: 'Agency Invoice',  icon: '📑' },
+      { key: 'agency-metrics', label: 'Profitability',   icon: '📈' },
+    ],
+  },
+  { type: 'item', key: 'roster', label: 'Internal Roster', icon: '👥' },
 ]
 
 const MARKETPLACE_ITEMS = [
@@ -37,23 +58,70 @@ const MARKETPLACE_ITEMS = [
   { key: 'shifts',     label: 'My Shifts',   icon: '📋' },
 ]
 
-function NavItem({ item, isActive, onNavigate }) {
+const SHARED_ITEMS = [
+  { key: 'providers',    label: 'Provider Management', icon: '👩‍⚕️' },
+  { key: 'profile',      label: 'Facility Profile',    icon: '🏥' },
+  { key: 'subscription', label: 'Subscription',        icon: '⭐' },
+]
+
+// Apply feature-flag filtering to the SNAP Shifts nav: drop flagged items and
+// any group that ends up empty, and respect a flag set on the group itself.
+function filterShiftsNav(featureFlags) {
+  return SHIFTS_NAV.flatMap((node) => {
+    if (node.type === 'item') {
+      return !node.flag || featureFlags[node.flag] ? [node] : []
+    }
+    if (node.flag && !featureFlags[node.flag]) return []
+    const items = node.items.filter((it) => !it.flag || featureFlags[it.flag])
+    return items.length ? [{ ...node, items }] : []
+  })
+}
+
+// Which group (if any) contains the given page key.
+function groupIdForPage(nav, pageKey) {
+  for (const node of nav) {
+    if (node.type === 'group' && node.items.some((it) => it.key === pageKey)) {
+      return node.id
+    }
+  }
+  return null
+}
+
+function Chevron({ open }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      style={{
+        transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+        transition: 'transform 0.18s ease',
+        flexShrink: 0,
+      }}
+    >
+      <path d="M3 1.5L6.5 5L3 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function NavItem({ item, isActive, onNavigate, indented = false }) {
   return (
     <button
       onClick={() => onNavigate(item.key)}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: indented ? 10 : 12,
         width: '100%',
-        padding: '11px 24px',
+        padding: indented ? '9px 24px 9px 46px' : '11px 24px',
         background: isActive
           ? 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(37,99,235,0.05) 100%)'
           : 'transparent',
         border: 'none',
         borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
         color: isActive ? '#A5B4FC' : '#64748B',
-        fontSize: 14,
+        fontSize: indented ? 13 : 14,
         fontWeight: isActive ? 600 : 400,
         cursor: 'pointer',
         textAlign: 'left',
@@ -72,8 +140,51 @@ function NavItem({ item, isActive, onNavigate }) {
         }
       }}
     >
-      <span style={{ fontSize: 16 }}>{item.icon}</span>
+      <span style={{ fontSize: indented ? 14 : 16 }}>{item.icon}</span>
       <span>{item.label}</span>
+    </button>
+  )
+}
+
+function GroupHeader({ group, open, hasActiveChild, onToggle }) {
+  // When collapsed but holding the active page, tint the header so the user
+  // still knows where they are.
+  const accent = open ? false : hasActiveChild
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        width: '100%',
+        padding: '11px 24px',
+        background: accent ? 'rgba(37,99,235,0.06)' : 'transparent',
+        border: 'none',
+        borderLeft: accent ? '3px solid rgba(37,99,235,0.6)' : '3px solid transparent',
+        color: accent ? '#A5B4FC' : '#94A3B8',
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'all 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        if (!accent) {
+          e.currentTarget.style.color = '#CBD5E1'
+          e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!accent) {
+          e.currentTarget.style.color = '#94A3B8'
+          e.currentTarget.style.background = 'transparent'
+        }
+      }}
+    >
+      <span style={{ fontSize: 16 }}>{group.icon}</span>
+      <span style={{ flex: 1 }}>{group.label}</span>
+      <Chevron open={open} />
     </button>
   )
 }
@@ -110,8 +221,24 @@ function Divider() {
 export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, snapMode, featureFlags = {} }) {
   const isShiftsMode = snapMode === 'SHIFTS' || snapMode === 'BOTH'
   const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
-  // Hide any nav item whose feature flag is off for this facility.
-  const shiftsItems = SHIFTS_ITEMS.filter((it) => !it.flag || featureFlags[it.flag])
+
+  const shiftsNav = filterShiftsNav(featureFlags)
+
+  // Track which collapsible groups are open. Default: everything collapsed
+  // except the group containing the active page, so the menu starts tidy.
+  const [openGroups, setOpenGroups] = useState(() => {
+    const g = groupIdForPage(shiftsNav, activePage)
+    return g ? { [g]: true } : {}
+  })
+
+  // When navigation moves into a collapsed group, auto-expand it (but never
+  // auto-close a group the user opened themselves).
+  useEffect(() => {
+    const g = groupIdForPage(shiftsNav, activePage)
+    if (g) setOpenGroups((prev) => (prev[g] ? prev : { ...prev, [g]: true }))
+  }, [activePage]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleGroup = (id) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
 
   return (
     <aside
@@ -161,14 +288,40 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         {isShiftsMode && (
           <>
             <SectionHeader label="SNAP Shifts" />
-            {shiftsItems.map((item) => (
-              <NavItem
-                key={item.key}
-                item={item}
-                isActive={activePage === item.key}
-                onNavigate={onNavigate}
-              />
-            ))}
+            {shiftsNav.map((node) => {
+              if (node.type === 'item') {
+                return (
+                  <NavItem
+                    key={node.key}
+                    item={node}
+                    isActive={activePage === node.key}
+                    onNavigate={onNavigate}
+                  />
+                )
+              }
+              const open = !!openGroups[node.id]
+              const hasActiveChild = node.items.some((it) => it.key === activePage)
+              return (
+                <div key={node.id}>
+                  <GroupHeader
+                    group={node}
+                    open={open}
+                    hasActiveChild={hasActiveChild}
+                    onToggle={() => toggleGroup(node.id)}
+                  />
+                  {open &&
+                    node.items.map((it) => (
+                      <NavItem
+                        key={it.key}
+                        item={it}
+                        isActive={activePage === it.key}
+                        onNavigate={onNavigate}
+                        indented
+                      />
+                    ))}
+                </div>
+              )
+            })}
             <Divider />
           </>
         )}
