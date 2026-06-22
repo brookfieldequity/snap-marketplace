@@ -566,7 +566,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                         >
                           <div style={{ cursor: 'pointer' }} onClick={() => setExpanded(open ? null : item.rosterEntryId)}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
-                              {item.hasShiftData ? '▸ ' : ''}{item.providerName}
+                              {open ? '▾ ' : '▸ '}{item.providerName}
                             </div>
                             {item.useBusinessNameForPayroll && item.businessName && (
                               <div style={{ fontSize: 11, color: '#7C3AED' }}>pays as {item.businessName}</div>
@@ -596,9 +596,12 @@ export default function PayrollBuilderPage({ onNavigate }) {
                           </div>
                           <div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{fmtMoney(item.grossPay)}</div>
-                            {clientBonus(item) > 0 && (
-                              <div style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600 }}>+ {fmtMoney(clientBonus(item))} bonus</div>
-                            )}
+                            <div
+                              onClick={() => setExpanded(open ? null : item.rosterEntryId)}
+                              style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              {clientBonus(item) > 0 ? `+ ${fmtMoney(clientBonus(item))} bonus` : '+ Add bonus'}
+                            </div>
                           </div>
                           <div style={{ textAlign: 'center' }}>
                             <button
