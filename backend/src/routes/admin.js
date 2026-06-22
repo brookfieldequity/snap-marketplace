@@ -6,6 +6,8 @@ const adminAuth = require('../middleware/adminAuth');
 const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
 const scorecard = require('../services/scorecard');
 const { accrueBookingFee, feeSummary } = require('../services/marketplaceFees');
+const { buildNameKey } = require('../services/nameKey');
+const normBizName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Where claim links land. The web app deploys separately from the backend
 // (per CLAUDE.md), so this points at the web service URL. Override via
@@ -1629,6 +1631,10 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
       agencyOwnerFacilityId = null,
       matchEmployerNames = [],
       matchIs1099 = false,
+      // Tag rows whose provider also appears on this OTHER facility's roster
+      // (the agency's own roster) — i.e. cross-match the same people by name /
+      // business, so CAPA's APNE providers get tagged without manual labeling.
+      matchAgencyRosterFacilityId = null,
       tagOwnStaff = true,
     } = req.body || {};
 
@@ -1665,17 +1671,41 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
       });
     }
 
+    // 2b. Optionally build a key set from the agency's OWN roster so we can
+    //     cross-match the same providers on this facility's roster by name /
+    //     business (no manual labeling needed).
+    let agencyKeys = null;
+    if (matchAgencyRosterFacilityId && agencyEmployer) {
+      const agencyRoster = await prisma.internalRosterEntry.findMany({
+        where: { facilityId: matchAgencyRosterFacilityId },
+        select: { providerName: true, businessName: true },
+      });
+      agencyKeys = new Set();
+      for (const e of agencyRoster) {
+        const nk = buildNameKey(e.providerName); if (nk) agencyKeys.add(nk);
+        const pn = normBizName(e.providerName); if (pn) agencyKeys.add(pn);
+        if (e.businessName) agencyKeys.add(normBizName(e.businessName));
+      }
+    }
+
     // 3. Backfill employerId on the facility's roster.
     const entries = await prisma.internalRosterEntry.findMany({
       where: { facilityId: facility.id },
-      select: { id: true, employer: true, is1099: true, employerId: true },
+      select: { id: true, providerName: true, businessName: true, employer: true, is1099: true, employerId: true },
     });
     const names = matchEmployerNames.map((n) => String(n).trim().toLowerCase());
     let taggedAgency = 0;
     let taggedSelf = 0;
     for (const e of entries) {
       const empName = (e.employer || '').trim().toLowerCase();
-      const isAgency = agencyEmployer && ((empName && names.includes(empName)) || (matchIs1099 && e.is1099 === true));
+      let isAgency = !!agencyEmployer && ((empName && names.includes(empName)) || (matchIs1099 && e.is1099 === true));
+      // Cross-match against the agency's own roster (by name / business).
+      if (!isAgency && agencyKeys) {
+        const nk = buildNameKey(e.providerName);
+        const pn = normBizName(e.providerName);
+        const bz = e.businessName ? normBizName(e.businessName) : null;
+        if ((nk && agencyKeys.has(nk)) || (pn && agencyKeys.has(pn)) || (bz && agencyKeys.has(bz))) isAgency = true;
+      }
       const targetId = isAgency ? agencyEmployer.id : (tagOwnStaff ? selfEmployer.id : null);
       if (!targetId || e.employerId === targetId) continue;
       // eslint-disable-next-line no-await-in-loop
