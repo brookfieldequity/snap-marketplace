@@ -146,17 +146,19 @@ router.get('/score', facilityAuth, async (req, res) => {
     });
 
     if (!latest) {
-      const defaultScore = 84;
-      const status = getScoreStatus(defaultScore);
+      // No StaffIQ data yet for this facility — return a "no score" state, not a
+      // fabricated default. The UI shows "—" + an upload prompt rather than a
+      // fake 84 that a brand-new facility (e.g. a just-created agency) would see.
       return res.json({
-        score: defaultScore,
-        status,
+        score: null,
+        status: null,
+        insufficientData: true,
         inefficiency1Pct: null,
         inefficiency2Pct: null,
         inefficiency1Cost: null,
         inefficiency2Cost: null,
         totalBudget: null,
-        calculationMethod: 'default',
+        calculationMethod: 'insufficient_data',
         period,
       });
     }
