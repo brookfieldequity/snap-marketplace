@@ -1597,15 +1597,8 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
     const facility = await prisma.facility.findUnique({ where: { id: facilityId }, select: { id: true, name: true } });
     if (!facility) return res.status(404).json({ error: 'Facility not found.' });
 
-    // 1. Ensure this facility's own employer-of-record (FACILITY_SELF).
-    let selfEmployer = await prisma.employer.findUnique({ where: { ownerFacilityId: facility.id } });
-    if (!selfEmployer) {
-      selfEmployer = await prisma.employer.create({
-        data: { name: facility.name || 'Facility', kind: 'FACILITY_SELF', ownerFacilityId: facility.id },
-      });
-    }
-
-    // 2. Ensure the staffing-agency employer (STAFFING_AGENCY), if requested.
+    // 1. Resolve the staffing-agency employer FIRST (STAFFING_AGENCY), if
+    //    requested — it may itself own a facility account (the agency tenant).
     let agencyEmployer = null;
     if (agencyName) {
       agencyEmployer = await prisma.employer.findFirst({ where: { name: agencyName, kind: 'STAFFING_AGENCY' } });
@@ -1620,6 +1613,16 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
           data: { ownerFacilityId: agencyOwnerFacilityId },
         });
       }
+    }
+
+    // 2. Resolve this facility's own employer-of-record. If the facility IS the
+    //    agency tenant (the agency employer already owns it), reuse that — don't
+    //    create a second employer for the same ownerFacilityId (@unique).
+    let selfEmployer = await prisma.employer.findUnique({ where: { ownerFacilityId: facility.id } });
+    if (!selfEmployer) {
+      selfEmployer = await prisma.employer.create({
+        data: { name: facility.name || 'Facility', kind: 'FACILITY_SELF', ownerFacilityId: facility.id },
+      });
     }
 
     // 3. Backfill employerId on the facility's roster.
