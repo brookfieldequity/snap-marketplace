@@ -660,8 +660,8 @@ export const adminAPI = {
   },
 
   overrideShift: (shiftId, status) =>
-    apiFetch(`${BASE}/admin/shifts/${shiftId}/status`, {
-      method: 'PUT',
+    apiFetch(`${BASE}/admin/shifts/${shiftId}/override`, {
+      method: 'PATCH',
       headers: adminHeaders(),
       body: JSON.stringify({ status }),
     }),
@@ -671,9 +671,9 @@ export const adminAPI = {
       headers: adminHeaders(),
     }),
 
-  resolveDispute: (shiftId, payload) =>
-    apiFetch(`${BASE}/admin/disputes/${shiftId}/resolve`, {
-      method: 'POST',
+  resolveDispute: (completionId, payload) =>
+    apiFetch(`${BASE}/admin/disputes/${completionId}/resolve`, {
+      method: 'PATCH',
       headers: adminHeaders(),
       body: JSON.stringify(payload),
     }),

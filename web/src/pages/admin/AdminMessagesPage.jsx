@@ -1,57 +1,26 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
-const MOCK_MESSAGES = [
-  {
-    id: 'm1',
-    senderName: 'Dr. Tom Walsh',
-    senderType: 'PROVIDER',
-    facilityName: 'Boston Surgery Center',
-    message: 'Can you give me the direct contact info for the anesthesia coordinator? I want to discuss rates directly.',
-    date: '2026-05-21',
-    time: '09:14 AM',
-    flagReason: 'Off-platform contact solicitation',
-    flagCount: 1,
-  },
-  {
-    id: 'm2',
-    senderName: 'Boston Surgery Center',
-    senderType: 'FACILITY',
-    facilityName: 'Boston Surgery Center',
-    message: 'Hey, this is Dr. Walsh — I can do the shift for $50 less if you pay me directly via Venmo. Skip the platform fee.',
-    date: '2026-05-20',
-    time: '4:32 PM',
-    flagReason: 'Circumvention attempt',
-    flagCount: 2,
-  },
-  {
-    id: 'm3',
-    senderName: 'Dr. Raj Patel',
-    senderType: 'PROVIDER',
-    facilityName: 'North Shore Surgical',
-    message: "What's your cell number? Easier to coordinate that way.",
-    date: '2026-05-19',
-    time: '11:05 AM',
-    flagReason: 'Off-platform contact solicitation',
-    flagCount: 1,
-  },
-  {
-    id: 'm4',
-    senderName: 'Cape Cod Surgical',
-    senderType: 'FACILITY',
-    facilityName: 'Cape Cod Surgical',
-    message: 'Are you available for a recurring monthly contract? We could do this outside of SNAP going forward.',
-    date: '2026-05-18',
-    time: '2:47 PM',
-    flagReason: 'Circumvention — recurring contract solicitation',
-    flagCount: 3,
-  },
-]
-
 const FLAG_REASON_COLORS = {
   'Off-platform contact solicitation': { bg: '#FFFBEB', border: '#FCD34D', text: '#92400E' },
   'Circumvention attempt':             { bg: '#FEF2F2', border: '#FCA5A5', text: '#991B1B' },
   'Circumvention — recurring contract solicitation': { bg: '#FEF2F2', border: '#FCA5A5', text: '#991B1B' },
+}
+
+// Map the real /admin/messages/flagged row (sender is always a provider; no
+// flagReason/senderType/flagCount in the data) to what this card renders.
+function normalizeMessage(m) {
+  const s = m.sender
+  return {
+    id: m.id,
+    senderName: (s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : '') || 'Provider',
+    senderType: 'PROVIDER',
+    facilityName: m.facility?.name || '—',
+    message: m.body || '',
+    date: m.createdAt ? String(m.createdAt).slice(0, 10) : '',
+    time: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '',
+    flagReason: null,
+  }
 }
 
 export default function AdminMessagesPage() {
@@ -61,8 +30,8 @@ export default function AdminMessagesPage() {
 
   useEffect(() => {
     adminAPI.getFlaggedMessages()
-      .then(setMessages)
-      .catch(() => setMessages(MOCK_MESSAGES))
+      .then((rows) => setMessages((rows || []).map(normalizeMessage)))
+      .catch(() => setMessages([])) // empty state, never fake messages
       .finally(() => setLoading(false))
   }, [])
 
@@ -210,24 +179,26 @@ export default function AdminMessagesPage() {
                 </div>
               </div>
 
-              {/* Flag reason */}
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: cfg.bg,
-                  border: `1px solid ${cfg.border}`,
-                  borderRadius: 8,
-                  padding: '5px 12px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: cfg.text,
-                  marginBottom: 14,
-                }}
-              >
-                🚩 {msg.flagReason}
-              </div>
+              {/* Flag reason — only when the platform recorded one */}
+              {msg.flagReason && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: cfg.bg,
+                    border: `1px solid ${cfg.border}`,
+                    borderRadius: 8,
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: cfg.text,
+                    marginBottom: 14,
+                  }}
+                >
+                  🚩 {msg.flagReason}
+                </div>
+              )}
 
               {/* Message body */}
               <div

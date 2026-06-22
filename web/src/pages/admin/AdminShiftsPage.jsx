@@ -8,16 +8,21 @@ function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0 })
 }
 
-const MOCK_SHIFTS = [
-  { id: 's1',  facilityName: 'Boston Surgery Center',     specialty: 'CRNA',              date: '2026-05-20', duration: 8,  payRate: 275, status: 'COMPLETED',       providerName: 'Dr. Lisa Park'   },
-  { id: 's2',  facilityName: 'Metro Anesthesia Partners', specialty: 'Anesthesiologist',  date: '2026-05-21', duration: 10, payRate: 310, status: 'COMPLETED',       providerName: 'Dr. Priya Nair'  },
-  { id: 's3',  facilityName: 'North Shore Surgical',      specialty: 'CRNA',              date: '2026-05-24', duration: 6,  payRate: 265, status: 'FILLED',          providerName: 'Dr. Sarah Kim'   },
-  { id: 's4',  facilityName: 'Boston Surgery Center',     specialty: 'Anesthesiologist',  date: '2026-05-26', duration: 8,  payRate: 295, status: 'LIVE',            providerName: null              },
-  { id: 's5',  facilityName: 'Brigham Specialty Center',  specialty: 'CRNA',              date: '2026-05-28', duration: 10, payRate: 285, status: 'LIVE',            providerName: null              },
-  { id: 's6',  facilityName: 'South Shore Ambulatory',    specialty: 'Anesthesiologist',  date: '2026-06-02', duration: 8,  payRate: 295, status: 'DEPOSIT_PENDING', providerName: null              },
-  { id: 's7',  facilityName: 'Boston Surgery Center',     specialty: 'CRNA',              date: '2026-04-15', duration: 8,  payRate: 260, status: 'DISPUTED',        providerName: 'Dr. Tom Walsh'   },
-  { id: 's8',  facilityName: 'Cape Cod Surgical',         specialty: 'Anesthesia Assistant', date: '2026-04-10', duration: 6, payRate: 220, status: 'CANCELLED',   providerName: null              },
-]
+// Flatten the real /admin/shifts row (nested facility/booking/provider) into
+// the flat fields this table renders.
+function normalizeShift(s) {
+  const p = s.booking?.provider
+  return {
+    id: s.id,
+    facilityName: s.facility?.name || '—',
+    providerName: p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : null,
+    specialty: s.specialty,
+    date: s.date ? String(s.date).slice(0, 10) : '',
+    duration: s.durationHours,
+    payRate: s.currentRate,
+    status: s.status,
+  }
+}
 
 export default function AdminShiftsPage() {
   const [shifts, setShifts]         = useState([])
@@ -28,8 +33,8 @@ export default function AdminShiftsPage() {
   useEffect(() => {
     const params = filter !== 'all' ? { status: filter } : {}
     adminAPI.getShifts(params)
-      .then(setShifts)
-      .catch(() => setShifts(MOCK_SHIFTS))
+      .then((rows) => setShifts((rows || []).map(normalizeShift)))
+      .catch(() => setShifts([])) // empty state, never fake shifts
       .finally(() => setLoading(false))
   }, [filter])
 

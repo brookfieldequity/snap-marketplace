@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
-const MOCK_PROVIDERS = [
-  { id: 'p1', name: 'Dr. Lisa Park',    email: 'lisa.park@email.com',    specialty: 'CRNA',              credentialed: true,  vip: true,  vipPoints: 1240, licenseExpiry: '2027-03-15', shiftsBooked: 47 },
-  { id: 'p2', name: 'Dr. James Obi',    email: 'j.obi@email.com',        specialty: 'Anesthesiologist',  credentialed: true,  vip: false, vipPoints: 320,  licenseExpiry: '2026-06-14', shiftsBooked: 31 },
-  { id: 'p3', name: 'Dr. Sarah Kim',    email: 'sarah.kim@email.com',    specialty: 'CRNA',              credentialed: true,  vip: false, vipPoints: 180,  licenseExpiry: '2027-01-20', shiftsBooked: 18 },
-  { id: 'p4', name: 'Dr. Tom Walsh',    email: 't.walsh@email.com',      specialty: 'CRNA',              credentialed: false, vip: false, vipPoints: 50,   licenseExpiry: '2026-06-22', shiftsBooked: 7  },
-  { id: 'p5', name: 'Dr. Priya Nair',   email: 'priya.nair@email.com',   specialty: 'Anesthesiologist',  credentialed: true,  vip: true,  vipPoints: 2100, licenseExpiry: '2027-08-10', shiftsBooked: 64 },
-  { id: 'p6', name: 'Dr. Marcus Chen',  email: 'm.chen@email.com',       specialty: 'Anesthesia Assistant', credentialed: true, vip: false, vipPoints: 90, licenseExpiry: '2026-09-05', shiftsBooked: 9 },
-  { id: 'p7', name: 'Dr. Raj Patel',    email: 'raj.patel@email.com',    specialty: 'Anesthesiologist',  credentialed: true,  vip: false, vipPoints: 440,  licenseExpiry: '2026-07-07', shiftsBooked: 22 },
-]
-
 function daysUntil(dateStr) {
   const diff = new Date(dateStr) - new Date()
   return Math.ceil(diff / (1000 * 60 * 60 * 24))

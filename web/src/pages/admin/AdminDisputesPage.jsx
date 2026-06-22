@@ -5,34 +5,24 @@ function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0 })
 }
 
-const MOCK_DISPUTES = [
-  {
-    id: 'd1',
-    shiftId: 's7',
-    facilityName: 'Boston Surgery Center',
-    providerName: 'Dr. Tom Walsh',
-    specialty: 'CRNA',
-    date: '2026-04-15',
-    payRate: 260,
-    providerHours: 9.5,
-    facilityHours: 8,
-    openedAt: '2026-04-16',
-    notes: 'Provider claims they stayed for case overrun. Facility says shift ended on time.',
-  },
-  {
-    id: 'd2',
-    shiftId: 's12',
-    facilityName: 'North Shore Surgical',
-    providerName: 'Dr. James Obi',
-    specialty: 'Anesthesiologist',
-    date: '2026-05-10',
-    payRate: 310,
-    providerHours: 8,
-    facilityHours: 7,
-    openedAt: '2026-05-11',
-    notes: 'Facility says provider left one hour early after cases were done.',
-  },
-]
+// Map the real /admin/disputes row (a ShiftCompletion with nested booking/
+// shift/facility) into the flat fields these cards render. The row id is the
+// ShiftCompletion id — that's what the resolve endpoint keys on.
+function normalizeDispute(c) {
+  const p = c.booking?.provider
+  return {
+    id: c.id,
+    facilityName: c.shift?.facility?.name || '—',
+    providerName: p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : 'Provider',
+    specialty: c.shift?.specialty,
+    date: c.shift?.date ? String(c.shift.date).slice(0, 10) : '',
+    payRate: c.shift?.currentRate || 0,
+    providerHours: c.providerHours ?? 0,
+    facilityHours: c.facilityHours ?? 0,
+    openedAt: c.createdAt ? String(c.createdAt).slice(0, 10) : '',
+    notes: c.disputeNotes || '',
+  }
+}
 
 function ResolveModal({ dispute, onClose, onResolved }) {
   const [finalHours, setFinalHours] = useState('')
@@ -45,7 +35,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
     setLoading(true)
     setError('')
     try {
-      await adminAPI.resolveDispute(dispute.shiftId, { finalHours: Number(finalHours), notes })
+      await adminAPI.resolveDispute(dispute.id, { finalHours: Number(finalHours), notes })
       onResolved(dispute.id)
     } catch (err) {
       setError(err.message || 'Failed to resolve dispute.')
@@ -180,8 +170,8 @@ export default function AdminDisputesPage() {
 
   useEffect(() => {
     adminAPI.getDisputes()
-      .then(setDisputes)
-      .catch(() => setDisputes(MOCK_DISPUTES))
+      .then((rows) => setDisputes((rows || []).map(normalizeDispute)))
+      .catch(() => setDisputes([])) // empty state, never fake disputes
       .finally(() => setLoading(false))
   }, [])
 

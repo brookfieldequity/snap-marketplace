@@ -31,27 +31,6 @@ function StatCard({ label, value, icon, color = '#0F172A', sub, danger }) {
   )
 }
 
-const MOCK = {
-  providers: { total: 48, active: 31, credentialed: 42 },
-  facilities: { total: 17, basic: 8, professional: 7, enterprise: 2 },
-  shifts: { total: 284, disputed: 3, filled: 241, fillRate: 84.9 },
-  revenue: {
-    gtv: 1240000,
-    platformFees: 124000,
-    subscriptionRevenue: {
-      basic: 6000,
-      professional: 14000,
-      enterprise: 10000,
-    },
-  },
-  flaggedMessages: 4,
-  licenseExpiringSoon: [
-    { name: 'Dr. Tom Walsh',   specialty: 'CRNA',             daysLeft: 22, expiry: '2026-06-14' },
-    { name: 'Dr. Raj Patel',   specialty: 'Anesthesiologist', daysLeft: 45, expiry: '2026-07-07' },
-    { name: 'Dr. Claire Dunn', specialty: 'CRNA',             daysLeft: 68, expiry: '2026-07-30' },
-  ],
-}
-
 export default function AdminOverviewPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -59,7 +38,7 @@ export default function AdminOverviewPage() {
   useEffect(() => {
     adminAPI.getAnalytics()
       .then(setData)
-      .catch(() => setData(MOCK))
+      .catch(() => setData(null)) // never fall back to fabricated metrics
       .finally(() => setLoading(false))
   }, [])
 

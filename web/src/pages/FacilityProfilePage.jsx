@@ -76,11 +76,13 @@ export default function FacilityProfilePage() {
         })
       })
       .catch(() => {
+        // Never pre-fill the editable profile with fabricated values — a
+        // coordinator could save them. Leave fields blank on load failure.
         setForm({
-          facilityName: 'Boston Surgery Center',
-          facilityType: 'Ambulatory Surgery Center',
-          address: '123 Medical Plaza Dr',
-          zipCode: '02101',
+          facilityName: '',
+          facilityType: '',
+          address: '',
+          zipCode: '',
           description: '',
           caseMix: '',
           parking: '',
