@@ -351,7 +351,9 @@ async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodE
 
     const data = {
       hours: row.hoursWorked,
-      status: 'SUBMITTED',
+      // Import as DRAFT so the coordinator reviews on Provider Hours and then
+      // hits Submit — payroll/invoice only count submitted hours.
+      status: 'DRAFT',
       source: 'PAYROLL_SHEET',
       enteredBy,
       reimbursementAmount: row.reimbursement || null,

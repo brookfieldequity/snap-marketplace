@@ -263,6 +263,15 @@ export default function HourEntryPage({ onNavigate }) {
           </table>
         </div>
       ))}
+
+      {/* Bottom Submit-all so you don't scroll back up after reviewing. */}
+      {!loading && providers.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <button style={primaryBtn} onClick={submitAll} disabled={!!busy}>
+            {busy === 'submit' ? 'Submitting…' : '✓ Submit all'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

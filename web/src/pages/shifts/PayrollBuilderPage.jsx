@@ -65,6 +65,9 @@ export default function PayrollBuilderPage({ onNavigate }) {
   const [grids, setGrids] = useState({})
   const [previewLoading, setPreviewLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
+  // Once both class grids load, auto-select the class that actually has hours
+  // (so an all-1099 agency doesn't land on an empty W-2 grid). Only fires once.
+  const [autoPicked, setAutoPicked] = useState(false)
 
   // Export state
   const [exporting, setExporting] = useState(false)
@@ -109,14 +112,25 @@ export default function PayrollBuilderPage({ onNavigate }) {
     [period.start, period.end]
   )
 
+  // On Review: load BOTH class grids, then auto-select whichever has hours.
   useEffect(() => {
-    if (step === 3 && !grids[payClass]) loadPreview(payClass)
-  }, [step, payClass, grids, loadPreview])
+    if (step !== 3) { setAutoPicked(false); return }
+    if (!grids.W2) { loadPreview('W2'); return }
+    if (!grids.CONTRACTOR) { loadPreview('CONTRACTOR'); return }
+    if (!autoPicked) {
+      setAutoPicked(true)
+      const w2 = grids.W2.items?.length || 0
+      const ct = grids.CONTRACTOR.items?.length || 0
+      if (w2 === 0 && ct > 0) setPayClass('CONTRACTOR')
+      else if (ct === 0 && w2 > 0) setPayClass('W2')
+    }
+  }, [step, grids, loadPreview, autoPicked])
 
   // Refetch both grids when the period changes.
   useEffect(() => {
     if (step === 3) {
       setGrids({})
+      setAutoPicked(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period.start, period.end])
@@ -533,9 +547,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
               })()}
 
               {grid.items.length === 0 ? (
-                <div style={{ ...card, color: '#64748B' }}>
-                  No {CLASS_LABEL[payClass]} on the roster for this period. Add providers on the Internal Roster, or check the
-                  pay-class on each provider's card.
+                <div style={{ ...card, color: '#64748B', lineHeight: 1.6 }}>
+                  No <strong>{CLASS_LABEL[payClass]}</strong> hours found for {period.start} → {period.end}. Check that:
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                    <li>the <strong>period</strong> above matches the one you entered hours under on Provider Hours,</li>
+                    <li>those hours are <strong>Submitted</strong> (green) on the Provider Hours page — drafts don't count,</li>
+                    <li>and each provider's pay class (1099 vs W-2) is set correctly. Try the other class with the toggle above.</li>
+                  </ul>
                 </div>
               ) : (
                 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
