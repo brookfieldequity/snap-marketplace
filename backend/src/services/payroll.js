@@ -349,7 +349,16 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
         })))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const { regularHours, otHours } = splitRegularOt(shiftDetail);
+    // Submitted hour entries (Provider Hours import / manual) are authoritative
+    // period totals lumped on one date — re-deriving a weekly >40 OT split from
+    // a lump wrongly flags everyone over 40 as overtime, and 1099 contractors
+    // aren't OT-eligible anyway. So pass submitted totals through as regular
+    // (admin can still add OT by editing the line). Only split when the hours
+    // come from real per-day scheduling records.
+    const usingSubmitted = !!(submitted && submitted.length);
+    const { regularHours, otHours } = usingSubmitted
+      ? { regularHours: Math.round(shiftDetail.reduce((s, x) => s + Number(x.hours || 0), 0) * 100) / 100, otHours: 0 }
+      : splitRegularOt(shiftDetail);
     // CONTRACTOR run for a dual provider uses their 1099 rate (contractorPayRate),
     // not hourlyRate (which is reserved for W-2-hourly staff). Everyone else uses
     // hourlyRate as before. annualRate (W-2 salary) only matters in the W-2 run.
