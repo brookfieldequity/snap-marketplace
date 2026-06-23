@@ -397,6 +397,10 @@ export const payrollAPI = {
     apiFetch(`${BASE}/payroll/preview?payClass=${payClass}&periodStart=${periodStart}&periodEnd=${periodEnd}`, {
       headers: facilityHeaders(),
     }),
+  getPayPeriods: () => apiFetch(`${BASE}/payroll/periods`, { headers: facilityHeaders() }),
+  getPaySchedule: () => apiFetch(`${BASE}/payroll/pay-schedule`, { headers: facilityHeaders() }),
+  setPaySchedule: ({ anchorDate, frequency }) =>
+    apiFetch(`${BASE}/payroll/pay-schedule`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ anchorDate, frequency }) }),
   exportRun: (payload) =>
     apiFetch(`${BASE}/payroll/runs`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
   getRuns: () => apiFetch(`${BASE}/payroll/runs`, { headers: facilityHeaders() }),

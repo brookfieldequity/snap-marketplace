@@ -318,6 +318,10 @@ model Facility {
   whatToBring            String?
   profileScore           Int           @default(0)
   snapMode               SnapMode      @default(BOTH)
+  // Pay-period schedule: set once, then payroll periods auto-generate from it
+  // so a coordinator picks "Jun 6 – Jun 20" instead of typing the span each run.
+  payAnchorDate          String?       // "YYYY-MM-DD" — start date of any one known pay period
+  payFrequency           String        @default("BIWEEKLY") // WEEKLY | BIWEEKLY
   // Industry-standard fully-loaded cost to staff one anesthetizing location
   // for one day ($/room/day), entered by the coordinator. Used as the
   // "old manual process" baseline the SNAP-built schedule is compared against

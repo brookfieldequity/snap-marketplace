@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { payrollAPI, facilityAPI } from '../../api.js'
+import PayrollPeriodPicker from '../../components/PayrollPeriodPicker.jsx'
 
 // ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
 const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
@@ -136,14 +137,7 @@ export default function HourEntryPage({ onNavigate }) {
 
       {/* Controls */}
       <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'flex-end', marginBottom: 18, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
-          Period start
-          <input style={inputStyle} type="date" value={period.start} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#475569' }}>
-          Period end
-          <input style={inputStyle} type="date" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} />
-        </label>
+        <PayrollPeriodPicker value={period} onChange={(p) => setPeriod(p)} />
         <button style={ghostBtn} onClick={seed} disabled={!!busy}>{busy === 'seed' ? 'Seeding…' : '↻ Seed from schedule'}</button>
         <label style={{ ...ghostBtn, display: 'inline-block', textAlign: 'center' }}>
           {busy === 'import' ? 'Importing…' : '⬆ Import payroll sheet'}

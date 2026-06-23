@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { payrollAPI } from '../../api.js'
+import PayrollPeriodPicker from '../../components/PayrollPeriodPicker.jsx'
 
 // ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
 const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
@@ -503,11 +504,8 @@ export default function PayrollBuilderPage({ onNavigate }) {
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748B' }}>
-              Pay period
-              <input type="date" value={period.start} onChange={(e) => setPeriod((p) => ({ ...p, start: e.target.value }))} style={{ ...inputStyle, width: 150 }} />
-              to
-              <input type="date" value={period.end} onChange={(e) => setPeriod((p) => ({ ...p, end: e.target.value }))} style={{ ...inputStyle, width: 150 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748B', flexWrap: 'wrap' }}>
+              <PayrollPeriodPicker value={period} onChange={(p) => setPeriod(p)} />
               <span style={{ marginLeft: 8 }}>Invoice #</span>
               <input
                 type="text"

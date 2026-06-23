@@ -185,6 +185,71 @@ router.delete('/template/:system', async (req, res) => {
   }
 });
 
+// ── Pay-period schedule + period picker ─────────────────────────────────────
+const ymd = (d) => new Date(d).toISOString().slice(0, 10);
+const parseYmd = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const addDays = (d, n) => { const x = new Date(d); x.setUTCDate(x.getUTCDate() + n); return x; };
+const todayUTC = () => { const t = new Date(); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate())); };
+
+// Generate pay periods (newest first) from an anchor period-start + frequency.
+function buildPeriods({ anchorDate, frequency }, back = 9, forward = 1) {
+  const len = frequency === 'WEEKLY' ? 7 : 14;
+  const anchor = anchorDate ? parseYmd(anchorDate) : todayUTC();
+  const k = Math.floor((todayUTC() - anchor) / (len * 86400000));
+  const out = [];
+  for (let i = k + forward; i >= k - back; i--) {
+    const start = addDays(anchor, i * len);
+    out.push({ start: ymd(start), end: ymd(addDays(start, len - 1)) });
+  }
+  return out;
+}
+
+// GET /pay-schedule
+router.get('/pay-schedule', async (req, res) => {
+  try {
+    const f = await prisma.facility.findUnique({ where: { id: req.facility.id }, select: { payAnchorDate: true, payFrequency: true } });
+    res.json({ anchorDate: f?.payAnchorDate || null, frequency: f?.payFrequency || 'BIWEEKLY' });
+  } catch (err) { console.error('[payroll/pay-schedule]', err.message); res.status(500).json({ error: 'Failed to load pay schedule' }); }
+});
+
+// PUT /pay-schedule  { anchorDate, frequency }
+router.put('/pay-schedule', async (req, res) => {
+  try {
+    const { anchorDate, frequency } = req.body || {};
+    if (anchorDate && !/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) return res.status(400).json({ error: 'anchorDate must be YYYY-MM-DD' });
+    const f = await prisma.facility.update({
+      where: { id: req.facility.id },
+      data: { payAnchorDate: anchorDate || null, payFrequency: frequency === 'WEEKLY' ? 'WEEKLY' : 'BIWEEKLY' },
+      select: { payAnchorDate: true, payFrequency: true },
+    });
+    res.json({ anchorDate: f.payAnchorDate, frequency: f.payFrequency });
+  } catch (err) { console.error('[payroll/pay-schedule PUT]', err.message); res.status(500).json({ error: 'Failed to save pay schedule' }); }
+});
+
+// GET /periods — generated pay periods + status (submitted hours, already-run).
+router.get('/periods', async (req, res) => {
+  try {
+    const f = await prisma.facility.findUnique({ where: { id: req.facility.id }, select: { payAnchorDate: true, payFrequency: true } });
+    const frequency = f?.payFrequency || 'BIWEEKLY';
+    const periods = buildPeriods({ anchorDate: f?.payAnchorDate, frequency });
+    if (!periods.length) return res.json({ anchorDate: f?.payAnchorDate || null, frequency, periods: [] });
+    const windowStart = parseYmd(periods[periods.length - 1].start);
+    const windowEnd = new Date(parseYmd(periods[0].end).getTime() + 86399999);
+    const [entries, runs] = await Promise.all([
+      prisma.providerHourEntry.findMany({ where: { facilityId: req.facility.id, status: 'SUBMITTED', date: { gte: windowStart, lte: windowEnd } }, select: { date: true, rosterEntryId: true } }),
+      prisma.payrollRun.findMany({ where: { facilityId: req.facility.id, periodStart: { gte: windowStart } }, select: { periodStart: true } }),
+    ]);
+    const runStarts = new Set(runs.map((r) => ymd(r.periodStart)));
+    const enriched = periods.map((p) => {
+      const s = parseYmd(p.start).getTime();
+      const e = parseYmd(p.end).getTime() + 86399999;
+      const inP = entries.filter((x) => { const t = new Date(x.date).getTime(); return t >= s && t <= e; });
+      return { ...p, submittedEntries: inP.length, providerCount: new Set(inP.map((x) => x.rosterEntryId)).size, hasRun: runStarts.has(p.start) };
+    });
+    res.json({ anchorDate: f?.payAnchorDate || null, frequency, periods: enriched });
+  } catch (err) { console.error('[payroll/periods]', err.message); res.status(500).json({ error: 'Failed to load pay periods' }); }
+});
+
 // ── Preview: auto-seed editable line items for a period + pay class ──────────────
 router.get('/preview', async (req, res) => {
   const payClass = String(req.query.payClass || 'W2').toUpperCase();
