@@ -26,6 +26,7 @@ const SNAP_FIELDS = {
   rate: { label: 'Rate', synonyms: ['rate', 'hourly rate', 'pay rate', 'rate of pay', 'hourly', 'rate hr', 'hourly pay rate'] },
   gross: { label: 'Gross Pay', synonyms: ['gross pay', 'gross', 'total pay', 'amount', 'gross wages', 'total', 'gross amount'] },
   bonus: { label: 'Bonus', synonyms: ['bonus', 'bonus pay', 'bonus amount', 'bonuses'] },
+  reimbursement: { label: 'Reimbursement', synonyms: ['reimbursement', 'reimbursements', 'reimburse', 'expense', 'expenses', 'expense reimbursement'] },
   invoiceNumber: { label: 'Invoice #', synonyms: ['invoice number', 'invoice no', 'invoice', 'invoice num'] },
   workerType: { label: 'Worker Type', synonyms: ['worker type', 'type', 'employment type', 'employee type', 'classification', 'w2 1099'] },
   fileCode: { label: 'File Code', synonyms: ['file code', 'file no', 'company code', 'batch id', 'co code', 'file number'] },
@@ -35,7 +36,7 @@ const SNAP_FIELDS = {
 // is the export column order; `map` is header → SNAP field.
 const DEFAULT_TEMPLATES = {
   ADP: {
-    headers: ['Employee ID', 'Employee Name', 'Department', 'Pay Period Start', 'Pay Period End', 'Regular Hours', 'OT Hours', 'Rate', 'Gross Pay', 'File Code'],
+    headers: ['Employee ID', 'Employee Name', 'Department', 'Pay Period Start', 'Pay Period End', 'Regular Hours', 'OT Hours', 'Rate', 'Gross Pay', 'Bonus', 'Reimbursement', 'File Code'],
     map: {
       'Employee ID': 'empId',
       'Employee Name': 'name',
@@ -46,11 +47,13 @@ const DEFAULT_TEMPLATES = {
       'OT Hours': 'otHours',
       Rate: 'rate',
       'Gross Pay': 'gross',
+      Bonus: 'bonus',
+      Reimbursement: 'reimbursement',
       'File Code': 'fileCode',
     },
   },
   GUSTO: {
-    headers: ['Employee Name', 'Start Date', 'End Date', 'Hours Worked', 'Hourly Rate', 'Total Pay', 'Worker Type', 'Department'],
+    headers: ['Employee Name', 'Start Date', 'End Date', 'Hours Worked', 'Hourly Rate', 'Total Pay', 'Bonus', 'Reimbursement', 'Worker Type', 'Department'],
     map: {
       'Employee Name': 'name',
       'Start Date': 'periodStart',
@@ -58,6 +61,8 @@ const DEFAULT_TEMPLATES = {
       'Hours Worked': 'regHours',
       'Hourly Rate': 'rate',
       'Total Pay': 'gross',
+      Bonus: 'bonus',
+      Reimbursement: 'reimbursement',
       'Worker Type': 'workerType',
       Department: 'dept',
     },
@@ -211,6 +216,10 @@ function valueForField(field, { item, run, config }) {
       const b = computeBonus(item);
       return b > 0 ? money(b) : ''; // blank when no bonus (cleaner for Gusto)
     }
+    case 'reimbursement': {
+      const r = Number(item.reimbursement || 0);
+      return r > 0 ? money(r) : '';
+    }
     case 'invoiceNumber':
       return run.invoiceNumber || ''; // run-level: same for every provider
     case 'workerType':
@@ -301,13 +310,27 @@ function splitRegularOt(shifts) {
 // payClass: 'W2'  → roster entries where is1099 !== true
 //           'CONTRACTOR' → roster entries where is1099 === true
 async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
+  // Pull submitted hours + extras FIRST so anyone WITH hours is included in the
+  // run even if their card's 1099 flag wasn't set — that gap otherwise silently
+  // drops people who clearly have hours. require() avoids a load-order cycle.
+  const hourEntrySvc = require('./hourEntry');
+  const submittedByRoster =
+    payClass === 'CONTRACTOR'
+      ? await hourEntrySvc.submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd })
+      : {};
+  const extrasByRoster =
+    payClass === 'CONTRACTOR'
+      ? await hourEntrySvc.submittedExtrasByRoster({ facilityId, periodStart, periodEnd })
+      : {};
+  const hoursIds = Object.keys(submittedByRoster);
+
   const roster = await prisma.internalRosterEntry.findMany({
     where: {
       facilityId,
-      // CONTRACTOR run = pure-1099s + dual providers' 1099 side.
-      // W-2 run = everyone not pure-1099, plus dual providers (for their salary).
+      // CONTRACTOR run = pure-1099s + dual providers' 1099 side + ANYONE with
+      // submitted hours this period. W-2 run = everyone not pure-1099 + duals.
       ...(payClass === 'CONTRACTOR'
-        ? { OR: [{ is1099: true }, { dualEmployment: true }] }
+        ? { OR: [{ is1099: true }, { dualEmployment: true }, ...(hoursIds.length ? [{ id: { in: hoursIds } }] : [])] }
         : { OR: [{ NOT: { is1099: true } }, { dualEmployment: true }] }),
     },
   });
@@ -326,13 +349,6 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
     if (!key) continue;
     (recsByKey[key] = recsByKey[key] || []).push(r);
   }
-
-  // For 1099s, SUBMITTED provider hour entries are authoritative — override the
-  // raw schedule hours. require() here (not top-level) avoids a load-order cycle.
-  const submittedByRoster =
-    payClass === 'CONTRACTOR'
-      ? await require('./hourEntry').submittedShiftDetailByRoster({ facilityId, periodStart, periodEnd })
-      : {};
 
   return roster.map((entry) => {
     const submitted = submittedByRoster[entry.id];
@@ -387,6 +403,9 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
       bonusHours: null,
       bonusRate: null,
       bonusTotal: 0,
+      // Reimbursement pre-filled from the imported payroll sheet, editable in
+      // the Payroll Builder. Paid to the contractor — separate from gross.
+      reimbursement: extrasByRoster[entry.id]?.reimbursement || null,
       shiftDetail,
       // UI flags
       missingRate: hourlyRate == null && annualRate == null,

@@ -149,7 +149,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
   // people with hours; hidden rows can be added back individually.
   function isEmpty(item) {
     const hrs = Number(item.regularHours || 0) + Number(item.otHours || 0)
-    return hrs === 0 && Number(item.grossPay || 0) === 0 && clientBonus(item) === 0
+    return hrs === 0 && Number(item.grossPay || 0) === 0 && clientBonus(item) === 0 && Number(item.reimbursement || 0) === 0
   }
   // Visible rows carry their ORIGINAL index into grid.items (updateItem needs it).
   const visible = grid
@@ -639,7 +639,10 @@ export default function PayrollBuilderPage({ onNavigate }) {
                               onClick={() => setExpanded(open ? null : item.rosterEntryId)}
                               style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, cursor: 'pointer' }}
                             >
-                              {clientBonus(item) > 0 ? `+ ${fmtMoney(clientBonus(item))} bonus` : '+ Add bonus'}
+                              {clientBonus(item) > 0 ? `+ ${fmtMoney(clientBonus(item))} bonus` : '+ Add bonus / reimb.'}
+                              {Number(item.reimbursement || 0) > 0 && (
+                                <span style={{ color: '#059669', marginLeft: 6 }}>+ {fmtMoney(item.reimbursement)} reimb.</span>
+                              )}
                             </div>
                           </div>
                           <div style={{ textAlign: 'center' }}>
@@ -730,6 +733,17 @@ export default function PayrollBuilderPage({ onNavigate }) {
                               </div>
                               <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 6 }}>
                                 Use either or both. The total exports in the template's <strong>bonus</strong> column — separate from regular pay.
+                              </div>
+
+                              {/* Reimbursement — separate payroll line, pre-filled from the import. */}
+                              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
+                                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Reimbursement ($)</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                  <input type="number" step="0.01" min="0" value={item.reimbursement ?? ''} placeholder="0"
+                                    onChange={(e) => updateItem(idx, { reimbursement: e.target.value === '' ? null : Number(e.target.value) })}
+                                    style={{ ...inputStyle, width: 140 }} />
+                                  <span style={{ fontSize: 11, color: '#94A3B8' }}>Paid to the contractor — exports in the <strong>reimbursement</strong> column, separate from pay + bonus.</span>
+                                </div>
                               </div>
                             </div>
                           </div>

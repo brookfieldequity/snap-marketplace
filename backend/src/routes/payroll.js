@@ -305,6 +305,7 @@ router.post('/runs', async (req, res) => {
       const bonusHours = li.bonusHours != null && li.bonusHours !== '' ? Number(li.bonusHours) : null;
       const bonusRate = li.bonusRate != null && li.bonusRate !== '' ? Number(li.bonusRate) : null;
       const bonusTotal = computeBonus({ bonusFlat, bonusHours, bonusRate });
+      const reimbursement = li.reimbursement != null && li.reimbursement !== '' ? Number(li.reimbursement) : null;
       return {
         rosterEntryId: li.rosterEntryId || null,
         providerName: li.providerName || '',
@@ -321,6 +322,7 @@ router.post('/runs', async (req, res) => {
         bonusHours,
         bonusRate,
         bonusTotal,
+        reimbursement,
         shiftDetail: li.shiftDetail || null,
       };
     });
@@ -379,6 +381,7 @@ router.post('/runs', async (req, res) => {
             bonusHours: i.bonusHours,
             bonusRate: i.bonusRate,
             bonusTotal: i.bonusTotal,
+            reimbursement: i.reimbursement,
             shiftDetail: i.shiftDetail,
             approved: true,
             approvedById: req.user.userId,

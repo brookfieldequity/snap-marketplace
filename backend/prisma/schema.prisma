@@ -1887,6 +1887,9 @@ model PayrollRunProvider {
   bonusHours      Float? // bonus computed from hours...
   bonusRate       Float? // ...at this (often different) hourly rate
   bonusTotal      Float                @default(0)
+  // Expense reimbursement paid to the contractor — its own CSV column,
+  // separate from gross + bonus.
+  reimbursement   Float?
   shiftDetail     Json? // [{ date, start, end, hours, type }]
   approved        Boolean              @default(false)
   approvedById    String?
