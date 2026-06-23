@@ -476,6 +476,7 @@ function EditFacilityModal({ facility, onClose, onSaved }) {
   const [address, setAddress]           = useState(facility.address || '')
   const [zipCode, setZipCode]           = useState(facility.zipCode || '')
   const [state, setState]               = useState(facility.state || 'MA')
+  const [snapMode, setSnapMode]         = useState(facility.snapMode || 'BOTH')
   const [submitting, setSubmitting]     = useState(false)
   const [error, setError]               = useState(null)
 
@@ -491,6 +492,7 @@ function EditFacilityModal({ facility, onClose, onSaved }) {
         address: address.trim() || null,
         zipCode: zipCode.trim() || null,
         state: state.trim() || null,
+        snapMode,
       })
       onSaved()
     } catch (err) {
@@ -530,6 +532,14 @@ function EditFacilityModal({ facility, onClose, onSaved }) {
             <input type="text" value={state} onChange={(e) => setState(e.target.value)} maxLength={2} style={{ ...inputStyle, textTransform: 'uppercase' }} />
           </Field>
         </div>
+
+        <Field label="Access (SNAP mode)" hint="Which top-tab capabilities this facility sees. SNAP Ops appears separately when the payroll feature flag is on.">
+          <select value={snapMode} onChange={(e) => setSnapMode(e.target.value)} style={inputStyle}>
+            <option value="BOTH">Both — Shifts + Marketplace</option>
+            <option value="SHIFTS">Shifts only</option>
+            <option value="MARKETPLACE">Marketplace only</option>
+          </select>
+        </Field>
 
         {error && <div style={{ padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, color: '#B91C1C', fontSize: 13, marginBottom: 16 }}>{error}</div>}
 

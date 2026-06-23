@@ -317,7 +317,7 @@ model Facility {
   parking                String?
   whatToBring            String?
   profileScore           Int           @default(0)
-  snapMode               SnapMode      @default(MARKETPLACE)
+  snapMode               SnapMode      @default(BOTH)
   // Industry-standard fully-loaded cost to staff one anesthetizing location
   // for one day ($/room/day), entered by the coordinator. Used as the
   // "old manual process" baseline the SNAP-built schedule is compared against

@@ -1375,10 +1375,11 @@ function normalizeFacilityType(raw) {
 // subscription states like the old /auth/facility/register could.
 router.post('/facilities', adminAuth, async (req, res) => {
   try {
-    const { name, facilityType, address, zipCode, state, tier } = req.body || {};
+    const { name, facilityType, address, zipCode, state, tier, snapMode } = req.body || {};
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Facility name is required.' });
     }
+    const VALID_SNAPMODE = ['MARKETPLACE', 'SHIFTS', 'BOTH'];
     const facility = await prisma.$transaction(async (tx) => {
       return tx.facility.create({
         data: {
@@ -1387,6 +1388,9 @@ router.post('/facilities', adminAuth, async (req, res) => {
           address: address || null,
           zipCode: zipCode || null,
           state: state || 'MA',
+          // Default to BOTH so facilities have marketplace access unless an
+          // admin restricts it.
+          snapMode: VALID_SNAPMODE.includes(snapMode) ? snapMode : 'BOTH',
           subscription: { create: { tier: tier || 'BASIC' } },
         },
         include: { subscription: true },
@@ -1416,9 +1420,12 @@ router.post('/facilities', adminAuth, async (req, res) => {
 // via /facilities/:id/subscription.
 router.patch('/facilities/:id', adminAuth, async (req, res) => {
   try {
-    const { name, facilityType, address, zipCode, state } = req.body || {};
+    const { name, facilityType, address, zipCode, state, snapMode } = req.body || {};
     if (name !== undefined && !String(name).trim()) {
       return res.status(400).json({ error: 'Facility name cannot be blank.' });
+    }
+    if (snapMode !== undefined && !['MARKETPLACE', 'SHIFTS', 'BOTH'].includes(snapMode)) {
+      return res.status(400).json({ error: 'snapMode must be MARKETPLACE, SHIFTS, or BOTH.' });
     }
     const data = {};
     if (name !== undefined) data.name = String(name).trim();
@@ -1426,6 +1433,7 @@ router.patch('/facilities/:id', adminAuth, async (req, res) => {
     if (address !== undefined) data.address = address || null;
     if (zipCode !== undefined) data.zipCode = zipCode || null;
     if (state !== undefined) data.state = state || null;
+    if (snapMode !== undefined) data.snapMode = snapMode;
 
     const facility = await prisma.facility.update({
       where: { id: req.params.id },
@@ -1441,6 +1449,7 @@ router.patch('/facilities/:id', adminAuth, async (req, res) => {
         address: facility.address,
         zipCode: facility.zipCode,
         state: facility.state,
+        snapMode: facility.snapMode,
         tier: facility.subscription?.tier || 'BASIC',
       },
     });
