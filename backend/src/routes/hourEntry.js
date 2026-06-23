@@ -149,6 +149,24 @@ router.post('/submit', async (req, res) => {
   }
 });
 
+// POST /clear-period — delete ALL hour entries for the facility in a period.
+// Undo for a bad import. Body: { periodStart, periodEnd }.
+router.post('/clear-period', async (req, res) => {
+  const { periodStart, periodEnd } = req.body || {};
+  if (!periodStart || !periodEnd) return res.status(400).json({ error: 'periodStart and periodEnd are required' });
+  try {
+    const start = new Date(periodStart);
+    const end = new Date(new Date(periodEnd).getTime() + 86399999);
+    const result = await prisma.providerHourEntry.deleteMany({
+      where: { facilityId: req.facility.id, date: { gte: start, lte: end } },
+    });
+    res.json({ deleted: result.count });
+  } catch (err) {
+    console.error('[hour-entry/clear-period]', err.message);
+    res.status(500).json({ error: 'Failed to clear hour entries' });
+  }
+});
+
 // DELETE /:id
 router.delete('/:id', async (req, res) => {
   try {

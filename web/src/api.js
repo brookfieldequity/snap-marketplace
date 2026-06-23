@@ -436,6 +436,8 @@ export const payrollAPI = {
     apiFetch(`${BASE}/hour-entry/submit`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd, rosterEntryId }) }),
   deleteHourEntry: (id) =>
     apiFetch(`${BASE}/hour-entry/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
+  clearHourEntries: ({ periodStart, periodEnd }) =>
+    apiFetch(`${BASE}/hour-entry/clear-period`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd }) }),
   // Agency invoice — the "CAPA All in" deliverable. JSON for the on-screen view.
   getAgencyInvoice: ({ periodStart, periodEnd }) =>
     apiFetch(`${BASE}/payroll/agency-invoice?periodStart=${periodStart}&periodEnd=${periodEnd}`, {

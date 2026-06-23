@@ -83,6 +83,27 @@ export default function HourEntryPage({ onNavigate }) {
     } catch (err) { setError(err.message || 'Update failed') }
   }
 
+  // Delete one hour entry (e.g. to fix a bad row).
+  async function deleteRow(id) {
+    if (!window.confirm('Delete this hour entry?')) return
+    try {
+      await payrollAPI.deleteHourEntry(id)
+      await load()
+    } catch (err) { setError(err.message || 'Delete failed') }
+  }
+
+  // Undo a bad import: clear every hour entry for the selected period.
+  async function clearPeriod() {
+    if (!window.confirm(`Delete ALL hour entries for ${period.start} → ${period.end}? This can't be undone.`)) return
+    setBusy('clear'); setError('')
+    try {
+      const res = await payrollAPI.clearHourEntries({ periodStart: period.start, periodEnd: period.end })
+      await load()
+      window.alert(`Cleared ${res?.deleted ?? 0} hour entr${(res?.deleted ?? 0) === 1 ? 'y' : 'ies'} for this period.`)
+    } catch (err) { setError(err.message || 'Clear failed') }
+    finally { setBusy('') }
+  }
+
   // Bulk manual entry — e.g. a fixed-rate 1099 line not tied to a shift (a
   // business-name contractor paid a set number of hours). Date defaults to
   // period end; blank location = facility site (billable).
@@ -130,6 +151,7 @@ export default function HourEntryPage({ onNavigate }) {
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; importSheet(f) }} />
         </label>
         <button style={primaryBtn} onClick={submitAll} disabled={!!busy}>{busy === 'submit' ? 'Submitting…' : '✓ Submit all'}</button>
+        <button style={{ ...ghostBtn, color: '#DC2626', borderColor: '#FECACA' }} onClick={clearPeriod} disabled={!!busy} title="Delete all hour entries for this period (undo a bad import)">{busy === 'clear' ? 'Clearing…' : '🗑 Clear period'}</button>
       </div>
 
       {error && <div style={{ ...card, borderColor: '#FCA5A5', background: '#FEF2F2', color: '#B91C1C', marginBottom: 18 }}>{error}</div>}
@@ -201,6 +223,7 @@ export default function HourEntryPage({ onNavigate }) {
                 <th style={th}>End</th>
                 <th style={{ ...th, textAlign: 'right' }}>Hours</th>
                 <th style={{ ...th, textAlign: 'center' }}>Status</th>
+                <th style={{ ...th, textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -226,6 +249,13 @@ export default function HourEntryPage({ onNavigate }) {
                       color: r.status === 'SUBMITTED' ? '#166534' : '#854D0E' }}>
                       {r.status === 'SUBMITTED' ? 'Submitted' : 'Draft'}
                     </span>
+                  </td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    <button
+                      onClick={() => deleteRow(r.id)}
+                      title="Delete this hour entry"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 15, lineHeight: 1, padding: 4 }}
+                    >🗑</button>
                   </td>
                 </tr>
               ))}
