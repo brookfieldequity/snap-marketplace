@@ -1635,6 +1635,9 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
       // (the agency's own roster) — i.e. cross-match the same people by name /
       // business, so CAPA's APNE providers get tagged without manual labeling.
       matchAgencyRosterFacilityId = null,
+      // Explicit roster-entry IDs to force-tag to the agency employer (used to
+      // fix name-mismatch stragglers the audit surfaces).
+      forceAgencyRosterEntryIds = [],
       tagOwnStaff = true,
     } = req.body || {};
 
@@ -1694,11 +1697,12 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
       select: { id: true, providerName: true, businessName: true, employer: true, is1099: true, employerId: true },
     });
     const names = matchEmployerNames.map((n) => String(n).trim().toLowerCase());
+    const forceSet = new Set(Array.isArray(forceAgencyRosterEntryIds) ? forceAgencyRosterEntryIds : []);
     let taggedAgency = 0;
     let taggedSelf = 0;
     for (const e of entries) {
       const empName = (e.employer || '').trim().toLowerCase();
-      let isAgency = !!agencyEmployer && ((empName && names.includes(empName)) || (matchIs1099 && e.is1099 === true));
+      let isAgency = !!agencyEmployer && (forceSet.has(e.id) || (empName && names.includes(empName)) || (matchIs1099 && e.is1099 === true));
       // Cross-match against the agency's own roster (by name / business).
       if (!isAgency && agencyKeys) {
         const nk = buildNameKey(e.providerName);
@@ -1724,6 +1728,88 @@ router.post('/eor/tag', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[admin] eor/tag failed:', err);
     res.status(500).json({ error: 'Failed to tag employer-of-record.' });
+  }
+});
+
+
+// GET /admin/eor/audit/:facilityId?agencyOwnerFacilityId=... — read-only
+// firewall check for a facility. Reports whether any provider the facility
+// would see still exposes a payroll rate that belongs to the agency (a leak),
+// using the same lens rule as services/rosterLens.js (a card's payroll is
+// hidden from this facility only when it's tagged to an employer the facility
+// does NOT own).
+router.get('/eor/audit/:facilityId', adminAuth, async (req, res) => {
+  try {
+    const facilityId = req.params.facilityId;
+    const { agencyOwnerFacilityId } = req.query;
+    const facility = await prisma.facility.findUnique({ where: { id: facilityId }, select: { id: true, name: true } });
+    if (!facility) return res.status(404).json({ error: 'Facility not found.' });
+
+    const cards = await prisma.internalRosterEntry.findMany({
+      where: { facilityId },
+      select: {
+        id: true, providerName: true, businessName: true,
+        hourlyRate: true, annualRate: true, contractorPayRate: true,
+        employerRef: { select: { name: true, kind: true, ownerFacilityId: true } },
+      },
+    });
+
+    // Build the agency's roster fingerprints so we can spot agency providers on
+    // this roster even if their card wasn't tagged (name-mismatch stragglers).
+    let agencyKeys = null;
+    if (agencyOwnerFacilityId) {
+      const agencyRoster = await prisma.internalRosterEntry.findMany({
+        where: { facilityId: agencyOwnerFacilityId },
+        select: { providerName: true, businessName: true },
+      });
+      agencyKeys = new Set();
+      for (const e of agencyRoster) {
+        const nk = buildNameKey(e.providerName); if (nk) agencyKeys.add(nk);
+        const pn = normBizName(e.providerName); if (pn) agencyKeys.add(pn);
+        if (e.businessName) agencyKeys.add(normBizName(e.businessName));
+      }
+    }
+    const hasPay = (c) => c.hourlyRate != null || c.annualRate != null || c.contractorPayRate != null;
+    const matchesAgency = (c) => {
+      if (!agencyKeys) return false;
+      const nk = buildNameKey(c.providerName);
+      const pn = normBizName(c.providerName);
+      const bz = c.businessName ? normBizName(c.businessName) : null;
+      return (nk && agencyKeys.has(nk)) || (pn && agencyKeys.has(pn)) || (bz && agencyKeys.has(bz));
+    };
+    // Firewalled = tagged to an employer this facility does NOT own (payroll hidden).
+    const firewalled = (c) => !!c.employerRef && c.employerRef.ownerFacilityId !== facilityId;
+
+    let taggedAgency = 0, taggedSelf = 0, untagged = 0;
+    let cardsWithPayroll = 0, firewalledWithPayroll = 0;
+    const leaks = [];
+    for (const c of cards) {
+      if (!c.employerRef) untagged += 1;
+      else if (c.employerRef.ownerFacilityId === facilityId) taggedSelf += 1;
+      else taggedAgency += 1;
+      if (hasPay(c)) cardsWithPayroll += 1;
+      if (firewalled(c) && hasPay(c)) firewalledWithPayroll += 1;
+      // Leak: this facility WOULD see a payroll rate for someone who is actually
+      // an agency provider.
+      if (!firewalled(c) && hasPay(c) && matchesAgency(c)) {
+        leaks.push({ id: c.id, name: c.businessName || c.providerName, hourlyRate: c.hourlyRate, annualRate: c.annualRate, contractorPayRate: c.contractorPayRate });
+      }
+    }
+
+    res.json({
+      facility: facility.name,
+      totalCards: cards.length,
+      taggedToAgency: taggedAgency,
+      taggedToSelf: taggedSelf,
+      untagged,
+      cardsWithAnyPayrollRate: cardsWithPayroll,
+      firewalledWithPayroll,
+      leakCount: leaks.length,
+      potentialLeaks: leaks,
+    });
+  } catch (err) {
+    console.error('[admin] eor/audit failed:', err);
+    res.status(500).json({ error: 'Audit failed', details: err.message });
   }
 });
 
