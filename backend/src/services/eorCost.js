@@ -273,7 +273,15 @@ async function buildFacilityCostForPeriod({ facilityId, periodStart, periodEnd, 
         hours: Number(r.durationHours || 0),
       }));
     }
-    const { regularHours, otHours } = splitRegularOt(shiftDetail);
+    // Submitted/imported hours are an authoritative period total lumped on one
+    // date — re-deriving a weekly >40 OT split from a lump wrongly bills the
+    // remainder at 1.5x the all-in rate (1099 contractors aren't OT-eligible,
+    // and the invoice is a flat hours x rate bill). Pass submitted totals
+    // through as regular; only split real per-day scheduling records.
+    const usingSubmitted = !!(submitted && submitted.length);
+    const { regularHours, otHours } = usingSubmitted
+      ? { regularHours: round2(shiftDetail.reduce((s, x) => s + Number(x.hours || 0), 0)), otHours: 0 }
+      : splitRegularOt(shiftDetail);
 
     // For the invoice, the 1099/agency nature wins (a dual provider's W-2 side
     // never appears here — it has no billable hours and is paid as salary).
