@@ -69,6 +69,8 @@ export default function PayrollBuilderPage({ onNavigate }) {
   // Once both class grids load, auto-select the class that actually has hours
   // (so an all-1099 agency doesn't land on an empty W-2 grid). Only fires once.
   const [autoPicked, setAutoPicked] = useState(false)
+  // rosterEntryIds the user re-added after they were hidden for having no hours.
+  const [restored, setRestored] = useState(() => new Set())
 
   // Export state
   const [exporting, setExporting] = useState(false)
@@ -132,11 +134,28 @@ export default function PayrollBuilderPage({ onNavigate }) {
     if (step === 3) {
       setGrids({})
       setAutoPicked(false)
+      setRestored(new Set())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period.start, period.end])
 
+  // Clear re-added rows when switching pay class (the list changes).
+  useEffect(() => { setRestored(new Set()) }, [payClass])
+
   const grid = grids[payClass]
+
+  // A row is "empty" if there's nothing to pay: no hours, no gross (covers
+  // salaried W-2 who keep gross from salary), no bonus. Condense the review to
+  // people with hours; hidden rows can be added back individually.
+  function isEmpty(item) {
+    const hrs = Number(item.regularHours || 0) + Number(item.otHours || 0)
+    return hrs === 0 && Number(item.grossPay || 0) === 0 && clientBonus(item) === 0
+  }
+  // Visible rows carry their ORIGINAL index into grid.items (updateItem needs it).
+  const visible = grid
+    ? grid.items.map((it, idx) => ({ it, idx })).filter(({ it }) => !isEmpty(it) || restored.has(it.rosterEntryId))
+    : []
+  const hidden = grid ? grid.items.filter((it) => isEmpty(it) && !restored.has(it.rosterEntryId)) : []
 
   // Only show the OT column when the active template actually has one (e.g. ADP).
   // Gusto's contractor template has no OT column, so showing it is just noise.
@@ -177,16 +196,18 @@ export default function PayrollBuilderPage({ onNavigate }) {
   }
 
   function approveAll() {
+    const visibleIds = new Set(visible.map(({ it }) => it.rosterEntryId))
     setGrids((g) => {
       const cur = g[payClass]
-      const approved = new Set(cur.items.filter((i) => !i.missingRate).map((i) => i.rosterEntryId))
+      const approved = new Set(cur.items.filter((i) => visibleIds.has(i.rosterEntryId) && !i.missingRate).map((i) => i.rosterEntryId))
       return { ...g, [payClass]: { ...cur, approved } }
     })
   }
 
+  // Approval / export operate on the VISIBLE (condensed) rows only.
   const allApproved =
-    grid && grid.items.length > 0 && grid.items.every((i) => grid.approved.has(i.rosterEntryId))
-  const anyMissingRate = grid && grid.items.some((i) => i.missingRate)
+    visible.length > 0 && visible.every(({ it }) => grid.approved.has(it.rosterEntryId))
+  const anyMissingRate = visible.some(({ it }) => it.missingRate)
 
   async function doExport() {
     setExporting(true)
@@ -198,7 +219,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
         periodStart: period.start,
         periodEnd: period.end,
         invoiceNumber,
-        lineItems: grid.items,
+        lineItems: visible.map(({ it }) => it),
       })
       setExported(res)
       downloadCsv(res.csv, res.fileName)
@@ -522,15 +543,17 @@ export default function PayrollBuilderPage({ onNavigate }) {
             <div style={{ ...card, color: '#64748B' }}>Building {CLASS_LABEL[payClass]} payroll…</div>
           ) : (
             <>
-              {/* Summary cards */}
+              {/* Summary cards — over the condensed (visible) list */}
               {(() => {
-                const totalBonus = grid.items.reduce((s, i) => s + clientBonus(i), 0)
+                const vis = visible.map(({ it }) => it)
+                const totalBonus = vis.reduce((s, i) => s + clientBonus(i), 0)
+                const approvedCount = vis.filter((i) => grid.approved.has(i.rosterEntryId)).length
                 const cards = [
-                  { label: 'Providers', value: grid.items.length },
-                  { label: 'Total Hours', value: grid.items.reduce((s, i) => s + Number(i.regularHours || 0) + Number(i.otHours || 0), 0).toFixed(1) },
-                  { label: 'Total Gross', value: fmtMoney(grid.items.reduce((s, i) => s + Number(i.grossPay || 0), 0)) },
+                  { label: 'Providers', value: vis.length },
+                  { label: 'Total Hours', value: vis.reduce((s, i) => s + Number(i.regularHours || 0) + Number(i.otHours || 0), 0).toFixed(1) },
+                  { label: 'Total Gross', value: fmtMoney(vis.reduce((s, i) => s + Number(i.grossPay || 0), 0)) },
                   { label: 'Total Bonus', value: fmtMoney(totalBonus), color: totalBonus > 0 ? '#7C3AED' : '#0F172A' },
-                  { label: 'Approved', value: `${grid.approved.size} / ${grid.items.length}` },
+                  { label: 'Approved', value: `${approvedCount} / ${vis.length}` },
                 ]
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 16 }}>
@@ -565,7 +588,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                     <div>Gross</div>
                     <div style={{ textAlign: 'center' }}>Status</div>
                   </div>
-                  {grid.items.map((item, idx) => {
+                  {visible.map(({ it: item, idx }) => {
                     const isApproved = grid.approved.has(item.rosterEntryId)
                     const open = expanded === item.rosterEntryId
                     return (
@@ -717,12 +740,45 @@ export default function PayrollBuilderPage({ onNavigate }) {
                 </div>
               )}
 
+              {/* Condensed-list controls: only people with hours show; add back or reveal all. */}
+              {grid && (hidden.length > 0 || restored.size > 0) && (
+                <div style={{ ...card, marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  {hidden.length > 0 && (
+                    <>
+                      <span style={{ fontSize: 13, color: '#64748B' }}>
+                        {hidden.length} provider{hidden.length === 1 ? '' : 's'} with no hours hidden.
+                      </span>
+                      <select
+                        value=""
+                        onChange={(e) => { const id = e.target.value; if (id) setRestored((s) => new Set([...s, id])) }}
+                        style={{ ...inputStyle, minWidth: 230 }}
+                      >
+                        <option value="">+ Add a provider back…</option>
+                        {hidden.map((h) => (
+                          <option key={h.rosterEntryId} value={h.rosterEntryId}>
+                            {h.useBusinessNameForPayroll && h.businessName ? h.businessName : h.providerName}
+                          </option>
+                        ))}
+                      </select>
+                      <button onClick={() => setRestored(new Set(grid.items.map((i) => i.rosterEntryId)))} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                        Show all
+                      </button>
+                    </>
+                  )}
+                  {restored.size > 0 && (
+                    <button onClick={() => setRestored(new Set())} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                      Condense (hide no-hours)
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
               <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
                 <button style={ghostBtn} onClick={() => setStep(activeSystem?.configured ? 1 : 2)}>
                   Back
                 </button>
-                <button style={{ ...ghostBtn, color: '#1D4ED8', borderColor: '#BFDBFE' }} onClick={approveAll} disabled={grid.items.length === 0}>
+                <button style={{ ...ghostBtn, color: '#1D4ED8', borderColor: '#BFDBFE' }} onClick={approveAll} disabled={visible.length === 0}>
                   Approve All
                 </button>
                 <button
