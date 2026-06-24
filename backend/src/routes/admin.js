@@ -1997,7 +1997,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       data: {
         shiftId: completedShift.id, providerId: michael.id,
         providerHourlyRate: 260, shiftDurationHours: 10, totalShiftValue: 2600,
-        platformFeePercent: 10, platformFeeAmount: 260, paymentStatus: 'SETTLED',
+        platformFeePercent: 10, platformFeeAmount: 260, paymentStatus: 'PAID',
         confirmedAt: demoDay(-7), completedAt: demoDay(-5),
       },
     });
