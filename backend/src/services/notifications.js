@@ -588,8 +588,51 @@ async function recordNotifications(providerIds, payload) {
   }
 }
 
+// ── Recurring/bulk series posted → ONE batched alert (not N) ──────────────────
+// A series can be dozens of shifts; sending a per-shift push/email would spam
+// every matching provider. Send a single summary instead.
+async function notifySeriesPosted({ facilityId, specialty, count, firstDate, lastDate, rate }) {
+  try {
+    const [facility, providers] = await Promise.all([
+      prisma.facility.findUnique({ where: { id: facilityId }, select: { name: true } }),
+      prisma.providerProfile.findMany({
+        where: { specialty, notifPreference: { not: 'NONE' } },
+        include: { user: { select: { email: true } } },
+      }),
+    ]);
+    if (!providers.length) return;
+
+    const facilityName = facility?.name || 'a facility';
+    const range = firstDate
+      ? `${fmtDate(firstDate)}${lastDate && lastDate !== firstDate ? `–${fmtDate(lastDate)}` : ''}`
+      : '';
+    const title = `${count} new ${specialty} shifts — $${Number(rate).toFixed(0)}/hr`;
+    const body = `${facilityName} · ${range}`;
+
+    const tokens = providers.filter((p) => p.expoPushToken).map((p) => p.expoPushToken);
+    await sendPush(tokens, title, body, { type: 'NEW_SHIFT_SERIES' });
+
+    for (const p of providers) {
+      if (!p.user?.email) continue;
+      await sendEmail(
+        p.user.email,
+        `${count} new ${specialty} shifts at ${facilityName} — $${Number(rate).toFixed(0)}/hr`,
+        emailTemplate('New Shifts Available', `
+          <p>Hi ${p.firstName || 'there'},</p>
+          <p><strong>${facilityName}</strong> just posted <strong>${count}</strong> new
+             <strong>${specialty}</strong> shifts (${range}) at <strong>$${Number(rate).toFixed(0)}/hr</strong>.</p>
+          <p>Open the SNAP app to view the dates that work for you and book before they fill.</p>
+        `)
+      );
+    }
+  } catch (err) {
+    console.error('notifySeriesPosted error:', err.message);
+  }
+}
+
 module.exports = {
   notifyShiftPosted,
+  notifySeriesPosted,
   notifyBooking,
   notifyApplication,
   notifyApplicationReview,

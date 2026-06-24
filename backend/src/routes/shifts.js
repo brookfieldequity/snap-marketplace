@@ -1,9 +1,11 @@
+const crypto = require('crypto');
 const express = require('express');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const facilityAuth = require('../middleware/facilityAuth');
-const { notifyShiftPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
+const { notifyShiftPosted, notifySeriesPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
 const { aggregateFacilityRatings, aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
+const { expandPattern } = require('../services/recurrence');
 
 const router = express.Router();
 
@@ -385,6 +387,118 @@ router.post('/', facilityAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to post shift' });
+  }
+});
+
+// ── Post a recurring/bulk series (facility) ──────────────────────────────────
+// Expands a pattern into N shifts that share a recurrenceGroupId, all created
+// DEPOSIT_PENDING. One batched notification (not N). Deposit is then confirmed
+// for the whole group via /series/:groupId/confirm-deposit.
+router.post('/series', facilityAuth, async (req, res) => {
+  try {
+    const {
+      specialty, startTime, durationHours, baseRate,
+      featured, surgeEnabled, preferredAccessOnly, preferredWindowHours,
+      pattern,
+    } = req.body;
+
+    if (!specialty || !startTime || !durationHours || !baseRate || !pattern) {
+      return res.status(400).json({ error: 'specialty, startTime, durationHours, baseRate, and pattern are required' });
+    }
+
+    const dates = expandPattern(pattern);
+    if (dates.length === 0) {
+      return res.status(400).json({ error: 'No valid future dates match that pattern.' });
+    }
+
+    // Tier limit applies to the whole batch.
+    const sub = req.facility.subscription;
+    if (sub?.tier === 'BASIC') {
+      await resetMonthlyCount(sub);
+      const remaining = 10 - sub.shiftsPostedThisMonth;
+      if (dates.length > remaining) {
+        return res.status(403).json({
+          error: `This series is ${dates.length} shifts but your Basic plan has ${Math.max(0, remaining)} left this month. Upgrade to Professional for unlimited posting.`,
+        });
+      }
+    }
+
+    const rate = parseFloat(baseRate);
+    const hours = parseFloat(durationHours);
+    const estimatedTotal = rate * hours;
+    const depositAmount = Math.round(estimatedTotal * 0.25 * 100) / 100;
+    const recurrenceGroupId = crypto.randomUUID();
+    const preferredWindowEnds = preferredAccessOnly
+      ? new Date(Date.now() + (preferredWindowHours || 2) * 3600000)
+      : null;
+
+    const data = dates.map((d) => ({
+      facilityId: req.facility.id,
+      specialty,
+      date: d,
+      startTime,
+      durationHours: hours,
+      baseRate: rate,
+      currentRate: rate,
+      featured: !!featured,
+      surgeEnabled: !!surgeEnabled,
+      preferredAccessOnly: !!preferredAccessOnly,
+      preferredWindowEnds,
+      recurrenceGroupId,
+      expiresAt: new Date(d.getTime() - 2 * 3600000),
+      estimatedTotal,
+      depositAmount,
+      status: 'DEPOSIT_PENDING',
+      platformFeePercent: 10,
+    }));
+
+    await prisma.shift.createMany({ data });
+
+    if (sub) {
+      await prisma.facilitySubscription.update({
+        where: { id: sub.id },
+        data: { shiftsPostedThisMonth: { increment: dates.length } },
+      });
+    }
+
+    notifySeriesPosted({
+      facilityId: req.facility.id,
+      specialty,
+      count: dates.length,
+      firstDate: dates[0],
+      lastDate: dates[dates.length - 1],
+      rate,
+    }).catch((err) => console.error('notifySeriesPosted:', err.message));
+
+    res.status(201).json({
+      recurrenceGroupId,
+      count: dates.length,
+      depositPerShift: depositAmount,
+      totalEstimated: Math.round(estimatedTotal * dates.length * 100) / 100,
+      totalDeposit: Math.round(depositAmount * dates.length * 100) / 100,
+      dates: dates.map((d) => d.toISOString().slice(0, 10)),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to post shift series' });
+  }
+});
+
+// ── Confirm deposit for an entire series (facility) ──────────────────────────
+router.post('/series/:groupId/confirm-deposit', facilityAuth, async (req, res) => {
+  try {
+    const { count } = await prisma.shift.updateMany({
+      where: {
+        facilityId: req.facility.id,
+        recurrenceGroupId: req.params.groupId,
+        status: 'DEPOSIT_PENDING',
+      },
+      data: { status: 'LIVE', depositConfirmed: true, depositConfirmedAt: new Date() },
+    });
+    if (count === 0) return res.status(404).json({ error: 'No pending shifts found for this series' });
+    res.json({ updated: count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to confirm series deposit' });
   }
 });
 

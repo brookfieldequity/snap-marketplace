@@ -128,7 +128,7 @@ enum PayrollRunStatus {
 // facility never sees. Phase 0 = correctness only (honest savings calc +
 // reimbursement totals); the employer portal is Phase 1.
 enum EmployerKind {
-  FACILITY_SELF   // the facility employing its own W-2 staff (CAPA pays CAPA staff)
+  FACILITY_SELF // the facility employing its own W-2 staff (CAPA pays CAPA staff)
   STAFFING_AGENCY // external EOR that staffs the facility (APNE, JJM)
 }
 
@@ -320,7 +320,7 @@ model Facility {
   snapMode               SnapMode      @default(BOTH)
   // Pay-period schedule: set once, then payroll periods auto-generate from it
   // so a coordinator picks "Jun 6 – Jun 20" instead of typing the span each run.
-  payAnchorDate          String?       // "YYYY-MM-DD" — start date of any one known pay period
+  payAnchorDate          String? // "YYYY-MM-DD" — start date of any one known pay period
   payFrequency           String        @default("BIWEEKLY") // WEEKLY | BIWEEKLY
   // Industry-standard fully-loaded cost to staff one anesthetizing location
   // for one day ($/room/day), entered by the coordinator. Used as the
@@ -372,7 +372,7 @@ model Facility {
   ptoWindows          PtoWindow[]
   // EOR (Phase 0). selfEmployer = this facility's own-W2 Employer row;
   // employerLinks = external agencies (APNE, JJM) allowed to staff it.
-  selfEmployer        Employer?              @relation("FacilitySelfEmployer")
+  selfEmployer        Employer?                @relation("FacilitySelfEmployer")
   employerLinks       EmployerFacilityLink[]
   hourEntries         ProviderHourEntry[]
   locations           FacilityLocation[]
@@ -547,6 +547,11 @@ model Shift {
   preferredAccessOnly Boolean   @default(false)
   preferredWindowEnds DateTime?
 
+  // When a facility posts a recurring/bulk series, every shift in the batch
+  // shares this id so the series can be confirmed/managed together. null = a
+  // one-off single post. See services/recurrence.js + POST /shifts/series.
+  recurrenceGroupId String?
+
   expiresAt      DateTime?
   currentViewers Int       @default(0)
 
@@ -567,6 +572,8 @@ model Shift {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([recurrenceGroupId])
 }
 
 model ShiftApplication {
@@ -715,45 +722,45 @@ model Message {
 // ── SNAP Shifts models ────────────────────────────────────────────────────────
 
 model InternalRosterEntry {
-  id                     String              @id @default(cuid())
-  facilityId             String
-  facility               Facility            @relation(fields: [facilityId], references: [id])
-  providerName           String
+  id                        String              @id @default(cuid())
+  facilityId                String
+  facility                  Facility            @relation(fields: [facilityId], references: [id])
+  providerName              String
   // Nullable so non-clinical roster members (back-office staff, billers)
   // can be on the roster for payroll without a clinical specialty. Clinical
   // scheduling explicitly excludes rows where providerType is null OR
   // isNonClinical is true (see scheduleBuilder.js + isNonClinical below).
-  providerType           Specialty?
-  employmentCategory     EmploymentCategory?
+  providerType              Specialty?
+  employmentCategory        EmploymentCategory?
   // True for back-office / non-clinical staff who belong on the roster for
   // payroll purposes but are never scheduled into ORs and don't need an NPI.
-  isNonClinical          Boolean             @default(false)
+  isNonClinical             Boolean             @default(false)
   // True when the coordinator has explicitly marked this person as not
   // needing an NPI (back-office staff, or a provider they'll handle out of
   // band). Exempt rows are excluded from the NPI review queue. Auto-set true
   // for non-clinical imports.
-  npiExempt              Boolean             @default(false)
-  snapAccountEmail       String?
-  phoneNumber            String?
+  npiExempt                 Boolean             @default(false)
+  snapAccountEmail          String?
+  phoneNumber               String?
   // NPI (National Provider Identifier) — primary key for matching this
   // roster entry to an existing ProviderProfile across the marketplace.
   // 10-digit string; unique-per-facility because the same provider could
   // (rarely) be on two practices' rosters as a locum.
-  npi                    String?
+  npi                       String?
   // Customer-internal provider code (e.g. CAPA's "Initials" field). Used
   // as the join key when a multi-sheet xlsx import bundles identity,
   // payroll, and per-location credentialing across separate tabs. NOT a
   // SNAP-wide identifier — only meaningful within ONE facility's roster.
-  rosterCode             String?
+  rosterCode                String?
   // External payroll-system identifier (Gusto / ADP / Paychex / etc).
   // Pass-through field so the SNAP Payroll tab can export weekly
   // summaries that link back to the customer's payroll provider rows.
-  payrollSystemId        String?
+  payrollSystemId           String?
   // Secret token for the provider's personal iCal subscription URL
   // (/api/schedule/ical/:rosterEntryId/:icalToken.ics). Generated on first
   // request, regenerated when the provider rotates the URL. Anyone with the
   // URL can read this provider's schedule, so treat it like a password.
-  icalToken              String?
+  icalToken                 String?
   // Who employs / staffs this provider into the facility. For CAPA this is
   // typically one of: "APNE" (Matt's anesthesia practice — staffs CAPA),
   // "CAPA" (CAPA-W2-employed staff), "JJM" (contracted group). NOTE: `hourlyRate`
@@ -763,11 +770,11 @@ model InternalRosterEntry {
   // wait for an enum edit when they onboard a new staffing group.
   // PHASE 0: kept as a denormalized mirror of Employer.name during migration;
   // employerId below is the new source of truth. See eor-model-spec.md.
-  employer               String?
+  employer                  String?
   // EOR link (Phase 0). Who pays this provider — resolves to a FACILITY_SELF
   // Employer for CAPA's own W-2 staff, or a STAFFING_AGENCY (APNE) for 1099s.
-  employerId             String?
-  employerRef            Employer?           @relation(fields: [employerId], references: [id])
+  employerId                String?
+  employerRef               Employer?           @relation(fields: [employerId], references: [id])
   // 1099 contractors may be paid under a business name (LLC/EIN) rather than
   // their personal name. `businessName` holds it; `useBusinessNameForPayroll`,
   // when true, makes the Payroll Builder export the business name (and blank the
@@ -775,7 +782,7 @@ model InternalRosterEntry {
   // in SNAP (marketplace, shifts, credentialing) the person is addressed by
   // their actual name.
   businessName              String?
-  useBusinessNameForPayroll Boolean @default(false)
+  useBusinessNameForPayroll Boolean             @default(false)
   // Payee identity for the (future) payroll-feed export — mirrors the APNE
   // payroll sheet's contractor_type/ein columns. "Business" payees bill under an
   // LLC/EIN; "Individual" payees under their name. SSN is deliberately NOT stored
@@ -790,47 +797,47 @@ model InternalRosterEntry {
   // CAPA-site 1099 hours are billed at) + contractorEmployer. hourlyRate stays
   // free for W-2-hourly staff so the dual 1099 rate never pollutes W-2 payroll.
   // See eor-model-spec.md (site-ownership + dual-employment section).
-  dualEmployment            Boolean @default(false)
+  dualEmployment            Boolean             @default(false)
   w2Employer                String? // who pays the W-2 salary (e.g. "CAPA")
   contractorEmployer        String? // who pays the 1099 (e.g. "APNE")
-  contractorPayRate         Float?  // 1099 pay rate for a DUAL provider
+  contractorPayRate         Float? // 1099 pay rate for a DUAL provider
   // Tax-status flag, orthogonal to employmentCategory. true = 1099 contractor,
   // false = W-2 employee, null = unknown. Surfaced on the roster card so the
   // coordinator can see "1099 · FT" at a glance for cost attribution.
-  is1099                 Boolean?
+  is1099                    Boolean?
   // Hours-status flag, orthogonal to employmentCategory. true = full-time,
   // false = part-time, null = unknown. The scheduler still keys off
   // employmentCategory (FULL_TIME/PER_DIEM/LOCUMS); this is descriptive only.
-  isFullTime             Boolean?
+  isFullTime                Boolean?
   // NPPES lookup state. Set when the import couldn't auto-attach an NPI
   // (multiple matches or zero matches in NPPES). The disambiguation UI
   // surfaces these for coordinator resolution. Cleared once npi is set.
-  npiLookupStatus        String? // 'NEEDS_DISAMBIGUATION' | 'NO_MATCH' | 'INVALID_NAME'
-  npiLookupCandidates    Json? // array of NPPES match objects for the disambiguation UI
-  licenseNumber          String?
-  licenseExpiration      DateTime?
-  notes                  String?
-  snapAccountLinked      Boolean             @default(false)
-  linkedProviderId       String?
+  npiLookupStatus           String? // 'NEEDS_DISAMBIGUATION' | 'NO_MATCH' | 'INVALID_NAME'
+  npiLookupCandidates       Json? // array of NPPES match objects for the disambiguation UI
+  licenseNumber             String?
+  licenseExpiration         DateTime?
+  notes                     String?
+  snapAccountLinked         Boolean             @default(false)
+  linkedProviderId          String?
   // Provider schedule access. A linked provider can view this facility's daily
   // board in their app BY DEFAULT; the facility revokes per provider by setting
   // scheduleAccessRevoked. v1.1: if access is revoked, the provider can REQUEST
   // it back (scheduleAccessRequested=true) → the facility sees the request and
   // grants (un-revokes). See eor-model-spec.md / provider↔facility schedule access.
-  scheduleAccessRevoked  Boolean             @default(false)
-  scheduleAccessRequested Boolean            @default(false)
-  inviteSentAt           DateTime?
+  scheduleAccessRevoked     Boolean             @default(false)
+  scheduleAccessRequested   Boolean             @default(false)
+  inviteSentAt              DateTime?
   // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
   // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator
   // sends a credentialing invite; CLAIMED/COMPLETED are synced back from the
   // passport bridge (a live grant means the provider claimed + consented).
-  credentialingStatus    String              @default("NOT_INVITED") // NOT_INVITED | INVITED | CLAIMED | COMPLETED
+  credentialingStatus       String              @default("NOT_INVITED") // NOT_INVITED | INVITED | CLAIMED | COMPLETED
   // True for providers already credentialed via the manual/legacy process.
   // Excluded from "Invite all" — their SNAP credentialing is deferred to their
   // next license renewal so we don't disrupt active credentials. Explicitly
   // selecting them in the invite modal overrides this.
-  externallyCredentialed Boolean             @default(false)
-  createdAt              DateTime            @default(now())
+  externallyCredentialed    Boolean             @default(false)
+  createdAt                 DateTime            @default(now())
 
   // Employment-specific preference fields
   fteHours             Float? // FULL_TIME: hours per week
@@ -897,19 +904,19 @@ model InternalRosterEntry {
 // [startDate, endDate]. v1 is coordinator-entered; provider self-request +
 // approval workflow is v1.1.
 model RosterTimeOff {
-  id            String              @id @default(cuid())
-  rosterEntryId String
-  rosterEntry   InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
-  facilityId    String
-  startDate     DateTime            @db.Date
-  endDate       DateTime            @db.Date
-  reason        String?
+  id                String              @id @default(cuid())
+  rosterEntryId     String
+  rosterEntry       InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  facilityId        String
+  startDate         DateTime            @db.Date
+  endDate           DateTime            @db.Date
+  reason            String?
   // When this time-off was materialized from a Tier-1 DAY_OFF ScheduleRequest,
   // links back to it so re-triaging (downgrade/decline) can clean it up. Plain
   // scalar (no relation) — only the builder/triage code reads it. null =
   // coordinator-entered time off, not request-managed.
-  scheduleRequestId String?         @unique
-  createdAt     DateTime            @default(now())
+  scheduleRequestId String?             @unique
+  createdAt         DateTime            @default(now())
 
   @@index([facilityId, startDate, endDate])
   @@index([rosterEntryId])
@@ -1028,21 +1035,21 @@ model AvailabilitySubmission {
 }
 
 model ScheduleDay {
-  id               String    @id @default(cuid())
-  facilityId       String
-  date             DateTime  @db.Date
-  location         String
-  roomsRequired    Int       @default(1)
+  id                 String    @id @default(cuid())
+  facilityId         String
+  date               DateTime  @db.Date
+  location           String
+  roomsRequired      Int       @default(1)
   // Coverage model copied from the template at generation time. null =
   // MD-only; 3 = team 1:3; 4 = team 1:4. See CoverageTemplateDay.
-  supervisionRatio Int?
-  publishedAt      DateTime?
+  supervisionRatio   Int?
+  publishedAt        DateTime?
   // Out-List Builder: when the day's release order ("who leaves first … who
   // closes") was finalized for the on-site floor runner. null = not yet set.
   // Layered on AFTER publish — it never gates publishing. The order itself
   // lives on ScheduleAssignment.outRank.
   outListPublishedAt DateTime?
-  facility         Facility  @relation(fields: [facilityId], references: [id])
+  facility           Facility  @relation(fields: [facilityId], references: [id])
 
   assignments ScheduleAssignment[]
 
@@ -1701,21 +1708,21 @@ model ScheduleRequest {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model PtoWindow {
-  id         String   @id @default(cuid())
-  facilityId String
-  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  year       Int
-  openDate   DateTime @db.Date
-  closeDate  DateTime @db.Date
+  id                    String   @id @default(cuid())
+  facilityId            String
+  facility              Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  year                  Int
+  openDate              DateTime @db.Date
+  closeDate             DateTime @db.Date
   // Global per-week capacity default (how many providers may have PTO that
   // week). Per-week overrides live in PtoWeekCapacity. Per-role/per-site
   // capacity is deferred — PtoWeekCapacity is shaped to grow into it.
-  defaultWeeklyCapacity Int @default(1)
+  defaultWeeklyCapacity Int      @default(1)
   // How many weeks each provider may rank (1 = most wanted … maxRanks).
-  maxRanks   Int      @default(15)
-  status     String   @default("DRAFT") // DRAFT | OPEN | CLOSED | ALLOCATED
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  maxRanks              Int      @default(15)
+  status                String   @default("DRAFT") // DRAFT | OPEN | CLOSED | ALLOCATED
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   capacities  PtoWeekCapacity[]
   bids        PtoBid[]
@@ -1978,11 +1985,11 @@ model ProviderHourEntry {
   hours     Float    @default(0) // computed from the window, editable
 
   // DRAFT = seeded/in-progress; SUBMITTED = confirmed, ready for payroll/invoice.
-  status    String @default("DRAFT") // DRAFT | SUBMITTED
+  status    String  @default("DRAFT") // DRAFT | SUBMITTED
   // Where the row originated, for provenance/dedup. SCHEDULE = SNAP scheduler;
   // UPLOAD = ingested SchedulingRecord; MANUAL = added by hand; PAYROLL_SHEET =
   // ingested from an APNE-style Gusto 1099 payroll sheet.
-  source    String @default("MANUAL") // SCHEDULE | UPLOAD | MANUAL | PAYROLL_SHEET
+  source    String  @default("MANUAL") // SCHEDULE | UPLOAD | MANUAL | PAYROLL_SHEET
   enteredBy String? // 'coordinator' | 'provider' | a user id, for audit
 
   // APNE payroll-sheet extras (period-level, from the Gusto 1099 feed):

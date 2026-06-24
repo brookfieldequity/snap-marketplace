@@ -121,8 +121,23 @@ export const facilityAPI = {
       body: JSON.stringify(payload),
     }),
 
+  // Recurring/bulk: payload includes a `pattern` ({mode, startDate, endDate,
+  // daysOfWeek} or {mode:'DATES', dates:[...]}) plus the shared shift fields.
+  postShiftSeries: (payload) =>
+    apiFetch(`${BASE}/shifts/series`, {
+      method: 'POST',
+      headers: facilityHeaders(),
+      body: JSON.stringify(payload),
+    }),
+
   confirmDeposit: (shiftId) =>
     apiFetch(`${BASE}/shifts/${shiftId}/confirm-deposit`, {
+      method: 'POST',
+      headers: facilityHeaders(),
+    }),
+
+  confirmSeriesDeposit: (groupId) =>
+    apiFetch(`${BASE}/shifts/series/${groupId}/confirm-deposit`, {
       method: 'POST',
       headers: facilityHeaders(),
     }),
