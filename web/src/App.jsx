@@ -233,11 +233,31 @@ export default function App() {
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, height: 36,
             background: '#FDE68A', color: '#78350F', zIndex: 300,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 20px',
+            fontSize: 12, fontWeight: 700, letterSpacing: '0.05em',
             borderBottom: '1px solid #F59E0B',
           }}>
-            DEMO MODE — Maple Ridge ASC — This is a demonstration facility with seeded data
+            <span />
+            <span>DEMO MODE — Maple Ridge ASC — seeded data only</span>
+            <button
+              onClick={() => {
+                const backup = sessionStorage.getItem('snapAdminTokenBackup')
+                localStorage.removeItem('snapFacilityToken')
+                if (backup) {
+                  localStorage.setItem('snapAdminToken', backup)
+                  sessionStorage.removeItem('snapAdminTokenBackup')
+                }
+                window.location.href = '/'
+              }}
+              style={{
+                background: '#92400E', color: '#FDE68A', border: 'none',
+                borderRadius: 6, padding: '4px 12px', fontSize: 11,
+                fontWeight: 800, cursor: 'pointer', letterSpacing: '0.04em',
+              }}
+            >
+              Exit Demo →
+            </button>
           </div>
         )}
         {/* ── Top navigation bar ─────────────────────────────────────────────── */}

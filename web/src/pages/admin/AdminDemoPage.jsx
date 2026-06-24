@@ -39,7 +39,9 @@ export default function AdminDemoPage() {
     try {
       const data = await adminAPI.launchDemo()
       if (mode === 'tab') {
-        // Switch into demo facility in this tab
+        // Stash admin token so the demo banner can restore it on exit
+        const adminTok = localStorage.getItem('snapAdminToken')
+        if (adminTok) sessionStorage.setItem('snapAdminTokenBackup', adminTok)
         localStorage.setItem('snapFacilityToken', data.token)
         localStorage.removeItem('snapAdminToken')
         window.location.href = '/'

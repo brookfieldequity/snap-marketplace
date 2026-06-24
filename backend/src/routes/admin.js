@@ -1886,6 +1886,10 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       await prisma.internalIncentiveShift.deleteMany({ where: { facilityId: fid } });
       await prisma.schedulingRecord.deleteMany({ where: { facilityId: fid } });
       await prisma.staffIQInput.deleteMany({ where: { facilityId: fid } });
+      await prisma.scheduleAssignment.deleteMany({ where: { facilityId: fid } });
+      await prisma.scheduleDay.deleteMany({ where: { facilityId: fid } });
+      await prisma.internalRosterEntry.deleteMany({ where: { facilityId: fid } });
+      await prisma.facilitySiteRate.deleteMany({ where: { facilityId: fid } });
       await prisma.facilityUser.deleteMany({ where: { facilityId: fid } });
       await prisma.facility.delete({ where: { id: fid } });
     }
@@ -2055,12 +2059,111 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
     }
     await prisma.schedulingRecord.createMany({ data: records });
 
+    // ── Site rates ────────────────────────────────────────────────────────────
+    await prisma.facilitySiteRate.createMany({
+      data: [
+        { facilityId: facility.id, siteName: 'Main OR',    ratePerDay: 3900 },
+        { facilityId: facility.id, siteName: 'Endo Suite', ratePerDay: 2800 },
+      ],
+    });
+
+    // ── Internal roster ───────────────────────────────────────────────────────
+    const rosterDefs = [
+      { providerName: 'Chen, Sarah',      providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Torres, Michael',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Williams, Karen',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Johnson, Lisa',    providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 255, allInCostPerHour: 305, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Brown, Amanda',    providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 255, allInCostPerHour: 305, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Davis, Patricia',  providerType: 'CRNA',             employmentCategory: 'PER_DIEM',  hourlyRate: 270, allInCostPerHour: 270, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Martinez, Carlos', providerType: 'CRNA',             employmentCategory: 'PER_DIEM',  hourlyRate: 270, allInCostPerHour: 270, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Thompson, David',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 258, allInCostPerHour: 308, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Anderson, Rachel', providerType: 'CRNA',             employmentCategory: 'LOCUMS',    hourlyRate: 285, allInCostPerHour: 420, employer: 'Agency', contractStart: demoDay(-60), contractEnd: demoDay(90) },
+      { providerName: 'Park, James',      providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Smith, Robert',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Lee, Jennifer',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'PER_DIEM',  hourlyRate: 400, allInCostPerHour: 400, employer: 'APNE', preferredShiftLength: '10hr' },
+    ];
+    const rosterEntries = [];
+    for (const def of rosterDefs) {
+      const entry = await prisma.internalRosterEntry.create({ data: { facilityId: facility.id, ...def } });
+      rosterEntries.push(entry);
+    }
+    const crnas = rosterEntries.filter((e) => e.providerType === 'CRNA');
+    const mds   = rosterEntries.filter((e) => e.providerType === 'ANESTHESIOLOGIST');
+
+    // ── Schedule days + assignments (past 2 weeks + next week) ────────────────
+    // Team model is 1:2 (what StaffIQ flags as suboptimal) — 1 MD per 2 CRNAs.
+    // Main OR: 10 rooms = 5 MD + 10 CRNA slots; Endo Suite: 2 CRNA rooms.
+    const weekdayOffsets = [];
+    for (let d = -14; d <= 5; d++) {
+      const dt = demoDay(d);
+      const dow = dt.getDay();
+      if (dow !== 0 && dow !== 6) weekdayOffsets.push(d);
+    }
+
+    for (const offset of weekdayOffsets) {
+      const date = demoDay(offset);
+      const isPast = offset < 0;
+
+      // Main OR — 10 rooms, supervision ratio 2 (1:2 model)
+      const mainDay = await prisma.scheduleDay.create({
+        data: {
+          facilityId: facility.id,
+          date,
+          location: 'Main OR',
+          roomsRequired: 10,
+          supervisionRatio: 2,
+          publishedAt: isPast || offset <= 2 ? new Date() : null,
+        },
+      });
+      const mainAssignments = [];
+      for (let room = 1; room <= 10; room++) {
+        mainAssignments.push({
+          scheduleDayId: mainDay.id,
+          facilityId: facility.id,
+          roomNumber: room,
+          rosterId: crnas[(room - 1) % crnas.length].id,
+          role: 'CRNA_ROOM',
+        });
+      }
+      // Supervising MDs at roomNumber 901-905 (5 MDs for 10 CRNA rooms at 1:2)
+      for (let m = 0; m < 5; m++) {
+        mainAssignments.push({
+          scheduleDayId: mainDay.id,
+          facilityId: facility.id,
+          roomNumber: 900 + m + 1,
+          rosterId: mds[m % mds.length].id,
+          role: 'SUPERVISING_MD',
+        });
+      }
+      await prisma.scheduleAssignment.createMany({ data: mainAssignments });
+
+      // Endo Suite — 2 rooms, CRNA-only
+      const endoDay = await prisma.scheduleDay.create({
+        data: {
+          facilityId: facility.id,
+          date,
+          location: 'Endo Suite',
+          roomsRequired: 2,
+          supervisionRatio: null,
+          publishedAt: isPast || offset <= 2 ? new Date() : null,
+        },
+      });
+      await prisma.scheduleAssignment.createMany({
+        data: [
+          { scheduleDayId: endoDay.id, facilityId: facility.id, roomNumber: 1, rosterId: crnas[5].id, role: 'CRNA_ROOM' },
+          { scheduleDayId: endoDay.id, facilityId: facility.id, roomNumber: 2, rosterId: crnas[6].id, role: 'CRNA_ROOM' },
+        ],
+      });
+    }
+
     res.json({
       ok: true,
       facilityId: facility.id,
       staffiqScore: computed.score,
       projectedMonthlySavings: Math.round((computed.inefficiency1Cost + computed.inefficiency2Cost) / 12),
       schedulingRecords: records.length,
+      rosterEntries: rosterEntries.length,
+      scheduleDays: weekdayOffsets.length * 2,
     });
   } catch (err) {
     console.error('[admin] demo/seed failed:', err);
