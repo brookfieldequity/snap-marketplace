@@ -1875,9 +1875,11 @@ model PayrollRun {
   payClass       PayrollClass
   periodStart    DateTime
   periodEnd      DateTime
-  providerCount  Int              @default(0)
-  totalHours     Float            @default(0)
-  totalGross     Float            @default(0)
+  providerCount        Int              @default(0)
+  totalHours           Float            @default(0)
+  totalGross           Float            @default(0)
+  totalBonus           Float            @default(0)
+  totalReimbursement   Float            @default(0)
   // Run-level invoice number — the SAME value for every provider on this run
   // (Gusto's invoice_number column), set once per payroll and incremented each run.
   invoiceNumber  String?

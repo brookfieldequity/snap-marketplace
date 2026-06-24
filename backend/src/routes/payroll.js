@@ -346,6 +346,8 @@ router.post('/runs', async (req, res) => {
     const fileName = `SNAP_Payroll_${system}_${classLabel}_${fmtDate(periodStart)}_${fmtDate(periodEnd)}.csv`;
     const totalHours = items.reduce((s, i) => s + i.regularHours + i.otHours, 0);
     const totalGross = items.reduce((s, i) => s + i.grossPay, 0);
+    const totalBonus = items.reduce((s, i) => s + i.bonusTotal, 0);
+    const totalReimbursement = items.reduce((s, i) => s + (i.reimbursement || 0), 0);
 
     const exportedByName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email || null;
 
@@ -359,6 +361,8 @@ router.post('/runs', async (req, res) => {
         providerCount: items.length,
         totalHours: Math.round(totalHours * 100) / 100,
         totalGross: Math.round(totalGross * 100) / 100,
+        totalBonus: Math.round(totalBonus * 100) / 100,
+        totalReimbursement: Math.round(totalReimbursement * 100) / 100,
         invoiceNumber: invoiceNum,
         status: 'EXPORTED',
         csvContent: csv,
@@ -413,6 +417,8 @@ router.get('/runs', async (req, res) => {
         providerCount: true,
         totalHours: true,
         totalGross: true,
+        totalBonus: true,
+        totalReimbursement: true,
         status: true,
         fileName: true,
         exportedByName: true,

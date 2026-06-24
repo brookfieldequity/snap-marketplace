@@ -60,18 +60,20 @@ export default function PayrollHistoryPage({ onNavigate }) {
         <div style={{ ...card, color: '#64748B' }}>No payroll runs yet. Build and export one from the Payroll Builder.</div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.8fr 1fr 1.2fr 1fr 110px', padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 1fr 1fr 1fr 110px', padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <div>Pay Period</div>
             <div>System</div>
             <div>Class</div>
             <div>Providers</div>
             <div>Hours</div>
-            <div>Gross Pay</div>
+            <div>Base Gross</div>
+            <div>Bonus</div>
+            <div>Reimb.</div>
             <div>Exported By</div>
             <div></div>
           </div>
           {runs.map((run) => (
-            <div key={run.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.8fr 1fr 1.2fr 1fr 110px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center', fontSize: 13 }}>
+            <div key={run.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 1fr 1fr 1fr 110px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center', fontSize: 13 }}>
               <div style={{ color: '#0F172A', fontWeight: 600 }}>
                 {run.periodStart?.slice(0, 10)} — {run.periodEnd?.slice(0, 10)}
               </div>
@@ -80,6 +82,12 @@ export default function PayrollHistoryPage({ onNavigate }) {
               <div style={{ color: '#64748B' }}>{run.providerCount}</div>
               <div style={{ color: '#64748B' }}>{run.totalHours}</div>
               <div style={{ color: '#059669', fontWeight: 700 }}>{fmtMoney(run.totalGross)}</div>
+              <div style={{ color: run.totalBonus > 0 ? '#7C3AED' : '#94A3B8', fontWeight: run.totalBonus > 0 ? 700 : 400 }}>
+                {run.totalBonus > 0 ? fmtMoney(run.totalBonus) : '—'}
+              </div>
+              <div style={{ color: run.totalReimbursement > 0 ? '#0369A1' : '#94A3B8', fontWeight: run.totalReimbursement > 0 ? 700 : 400 }}>
+                {run.totalReimbursement > 0 ? fmtMoney(run.totalReimbursement) : '—'}
+              </div>
               <div style={{ color: '#64748B', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {run.exportedByName || '—'}
                 <div style={{ fontSize: 11, color: '#94A3B8' }}>{run.exportedAt?.slice(0, 10)}</div>

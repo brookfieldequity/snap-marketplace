@@ -839,11 +839,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
               ['Pay Class', CLASS_LABEL[exported.run.payClass]],
               ['Providers', exported.run.providerCount],
               ['Total Hours', `${exported.run.totalHours} hrs`],
-              ['Total Gross', fmtMoney(exported.run.totalGross)],
+              ['Base Gross', fmtMoney(exported.run.totalGross)],
+              ...(exported.run.totalBonus > 0 ? [['Total Bonus', fmtMoney(exported.run.totalBonus)]] : []),
+              ...(exported.run.totalReimbursement > 0 ? [['Total Reimb.', fmtMoney(exported.run.totalReimbursement)]] : []),
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
                 <span style={{ color: '#64748B' }}>{k}</span>
-                <span style={{ color: '#0F172A', fontWeight: 600 }}>{v}</span>
+                <span style={{ color: k === 'Total Bonus' ? '#7C3AED' : k === 'Total Reimb.' ? '#0369A1' : '#0F172A', fontWeight: 600 }}>{v}</span>
               </div>
             ))}
           </div>
