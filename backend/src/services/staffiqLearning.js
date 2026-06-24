@@ -1,5 +1,7 @@
 'use strict';
 
+const { calculateStaffIQScore } = require('../utils/staffiqScore');
+
 /**
  * StaffIQ learning layer.
  *
@@ -480,6 +482,10 @@ const WEEKDAYS_PER_MONTH = 21.7;
 const FRIDAYS_PER_MONTH = 4.34;
 // Enough learned observation-days before we trust realized waste over the projection.
 const MIN_OBS_FOR_REALIZED = 20;
+// Efficiency score normalization: 2× network-p75 waste (≈22%) maps to score 0.
+// Median facility (~12% waste) → score ~73. Zero waste → 100.
+// Derived from SEED_PRIORS.inefficiencyPct.p75 = 22.
+const EFFICIENCY_SCALE_PCT = 44;
 
 async function projectFacilitySavings(facilityId) {
   try {
@@ -554,10 +560,34 @@ async function projectFacilitySavings(facilityId) {
       ? Math.min(100, Math.round(((profile.observationCount || 0) / 60) * 100))
       : (latestInput ? 35 : 0);
 
+    // ── Efficiency score (0–100) — derived from the same waste engine, no extra multipliers
+    // Waste ratio (size-invariant): waste as % of total staffing budget.
+    // Realized path uses profile.avgWeekdayWastePerRoom / avgCostPerRoom.
+    // Projected path uses calculateStaffIQScore's inefficiency percentages from the input form.
+    // Normalized against EFFICIENCY_SCALE_PCT so median facility (~12% waste) ≈ 73.
+    let score = null;
+    let scoreBasis = 'insufficient';
+    if (lever1Basis !== 'none') {
+      let wasteRatioPct = null;
+      if (profileReady && profile.avgCostPerRoom > 0) {
+        wasteRatioPct = (profile.avgWeekdayWastePerRoom / profile.avgCostPerRoom) * 100;
+        scoreBasis = 'realized';
+      } else if (latestInput) {
+        const sc = calculateStaffIQScore(latestInput);
+        wasteRatioPct = (sc.inefficiency1Pct || 0) + (sc.inefficiency2Pct || 0);
+        scoreBasis = 'projected';
+      }
+      if (wasteRatioPct != null) {
+        score = Math.max(0, Math.min(100, Math.round(100 - (wasteRatioPct / EFFICIENCY_SCALE_PCT) * 100)));
+      }
+    }
+
     return {
       monthly,
       annual: monthly * 12,
       basis,                       // 'projected' until enough of the facility's own data is in
+      score,                       // 0-100 efficiency score, null if no data
+      scoreBasis,                  // 'projected' | 'realized' | 'insufficient'
       confidence,
       savingsVersion: 'learned_v1',
       components: [

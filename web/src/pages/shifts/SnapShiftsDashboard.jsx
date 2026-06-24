@@ -27,8 +27,10 @@ function Skeleton({ width = '100%', height = 20, radius = 6 }) {
   )
 }
 
-// ─── StaffIQ Gauge ────────────────────────────────────────────────────────────
-function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
+// ─── StaffIQ Efficiency Gauge ─────────────────────────────────────────────────
+// Score derived from the same waste engine as the savings hero — no separate
+// multipliers. Positioned below the dollar hero as the efficiency explanation.
+function StaffIQGauge({ score, scoreBasis }) {
   const cx = 150, cy = 140, r = 110;
   const toRad = (deg) => (deg * Math.PI) / 180;
 
@@ -43,6 +45,20 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
     return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
   }
 
+  // Zone derived from score — consistent with the efficiency scale (median ≈ 73)
+  const zone = score == null ? 'neutral'
+    : score >= 80 ? 'blue'
+    : score >= 65 ? 'green'
+    : score >= 45 ? 'yellow'
+    : 'red';
+
+  const statusMsg = score == null
+    ? 'Enter your staffing numbers to see your efficiency score vs. the network.'
+    : score >= 80 ? 'Top-tier care-team efficiency vs. the network.'
+    : score >= 65 ? 'Above network average — a few scheduling improvements could unlock more savings.'
+    : score >= 45 ? 'Near network average — the savings estimate above shows your opportunity.'
+    : 'Below network average — StaffIQ can help right-size your care-team immediately.';
+
   const hasScore = score != null;
   const needleDeg = -180 + ((hasScore ? score : 0) / 100) * 180;
   const needleRad = toRad(needleDeg);
@@ -51,51 +67,42 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
   const ny = cy + needleLen * Math.sin(needleRad);
 
   const zoneColors = { red: '#EF4444', yellow: '#F59E0B', green: '#10B981', blue: '#3B82F6', neutral: '#94A3B8' };
-  const zoneColor = hasScore ? (zoneColors[zone] || '#10B981') : '#CBD5E1';
+  const zoneColor = zoneColors[zone];
 
   return (
-    <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0', padding: '24px 28px', width: 360, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-      {/* Period toggle */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 12, background: '#F1F5F9', borderRadius: 8, padding: 3 }}>
-        {['today', 'week', 'month'].map(p => (
-          <button
-            key={p}
-            onClick={() => onPeriodChange(p)}
-            style={{
-              flex: 1, padding: '5px 0', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              background: period === p ? '#2563EB' : 'transparent',
-              color: period === p ? '#fff' : '#64748B',
-            }}
-          >
-            {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
-          </button>
-        ))}
+    <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0', padding: '24px 28px', width: 340, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.04em', marginBottom: 4, textTransform: 'uppercase' }}>
+        Efficiency score
+      </div>
+      <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 2 }}>
+        vs. network benchmark
+        {hasScore && scoreBasis === 'projected' && (
+          <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#93C5FD', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '1px 6px' }}>PROJECTED</span>
+        )}
+        {hasScore && scoreBasis === 'realized' && (
+          <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#6EE7B7', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '1px 6px' }}>REALIZED</span>
+        )}
       </div>
 
       {/* SVG Gauge */}
       <svg width={300} height={160} style={{ display: 'block', margin: '0 auto' }}>
-        {/* Background arc */}
         <path d={arcPath(0, 100)} fill="none" stroke="#E2E8F0" strokeWidth={20} strokeLinecap="round" />
-        {/* Color zone arcs */}
         <path d={arcPath(0, 40)} fill="none" stroke="#EF4444" strokeWidth={20} />
-        <path d={arcPath(40, 70)} fill="none" stroke="#F59E0B" strokeWidth={20} />
-        <path d={arcPath(70, 89)} fill="none" stroke="#10B981" strokeWidth={20} />
-        <path d={arcPath(89, 100)} fill="none" stroke="#3B82F6" strokeWidth={20} />
-        {/* Needle — hidden until a real score exists */}
+        <path d={arcPath(40, 65)} fill="none" stroke="#F59E0B" strokeWidth={20} />
+        <path d={arcPath(65, 80)} fill="none" stroke="#10B981" strokeWidth={20} />
+        <path d={arcPath(80, 100)} fill="none" stroke="#3B82F6" strokeWidth={20} />
         {hasScore && (
           <>
             <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="#0F172A" strokeWidth={3} strokeLinecap="round" />
             <circle cx={cx} cy={cy} r={6} fill="#0F172A" />
           </>
         )}
-        {/* Score text */}
         <text x={cx} y={cy - 20} textAnchor="middle" fontSize={42} fontWeight={900} fill={zoneColor}>{hasScore ? score : '—'}</text>
-        <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fill="#64748B">StaffIQ Score</text>
+        <text x={cx} y={cy - 2} textAnchor="middle" fontSize={12} fill="#64748B">efficiency score</text>
       </svg>
 
-      {/* Status message */}
       <div style={{ textAlign: 'center', fontSize: 12, color: '#475569', lineHeight: 1.5, marginTop: 4, minHeight: 36 }}>
-        {status || (hasScore ? '' : 'Upload scheduling data and run an analysis to generate your StaffIQ score.')}
+        {statusMsg}
       </div>
       <div style={{ textAlign: 'center', fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginTop: 6 }}>
         Powered by StaffIQ™
@@ -389,8 +396,6 @@ export default function SnapShiftsDashboard({ onNavigate }) {
   const [error, setError] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeMsg, setAnalyzeMsg] = useState('')
-  const [staffiqScore, setStaffiqScore] = useState({ score: null, status: '', zone: 'neutral', calculationMethod: 'default' })
-  const [scorePeriod, setScorePeriod] = useState('month')
 
   async function loadDashboard() {
     setLoading(true)
@@ -414,20 +419,6 @@ export default function SnapShiftsDashboard({ onNavigate }) {
     loadDashboard()
   }, [])
 
-  useEffect(() => {
-    facilityAPI.getStaffIQScore(scorePeriod)
-      .then(res => {
-        if (!res) return;
-        // status comes back as { label, message, zone } — flatten it
-        setStaffiqScore({
-          score: res.score ?? null,
-          status: res.status?.message || (typeof res.status === 'string' ? res.status : '') || '',
-          zone: res.status?.zone || res.zone || 'yellow',
-          calculationMethod: res.calculationMethod || 'default',
-        });
-      })
-      .catch(() => {}); // keep default on error
-  }, [scorePeriod])
 
   async function handleRunAnalysis() {
     setAnalyzing(true)
@@ -665,17 +656,12 @@ export default function SnapShiftsDashboard({ onNavigate }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 24, marginBottom: 32, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
+          <UnifiedSavingsCard unified={unified} loading={loading} />
           <StaffIQGauge
-            score={staffiqScore.score}
-            status={staffiqScore.status || staffiqScore.message}
-            zone={staffiqScore.zone}
-            period={scorePeriod}
-            onPeriodChange={setScorePeriod}
+            score={unified?.score ?? null}
+            scoreBasis={unified?.scoreBasis ?? 'insufficient'}
           />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <UnifiedSavingsCard unified={unified} loading={loading} />
-          </div>
         </div>
       </div>
 
