@@ -197,6 +197,8 @@ export const facilityAPI = {
   decideScheduleRequest: (id, decision, tier) => apiFetch(`${BASE}/schedule-requests/${id}/decide`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ decision, tier }) }),
   // Bulk tier triage (the priority board's Save). items: [{ id, status, tier, manualOrder }]
   triageScheduleRequests: (items) => apiFetch(`${BASE}/schedule-requests/triage`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ items }) }),
+  // Admin logs a request on a provider's behalf, pre-accepted at a chosen tier.
+  createFacilityScheduleRequest: (payload) => apiFetch(`${BASE}/schedule-requests/facility`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
 
   // Snappy AI assistant (Task #17)
   snappyChat: (messages) => apiFetch(`${BASE}/snappy/chat`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ messages }) }),

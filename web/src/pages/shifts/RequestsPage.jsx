@@ -63,6 +63,10 @@ export default function RequestsPage() {
   const [busy, setBusy] = useState({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Admin "log a request on a provider's behalf" modal + its roster/site data.
+  const [showAdd, setShowAdd] = useState(false)
+  const [roster, setRoster] = useState([])
+  const [locations, setLocations] = useState([])
   // Working copy of tierable (WORK/DAY_OFF) requests during triage. Each carries
   // _status / _tier; array order defines the within-tier manual order.
   const [work, setWork] = useState([])
@@ -174,6 +178,13 @@ export default function RequestsPage() {
     }
   }
 
+  function openAdd() {
+    setShowAdd(true)
+    // Lazy-load the roster (provider picker) + known sites the first time.
+    if (roster.length === 0) facilityAPI.getRoster().then((r) => setRoster(Array.isArray(r) ? r : r?.roster || [])).catch(() => {})
+    if (locations.length === 0) facilityAPI.getRosterLocations().then((r) => setLocations(r?.locations || [])).catch(() => {})
+  }
+
   async function decidePto(id, decision) {
     setBusy((b) => ({ ...b, [id]: true }))
     try {
@@ -196,11 +207,19 @@ export default function RequestsPage() {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1040, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
-        <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, maxWidth: 760 }}>
-          Sort day-off and work requests into priority tiers before you build the schedule. The builder honors higher tiers first; within a tier it goes by seniority, then first-come — drag the order with the arrows to override. PTO is approved separately and booked straight to the calendar.
-        </p>
+      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
+          <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, maxWidth: 760 }}>
+            Sort day-off and work requests into priority tiers before you build the schedule. The builder honors higher tiers first; within a tier it goes by seniority, then first-come — drag the order with the arrows to override. PTO is approved separately and booked straight to the calendar.
+          </p>
+        </div>
+        <button
+          onClick={openAdd}
+          style={{ flexShrink: 0, padding: '10px 18px', background: '#0F172A', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
+        >
+          + Add request
+        </button>
       </div>
 
       {/* Tabs */}
@@ -328,6 +347,127 @@ export default function RequestsPage() {
       {!loading && tab !== 'TRIAGE' && (
         <ReadOnlyList requests={requests} tab={tab} />
       )}
+
+      {showAdd && (
+        <AddRequestModal
+          roster={roster}
+          locations={locations}
+          onClose={() => setShowAdd(false)}
+          onCreated={() => { setShowAdd(false); setTab('TRIAGE'); load() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Admin "log a request on a provider's behalf" modal ───────────────────────
+function AddRequestModal({ roster, locations, onClose, onCreated }) {
+  const [form, setForm] = useState({ rosterEntryId: '', type: 'WORK', date: '', endDate: '', siteName: '', note: '', tier: 2 })
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState(null)
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  async function submit() {
+    if (!form.rosterEntryId) return setErr('Pick a provider.')
+    if (!form.date) return setErr('Pick a date.')
+    setSaving(true); setErr(null)
+    try {
+      await facilityAPI.createFacilityScheduleRequest({
+        rosterEntryId: form.rosterEntryId,
+        type: form.type,
+        date: form.date,
+        endDate: form.endDate || null,
+        siteName: form.type === 'WORK' ? form.siteName || null : null,
+        note: form.note || null,
+        tier: form.tier,
+      })
+      onCreated()
+    } catch (e) {
+      setErr(e.message || 'Failed to add request')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const label = { fontSize: 12.5, fontWeight: 700, color: '#475569', marginBottom: 5, display: 'block' }
+  const input = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', boxSizing: 'border-box' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: 480, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Add a request</div>
+        <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>Logged on the provider's behalf and pre-accepted at the tier you choose.</div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={label}>Provider</label>
+          <select style={input} value={form.rosterEntryId} onChange={(e) => set('rosterEntryId', e.target.value)}>
+            <option value="">Select a provider…</option>
+            {[...roster].sort((a, b) => (a.providerName || '').localeCompare(b.providerName || '')).map((r) => (
+              <option key={r.id} value={r.id}>{r.providerName}{r.providerType ? ` · ${r.providerType}` : ''}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={label}>Type</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[{ k: 'WORK', l: 'Wants to work' }, { k: 'DAY_OFF', l: 'Wants off' }].map(({ k, l }) => {
+              const active = form.type === k
+              return (
+                <button key={k} onClick={() => set('type', k)} style={{ flex: 1, padding: '9px 0', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: active ? '#2563EB' : '#fff', color: active ? '#fff' : '#475569', border: `1.5px solid ${active ? '#2563EB' : '#E2E8F0'}` }}>{l}</button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <label style={label}>Date</label>
+            <input type="date" style={input} value={form.date} onChange={(e) => set('date', e.target.value)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={label}>End date <span style={{ color: '#94A3B8', fontWeight: 500 }}>(optional)</span></label>
+            <input type="date" style={input} value={form.endDate} min={form.date || undefined} onChange={(e) => set('endDate', e.target.value)} />
+          </div>
+        </div>
+
+        {form.type === 'WORK' && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={label}>Site <span style={{ color: '#94A3B8', fontWeight: 500 }}>(optional)</span></label>
+            <input list="req-sites" style={input} value={form.siteName} placeholder="Any site" onChange={(e) => set('siteName', e.target.value)} />
+            <datalist id="req-sites">
+              {locations.map((l) => <option key={l} value={l} />)}
+            </datalist>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={label}>Priority tier</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {TIERS.map((t) => {
+              const active = form.tier === t.n
+              return (
+                <button key={t.n} title={t.blurb} onClick={() => set('tier', t.n)} style={{ flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer', fontSize: 12.5, fontWeight: 800, background: active ? t.color : '#fff', color: active ? '#fff' : t.color, border: `1.5px solid ${active ? t.color : t.border}` }}>
+                  {t.n} {t.label}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 5 }}>{TIER_BY_N[form.tier]?.blurb}</div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={label}>Note <span style={{ color: '#94A3B8', fontWeight: 500 }}>(optional)</span></label>
+          <input style={input} value={form.note} placeholder="e.g. Confirmed by phone" onChange={(e) => set('note', e.target.value)} />
+        </div>
+
+        {err && <div style={{ fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>{err}</div>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} style={btnGhost('#475569', '#E2E8F0')}>Cancel</button>
+          <button onClick={submit} disabled={saving} style={{ ...btnSolid('#2563EB'), opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>{saving ? 'Adding…' : 'Add request'}</button>
+        </div>
+      </div>
     </div>
   )
 }

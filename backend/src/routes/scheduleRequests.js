@@ -338,4 +338,74 @@ router.put('/triage', facilityAuth, async (req, res) => {
   }
 });
 
+// ── Facility: log a request on a provider's behalf (pre-accepted at a tier) ────
+// For when a provider tells the coordinator verbally instead of using the app.
+// Body: { rosterEntryId, type: "WORK"|"DAY_OFF", date, endDate?, siteName?, note?, tier }
+// Created already ACCEPTED at the chosen tier so it drops straight onto the
+// triage board / into the builder (no pending step).
+router.post('/facility', facilityAuth, async (req, res) => {
+  try {
+    const { rosterEntryId, type, date, endDate, siteName, note, tier } = req.body || {};
+    if (!rosterEntryId || !type || !date) {
+      return res.status(400).json({ error: 'rosterEntryId, type, and date are required' });
+    }
+    if (!['WORK', 'DAY_OFF'].includes(type)) {
+      return res.status(400).json({ error: 'type must be WORK or DAY_OFF' });
+    }
+
+    const roster = await prisma.internalRosterEntry.findFirst({
+      where: { id: rosterEntryId, facilityId: req.facility.id },
+      select: { id: true, linkedProviderId: true, providerName: true },
+    });
+    if (!roster) return res.status(404).json({ error: 'Provider not on this facility roster' });
+
+    let end = null;
+    if (endDate) {
+      end = dateOnly(endDate);
+      if (end < dateOnly(date)) return res.status(400).json({ error: 'endDate must be on or after date' });
+      if ((end - dateOnly(date)) / DAY_MS > 366) return res.status(400).json({ error: 'Range too large (max 1 year)' });
+    }
+
+    const newTier = resolveTier(type, tier);
+    const created = await prisma.$transaction(async (tx) => {
+      const r = await tx.scheduleRequest.create({
+        data: {
+          facilityId: req.facility.id,
+          rosterEntryId: roster.id,
+          type,
+          date: dateOnly(date),
+          endDate: end,
+          siteName: siteName || null,
+          note: note || null,
+          status: 'ACCEPTED',
+          tier: newTier,
+          decidedAt: new Date(),
+          decidedBy: req.user?.userId || null,
+        },
+      });
+      await syncDayOffTimeOff(tx, r, req.facility.id);
+      return r;
+    });
+
+    // Let the provider know their coordinator logged it (if app-linked).
+    if (roster.linkedProviderId) {
+      const fmt = (d) =>
+        new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const dateStr = end && end > dateOnly(date) ? `${fmt(date)} – ${fmt(end)}` : fmt(date);
+      const verb = type === 'DAY_OFF' ? 'day off' : 'shift to work';
+      await recordNotification(roster.linkedProviderId, {
+        type: 'REQUEST_LOGGED',
+        title: `${req.facility.name} logged a ${verb} for ${dateStr}`,
+        body: `Your coordinator added a ${verb} request for ${dateStr} on your behalf.`,
+        data: { scheduleRequestId: created.id, date: created.date, endDate: created.endDate },
+      });
+    }
+
+    res.status(201).json(created);
+  } catch (err) {
+    console.error('[schedule-requests] facility create failed:', err);
+    res.status(500).json({ error: 'Failed to add request' });
+  }
+});
+
 module.exports = router;
