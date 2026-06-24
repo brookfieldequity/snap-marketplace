@@ -1,12 +1,14 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
 const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
 const scorecard = require('../services/scorecard');
 const { accrueBookingFee, feeSummary } = require('../services/marketplaceFees');
 const { buildNameKey } = require('../services/nameKey');
+const { calculateStaffIQScore } = require('../utils/staffiqScore');
 const normBizName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Where claim links land. The web app deploys separately from the backend
@@ -1822,5 +1824,266 @@ router.get('/eor/audit/:facilityId', adminAuth, async (req, res) => {
   }
 });
 
+
+// ── Demo mode ─────────────────────────────────────────────────────────────────
+// Seed a fictional "Maple Ridge ASC" facility with pre-loaded data so a rep
+// can launch a polished 10-minute demo without touching any real onboarding.
+// POST /demo/seed   — idempotent: wipes + recreates all demo data
+// GET  /demo/status — is it seeded, and what does the savings number look like
+// POST /demo/launch — returns a 24h facility token + portal URL
+
+const DEMO_EMAILS = [
+  'demo.coordinator@snapmedical.app',
+  'demo.crna1@snapmedical.app',
+  'demo.crna2@snapmedical.app',
+  'demo.anes1@snapmedical.app',
+];
+
+function demoDay(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+router.get('/demo/status', adminAuth, async (req, res) => {
+  try {
+    const facility = await prisma.facility.findFirst({ where: { isDemo: true } });
+    if (!facility) return res.json({ seeded: false });
+    const [shiftCount, recordCount, input] = await Promise.all([
+      prisma.shift.count({ where: { facilityId: facility.id } }),
+      prisma.schedulingRecord.count({ where: { facilityId: facility.id } }),
+      prisma.staffIQInput.findFirst({ where: { facilityId: facility.id }, orderBy: { createdAt: 'desc' } }),
+    ]);
+    res.json({
+      seeded: true,
+      facilityId: facility.id,
+      shifts: shiftCount,
+      schedulingRecords: recordCount,
+      staffiqScore: input?.staffiqScore,
+      projectedMonthlySavings: input
+        ? Math.round((input.inefficiency1Cost + input.inefficiency2Cost) / 12)
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/demo/seed', adminAuth, async (req, res) => {
+  try {
+    // ── Teardown ──────────────────────────────────────────────────────────────
+    const existing = await prisma.facility.findFirst({ where: { isDemo: true } });
+    if (existing) {
+      const fid = existing.id;
+      const shifts = await prisma.shift.findMany({ where: { facilityId: fid }, select: { id: true } });
+      const shiftIds = shifts.map((s) => s.id);
+      const bookings = await prisma.shiftBooking.findMany({ where: { shiftId: { in: shiftIds } }, select: { id: true } });
+      const bookingIds = bookings.map((b) => b.id);
+      await prisma.providerRating.deleteMany({ where: { OR: [{ facilityId: fid }, { bookingId: { in: bookingIds } }] } });
+      await prisma.shiftBooking.deleteMany({ where: { shiftId: { in: shiftIds } } });
+      await prisma.shift.deleteMany({ where: { facilityId: fid } });
+      await prisma.internalIncentiveShift.deleteMany({ where: { facilityId: fid } });
+      await prisma.schedulingRecord.deleteMany({ where: { facilityId: fid } });
+      await prisma.staffIQInput.deleteMany({ where: { facilityId: fid } });
+      await prisma.facilityUser.deleteMany({ where: { facilityId: fid } });
+      await prisma.facility.delete({ where: { id: fid } });
+    }
+    for (const email of DEMO_EMAILS) {
+      const u = await prisma.user.findUnique({ where: { email } });
+      if (u) {
+        await prisma.providerProfile.deleteMany({ where: { userId: u.id } });
+        await prisma.user.delete({ where: { id: u.id } });
+      }
+    }
+
+    // ── Facility ──────────────────────────────────────────────────────────────
+    const facility = await prisma.facility.create({
+      data: {
+        name: 'Maple Ridge ASC',
+        facilityType: 'AMBULATORY_SURGERY_CENTER',
+        address: '150 Cabot St',
+        zipCode: '01915',
+        state: 'MA',
+        snapMode: 'BOTH',
+        isDemo: true,
+        description: 'A 10-OR ambulatory surgery center serving Boston\'s North Shore. Demo facility — seeded data only.',
+      },
+    });
+
+    const pwHash = await bcrypt.hash('demo1234', 10);
+    const coordUser = await prisma.user.create({
+      data: { email: 'demo.coordinator@snapmedical.app', password: pwHash, role: 'FACILITY_USER' },
+    });
+    await prisma.facilityUser.create({
+      data: { userId: coordUser.id, facilityId: facility.id, facilityRole: 'COORDINATOR' },
+    });
+
+    // ── StaffIQ inputs ────────────────────────────────────────────────────────
+    const inputData = {
+      totalLocations: 1,
+      avgRoomsPerDay: 10,
+      ftAnesthesiologists: 4,
+      ftCrnas: 8,
+      pdAnesthesiologistsPerMonth: 2,
+      pdCrnasPerMonth: 3,
+      agencyAnesthesiologistsPerMonth: 3,
+      agencyCrnasPerMonth: 5,
+      avgAnesthesiologistRate: 390,
+      avgCrnaRate: 260,
+      avgShiftHours: 10,
+      operatingDaysPerYear: 250,
+      primaryTeamModel: '1:2',
+    };
+    const computed = calculateStaffIQScore(inputData);
+    await prisma.staffIQInput.create({
+      data: {
+        facilityId: facility.id,
+        ...inputData,
+        staffiqScore: computed.score,
+        inefficiency1Pct: computed.inefficiency1Pct,
+        inefficiency2Pct: computed.inefficiency2Pct,
+        inefficiency1Cost: computed.inefficiency1Cost,
+        inefficiency2Cost: computed.inefficiency2Cost,
+        totalBudget: computed.totalBudget,
+      },
+    });
+
+    // ── Providers ─────────────────────────────────────────────────────────────
+    const makeProvider = async (email, firstName, lastName, specialty, years, credentialed, vipPoints) => {
+      const user = await prisma.user.create({ data: { email, password: pwHash, role: 'PROVIDER' } });
+      return prisma.providerProfile.create({
+        data: {
+          userId: user.id, firstName, lastName, specialty, yearsExperience: years,
+          state: 'MA', credentialed, vipPoints,
+          vipStatus: vipPoints >= 500 ? 'GOLD' : 'SILVER',
+          personalStatement: credentialed
+            ? `Board-certified with ${years} years of experience. Credentialed across 6 Massachusetts facilities.`
+            : `${years} years of clinical experience. NBCRNA certified.`,
+        },
+      });
+    };
+    const sarah   = await makeProvider('demo.crna1@snapmedical.app',  'Sarah',   'Chen',    'CRNA',               8,  true,  720);
+    const michael = await makeProvider('demo.crna2@snapmedical.app',  'Michael', 'Torres',  'CRNA',               5,  false, 340);
+    /* const drPark = */ await makeProvider('demo.anes1@snapmedical.app', 'James',   'Park',    'ANESTHESIOLOGIST',  14, true,  890);
+
+    // ── Marketplace shifts ────────────────────────────────────────────────────
+    const mkShift = (specialty, offsetDays, startTime, hours, rate, status) =>
+      prisma.shift.create({
+        data: {
+          facilityId: facility.id, specialty, status,
+          date: demoDay(offsetDays), startTime, durationHours: hours,
+          baseRate: rate, currentRate: rate, estimatedTotal: rate * hours,
+        },
+      });
+
+    await mkShift('CRNA', 3, '07:00', 10, 270, 'LIVE');
+    await mkShift('CRNA', 5, '07:00', 10, 260, 'LIVE');
+    await mkShift('ANESTHESIOLOGIST', 8, '07:30', 9, 380, 'LIVE');
+
+    const filledShift = await mkShift('CRNA', 1, '07:00', 10, 270, 'FILLED');
+    const filledBooking = await prisma.shiftBooking.create({
+      data: {
+        shiftId: filledShift.id, providerId: sarah.id,
+        providerHourlyRate: 270, shiftDurationHours: 10, totalShiftValue: 2700,
+        platformFeePercent: 10, platformFeeAmount: 270, paymentStatus: 'PENDING',
+        confirmedAt: new Date(),
+      },
+    });
+    void filledBooking; // referenced by escalation below
+
+    const completedShift = await mkShift('CRNA', -5, '07:00', 10, 260, 'COMPLETED');
+    const completedBooking = await prisma.shiftBooking.create({
+      data: {
+        shiftId: completedShift.id, providerId: michael.id,
+        providerHourlyRate: 260, shiftDurationHours: 10, totalShiftValue: 2600,
+        platformFeePercent: 10, platformFeeAmount: 260, paymentStatus: 'SETTLED',
+        confirmedAt: demoDay(-7), completedAt: demoDay(-5),
+      },
+    });
+    await prisma.providerRating.create({
+      data: {
+        facilityId: facility.id, providerId: michael.id, bookingId: completedBooking.id,
+        stars: 5, notes: 'Arrived on time, fit right in with our team. Would book again.',
+      },
+    });
+
+    // ── Gap story: internal incentive that escalated → marketplace ────────────
+    await prisma.internalIncentiveShift.create({
+      data: {
+        facilityId: facility.id,
+        shiftDate: demoDay(-2), startTime: '07:00', durationHours: 10,
+        facilityLocation: 'OR-3', incentiveRate: 285,
+        isIncentive: true, providerTypeRequired: 'CRNA',
+        responseDeadline: demoDay(-4), status: 'ESCALATED',
+        escalatedToMarketplace: true, escalationApprovedAt: demoDay(-3),
+        escalationApprovedBy: 'Coordinator', marketplaceShiftId: filledShift.id,
+      },
+    });
+
+    // ── Scheduling records (30 weekdays) ──────────────────────────────────────
+    const rosterNames = [
+      { name: 'Chen, S.',      type: 'CRNA',      rate: 260 },
+      { name: 'Torres, M.',    type: 'CRNA',      rate: 260 },
+      { name: 'Williams, K.',  type: 'CRNA',      rate: 260 },
+      { name: 'Johnson, L.',   type: 'CRNA',      rate: 260 },
+      { name: 'Brown, A.',     type: 'CRNA',      rate: 260 },
+      { name: 'Davis, P.',     type: 'CRNA',      rate: 260 },
+      { name: 'Martinez, C.',  type: 'CRNA',      rate: 260 },
+      { name: 'Park, J.',      type: 'Physician', rate: 390 },
+      { name: 'Smith, R.',     type: 'Physician', rate: 390 },
+      { name: 'Agency CRNA',   type: 'CRNA',      rate: 290 },
+    ];
+    const orLocations = ['OR-1','OR-2','OR-3','OR-4','OR-5','OR-6','OR-7','OR-8','OR-9','OR-10'];
+    const caseTypes   = ['General','Ortho','GYN','ENT','Cardiac','Neuro'];
+    const records = [];
+    for (let day = -42; day <= -1; day++) {
+      const d = demoDay(day);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const rooms = dow === 5 ? 6 : 10; // Fridays run lighter
+      for (let r = 0; r < rooms; r++) {
+        const p = rosterNames[r % rosterNames.length];
+        records.push({
+          facilityId: facility.id,
+          providerName: p.name, providerType: p.type,
+          shiftDate: d, startTime: '07:00', endTime: '17:00', durationHours: 10,
+          facilityLocation: orLocations[r], caseType: caseTypes[r % caseTypes.length],
+          rate: p.rate, dayOfWeek: dow,
+        });
+      }
+    }
+    await prisma.schedulingRecord.createMany({ data: records });
+
+    res.json({
+      ok: true,
+      facilityId: facility.id,
+      staffiqScore: computed.score,
+      projectedMonthlySavings: Math.round((computed.inefficiency1Cost + computed.inefficiency2Cost) / 12),
+      schedulingRecords: records.length,
+    });
+  } catch (err) {
+    console.error('[admin] demo/seed failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/demo/launch', adminAuth, async (req, res) => {
+  try {
+    const facility = await prisma.facility.findFirst({ where: { isDemo: true } });
+    if (!facility) return res.status(404).json({ error: 'Demo not seeded — run POST /admin/demo/seed first' });
+    const coordUser = await prisma.user.findUnique({ where: { email: 'demo.coordinator@snapmedical.app' } });
+    if (!coordUser) return res.status(404).json({ error: 'Demo coordinator account not found' });
+    const token = jwt.sign(
+      { userId: coordUser.id, role: 'FACILITY_USER' },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' },
+    );
+    const baseUrl = process.env.FACILITY_CLAIM_BASE || 'https://sublime-flexibility-production-4f52.up.railway.app';
+    res.json({ token, url: `${baseUrl}/?demoToken=${token}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

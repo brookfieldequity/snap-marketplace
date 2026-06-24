@@ -333,6 +333,7 @@ model Facility {
   // Drives the one-click "auto-build out lists" for a week/month. null =
   // use defaults. See services/outListRules.js.
   outListRules           Json?
+  isDemo                 Boolean       @default(false)
 
   users               FacilityUser[]
   subscription        FacilitySubscription?

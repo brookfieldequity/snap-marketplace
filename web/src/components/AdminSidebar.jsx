@@ -2,6 +2,7 @@ import React from 'react'
 
 const NAV_ITEMS = [
   { key: 'overview',         label: 'Overview',         icon: '📊' },
+  { key: 'demo',             label: 'Demo Mode',        icon: '🎯' },
   { key: 'providers',        label: 'Providers',        icon: '👩‍⚕️' },
   { key: 'facilities',       label: 'Facilities',       icon: '🏥' },
   { key: 'credential-users', label: 'Credential Users', icon: '🔐' },

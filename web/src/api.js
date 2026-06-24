@@ -758,6 +758,11 @@ export const adminAPI = {
   updateCalculatorLead: (id, followUpStatus) => apiFetch(`${BASE}/admin/calculator-leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
   getFacilityPitch: () => apiFetch(`${BASE}/admin/staffiq/facility-pitch`, { headers: adminHeaders() }),
 
+  // Demo mode
+  getDemoStatus: () => apiFetch(`${BASE}/admin/demo/status`, { headers: adminHeaders() }),
+  seedDemo: () => apiFetch(`${BASE}/admin/demo/seed`, { method: 'POST', headers: adminHeaders() }),
+  launchDemo: () => apiFetch(`${BASE}/admin/demo/launch`, { method: 'POST', headers: adminHeaders() }),
+
   // Credential user management
   getCredentialUsers: () => apiFetch(`${BASE}/admin/credential-users`, { headers: adminHeaders() }),
   createCredentialUser: (data) => apiFetch(`${BASE}/admin/credential-users`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),

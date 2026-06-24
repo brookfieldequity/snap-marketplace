@@ -55,6 +55,7 @@ import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx
 import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
 import AdminMarketplaceFeesPage from './pages/admin/AdminMarketplaceFeesPage.jsx'
 import AdminFeatureFlagsPage from './pages/admin/AdminFeatureFlagsPage.jsx'
+import AdminDemoPage from './pages/admin/AdminDemoPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
 
@@ -85,12 +86,23 @@ export default function App() {
     return <PtoRankPage token={decodeURIComponent(rankMatch[1])} />
   }
 
-  const [facilityToken, setFacilityToken] = useState(
-    () => localStorage.getItem('snapFacilityToken')
-  )
+  const [facilityToken, setFacilityToken] = useState(() => {
+    // Handle ?demoToken=... deep link from the admin "Copy Demo Link" button
+    const params = new URLSearchParams(window.location.search)
+    const demoTok = params.get('demoToken')
+    if (demoTok) {
+      localStorage.setItem('snapFacilityToken', demoTok)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('demoToken')
+      window.history.replaceState({}, '', url.toString())
+      return demoTok
+    }
+    return localStorage.getItem('snapFacilityToken')
+  })
   const [adminToken, setAdminToken] = useState(
     () => localStorage.getItem('snapAdminToken')
   )
+  const [facilityIsDemo, setFacilityIsDemo] = useState(false)
 
   // Facility-side state
   const [facilityPage, setFacilityPage] = useState('dashboard')
@@ -127,6 +139,7 @@ export default function App() {
         // `facilityName` never existed, so on reload the header went blank.
         const resolvedName = facility.name || facility.facilityName
         if (resolvedName && !facilityName) setFacilityName(resolvedName)
+        if (facility.isDemo) setFacilityIsDemo(true)
       })
       .catch(() => {
         // Silently ignore — default MARKETPLACE mode stays
@@ -211,13 +224,27 @@ export default function App() {
     const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
     const isOpsMode = !!featureFlags.payroll_builder
 
+    const demoBannerH = facilityIsDemo ? 36 : 0
+
     return (
       <div style={{ minHeight: '100vh' }}>
+        {/* Demo mode banner — visible above the fixed header */}
+        {facilityIsDemo && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, height: 36,
+            background: '#FDE68A', color: '#78350F', zIndex: 300,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
+            borderBottom: '1px solid #F59E0B',
+          }}>
+            DEMO MODE — Maple Ridge ASC — This is a demonstration facility with seeded data
+          </div>
+        )}
         {/* ── Top navigation bar ─────────────────────────────────────────────── */}
         <header
           style={{
             position: 'fixed',
-            top: 0,
+            top: demoBannerH,
             left: 0,
             right: 0,
             height: 56,
@@ -288,7 +315,7 @@ export default function App() {
         </header>
 
         {/* ── Body below header ───────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 56 }}>
+        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 56 + demoBannerH }}>
           <Sidebar
             activePage={facilityPage}
             onNavigate={setFacilityPage}
@@ -402,6 +429,7 @@ export default function App() {
         />
         <main style={{ flex: 1, marginLeft: 240, minHeight: '100vh', background: '#F8FAFC' }}>
           {adminPage === 'overview'          && <AdminOverviewPage />}
+          {adminPage === 'demo'             && <AdminDemoPage />}
           {adminPage === 'providers'         && <AdminProvidersPage />}
           {adminPage === 'facilities'        && (
             <AdminFacilitiesPage
