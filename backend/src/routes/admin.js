@@ -1956,7 +1956,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
         data: {
           userId: user.id, firstName, lastName, specialty, yearsExperience: years,
           state: 'MA', credentialed, vipPoints,
-          vipStatus: vipPoints >= 500 ? 'GOLD' : 'SILVER',
+          vipStatus: vipPoints >= 200,
           personalStatement: credentialed
             ? `Board-certified with ${years} years of experience. Credentialed across 6 Massachusetts facilities.`
             : `${years} years of clinical experience. NBCRNA certified.`,
