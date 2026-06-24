@@ -5,7 +5,7 @@ import { facilityAPI } from '../../api.js'
 // single date, reusing the month schedule data. Coordinator picks/navigates a
 // day; each site shows its rooms + assigned providers + roles + supervising MDs.
 
-const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🟢', LOCUMS: '🟠' }
+const EMP_PREFIX = { FULL_TIME: '🔵', PER_DIEM: '🔵', LOCUMS: '🟠' }
 const ROLE_TAG = {
   CRNA_ROOM: { text: 'CRNA', bg: '#EFF6FF', color: '#1D4ED8' },
   SOLO_MD_ROOM: { text: 'Solo MD', bg: '#F5F3FF', color: '#1E3A8A' },
