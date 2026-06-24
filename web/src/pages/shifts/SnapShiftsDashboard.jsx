@@ -28,9 +28,9 @@ function Skeleton({ width = '100%', height = 20, radius = 6 }) {
 }
 
 // ─── StaffIQ Efficiency Gauge ─────────────────────────────────────────────────
-// Score derived from the same waste engine as the savings hero — no separate
-// multipliers. Positioned below the dollar hero as the efficiency explanation.
-function StaffIQGauge({ score, scoreBasis }) {
+// Score = 100 − wasteRatioPct. Gap from 100 = waste% = lever-1 $/spend.
+// Positioned below the dollar hero as the efficiency-and-benchmark explanation.
+function StaffIQGauge({ score, scoreBasis, networkMedianScore }) {
   const cx = 150, cy = 140, r = 110;
   const toRad = (deg) => (deg * Math.PI) / 180;
 
@@ -45,19 +45,25 @@ function StaffIQGauge({ score, scoreBasis }) {
     return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
   }
 
-  // Zone derived from score — consistent with the efficiency scale (median ≈ 73)
+  const median = networkMedianScore ?? 88; // 100 − 12% seed-prior median
+
+  // Zone: relative to the network median, not arbitrary bands
   const zone = score == null ? 'neutral'
-    : score >= 80 ? 'blue'
-    : score >= 65 ? 'green'
-    : score >= 45 ? 'yellow'
-    : 'red';
+    : score >= median + 5 ? 'blue'    // clearly above median
+    : score >= median - 3 ? 'green'   // at or near median
+    : score >= median - 12 ? 'yellow' // below median
+    : 'red';                          // well below median
+
+  const benchmarkLine = score != null
+    ? `Network median: ${median}. ${score > median ? `You're ${score - median} pts above.` : score === median ? "You're at the network median." : `You're ${median - score} pts below.`}`
+    : '';
 
   const statusMsg = score == null
     ? 'Enter your staffing numbers to see your efficiency score vs. the network.'
-    : score >= 80 ? 'Top-tier care-team efficiency vs. the network.'
-    : score >= 65 ? 'Above network average — a few scheduling improvements could unlock more savings.'
-    : score >= 45 ? 'Near network average — the savings estimate above shows your opportunity.'
-    : 'Below network average — StaffIQ can help right-size your care-team immediately.';
+    : score >= median + 5 ? `Top-tier care-team efficiency. ${benchmarkLine}`
+    : score >= median - 3 ? `At or near network average. ${benchmarkLine}`
+    : score >= median - 12 ? `Below network average — the dollar figure above shows your opportunity. ${benchmarkLine}`
+    : `Well below network average — StaffIQ can help right-size your care-team immediately. ${benchmarkLine}`;
 
   const hasScore = score != null;
   const needleDeg = -180 + ((hasScore ? score : 0) / 100) * 180;
@@ -91,6 +97,28 @@ function StaffIQGauge({ score, scoreBasis }) {
         <path d={arcPath(40, 65)} fill="none" stroke="#F59E0B" strokeWidth={20} />
         <path d={arcPath(65, 80)} fill="none" stroke="#10B981" strokeWidth={20} />
         <path d={arcPath(80, 100)} fill="none" stroke="#3B82F6" strokeWidth={20} />
+        {/* Network median tick */}
+        {(() => {
+          const mDeg = -180 + (median / 100) * 180;
+          const mRad = (mDeg * Math.PI) / 180;
+          const inner = r - 14, outer = r + 14;
+          return (
+            <>
+              <line
+                x1={cx + inner * Math.cos(mRad)} y1={cy + inner * Math.sin(mRad)}
+                x2={cx + outer * Math.cos(mRad)} y2={cy + outer * Math.sin(mRad)}
+                stroke="#94A3B8" strokeWidth={2} strokeDasharray="3 2"
+              />
+              <text
+                x={cx + (outer + 10) * Math.cos(mRad)}
+                y={cy + (outer + 10) * Math.sin(mRad)}
+                textAnchor="middle" fontSize={9} fill="#94A3B8"
+              >
+                avg
+              </text>
+            </>
+          );
+        })()}
         {hasScore && (
           <>
             <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="#0F172A" strokeWidth={3} strokeLinecap="round" />
@@ -661,6 +689,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
           <StaffIQGauge
             score={unified?.score ?? null}
             scoreBasis={unified?.scoreBasis ?? 'insufficient'}
+            networkMedianScore={unified?.networkMedianScore ?? 88}
           />
         </div>
       </div>

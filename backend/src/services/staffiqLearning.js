@@ -482,10 +482,9 @@ const WEEKDAYS_PER_MONTH = 21.7;
 const FRIDAYS_PER_MONTH = 4.34;
 // Enough learned observation-days before we trust realized waste over the projection.
 const MIN_OBS_FOR_REALIZED = 20;
-// Efficiency score normalization: 2× network-p75 waste (≈22%) maps to score 0.
-// Median facility (~12% waste) → score ~73. Zero waste → 100.
-// Derived from SEED_PRIORS.inefficiencyPct.p75 = 22.
-const EFFICIENCY_SCALE_PCT = 44;
+// Network median score: 100 − median facility waste (12%).
+// "You're 88; network median is 88" is the benchmark context shown in the UI.
+const NETWORK_MEDIAN_SCORE = 100 - SEED_PRIORS.inefficiencyPct.median; // 88
 
 async function projectFacilitySavings(facilityId) {
   try {
@@ -560,11 +559,12 @@ async function projectFacilitySavings(facilityId) {
       ? Math.min(100, Math.round(((profile.observationCount || 0) / 60) * 100))
       : (latestInput ? 35 : 0);
 
-    // ── Efficiency score (0–100) — derived from the same waste engine, no extra multipliers
-    // Waste ratio (size-invariant): waste as % of total staffing budget.
-    // Realized path uses profile.avgWeekdayWastePerRoom / avgCostPerRoom.
-    // Projected path uses calculateStaffIQScore's inefficiency percentages from the input form.
-    // Normalized against EFFICIENCY_SCALE_PCT so median facility (~12% waste) ≈ 73.
+    // ── Efficiency score (0–100) — score = 100 − wasteRatioPct, no multipliers
+    // wasteRatioPct = lever-1 waste ÷ total staffing spend × 100 (size-invariant).
+    // Score gap IS the waste percentage: score 92 = 8% waste = 8% of spend = lever-1 $/mo.
+    // Agency displacement (lever 2) is excluded — it's a sourcing win, not an efficiency grade.
+    // Realized path: actual waste from uploaded schedule data.
+    // Projected path: team-model + overstaffing inefficiency from the StaffIQ Inputs form.
     let score = null;
     let scoreBasis = 'insufficient';
     if (lever1Basis !== 'none') {
@@ -578,7 +578,7 @@ async function projectFacilitySavings(facilityId) {
         scoreBasis = 'projected';
       }
       if (wasteRatioPct != null) {
-        score = Math.max(0, Math.min(100, Math.round(100 - (wasteRatioPct / EFFICIENCY_SCALE_PCT) * 100)));
+        score = Math.max(0, Math.min(100, Math.round(100 - wasteRatioPct)));
       }
     }
 
@@ -586,8 +586,9 @@ async function projectFacilitySavings(facilityId) {
       monthly,
       annual: monthly * 12,
       basis,                       // 'projected' until enough of the facility's own data is in
-      score,                       // 0-100 efficiency score, null if no data
+      score,                       // 0-100; gap from 100 = waste% = lever-1 $/spend
       scoreBasis,                  // 'projected' | 'realized' | 'insufficient'
+      networkMedianScore: NETWORK_MEDIAN_SCORE, // 88 — benchmark context for "you're X, median is 88"
       confidence,
       savingsVersion: 'learned_v1',
       components: [
