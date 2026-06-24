@@ -104,6 +104,98 @@ function StaffIQGauge({ score, status, zone, period, onPeriodChange }) {
   );
 }
 
+// ─── Unified hero: "StaffIQ saves you $X / month" ────────────────────────────
+// One number, the single savings authority. Shows projected→realized state and
+// the two levers underneath; never fabricates a number on a data-less facility.
+function UnifiedSavingsCard({ unified, loading }) {
+  const cardShell = {
+    background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+    borderRadius: 20,
+    padding: '36px 40px',
+    position: 'relative',
+    overflow: 'hidden',
+    boxShadow: '0 24px 64px rgba(15,23,42,0.4), 0 0 0 2px rgba(251,191,36,0.25)',
+    border: '1px solid rgba(251,191,36,0.3)',
+  }
+
+  if (loading) {
+    return <div style={cardShell}><Skeleton width="60%" height={64} radius={8} /></div>
+  }
+
+  // No baseline + no data yet → invite input rather than show a fake number.
+  if (!unified || unified.monthly == null || unified.basis === 'insufficient') {
+    return (
+      <div style={cardShell}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#FCD34D', letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase' }}>
+          ⭐ STAFFIQ SAVINGS
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#E2E8F0', marginBottom: 6 }}>
+          Add your staffing numbers to see your savings
+        </div>
+        <div style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.5 }}>
+          Enter rooms, rates, and current agency use in StaffIQ Inputs and we'll project your monthly savings — it sharpens as your schedules come in.
+        </div>
+      </div>
+    )
+  }
+
+  const isProjected = unified.basis === 'projected'
+  const components = unified.components || []
+
+  return (
+    <div style={cardShell}>
+      <div style={{ position: 'absolute', top: -80, right: -80, width: 240, height: 240, background: 'radial-gradient(circle, rgba(251,191,36,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#FCD34D', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          ⭐ STAFFIQ SAVES YOU
+        </div>
+        <span style={{
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: 20,
+          background: isProjected ? 'rgba(59,130,246,0.18)' : 'rgba(16,185,129,0.18)',
+          color: isProjected ? '#93C5FD' : '#6EE7B7',
+          border: `1px solid ${isProjected ? 'rgba(59,130,246,0.4)' : 'rgba(16,185,129,0.4)'}`,
+        }}>
+          {isProjected ? 'PROJECTED' : 'REALIZED'}
+        </span>
+      </div>
+
+      {/* Hero monthly number */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <div style={{
+          fontSize: 64, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1,
+          background: 'linear-gradient(135deg, #FCD34D 0%, #10B981 100%)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent',
+        }}>
+          {fmt(unified.monthly)}
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#94A3B8' }}>/month</div>
+      </div>
+
+      {/* Annualized, always visible */}
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#10B981', marginTop: 4 }}>
+        = {fmt(unified.annual)} / year
+      </div>
+
+      {/* Two levers (the breakdown) */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 18, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {components.map((c) => (
+          <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: '#CBD5E1', fontWeight: 500 }}>{c.label}</span>
+            <span style={{ fontSize: 14, color: '#E2E8F0', fontWeight: 700 }}>{fmt(c.monthly)}/mo</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: '#64748B', marginTop: 14, lineHeight: 1.5 }}>
+        {isProjected
+          ? 'Projected from your inputs — refines automatically as your real schedules and fills come in.'
+          : `Based on your facility's own data · ${unified.confidence}% confidence and climbing.`}
+      </div>
+    </div>
+  )
+}
+
 // ─── Savings hero card ────────────────────────────────────────────────────────
 function SavingsCard({ label, monthValue, ytdValue, loading, size = 'normal' }) {
   const isTotal = size === 'large'
@@ -365,6 +457,8 @@ export default function SnapShiftsDashboard({ onNavigate }) {
     totalMonth:             rawSavings.total?.month || 0,
     totalYtd:               rawSavings.total?.ytd || 0,
   }
+  // The hero "StaffIQ saves you $X/month" number (single savings authority).
+  const unified = rawSavings.unified || null
   const upcoming = d.upcomingShifts || []
   const stats = {
     upcomingShifts14Days:         upcoming.length,
@@ -580,25 +674,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
             onPeriodChange={setScorePeriod}
           />
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <SavingsCard
-              label="Internal Efficiency Savings"
-              monthValue={savings.efficiencyMonth}
-              ytdValue={savings.efficiencyYtd}
-              loading={loading}
-            />
-            <SavingsCard
-              label="Agency Replacement Savings"
-              monthValue={savings.agencyReplacementMonth}
-              ytdValue={savings.agencyReplacementYtd}
-              loading={loading}
-            />
-            <SavingsCard
-              label="Total SNAP Savings"
-              monthValue={savings.totalMonth}
-              ytdValue={savings.totalYtd}
-              loading={loading}
-              size="large"
-            />
+            <UnifiedSavingsCard unified={unified} loading={loading} />
           </div>
         </div>
       </div>

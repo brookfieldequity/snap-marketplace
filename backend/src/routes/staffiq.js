@@ -387,6 +387,13 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
     const internalMonth = calcInternalSavings(recordsMonth);
     const internalYtd = calcInternalSavings(recordsYtd);
 
+    // ── Unified "StaffIQ saves you $X/month" (single savings authority) ────────
+    // The hero number. Built on the learning layer (projected from inputs/priors,
+    // realized from the learned baseline + actual fills). The legacy internal/
+    // agencyReplacement fields below are retained for back-compat but the UI now
+    // leads with `savings.unified`.
+    const unifiedSavings = await learning.projectFacilitySavings(facilityId);
+
     // ── Upcoming shifts (next 14 days from ScheduleDay) ───────────────────────
 
     const upcomingScheduleDays = await prisma.scheduleDay.findMany({
@@ -495,6 +502,7 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
 
     res.json({
       savings: {
+        unified: unifiedSavings,
         internal: {
           month: Math.round(internalMonth),
           ytd: Math.round(internalYtd),

@@ -460,6 +460,117 @@ function assessDataReadiness({ totalRecords, dataSpanDays, uploadsAnalyzed, obse
   return { confidence, checks, suggestions, totalRecords: totalRecords || 0 };
 }
 
+// ── Unified savings authority ("StaffIQ saves you $X/month") ─────────────────────
+//
+// ONE number, two levers, built ON the learning layer so it starts simple (priors
+// + the facility's entered inputs) and gets smarter as real schedules/fills accrue
+// (per-facility EMA baseline + actual bookings). Each lever independently uses its
+// best available source and reports whether it's `projected` or `realized`, so the
+// headline never artificially drops as data comes in — it just gets more accurate.
+//
+// This replaces the old split heuristics (flat 12% internal-efficiency + hardcoded
+// agency replacement) as the single savings authority — no double-count, because
+// lever 1 is staffing-MODEL efficiency (right-sizing the care team) and lever 2 is
+// agency-RATE displacement; they measure different dollars.
+
+// Agency rate priors (loaded $/hr a locum agency would charge). A network prior for
+// now; can later be learned per-facility from actual agency spend / marketplace fills.
+const AGENCY_RATE_PRIORS = { ANESTHESIOLOGIST: 425, CRNA: 300, ANESTHESIA_ASSISTANT: 250 };
+const WEEKDAYS_PER_MONTH = 21.7;
+const FRIDAYS_PER_MONTH = 4.34;
+// Enough learned observation-days before we trust realized waste over the projection.
+const MIN_OBS_FOR_REALIZED = 20;
+
+async function projectFacilitySavings(facilityId) {
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [profile, latestInput, bookingsMonth] = await Promise.all([
+      prisma.facilityStaffingProfile.findUnique({ where: { facilityId } }),
+      prisma.staffIQInput.findFirst({ where: { facilityId }, orderBy: { calculatedAt: 'desc' } }),
+      prisma.shiftBooking.findMany({
+        where: { shift: { facilityId }, confirmedAt: { gte: monthStart }, completedAt: { not: null } },
+        include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
+      }),
+    ]);
+
+    // ── Lever 1 — staffing-model efficiency ──────────────────────────────────
+    const profileReady = !!profile
+      && (profile.observationCount || 0) >= MIN_OBS_FOR_REALIZED
+      && profile.avgWeekdayWastePerRoom != null;
+
+    let lever1 = 0;
+    let lever1Basis = 'none';
+    if (profileReady) {
+      // Realized: learned waste-per-room (vs the optimal care team) over a month of
+      // room-days. avgWeekdayWastePerRoom applies across all weekdays; the Friday
+      // figure is the EXTRA shortfall on Fridays (see staffiqScore.js).
+      const rooms = profile.avgRoomsByDow || {};
+      const weekdayRooms = Number(rooms.weekday) || 0;
+      const fridayRooms = Number(rooms.friday) || weekdayRooms;
+      lever1 = (profile.avgWeekdayWastePerRoom || 0) * weekdayRooms * WEEKDAYS_PER_MONTH
+        + (profile.avgFridayWastePerRoom || 0) * fridayRooms * FRIDAYS_PER_MONTH;
+      lever1Basis = 'realized';
+    } else if (latestInput) {
+      // Projected: the team-model + overstaffing inefficiency the input form already
+      // computed (annual) → monthly.
+      lever1 = ((latestInput.inefficiency1Cost || 0) + (latestInput.inefficiency2Cost || 0)) / 12;
+      lever1Basis = 'projected';
+    }
+
+    // ── Lever 2 — agency displacement ────────────────────────────────────────
+    let lever2 = 0;
+    let lever2Basis = 'none';
+    if (bookingsMonth.length) {
+      // Realized: what we actually saved vs agency on shifts SNAP filled this month.
+      lever2 = bookingsMonth.reduce((sum, b) => {
+        const agencyRate = AGENCY_RATE_PRIORS[b.shift.specialty] || 300;
+        const providerRate = b.providerHourlyRate || b.shift.currentRate || 0;
+        const hours = b.shiftDurationHours || b.shift.durationHours || 0;
+        return sum + Math.max(0, (agencyRate - providerRate) * hours);
+      }, 0);
+      lever2Basis = 'realized';
+    } else if (latestInput) {
+      // Projected: displace the facility's current agency shifts at SNAP rates.
+      const hrs = latestInput.avgShiftHours || 10;
+      const anesPrem = Math.max(0, (AGENCY_RATE_PRIORS.ANESTHESIOLOGIST - (latestInput.avgAnesthesiologistRate || 390)));
+      const crnaPrem = Math.max(0, (AGENCY_RATE_PRIORS.CRNA - (latestInput.avgCrnaRate || 260)));
+      lever2 = ((latestInput.agencyAnesthesiologistsPerMonth || 0) * anesPrem
+        + (latestInput.agencyCrnasPerMonth || 0) * crnaPrem) * hrs;
+      lever2Basis = 'projected';
+    }
+
+    const anyRealized = lever1Basis === 'realized' || lever2Basis === 'realized';
+    const anyProjected = lever1Basis === 'projected' || lever2Basis === 'projected';
+    const basis = anyRealized ? 'realized' : (anyProjected ? 'projected' : 'insufficient');
+
+    if (basis === 'insufficient') {
+      return { monthly: null, annual: null, basis, confidence: 0, components: [], savingsVersion: 'learned_v1' };
+    }
+
+    const monthly = Math.round(lever1 + lever2);
+    const confidence = profile
+      ? Math.min(100, Math.round(((profile.observationCount || 0) / 60) * 100))
+      : (latestInput ? 35 : 0);
+
+    return {
+      monthly,
+      annual: monthly * 12,
+      basis,                       // 'projected' until enough of the facility's own data is in
+      confidence,
+      savingsVersion: 'learned_v1',
+      components: [
+        { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: lever1Basis },
+        { key: 'agency_displacement', label: 'Agency displacement', monthly: Math.round(lever2), basis: lever2Basis },
+      ],
+    };
+  } catch (err) {
+    console.error('projectFacilitySavings failed (non-fatal):', err.message);
+    return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v1' };
+  }
+}
+
 // ── small rounding helpers ───────────────────────────────────────────────────
 
 function round0(n) { return n == null ? null : Math.round(n); }
@@ -478,4 +589,5 @@ module.exports = {
   gradeAgainstNetwork,
   recordOutcome,
   assessDataReadiness,
+  projectFacilitySavings,
 };
