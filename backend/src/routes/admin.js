@@ -1901,7 +1901,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
     const facility = await prisma.facility.create({
       data: {
         name: 'Maple Ridge ASC',
-        facilityType: 'AMBULATORY_SURGERY_CENTER',
+        facilityType: 'SURGERY_CENTER',
         address: '150 Cabot St',
         zipCode: '01915',
         state: 'MA',
