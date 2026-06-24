@@ -904,6 +904,11 @@ model RosterTimeOff {
   startDate     DateTime            @db.Date
   endDate       DateTime            @db.Date
   reason        String?
+  // When this time-off was materialized from a Tier-1 DAY_OFF ScheduleRequest,
+  // links back to it so re-triaging (downgrade/decline) can clean it up. Plain
+  // scalar (no relation) — only the builder/triage code reads it. null =
+  // coordinator-entered time off, not request-managed.
+  scheduleRequestId String?         @unique
   createdAt     DateTime            @default(now())
 
   @@index([facilityId, startDate, endDate])
@@ -1554,6 +1559,12 @@ model ScheduleBuildRun {
   // with the dollar penalty + the savings from incentivizing CRNAs.
   staffiqRecommendations Json?
 
+  // Per-request honored/not-honored report for this run's assignments. Array of
+  // { requestId, providerName, type, date, siteName, tier, honored, reason }.
+  // Lets the coordinator see which provider requests this candidate satisfied
+  // before committing it. Computed per mode (each run's assignments differ).
+  requestOutcomes Json?
+
   selectedAt        DateTime? // when coordinator picked this run as active
   startedAt         DateTime  @default(now())
   completedAt       DateTime?
@@ -1655,6 +1666,19 @@ model ScheduleRequest {
   siteName      String?
   note          String?
   status        String              @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  // Priority tier the admin assigns when triaging an ACCEPTED request, used by
+  // the schedule builder. WORK + DAY_OFF only (PTO uses the PTO Builder).
+  //   1 = Locked   — honor unless literally impossible to cover the room.
+  //   2 = Strong   — honor if at all possible (break only to avoid OT/agency
+  //                  cost or an uncovered room). Default for legacy accepts.
+  //   3 = Moderate — honor only if it doesn't meaningfully disrupt the schedule.
+  //   4 = Loose    — honor only if it costs nothing (a free slot already exists).
+  // null until triaged. A Tier-1 DAY_OFF materializes a RosterTimeOff (hard
+  // exclude); tiers 2–4 stay soft and are weighted by the builder.
+  tier          Int?
+  // Admin's manual position WITHIN a tier (0-based; lower wins ties). null =
+  // use the auto seed (seniority → first-come). Set when the admin reorders.
+  manualOrder   Int?
   decidedAt     DateTime?
   decidedBy     String?
   createdAt     DateTime            @default(now())

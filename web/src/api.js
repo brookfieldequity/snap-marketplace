@@ -194,7 +194,9 @@ export const facilityAPI = {
 
   // Provider schedule requests (Task #21) — facility side
   getScheduleRequests: (status) => apiFetch(`${BASE}/schedule-requests${status ? `?status=${status}` : ''}`, { headers: facilityHeaders() }),
-  decideScheduleRequest: (id, decision) => apiFetch(`${BASE}/schedule-requests/${id}/decide`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ decision }) }),
+  decideScheduleRequest: (id, decision, tier) => apiFetch(`${BASE}/schedule-requests/${id}/decide`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ decision, tier }) }),
+  // Bulk tier triage (the priority board's Save). items: [{ id, status, tier, manualOrder }]
+  triageScheduleRequests: (items) => apiFetch(`${BASE}/schedule-requests/triage`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ items }) }),
 
   // Snappy AI assistant (Task #17)
   snappyChat: (messages) => apiFetch(`${BASE}/snappy/chat`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ messages }) }),

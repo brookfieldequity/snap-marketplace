@@ -1134,24 +1134,66 @@ router.post('/build', facilityAuth, async (req, res) => {
       }
     }
 
-    // Task #21: accepted "request to work" preferences for the build month.
-    // Map of `${rosterId}::${YYYY-MM-DD}` → requested siteName (null = any).
-    // The builder biases these providers into the schedule on those dates.
-    const workRequests = await prisma.scheduleRequest.findMany({
+    // Tiered provider requests for the build month (admin-triaged). WORK biases
+    // the provider INTO the schedule; soft DAY_OFF (tiers 2–4) biases them OUT.
+    // Tier-1 DAY_OFFs are already materialized as RosterTimeOff → they arrive
+    // via unavailableKeys (hard exclude), so we only soft-weight tiers 2–4 here.
+    // Within a tier, `order` is seeded by seniority → first-come (then any admin
+    // manual override) so same-tier conflicts resolve deterministically.
+    const triagedRequests = await prisma.scheduleRequest.findMany({
       where: {
         facilityId: req.facility.id,
-        type: 'WORK',
+        type: { in: ['WORK', 'DAY_OFF'] },
         status: 'ACCEPTED',
         date: { gte: monthStart, lt: monthEnd },
       },
-      select: { rosterEntryId: true, date: true, siteName: true },
+      select: {
+        id: true,
+        rosterEntryId: true,
+        type: true,
+        date: true,
+        endDate: true,
+        siteName: true,
+        tier: true,
+        manualOrder: true,
+        createdAt: true,
+        rosterEntry: { select: { providerName: true, seniorityRank: true } },
+      },
     });
-    const workRequestKeys = new Map();
-    for (const w of workRequests) {
-      workRequestKeys.set(
-        `${w.rosterEntryId}::${new Date(w.date).toISOString().slice(0, 10)}`,
-        w.siteName || null
-      );
+
+    // Seed a stable within-tier order: manual override first, else most-senior
+    // (lower seniorityRank), else earliest request. Assign a 0-based index per
+    // (type, tier) bucket — the builder uses it only as a tie-break nudge.
+    const orderByRequestId = new Map();
+    const buckets = new Map(); // `${type}:${tier}` → [requests]
+    for (const r of triagedRequests) {
+      const key = `${r.type}:${r.tier ?? 'X'}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(r);
+    }
+    for (const list of buckets.values()) {
+      list
+        .sort((a, b) => {
+          const am = a.manualOrder, bm = b.manualOrder;
+          if (am != null || bm != null) return (am ?? 1e9) - (bm ?? 1e9);
+          const as = a.rosterEntry?.seniorityRank, bs = b.rosterEntry?.seniorityRank;
+          if (as != null || bs != null) return (as ?? 1e9) - (bs ?? 1e9);
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        })
+        .forEach((r, i) => orderByRequestId.set(r.id, i));
+    }
+
+    const workRequestKeys = new Map(); // key → { siteName, tier, order }
+    const dayOffSoftKeys = new Map(); // key → { tier, order } (tiers 2–4 only)
+    for (const r of triagedRequests) {
+      const dISO = new Date(r.date).toISOString().slice(0, 10);
+      const key = `${r.rosterEntryId}::${dISO}`;
+      const order = orderByRequestId.get(r.id) ?? 0;
+      if (r.type === 'WORK') {
+        workRequestKeys.set(key, { siteName: r.siteName || null, tier: r.tier ?? null, order });
+      } else if (r.type === 'DAY_OFF' && (r.tier === 2 || r.tier === 3 || r.tier === 4)) {
+        dayOffSoftKeys.set(key, { tier: r.tier, order });
+      }
     }
 
     // Shared input snapshot — lets us reproduce and explain each run later.
@@ -1191,7 +1233,23 @@ router.post('/build', facilityAuth, async (req, res) => {
               staffiqWeights,
               unavailableKeys,
               workRequestKeys,
+              dayOffSoftKeys,
             });
+          // Honored / not-honored report for THIS candidate's assignments.
+          const requestOutcomes = scheduleBuilder.computeRequestOutcomes({
+            assignments,
+            scheduleDays,
+            requests: triagedRequests.map((r) => ({
+              id: r.id,
+              rosterEntryId: r.rosterEntryId,
+              providerName: r.rosterEntry?.providerName || 'Provider',
+              type: r.type,
+              tier: r.tier,
+              date: r.date,
+              endDate: r.endDate,
+              siteName: r.siteName,
+            })),
+          });
           return prisma.scheduleBuildRun.create({
             data: {
               facilityId: req.facility.id,
@@ -1206,6 +1264,7 @@ router.post('/build', facilityAuth, async (req, res) => {
               insights,
               warnings,
               staffiqRecommendations,
+              requestOutcomes,
               startedAt,
               completedAt: new Date(),
               triggeredByUserId: userId,
@@ -1456,6 +1515,7 @@ function serializeRun(run) {
     insights: run.insights,
     warnings: run.warnings,
     staffiqRecommendations: run.staffiqRecommendations,
+    requestOutcomes: run.requestOutcomes,
     assignmentCount: Array.isArray(run.assignments) ? run.assignments.length : 0,
     selectedAt: run.selectedAt,
     startedAt: run.startedAt,

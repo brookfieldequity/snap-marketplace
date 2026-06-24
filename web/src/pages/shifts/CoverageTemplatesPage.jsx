@@ -251,7 +251,9 @@ function TemplateEditor({ templateId, onSaved, onCancel }) {
       setError(`"${trimmed}" is already in this template.`)
       return
     }
-    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0, defaultStartTime: '', defaultEndTime: '', isExternal: false }])
+    // Default to the standard OR day (07:00–15:30) so coordinators only adjust
+    // exceptions instead of typing the window on every new location.
+    setRows([...rows, { location: trimmed, counts: Array(7).fill(0), supervisionRatio: 0, defaultStartTime: '07:00', defaultEndTime: '15:30', isExternal: false }])
     setNewLocation('')
     setError(null)
   }

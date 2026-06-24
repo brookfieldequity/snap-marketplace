@@ -36,12 +36,29 @@ const SHIFT_HOURS_PER_DAY = 8;
 // ranking, on top of the mode's cost/quality score (both ~0-1). Strong enough
 // to steer people toward their home sites, not so strong it ignores cost.
 const SITE_SHARE_WEIGHT = 0.6;
-// Task #21: an admin-ACCEPTED "request to work" is a strong preference — bias
-// the provider into the schedule that day well above cost/quality/site-share,
-// but still below the hard constraints (off-keys, eligibility, role) which are
-// filters, not scores. Site match on the request gets the full weight; a
-// day-only request (no site) still gets most of it.
-const WORK_REQUEST_WEIGHT = 3.0;
+// Tiered provider requests (admin-triaged). A WORK request biases the provider
+// INTO the schedule; a soft DAY_OFF request biases them OUT. Both scale by the
+// tier the admin assigned. These act on top of the cost/quality/site-share
+// score (each ~0–1.6) but below the hard constraints (off-keys, eligibility,
+// role) which are filters, not scores.
+//
+// WORK bonus by tier:
+//   1 Locked   — 100 effectively guarantees placement whenever the provider is
+//                eligible + available (only an exhausted roster can break it).
+//   2 Strong   — 3.0 (matches the pre-tier WORK_REQUEST_WEIGHT; legacy null
+//                accepts default here so old data behaves identically).
+//   3 Moderate — 1.0 wins over cost/quality ties but yields to real tradeoffs.
+//   4 Loose    — 0.3 only tips a near-tie.
+const TIER_WORK_BONUS = { 1: 100, 2: 3.0, 3: 1.0, 4: 0.3 };
+// Soft DAY_OFF penalty by tier (subtracted from the score — the builder avoids
+// scheduling them that day unless coverage forces it). Tier 1 DAY_OFF is NOT
+// here: it's materialized as a RosterTimeOff (hard exclude via off-keys).
+const TIER_DAYOFF_PENALTY = { 2: 50, 3: 8, 4: 2 };
+// Default tier for an ACCEPTED request whose tier wasn't set (legacy data).
+const DEFAULT_WORK_TIER = 2;
+// Tiny per-position nudge so that within a tier the admin's manual order (and
+// the seniority/first-come seed behind it) breaks ties deterministically.
+const ORDER_EPSILON = 0.001;
 
 // Supervising-MD assignments use room numbers in a reserved high range so
 // they never collide with real OR rooms (which are 1..roomsRequired, always
@@ -197,24 +214,39 @@ const MODE_SCORERS = {
  * @param {object} args.staffiqWeights   { cost, quality } summing ≤ 1 (STAFFIQ mode only)
  * @returns {object} { assignments, insights, warnings, score }
  */
-async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailableKeys, workRequestKeys }) {
+async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailableKeys, workRequestKeys, dayOffSoftKeys }) {
   if (!MODES.includes(mode)) throw new Error(`Unknown mode: ${mode}`);
   // Set of `${rosterId}::${YYYY-MM-DD}` for providers who are off (PTO /
-  // explicitly unavailable). Hard-excluded from assignment — never scheduled.
+  // explicitly unavailable, incl. Tier-1 day-off). Hard-excluded — never scheduled.
   const offKeys = unavailableKeys instanceof Set ? unavailableKeys : new Set();
-  // Task #21: accepted "request to work" preferences. Map of
-  // `${rosterId}::${YYYY-MM-DD}` → requested siteName (or null = any site).
-  // A provider with an accepted WORK request for the day gets a strong score
-  // bonus toward being placed (full weight when the request's site matches).
+  // Tiered "request to work" preferences. Map of `${rosterId}::${YYYY-MM-DD}` →
+  // { siteName, tier, order }. A provider with a WORK request for the day gets
+  // a tier-scaled score bonus toward being placed (full weight when the
+  // request's site matches this room's location).
   const workReqMap = workRequestKeys instanceof Map ? workRequestKeys : new Map();
   const workRequestBonus = (rosterId, dateISO, location) => {
-    if (!workReqMap.has(`${rosterId}::${dateISO}`)) return 0;
-    const wantSite = workReqMap.get(`${rosterId}::${dateISO}`);
+    const req = workReqMap.get(`${rosterId}::${dateISO}`);
+    if (!req) return 0;
+    const base = TIER_WORK_BONUS[req.tier] ?? TIER_WORK_BONUS[DEFAULT_WORK_TIER];
     // Full weight when no specific site was requested or it matches this
     // location; a partial bonus when they asked for a different site (still
     // want to work that day, just preferred elsewhere).
-    if (!wantSite || wantSite === location) return WORK_REQUEST_WEIGHT;
-    return WORK_REQUEST_WEIGHT * 0.4;
+    const siteFactor = !req.siteName || req.siteName === location ? 1 : 0.4;
+    // Earlier manual/seed order wins ties within a tier.
+    const orderNudge = req.order != null ? -req.order * ORDER_EPSILON : 0;
+    return base * siteFactor + orderNudge;
+  };
+  // Tiered SOFT day-off preferences (tiers 2–4). Map of `${rosterId}::${date}` →
+  // { tier, order }. Subtracted from the score so the builder avoids scheduling
+  // them that day unless coverage forces it. Tier-1 day-offs aren't here — they
+  // come through offKeys (RosterTimeOff) as a hard exclude.
+  const dayOffMap = dayOffSoftKeys instanceof Map ? dayOffSoftKeys : new Map();
+  const dayOffPenalty = (rosterId, dateISO) => {
+    const req = dayOffMap.get(`${rosterId}::${dateISO}`);
+    if (!req) return 0;
+    const base = TIER_DAYOFF_PENALTY[req.tier] || 0;
+    const orderNudge = req.order != null ? req.order * ORDER_EPSILON : 0;
+    return base + orderNudge;
   };
 
   // Pre-compute the cheapest rate so cost scores are normalized against the
@@ -286,7 +318,7 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailable
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => !offKeys.has(`${r.id}::${dateISO}`)) // PTO / unavailable
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
-        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) + workRequestBonus(r.id, dateISO, day.location) }))
+        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) + workRequestBonus(r.id, dateISO, day.location) - dayOffPenalty(r.id, dateISO) }))
         .sort((a, b) => b.score - a.score);
       return ranked[0] || null;
     };
@@ -622,10 +654,80 @@ function deriveCrnaGaps(days) {
   return gaps;
 }
 
+/**
+ * Honored / not-honored report for a single run's assignments.
+ *
+ * For each triaged WORK / DAY_OFF request in the build window, decides whether
+ * this candidate schedule satisfied it:
+ *   - WORK   → honored if the provider is assigned every day of the span.
+ *              If a site was requested but they landed elsewhere, still honored
+ *              (their ask was to work) with a site-mismatch note.
+ *   - DAY_OFF→ honored if the provider is NOT assigned any day of the span.
+ *
+ * `requests` items: { id, rosterEntryId, providerName, type, tier, date,
+ * endDate, siteName }. Returns one row per request for ScheduleBuildRun.requestOutcomes.
+ */
+function computeRequestOutcomes({ assignments, scheduleDays, requests }) {
+  if (!requests || requests.length === 0) return [];
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const iso = (d) => new Date(d).toISOString().slice(0, 10);
+
+  const dayMeta = new Map(); // scheduleDayId → { dateISO, location }
+  for (const d of scheduleDays) {
+    dayMeta.set(d.id, { dateISO: iso(d.date), location: d.location });
+  }
+  // `${rosterId}::${dateISO}` → Set(locations the provider works that day)
+  const worked = new Map();
+  for (const a of assignments) {
+    const meta = dayMeta.get(a.scheduleDayId);
+    if (!meta || !a.rosterId) continue;
+    const key = `${a.rosterId}::${meta.dateISO}`;
+    if (!worked.has(key)) worked.set(key, new Set());
+    worked.get(key).add(meta.location);
+  }
+
+  return requests.map((r) => {
+    const startISO = iso(r.date);
+    const endISO = r.endDate ? iso(r.endDate) : startISO;
+    const days = [];
+    for (let t = new Date(`${startISO}T00:00:00.000Z`); iso(t) <= endISO; t = new Date(t.getTime() + DAY_MS)) {
+      days.push(iso(t));
+    }
+    let honored = true;
+    let reason = null;
+    let note = null;
+    if (r.type === 'WORK') {
+      for (const dISO of days) {
+        const locs = worked.get(`${r.rosterEntryId}::${dISO}`);
+        if (!locs) { honored = false; reason = `Not scheduled ${dISO} (roster full or outranked)`; break; }
+        if (r.siteName && !locs.has(r.siteName)) note = `Scheduled, but at ${[...locs].join(', ')} (asked for ${r.siteName})`;
+      }
+    } else {
+      // DAY_OFF (soft tiers 2–4; tier-1 is a hard time-off and is honored here too)
+      for (const dISO of days) {
+        if (worked.get(`${r.rosterEntryId}::${dISO}`)) { honored = false; reason = `Scheduled ${dISO} despite day-off (coverage required)`; break; }
+      }
+    }
+    if (honored) reason = note || 'Honored';
+    return {
+      requestId: r.id,
+      providerName: r.providerName,
+      type: r.type,
+      tier: r.tier ?? null,
+      date: startISO,
+      endDate: r.endDate ? endISO : null,
+      siteName: r.siteName || null,
+      honored,
+      reason,
+    };
+  });
+}
+
 module.exports = {
   MODES,
   runMode,
   resolveStaffIQWeights,
+  computeRequestOutcomes,
   // exposed for testing / re-scoring after edits
   computeInsights,
   computeStaffIQScore,

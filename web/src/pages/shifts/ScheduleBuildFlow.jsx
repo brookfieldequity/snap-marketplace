@@ -305,6 +305,8 @@ function ComparingPhase({ runs, onSelect, selecting, onBack, industryRoomRate })
                     </div>
                   )}
 
+                  <RequestOutcomes outcomes={run.requestOutcomes} />
+
                   <StaffIQRecommendations recommendations={run.staffiqRecommendations} compact />
 
                   <button
@@ -325,6 +327,34 @@ function ComparingPhase({ runs, onSelect, selecting, onBack, industryRoomRate })
         <button style={styles.secondaryBtn} onClick={onBack}>← Back to strategies</button>
       </div>
     </>
+  )
+}
+
+// Honored / not-honored report for the tiered provider requests this candidate
+// satisfied. Green count + a short list of the ones it couldn't fit.
+function RequestOutcomes({ outcomes }) {
+  if (!Array.isArray(outcomes) || outcomes.length === 0) return null
+  const honored = outcomes.filter((o) => o.honored)
+  const missed = outcomes.filter((o) => !o.honored)
+  const tierLabel = (n) => (n ? `T${n}` : '')
+  return (
+    <div style={styles.requestsBlock}>
+      <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+        Requests honored: {honored.length}/{outcomes.length}
+      </div>
+      {missed.length === 0 ? (
+        <div style={{ color: '#047857' }}>✓ Every triaged request made this schedule.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {missed.slice(0, 4).map((o) => (
+            <div key={o.requestId} style={{ color: '#B45309' }}>
+              ✗ {o.providerName} {tierLabel(o.tier)} — {o.reason}
+            </div>
+          ))}
+          {missed.length > 4 && <div style={{ color: '#B45309' }}>+ {missed.length - 4} more not honored</div>}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -404,6 +434,7 @@ const styles = {
   savingsTop: { fontSize: 14, fontWeight: 800, color: '#065F46', letterSpacing: '-0.01em' },
   savingsSub: { fontSize: 10, color: '#047857', marginTop: 1 },
   warningsBlock: { fontSize: 11, color: '#92400E', background: '#FFFBEB', padding: 8, borderRadius: 6, marginTop: 4 },
+  requestsBlock: { fontSize: 11, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', padding: 8, borderRadius: 6, marginTop: 4 },
   warningsList: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 },
   warning: { fontSize: 10, color: '#92400E', lineHeight: 1.4 },
   useBtn: { marginTop: 8, padding: '10px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
