@@ -6,6 +6,63 @@ function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+function fullName(p) {
+  return [p?.firstName, p?.lastName].filter(Boolean).join(' ') || 'Provider'
+}
+
+// The backend (/shifts/facility/mine) returns Prisma rows; the table renders a
+// flattened display shape. Map once here so the JSX stays simple — and so the
+// new provider rating/badges from the trust layer surface.
+function normalizeShift(s) {
+  const applicants = (s.applications || []).map((a) => ({
+    id: a.id,
+    status: a.status,
+    providerName: fullName(a.provider),
+    specialty: a.provider?.specialty,
+    rating: a.provider?.rating || { avg: null, count: 0 },
+    badges: a.provider?.badges || [],
+    shiftsWorked: a.provider?._count?.bookings ?? 0,
+  }))
+  const bp = s.booking?.provider
+  return {
+    ...s,
+    dateLabel: s.date ? new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+    payRate: s.currentRate ?? s.baseRate ?? 0,
+    duration: s.durationHours ?? 0,
+    surge: !!s.surgeEnabled || (s.surgeMultiplier > 1),
+    providerName: bp ? fullName(bp) : null,
+    providerRating: bp?.rating || null,
+    providerBadges: bp?.badges || [],
+    applicants,
+  }
+}
+
+// Small color-coded verification badge (tone mirrors backend trust service).
+const BADGE_TONES = {
+  good: { bg: '#ECFDF5', border: '#A7F3D0', color: '#047857' },
+  info: { bg: '#EFF6FF', border: '#BFDBFE', color: '#2563EB' },
+  warn: { bg: '#FEF2F2', border: '#FCA5A5', color: '#B91C1C' },
+}
+function TrustBadge({ badge }) {
+  const t = BADGE_TONES[badge.tone] || BADGE_TONES.info
+  return (
+    <span style={{
+      background: t.bg, border: `1px solid ${t.border}`, color: t.color,
+      borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+    }}>
+      {badge.label}
+    </span>
+  )
+}
+function RatingText({ rating }) {
+  if (!rating || !rating.count) return <span style={{ color: '#94A3B8', fontSize: 12 }}>No ratings yet</span>
+  return (
+    <span style={{ color: '#F59E0B', fontSize: 13, fontWeight: 600 }}>
+      ★ {rating.avg?.toFixed(1)} <span style={{ color: '#94A3B8', fontWeight: 500 }}>({rating.count})</span>
+    </span>
+  )
+}
+
 export default function ShiftsPage({ onNavigate }) {
   const [shifts, setShifts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -14,7 +71,7 @@ export default function ShiftsPage({ onNavigate }) {
 
   useEffect(() => {
     facilityAPI.getShifts()
-      .then(setShifts)
+      .then((data) => setShifts((data || []).map(normalizeShift)))
       .catch(() => setShifts([]))
       .finally(() => setLoading(false))
   }, [])
@@ -25,7 +82,7 @@ export default function ShiftsPage({ onNavigate }) {
     try {
       await facilityAPI.reviewApplication(shiftId, applicationId, action)
       const updated = await facilityAPI.getShifts()
-      setShifts(updated)
+      setShifts((updated || []).map(normalizeShift))
     } catch {
       alert('Action failed.')
     } finally {
@@ -38,7 +95,7 @@ export default function ShiftsPage({ onNavigate }) {
     try {
       await facilityAPI.confirmDeposit(shiftId)
       const updated = await facilityAPI.getShifts()
-      setShifts(updated)
+      setShifts((updated || []).map(normalizeShift))
     } catch {
       alert('Failed to confirm deposit.')
     } finally {
@@ -159,7 +216,7 @@ export default function ShiftsPage({ onNavigate }) {
                 onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#FAFAFA' }}
               >
                 <div style={colStyle('110px')}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{shift.date}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{shift.dateLabel}</div>
                 </div>
                 <div style={colStyle('160px')}>
                   <span style={{ fontWeight: 500 }}>{shift.specialty}</span>
@@ -228,6 +285,21 @@ export default function ShiftsPage({ onNavigate }) {
                     )}
                   </div>
 
+                  {shift.providerName && (
+                    <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', marginBottom: 16, border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Booked Provider</div>
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{shift.providerName}</span>
+                        <RatingText rating={shift.providerRating} />
+                      </div>
+                      {shift.providerBadges.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                          {shift.providerBadges.map((b) => <TrustBadge key={b.key} badge={b} />)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {applicants.length > 0 && shift.status === 'LIVE' && (
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
@@ -248,10 +320,17 @@ export default function ShiftsPage({ onNavigate }) {
                           }}
                         >
                           <div>
-                            <span style={{ fontWeight: 600, fontSize: 14 }}>{app.providerName}</span>
-                            <span style={{ color: '#64748B', fontSize: 13, marginLeft: 10 }}>{app.specialty}</span>
-                            <span style={{ color: '#F59E0B', fontSize: 13, marginLeft: 10 }}>★ {app.rating}</span>
-                            <span style={{ color: '#94A3B8', fontSize: 12, marginLeft: 8 }}>{app.shiftsWorked} shifts</span>
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                              <span style={{ fontWeight: 600, fontSize: 14 }}>{app.providerName}</span>
+                              <span style={{ color: '#64748B', fontSize: 13 }}>{app.specialty}</span>
+                              <RatingText rating={app.rating} />
+                              <span style={{ color: '#94A3B8', fontSize: 12 }}>{app.shiftsWorked} shifts</span>
+                            </div>
+                            {app.badges.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                                {app.badges.map((b) => <TrustBadge key={b.key} badge={b} />)}
+                              </div>
+                            )}
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button

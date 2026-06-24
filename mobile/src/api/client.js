@@ -117,7 +117,9 @@ export const shiftAPI = {
    * @param {object} params - { page, limit, sort, specialty, minRate, maxRate,
    *                            dateRange ('NEXT_7'|'THIS_MONTH'|'NEXT_MONTH'|'ALL'),
    *                            facilityType (CSV of FacilityType enum),
-   *                            shiftType ('DAY'|'NIGHT') }
+   *                            shiftType ('DAY'|'NIGHT'),
+   *                            q (keyword — matches facility name),
+   *                            centerLat, centerLng, radiusMiles ("search this area") }
    */
   getFeed: (params = {}) => api.get('/shifts/feed', { params }),
 

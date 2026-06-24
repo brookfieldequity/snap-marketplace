@@ -57,6 +57,16 @@ function formatLicenseExpiry(value) {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+// Map a badge tone (from the backend trust service) to box + text styles.
+function badgeToneStyle(tone) {
+  switch (tone) {
+    case 'good': return { box: styles.badgeGoodBox, text: styles.badgeGoodText };
+    case 'warn': return { box: styles.badgeWarnBox, text: styles.badgeWarnText };
+    case 'info':
+    default: return { box: styles.badgeInfoBox, text: styles.badgeInfoText };
+  }
+}
+
 function VipDetailModal({ visible, points, threshold, isVip, log, onClose }) {
   const sortedLog = [...(log || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
   const pointsToGo = Math.max(0, threshold - points);
@@ -428,6 +438,30 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/* Rating + verification badges */}
+        {(provider?.rating?.count > 0 || provider?.badges?.length > 0) && (
+          <View style={styles.sectionCard}>
+            {provider?.rating?.count > 0 && (
+              <View style={styles.ratingSummary}>
+                <Text style={styles.ratingSummaryStar}>★</Text>
+                <Text style={styles.ratingSummaryValue}>{provider.rating.avg?.toFixed(1)}</Text>
+                <Text style={styles.ratingSummaryLabel}>
+                  facility rating · {provider.rating.count} shift{provider.rating.count > 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
+            {provider?.badges?.length > 0 && (
+              <View style={styles.badgeStrip}>
+                {provider.badges.map((b) => (
+                  <View key={b.key} style={[styles.trustBadge, badgeToneStyle(b.tone).box]}>
+                    <Text style={[styles.trustBadgeText, badgeToneStyle(b.tone).text]}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Profile completion */}
         <View style={styles.sectionCard}>
           <View style={styles.completionHeader}>
@@ -648,6 +682,62 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.vip,
     letterSpacing: 0.3,
+  },
+  ratingSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 12,
+  },
+  ratingSummaryStar: {
+    fontSize: 18,
+    color: '#F59E0B',
+  },
+  ratingSummaryValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  ratingSummaryLabel: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  badgeStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  trustBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  trustBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  badgeGoodBox: {
+    backgroundColor: COLORS.success + '15',
+    borderColor: COLORS.success + '40',
+  },
+  badgeGoodText: {
+    color: '#047857',
+  },
+  badgeInfoBox: {
+    backgroundColor: COLORS.primary + '12',
+    borderColor: COLORS.primary + '35',
+  },
+  badgeInfoText: {
+    color: COLORS.primary,
+  },
+  badgeWarnBox: {
+    backgroundColor: COLORS.error + '12',
+    borderColor: COLORS.error + '40',
+  },
+  badgeWarnText: {
+    color: '#B91C1C',
   },
   specialty: {
     fontSize: 13,

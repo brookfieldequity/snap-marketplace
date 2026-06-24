@@ -46,6 +46,7 @@ function normalizeShift(s) {
     ...s,
     facilityName: s.facility?.name ?? s.facilityName,
     facilityAddress: s.facility?.address ?? s.facilityAddress,
+    facilityRating: s.facility?.rating ?? s.facilityRating ?? null,
     payRate: s.currentRate ?? s.baseRate ?? s.payRate,
     viewerCount: s.currentViewers ?? s.viewerCount,
     startTime: startIso,
@@ -343,7 +344,18 @@ export default function ShiftDetailScreen({ route, navigation }) {
 
         {/* Facility name + specialty */}
         <Text style={styles.facilityName}>{shift.facilityName}</Text>
-        <Text style={styles.specialty}>{shift.specialty}</Text>
+        <View style={styles.specialtyRow}>
+          <Text style={styles.specialty}>{shift.specialty}</Text>
+          {shift.facilityRating?.count > 0 && (
+            <View style={styles.detailRating}>
+              <Text style={styles.detailRatingStar}>★</Text>
+              <Text style={styles.detailRatingValue}>{shift.facilityRating.avg?.toFixed(1)}</Text>
+              <Text style={styles.detailRatingCount}>
+                · {shift.facilityRating.count} rating{shift.facilityRating.count > 1 ? 's' : ''}
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* VIP countdown */}
         {shift.vipWindowActive && shift.vipWindowEnd && (
@@ -608,11 +620,35 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 4,
   },
+  specialtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
   specialty: {
     fontSize: 15,
     color: COLORS.textMuted,
     fontWeight: '500',
-    marginBottom: 16,
+  },
+  detailRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  detailRatingStar: {
+    fontSize: 14,
+    color: '#F59E0B',
+  },
+  detailRatingValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  detailRatingCount: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '500',
   },
   vipCountdownBox: {
     backgroundColor: COLORS.vip + '12',

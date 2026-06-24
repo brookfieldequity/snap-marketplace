@@ -66,10 +66,21 @@ function regionForPoints(points) {
   };
 }
 
-export default function ShiftMap({ shifts, onShiftPress }) {
+// 1° of latitude ≈ 69 miles. A search radius of ~0.6 × the visible height
+// covers the viewport (center-to-edge is half the height; the extra reaches
+// the corners) without pulling in far-off facilities.
+function radiusMilesFromRegion(r) {
+  return Math.max(2, Math.round((r.latitudeDelta || 0.5) * 69 * 0.6));
+}
+
+export default function ShiftMap({ shifts, onShiftPress, onSearchArea }) {
   const mapRef = useRef(null);
   const [selected, setSelected] = useState(null);
   const [region, setRegion] = useState(DEFAULT_REGION);
+  const [showSearchHere, setShowSearchHere] = useState(false);
+  const currentRegionRef = useRef(DEFAULT_REGION);
+  const initializedRef = useRef(false);
+  const hasSearchedRef = useRef(false);
 
   const groups = useMemo(() => groupByFacility(shifts), [shifts]);
 
@@ -77,6 +88,25 @@ export default function ShiftMap({ shifts, onShiftPress }) {
     setRegion(regionForPoints(groups));
     setSelected(null);
   }, [groups]);
+
+  // Fired after any region change. The first call is the initial layout; only
+  // subsequent (user-driven) moves should reveal the "Search this area" button.
+  const handleRegionChangeComplete = (r) => {
+    currentRegionRef.current = r;
+    if (initializedRef.current) setShowSearchHere(true);
+    else initializedRef.current = true;
+  };
+
+  const handleSearchHere = () => {
+    const r = currentRegionRef.current;
+    setShowSearchHere(false);
+    hasSearchedRef.current = true;
+    onSearchArea?.({
+      centerLat: r.latitude,
+      centerLng: r.longitude,
+      radiusMiles: radiusMilesFromRegion(r),
+    });
+  };
 
   // Try to center on the provider's current location, but never block the map render.
   useEffect(() => {
@@ -87,8 +117,9 @@ export default function ShiftMap({ shifts, onShiftPress }) {
         if (status !== 'granted') return;
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         if (cancelled || !mapRef.current) return;
-        // Only recenter when we don't already have shifts to frame.
-        if (groups.length === 0) {
+        // Only recenter when we don't already have shifts to frame — and never
+        // after a manual "search this area" (that would yank the user away).
+        if (groups.length === 0 && !hasSearchedRef.current) {
           mapRef.current.animateToRegion({
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
@@ -103,18 +134,6 @@ export default function ShiftMap({ shifts, onShiftPress }) {
     return () => { cancelled = true; };
   }, [groups.length]);
 
-  if (groups.length === 0) {
-    return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>🗺️</Text>
-        <Text style={styles.emptyTitle}>No mapped shifts</Text>
-        <Text style={styles.emptySubtitle}>
-          No facilities with location data match your filters. Try widening the filters or check back later.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <MapView
@@ -122,6 +141,7 @@ export default function ShiftMap({ shifts, onShiftPress }) {
         provider={PROVIDER_DEFAULT}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
+        onRegionChangeComplete={handleRegionChangeComplete}
         showsUserLocation
         showsMyLocationButton={Platform.OS === 'android'}
       >
@@ -137,6 +157,24 @@ export default function ShiftMap({ shifts, onShiftPress }) {
           </Marker>
         ))}
       </MapView>
+
+      {/* "Search this area" — appears after the user pans/zooms the map */}
+      {showSearchHere && onSearchArea && (
+        <View style={styles.searchHereWrap} pointerEvents="box-none">
+          <TouchableOpacity style={styles.searchHereBtn} onPress={handleSearchHere} activeOpacity={0.85}>
+            <Text style={styles.searchHereText}>⟳ Search this area</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Non-blocking "no shifts" pill so the user can keep panning + re-search */}
+      {groups.length === 0 && (
+        <View style={styles.noShiftsPillWrap} pointerEvents="none">
+          <View style={styles.noShiftsPill}>
+            <Text style={styles.noShiftsPillText}>No shifts in this area — pan and search again</Text>
+          </View>
+        </View>
+      )}
 
       {/* Mini-card for the selected facility */}
       {selected && (
@@ -191,6 +229,49 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#E2E8F0',
+  },
+  searchHereWrap: {
+    position: 'absolute',
+    top: 14,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  searchHereBtn: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  searchHereText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  noShiftsPillWrap: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  noShiftsPill: {
+    backgroundColor: 'rgba(15,23,42,0.82)',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  noShiftsPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.white,
   },
   pin: {
     minWidth: 32,

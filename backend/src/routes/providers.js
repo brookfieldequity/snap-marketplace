@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
+const { aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 
 const router = express.Router();
 
@@ -31,7 +32,12 @@ router.get('/me', auth, async (req, res) => {
       },
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
-    res.json(profile);
+    const ratingMap = await aggregateProviderRatings([profile.id]);
+    res.json({
+      ...profile,
+      rating: ratingMap.get(profile.id) || { avg: null, count: 0 },
+      badges: deriveProviderBadges(profile, { completedShifts: profile._count?.bookings }),
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load profile' });
   }

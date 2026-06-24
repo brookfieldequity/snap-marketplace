@@ -3,6 +3,7 @@ const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const facilityAuth = require('../middleware/facilityAuth');
 const { notifyShiftPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
+const { aggregateFacilityRatings, aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 
 const router = express.Router();
 
@@ -32,6 +33,10 @@ router.get('/feed', auth, async (req, res) => {
       dateRange,            // NEXT_7 | THIS_MONTH | NEXT_MONTH | ALL
       facilityType,         // CSV: HOSPITAL,SURGERY_CENTER,...
       shiftType,            // DAY | NIGHT
+      q,                    // keyword — matches facility name
+      centerLat,            // "search this area" — map center + radius (miles)
+      centerLng,
+      radiusMiles,
     } = req.query;
     const provider = await prisma.providerProfile.findUnique({
       where: { userId: req.user.userId },
@@ -65,11 +70,17 @@ router.get('/feed', auth, async (req, res) => {
       if (start && end) where.date = { gte: start, lt: end };
     }
 
+    // Facility-scoped filters (type + keyword) build one nested `facility` where.
+    const facilityWhere = {};
     if (facilityType) {
       const types = String(facilityType).split(',').map((t) => t.trim()).filter(Boolean);
-      if (types.length > 0) {
-        where.facility = { facilityType: { in: types } };
-      }
+      if (types.length > 0) facilityWhere.facilityType = { in: types };
+    }
+    if (q && String(q).trim()) {
+      facilityWhere.name = { contains: String(q).trim(), mode: 'insensitive' };
+    }
+    if (Object.keys(facilityWhere).length > 0) {
+      where.facility = facilityWhere;
     }
 
     const shifts = await prisma.shift.findMany({
@@ -150,13 +161,33 @@ router.get('/feed', auth, async (req, res) => {
       };
     }).filter(Boolean);
 
+    // "Search this area" — filter to facilities within radiusMiles of the map
+    // center. Independent of the provider's own location (which drives display
+    // distance + the default location sort).
+    const cLat = Number(centerLat), cLng = Number(centerLng), rMi = Number(radiusMiles);
+    if (centerLat && centerLng && radiusMiles && !Number.isNaN(cLat) && !Number.isNaN(cLng) && !Number.isNaN(rMi)) {
+      results = results.filter((s) => {
+        if (s.facility?.lat == null || s.facility?.lng == null) return false;
+        return haversineKm(cLat, cLng, s.facility.lat, s.facility.lng) * 0.621371 <= rMi;
+      });
+    }
+
     if (sort === 'location' && provider?.lat) {
       results.sort((a, b) => (a.distanceMiles ?? 9999) - (b.distanceMiles ?? 9999));
     }
 
     const start = (parseInt(page) - 1) * parseInt(limit);
+    const pageSlice = results.slice(start, start + parseInt(limit));
+
+    // Attach each facility's public rating (only for the page we return).
+    const ratingMap = await aggregateFacilityRatings(pageSlice.map((s) => s.facility.id));
+    const withRatings = pageSlice.map((s) => ({
+      ...s,
+      facility: { ...s.facility, rating: ratingMap.get(s.facility.id) || { avg: null, count: 0 } },
+    }));
+
     res.json({
-      shifts: results.slice(start, start + parseInt(limit)),
+      shifts: withRatings,
       total: results.length,
       page: parseInt(page),
     });
@@ -194,8 +225,11 @@ router.get('/:id', auth, async (req, res) => {
     const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
     const myApplication = shift.applications.find((a) => a.providerId === provider?.id);
 
+    const ratingMap = await aggregateFacilityRatings([shift.facilityId]);
+
     res.json({
       ...shift,
+      facility: { ...shift.facility, rating: ratingMap.get(shift.facilityId) || { avg: null, count: 0 } },
       myApplicationStatus: myApplication?.status || null,
       isBooked: !!shift.booking,
       isMyBooking: shift.booking?.providerId === provider?.id,
@@ -383,16 +417,41 @@ router.post('/:id/confirm-deposit', facilityAuth, async (req, res) => {
 
 router.get('/facility/mine', facilityAuth, async (req, res) => {
   try {
+    const providerSelect = {
+      id: true, firstName: true, lastName: true, specialty: true,
+      credentialed: true, photoUrl: true, vipStatus: true,
+      maLicenseNumber: true, maLicenseExpiry: true,
+      _count: { select: { bookings: true } },
+    };
     const shifts = await prisma.shift.findMany({
       where: { facilityId: req.facility.id },
       include: {
-        applications: { include: { provider: { select: { id: true, firstName: true, lastName: true, specialty: true, credentialed: true, photoUrl: true } } } },
-        booking: { include: { provider: { select: { id: true, firstName: true, lastName: true, specialty: true } } } },
+        applications: { include: { provider: { select: providerSelect } } },
+        booking: { include: { provider: { select: providerSelect } } },
         completions: true,
       },
       orderBy: { date: 'asc' },
     });
-    res.json(shifts);
+
+    // Collect every provider id across applicants + bookings, fetch ratings once,
+    // then decorate each provider with { rating, badges }.
+    const providerIds = [];
+    for (const s of shifts) {
+      for (const a of s.applications) if (a.provider) providerIds.push(a.provider.id);
+      if (s.booking?.provider) providerIds.push(s.booking.provider.id);
+    }
+    const ratingMap = await aggregateProviderRatings(providerIds);
+    const decorate = (p) => p && {
+      ...p,
+      rating: ratingMap.get(p.id) || { avg: null, count: 0 },
+      badges: deriveProviderBadges(p, { completedShifts: p._count?.bookings }),
+    };
+    const enriched = shifts.map((s) => ({
+      ...s,
+      applications: s.applications.map((a) => ({ ...a, provider: decorate(a.provider) })),
+      booking: s.booking ? { ...s.booking, provider: decorate(s.booking.provider) } : s.booking,
+    }));
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: 'Failed to load shifts' });
   }

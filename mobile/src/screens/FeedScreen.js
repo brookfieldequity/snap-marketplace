@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   TouchableOpacity,
   StyleSheet,
@@ -46,6 +47,47 @@ function countActiveFilters(f) {
   return n;
 }
 
+const DATE_RANGE_LABELS = {
+  NEXT_7: 'Next 7 days',
+  THIS_MONTH: 'This month',
+  NEXT_MONTH: 'Next month',
+};
+
+// Turn the active filter set into removable chips. Each chip names the filter
+// keys it clears so a single tap removes the whole logical filter (e.g. the
+// rate chip clears both min and max).
+function buildFilterChips(f) {
+  const chips = [];
+  if (f.minRate != null || f.maxRate != null) {
+    const lo = f.minRate != null ? `$${f.minRate}` : '$100';
+    const hi = f.maxRate != null ? `$${f.maxRate}` : '$500+';
+    chips.push({ id: 'rate', label: `${lo}–${hi}/hr`, clears: ['minRate', 'maxRate'] });
+  }
+  if (f.dateRange) {
+    chips.push({ id: 'dateRange', label: DATE_RANGE_LABELS[f.dateRange] || f.dateRange, clears: ['dateRange'] });
+  }
+  if (f.shiftType) {
+    chips.push({ id: 'shiftType', label: f.shiftType === 'NIGHT' ? 'Night' : 'Day', clears: ['shiftType'] });
+  }
+  if (f.facilityType?.length) {
+    const n = f.facilityType.length;
+    chips.push({ id: 'facilityType', label: `${n} facility type${n > 1 ? 's' : ''}`, clears: ['facilityType'] });
+  }
+  return chips;
+}
+
+// Small inline star rating shown on each card (only when a facility has ratings).
+function RatingInline({ rating }) {
+  if (!rating || !rating.count) return null;
+  return (
+    <View style={styles.ratingInline}>
+      <Text style={styles.ratingStar}>★</Text>
+      <Text style={styles.ratingValue}>{rating.avg?.toFixed(1)}</Text>
+      <Text style={styles.ratingCount}>({rating.count})</Text>
+    </View>
+  );
+}
+
 function normalizeShift(s) {
   const rawStart = s.startTime;
   const isTimeStr = rawStart && /^\d{1,2}:\d{2}/.test(rawStart);
@@ -63,6 +105,7 @@ function normalizeShift(s) {
     ...s,
     facilityName: s.facility?.name ?? s.facilityName,
     facilityAddress: s.facility?.address ?? s.facilityAddress,
+    facilityRating: s.facility?.rating ?? s.facilityRating ?? null,
     payRate: s.currentRate ?? s.baseRate ?? s.payRate,
     viewerCount: s.currentViewers ?? s.viewerCount,
     startTime: startIso,
@@ -130,7 +173,10 @@ function ShiftCard({ shift, onPress }) {
           <Text style={styles.facilityName} numberOfLines={1}>
             {shift.facilityName || 'Facility'}
           </Text>
-          <Text style={styles.specialtyText}>{shift.specialty}</Text>
+          <View style={styles.specialtyRow}>
+            <Text style={styles.specialtyText}>{shift.specialty}</Text>
+            <RatingInline rating={shift.facilityRating} />
+          </View>
         </View>
         <View style={styles.payBlock}>
           <Text style={styles.payRate}>
@@ -199,9 +245,19 @@ export default function FeedScreen({ navigation }) {
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState({});
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');   // debounced committed keyword
+  const [total, setTotal] = useState(0);
+  const [area, setArea] = useState(null);     // { centerLat, centerLng, radiusMiles } from map "search this area"
+
+  // Debounce the keyword so we don't query on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const fetchShifts = useCallback(
-    async ({ sort = activeSort, pageNum = 1, append = false, currentFilters = filters, mode = viewMode } = {}) => {
+    async ({ sort = activeSort, pageNum = 1, append = false, currentFilters = filters, mode = viewMode, currentSearch = search, currentArea = area } = {}) => {
       try {
         const params = {
           sort: mode === 'map' ? 'location' : sort,
@@ -215,46 +271,69 @@ export default function FeedScreen({ navigation }) {
           facilityType: currentFilters.facilityType?.length
             ? currentFilters.facilityType.join(',')
             : undefined,
+          q: currentSearch || undefined,
+          // "Search this area" only applies on the map.
+          ...(mode === 'map' && currentArea ? {
+            centerLat: currentArea.centerLat,
+            centerLng: currentArea.centerLng,
+            radiusMiles: currentArea.radiusMiles,
+          } : {}),
         };
         const res = await shiftAPI.getFeed(params);
         const raw = res.data?.shifts || res.data || [];
         const data = raw.map(normalizeShift);
-        const total = res.data?.total || data.length;
+        const totalCount = res.data?.total ?? data.length;
 
         if (append) {
           setShifts((prev) => [...prev, ...data]);
         } else {
           setShifts(data);
         }
-        setHasMore(mode === 'list' && pageNum * 15 < total);
+        setTotal(totalCount);
+        setHasMore(mode === 'list' && pageNum * 15 < totalCount);
         setPage(pageNum);
       } catch (err) {
         if (!append) {
           // Show placeholder data if API not yet available
           setShifts(PLACEHOLDER_SHIFTS);
+          setTotal(PLACEHOLDER_SHIFTS.length);
         }
       }
     },
-    [activeSort, filters, viewMode]
+    [activeSort, filters, viewMode, search, area]
   );
 
   useEffect(() => {
     setLoading(true);
-    fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode })
+    fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode, currentSearch: search })
       .finally(() => setLoading(false));
-  }, [activeSort, filters, viewMode]);
+  }, [activeSort, filters, viewMode, search]);
+
+  // "Search this area" refetch — deliberately does NOT toggle the full-screen
+  // loader, so the map stays mounted and in place while results update.
+  useEffect(() => {
+    if (!area || viewMode !== 'map') return;
+    fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: 'map', currentSearch: search, currentArea: area });
+  }, [area]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode });
+    await fetchShifts({ sort: activeSort, pageNum: 1, currentFilters: filters, mode: viewMode, currentSearch: search });
     setRefreshing(false);
   };
 
   const handleLoadMore = async () => {
     if (viewMode !== 'list' || loadingMore || !hasMore) return;
     setLoadingMore(true);
-    await fetchShifts({ sort: activeSort, pageNum: page + 1, append: true, currentFilters: filters, mode: 'list' });
+    await fetchShifts({ sort: activeSort, pageNum: page + 1, append: true, currentFilters: filters, mode: 'list', currentSearch: search });
     setLoadingMore(false);
+  };
+
+  const handleSetViewMode = (mode) => {
+    // Leaving the map drops any "search this area" filter so the list/map
+    // re-frames to all shifts next time.
+    if (mode === 'list') setArea(null);
+    setViewMode(mode);
   };
 
   const handleSortChange = (key) => {
@@ -269,7 +348,19 @@ export default function FeedScreen({ navigation }) {
     setHasMore(true);
   };
 
+  // Remove one logical filter (a chip) by clearing its underlying keys.
+  const removeFilter = (clears) => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      clears.forEach((k) => delete next[k]);
+      return next;
+    });
+    setPage(1);
+    setHasMore(true);
+  };
+
   const activeFilterCount = countActiveFilters(filters);
+  const filterChips = buildFilterChips(filters);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -293,7 +384,7 @@ export default function FeedScreen({ navigation }) {
         <View style={styles.viewToggle}>
           <TouchableOpacity
             style={[styles.viewToggleBtn, viewMode === 'list' && styles.viewToggleBtnActive]}
-            onPress={() => setViewMode('list')}
+            onPress={() => handleSetViewMode('list')}
           >
             <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>
               List
@@ -301,12 +392,34 @@ export default function FeedScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewToggleBtn, viewMode === 'map' && styles.viewToggleBtnActive]}
-            onPress={() => setViewMode('map')}
+            onPress={() => handleSetViewMode('map')}
           >
             <Text style={[styles.viewToggleText, viewMode === 'map' && styles.viewToggleTextActive]}>
               Map
             </Text>
           </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by facility name"
+            placeholderTextColor={COLORS.textMuted}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+          {searchInput.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchInput('')} hitSlop={8}>
+              <Text style={styles.searchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -344,6 +457,31 @@ export default function FeedScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Active filter chips + result count (list view only) */}
+      {viewMode === 'list' && (filterChips.length > 0 || !loading) && (
+        <View style={styles.metaRow}>
+          {filterChips.length > 0 ? (
+            <FlatList
+              horizontal
+              data={filterChips}
+              keyExtractor={(c) => c.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsScroll}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.activeChip} onPress={() => removeFilter(item.clears)}>
+                  <Text style={styles.activeChipText}>{item.label}</Text>
+                  <Text style={styles.activeChipRemove}>✕</Text>
+                </TouchableOpacity>
+              )}
+            />
+          ) : (
+            <Text style={styles.resultCount}>
+              {total} {total === 1 ? 'shift' : 'shifts'}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Feed */}
       {loading ? (
         <View style={styles.centerLoader}>
@@ -354,6 +492,7 @@ export default function FeedScreen({ navigation }) {
         <ShiftMap
           shifts={shifts}
           onShiftPress={(s) => navigation.navigate('ShiftDetail', { shiftId: s._id || s.id, shift: s })}
+          onSearchArea={setArea}
         />
       ) : (
         <FlatList
@@ -570,6 +709,99 @@ const styles = StyleSheet.create({
   },
   sortChipTextActive: {
     color: COLORS.primary,
+  },
+  searchWrap: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    gap: 8,
+  },
+  searchIcon: {
+    fontSize: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textDark,
+    fontWeight: '500',
+    padding: 0,
+  },
+  searchClear: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+  },
+  metaRow: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    minHeight: 20,
+    justifyContent: 'center',
+  },
+  chipsScroll: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary + '15',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
+    borderRadius: 16,
+    paddingLeft: 12,
+    paddingRight: 10,
+    paddingVertical: 6,
+  },
+  activeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  activeChipRemove: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  resultCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  specialtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  ratingStar: {
+    fontSize: 12,
+    color: '#F59E0B',
+  },
+  ratingValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  ratingCount: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
   },
   feedList: {
     padding: 16,
