@@ -424,6 +424,8 @@ export const payrollAPI = {
     apiFetch(`${BASE}/payroll/runs`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(payload) }),
   getRuns: () => apiFetch(`${BASE}/payroll/runs`, { headers: facilityHeaders() }),
   getRun: (id) => apiFetch(`${BASE}/payroll/runs/${id}`, { headers: facilityHeaders() }),
+  updateRun: (id, data) => apiFetch(`${BASE}/payroll/runs/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  deleteRun: (id) => apiFetch(`${BASE}/payroll/runs/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
   setProviderRate: (rosterEntryId, data) =>
     apiFetch(`${BASE}/payroll/providers/${rosterEntryId}/rate`, {
       method: 'PATCH',

@@ -447,6 +447,42 @@ router.get('/runs/:id', async (req, res) => {
   }
 });
 
+// ── Edit a run (invoice number only — CSV was already exported) ─────────────────
+router.patch('/runs/:id', async (req, res) => {
+  const { invoiceNumber } = req.body || {};
+  try {
+    const run = await prisma.payrollRun.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+    });
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    const updated = await prisma.payrollRun.update({
+      where: { id: run.id },
+      data: {
+        invoiceNumber: invoiceNumber != null ? (String(invoiceNumber).trim() || null) : run.invoiceNumber,
+      },
+    });
+    res.json({ run: updated });
+  } catch (err) {
+    console.error('[payroll/runs PATCH]', err.message);
+    res.status(500).json({ error: 'Failed to update payroll run' });
+  }
+});
+
+// ── Delete a run ─────────────────────────────────────────────────────────────────
+router.delete('/runs/:id', async (req, res) => {
+  try {
+    const run = await prisma.payrollRun.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+    });
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    await prisma.payrollRun.delete({ where: { id: run.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[payroll/runs DELETE]', err.message);
+    res.status(500).json({ error: 'Failed to delete payroll run' });
+  }
+});
+
 // ── Provider rate + classification (the roster "card") ──────────────────────────
 // Sets the current rate on the roster entry AND writes a RosterRateHistory row
 // (effective-dated) for audit. Also updates classification used to split runs.
