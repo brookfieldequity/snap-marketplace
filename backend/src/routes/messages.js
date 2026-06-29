@@ -43,6 +43,16 @@ router.post('/', auth, async (req, res) => {
 
 router.get('/shift/:shiftId', auth, async (req, res) => {
   try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+    if (!provider) return res.status(403).json({ error: 'Not authorized' });
+
+    const hasAccess = await prisma.shiftBooking.findFirst({
+      where: { shiftId: req.params.shiftId, providerId: provider.id },
+    }) || await prisma.shiftApplication.findFirst({
+      where: { shiftId: req.params.shiftId, providerId: provider.id },
+    });
+    if (!hasAccess) return res.status(403).json({ error: 'Not authorized' });
+
     const messages = await prisma.message.findMany({
       where: { shiftId: req.params.shiftId },
       include: {

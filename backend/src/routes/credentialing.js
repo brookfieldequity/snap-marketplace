@@ -187,10 +187,11 @@ router.post('/auth/forgot-password', async (req, res) => {
     // Always return 200 to avoid user enumeration
     if (!user || !user.isActive) return res.json({ message: 'If that email exists, a reset link has been sent.' })
     const token = require('crypto').randomBytes(32).toString('hex')
+    const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex')
     const expires = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
     await prisma.credentialUser.update({
       where: { id: user.id },
-      data: { resetToken: token, resetTokenExpiresAt: expires },
+      data: { resetToken: tokenHash, resetTokenExpiresAt: expires },
     })
     const APP_URL = process.env.APP_URL || 'https://snap-marketplace.up.railway.app'
     const resetLink = `${APP_URL}?resetToken=${token}`
@@ -207,8 +208,9 @@ router.post('/auth/reset-password', async (req, res) => {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and password required' })
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex')
     const user = await prisma.credentialUser.findFirst({
-      where: { resetToken: token, resetTokenExpiresAt: { gt: new Date() } },
+      where: { resetToken: tokenHash, resetTokenExpiresAt: { gt: new Date() } },
     })
     if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
     const passwordHash = await bcrypt.hash(password, 10)
@@ -286,6 +288,11 @@ router.post('/users', credentialAuth, requireCoordinator, async (req, res) => {
 
 router.patch('/users/:id', credentialAuth, requireCoordinator, async (req, res) => {
   try {
+    const target = await prisma.credentialUser.findFirst({
+      where: { id: req.params.id, facilityId: req.facilityId },
+    })
+    if (!target) return res.status(404).json({ error: 'Not found' })
+
     const { name, email, permission, password } = req.body
     const data = {}
     if (name) data.name = name
@@ -310,6 +317,10 @@ router.delete('/users/:id', credentialAuth, requireCoordinator, async (req, res)
     if (req.params.id === req.credUser.id) {
       return res.status(400).json({ error: 'Cannot delete your own account' })
     }
+    const target = await prisma.credentialUser.findFirst({
+      where: { id: req.params.id, facilityId: req.facilityId },
+    })
+    if (!target) return res.status(404).json({ error: 'Not found' })
     await prisma.credentialUser.delete({ where: { id: req.params.id } })
     res.json({ success: true })
   } catch (err) {
@@ -751,10 +762,11 @@ router.post('/providers/:providerId/credentials/:type/flag', credentialAuth, req
 
 router.delete('/providers/:providerId/credentials/:type/flag/:flagId', credentialAuth, requireCoordinator, async (req, res) => {
   try {
-    await prisma.credentialFlag.update({
-      where: { id: req.params.flagId },
+    const { count } = await prisma.credentialFlag.updateMany({
+      where: { id: req.params.flagId, facilityId: req.facilityId },
       data: { resolvedAt: new Date() },
     })
+    if (!count) return res.status(404).json({ error: 'Not found' })
     res.json({ success: true })
   } catch (err) {
     console.error(err)
@@ -1012,7 +1024,11 @@ router.post('/roster/:rosterId/credentials/:type/flag', credentialAuth, requireC
 
 router.delete('/roster/:rosterId/credentials/:type/flag/:flagId', credentialAuth, requireCoordinator, async (req, res) => {
   try {
-    await prisma.credentialFlag.update({ where: { id: req.params.flagId }, data: { resolvedAt: new Date() } })
+    const { count } = await prisma.credentialFlag.updateMany({
+      where: { id: req.params.flagId, facilityId: req.facilityId },
+      data: { resolvedAt: new Date() },
+    })
+    if (!count) return res.status(404).json({ error: 'Not found' })
     res.json({ success: true })
   } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }) }
 })

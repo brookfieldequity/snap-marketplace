@@ -277,18 +277,19 @@ router.post('/:id/send', adminAuth, async (req, res) => {
 
     const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
     const dateStr = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const lineItems = Array.isArray(inv.lineItems) ? inv.lineItems : JSON.parse(inv.lineItems || '[]')
 
     const lineRows = lineItems.map(item => `
       <tr>
         <td style="padding:12px 16px;border-bottom:1px solid #E2E8F0;">
-          <strong style="color:#0F172A">${item.description}</strong>
-          ${item.detail ? `<br><span style="font-size:12px;color:#64748B">${item.detail}</span>` : ''}
+          <strong style="color:#0F172A">${esc(item.description)}</strong>
+          ${item.detail ? `<br><span style="font-size:12px;color:#64748B">${esc(item.detail)}</span>` : ''}
         </td>
         <td style="padding:12px 16px;border-bottom:1px solid #E2E8F0;text-align:right;color:#374151">${fmt(item.listPrice)}</td>
         <td style="padding:12px 16px;border-bottom:1px solid #E2E8F0;text-align:right;color:${item.discount > 0 ? '#DC2626' : '#94A3B8'}">
           ${item.discount > 0 ? `-${fmt(item.discount)}` : '—'}
-          ${item.discountLabel ? `<br><span style="font-size:11px">${item.discountLabel}</span>` : ''}
+          ${item.discountLabel ? `<br><span style="font-size:11px">${esc(item.discountLabel)}</span>` : ''}
         </td>
         <td style="padding:12px 16px;border-bottom:1px solid #E2E8F0;text-align:right;font-weight:700;color:#0F172A">${fmt(item.amount)}</td>
       </tr>`).join('')
@@ -320,9 +321,9 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     <div style="display:flex;justify-content:space-between;margin-bottom:24px">
       <div>
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Bill To</div>
-        <div style="font-size:16px;font-weight:700;color:#0F172A">${inv.billingName}</div>
-        <div style="color:#475569">${inv.billingEmail}</div>
-        ${inv.billingAddress ? `<div style="color:#475569;font-size:13px">${inv.billingAddress}</div>` : ''}
+        <div style="font-size:16px;font-weight:700;color:#0F172A">${esc(inv.billingName)}</div>
+        <div style="color:#475569">${esc(inv.billingEmail)}</div>
+        ${inv.billingAddress ? `<div style="color:#475569;font-size:13px">${esc(inv.billingAddress)}</div>` : ''}
       </div>
       <div style="text-align:right">
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Invoice Date</div>
@@ -355,7 +356,7 @@ router.post('/:id/send', adminAuth, async (req, res) => {
       <span style="color:#fff;font-size:20px;font-weight:800">${fmt(inv.amountDue)}</span>
     </div>
     ${savingsLine}
-    ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${inv.notes}</div>` : ''}
+    ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong><br>
