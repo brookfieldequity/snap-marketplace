@@ -88,6 +88,18 @@ export default function AdminCredentialUsersPage() {
     }
   }
 
+  async function handleChangePermission(user, permission) {
+    setActionLoading(p => ({ ...p, [user.id + '_perm']: true }))
+    try {
+      await adminAPI.updateCredentialUser(user.id, { permission })
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, permission } : u))
+    } catch {
+      alert('Failed to update permission')
+    } finally {
+      setActionLoading(p => ({ ...p, [user.id + '_perm']: false }))
+    }
+  }
+
   const filtered = users.filter(u =>
     !search || u.name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -185,9 +197,14 @@ export default function AdminCredentialUsersPage() {
               <div style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{u.email}</div>
               <div style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{u.facilityName}</div>
               <div style={{ padding: '14px 16px' }}>
-                <span style={{ background: pc.bg, color: pc.text, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
-                  {PERM_LABELS[u.permission]}
-                </span>
+                <select
+                  value={u.permission}
+                  disabled={!!actionLoading[u.id + '_perm']}
+                  onChange={e => handleChangePermission(u, e.target.value)}
+                  style={{ background: pc.bg, color: pc.text, border: `1px solid ${pc.text}30`, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {PERMISSIONS.map(p => <option key={p} value={p}>{PERM_LABELS[p]}</option>)}
+                </select>
               </div>
               <div style={{ padding: '14px 16px', fontSize: 13, color: '#94A3B8' }}>{formatDate(u.lastLoginAt)}</div>
               <div style={{ padding: '14px 16px' }}>
