@@ -32,7 +32,6 @@ function CredStatusBadge({ status }) {
 function CredentialSection({ section, credential, entityApi, permission, onRefresh }) {
   const [showNote, setShowNote] = useState(false)
   const [noteText, setNoteText] = useState('')
-  const [viewingDoc, setViewingDoc] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
 
@@ -71,7 +70,7 @@ function CredentialSection({ section, credential, entityApi, permission, onRefre
   async function handleViewDoc() {
     try {
       const { url } = await entityApi.getDocToken(section.type)
-      setViewingDoc(url)
+      window.open(url, '_blank', 'noopener')
     } catch (err) { setActionMsg('Failed to load document: ' + err.message) }
   }
 
@@ -188,19 +187,6 @@ function CredentialSection({ section, credential, entityApi, permission, onRefre
       )}
 
       {actionMsg && <div style={{ marginTop: 8, fontSize: 12, color: '#EF4444' }}>{actionMsg}</div>}
-
-      {/* Document modal */}
-      {viewingDoc && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 900, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
-              <span style={{ fontWeight: 700, color: '#0F172A' }}>{section.label}</span>
-              <button onClick={() => setViewingDoc(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#64748B' }}>×</button>
-            </div>
-            <iframe src={viewingDoc} style={{ flex: 1, border: 'none', minHeight: 500 }} title="Document viewer" />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
