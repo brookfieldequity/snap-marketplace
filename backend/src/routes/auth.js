@@ -6,6 +6,7 @@ const { OAuth2Client } = require('google-auth-library');
 const jwksClient = require('jwks-rsa');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
+const { checkAdminLockout, recordAdminFailure, clearAdminFailures } = require('../middleware/rateLimit');
 const { reverseLinkForProvider } = require('../services/rosterLink');
 const { sendEmail } = require('../services/notifications');
 
@@ -456,21 +457,27 @@ router.post('/facility/login', async (req, res) => {
 
 // ── Admin login ───────────────────────────────────────────────────────────────
 
-router.post('/admin/login', async (req, res) => {
+router.post('/admin/login', checkAdminLockout, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     // Guard missing fields: findUnique({ where: { email: undefined } }) throws,
     // which previously turned a blank submit into a 500 instead of a clean 401.
     if (!email || !password) {
+      recordAdminFailure(req.ip);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || user.role !== 'ADMIN') {
+      recordAdminFailure(req.ip);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!valid) {
+      recordAdminFailure(req.ip);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
+    clearAdminFailures(req.ip);
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: 'ADMIN' },
       process.env.JWT_SECRET,
