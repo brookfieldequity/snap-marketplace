@@ -122,7 +122,7 @@ router.get('/facilities', adminAuth, async (req, res) => {
         users: {
           take: 1,
           orderBy: { createdAt: 'asc' },
-          include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+          include: { user: { select: { id: true, email: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },
