@@ -80,6 +80,7 @@ export default function AdminInvoicesPage() {
     promoFeatures: 'SNAP Complete',
     notes: '',
     dueDays: 30,
+    billingCycle: 'ONCE',  // 'ONCE' | 'MONTHLY'
   })
 
   useEffect(() => {
@@ -88,14 +89,18 @@ export default function AdminInvoicesPage() {
     adminAPI.getFacilities().then(d => setFacilities(d.facilities || d)).catch(() => {})
   }, [])
 
-  // Auto-populate billing name/email when facility selected
+  // Auto-populate billing info when facility selected
   function handleFacilityChange(id) {
     const fac = facilities.find(f => f.id === id)
+    const addrParts = [fac?.address, [fac?.zipCode, fac?.state].filter(Boolean).join(' ')].filter(Boolean)
+    const addr = addrParts.join(', ')
+    const firstUser = fac?.users?.[0]?.user
     setForm(f => ({
       ...f,
       facilityId: id,
-      billingName: fac ? fac.name : f.billingName,
-      billingEmail: fac?.billingEmail || fac?.users?.[0]?.user?.email || f.billingEmail,
+      billingName: fac?.name || f.billingName,
+      billingEmail: firstUser?.email || f.billingEmail,
+      billingAddress: addr || f.billingAddress,
     }))
   }
 
@@ -169,6 +174,7 @@ export default function AdminInvoicesPage() {
         promoFeatures: (form.discountMonths && form.promoFeatures) ? form.promoFeatures : undefined,
         notes: form.notes || undefined,
         dueDays: form.dueDays,
+        billingCycle: form.billingCycle,
       }
       const inv = await adminAPI.createInvoice(payload)
       setInvoices(prev => [inv, ...prev])
@@ -489,6 +495,23 @@ export default function AdminInvoicesPage() {
                   />
                 </div>
 
+                <div>
+                  <Label>Billing frequency</Label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[{ value: 'ONCE', label: 'Full payment (one invoice)' }, { value: 'MONTHLY', label: 'Monthly installments (auto-sends 1st of each month)' }].map(opt => (
+                      <label key={opt.value} style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', border: `1.5px solid ${form.billingCycle === opt.value ? '#2563EB' : '#E2E8F0'}`, borderRadius: 8, cursor: 'pointer', background: form.billingCycle === opt.value ? '#EFF6FF' : '#fff' }}>
+                        <input type="radio" name="billingCycle" value={opt.value} checked={form.billingCycle === opt.value} onChange={() => setForm(f => ({ ...f, billingCycle: opt.value }))} style={{ marginTop: 2, accentColor: '#2563EB' }} />
+                        <span style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {form.billingCycle === 'MONTHLY' && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#64748B', background: '#EFF6FF', borderRadius: 6, padding: '8px 12px' }}>
+                      Monthly amount = annual total ÷ 12. First auto-send: 1st of next month.
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <Label>Due in (days)</Label>
@@ -538,10 +561,22 @@ export default function AdminInvoicesPage() {
                       </div>
                     )}
 
-                    <div style={{ background: '#2563EB', borderRadius: 8, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>TOTAL DUE</span>
-                      <span style={{ color: '#fff', fontSize: 20, fontWeight: 800 }}>{fmt(totals.amountDue)}</span>
-                    </div>
+                    {form.billingCycle === 'MONTHLY' ? (
+                      <>
+                        <div style={{ background: '#2563EB', borderRadius: 8, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>MONTHLY AMOUNT</span>
+                          <span style={{ color: '#fff', fontSize: 20, fontWeight: 800 }}>{fmt(Math.round(totals.amountDue / 12))}<span style={{ fontSize: 12, opacity: 0.8 }}>/mo</span></span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>
+                          Annual total: {fmt(totals.amountDue)} · Auto-sends 1st of each month
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ background: '#2563EB', borderRadius: 8, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>TOTAL DUE</span>
+                        <span style={{ color: '#fff', fontSize: 20, fontWeight: 800 }}>{fmt(totals.amountDue)}</span>
+                      </div>
+                    )}
 
                     {totals.discountTotal > 0 && (
                       <div style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>
@@ -592,6 +627,16 @@ export default function AdminInvoicesPage() {
                     {inv.invoiceNumber}
                     {inv.discountType === 'FOUNDER' && (
                       <span style={{ marginLeft: 6, fontSize: 10, color: '#D97706', fontWeight: 700 }}>★ FOUNDER</span>
+                    )}
+                    {inv.billingCycle === 'MONTHLY' && (
+                      <div style={{ marginTop: 3 }}>
+                        <span style={{ fontSize: 10, color: '#2563EB', fontWeight: 700, background: '#EFF6FF', padding: '2px 6px', borderRadius: 4 }}>MONTHLY</span>
+                        {inv.nextRecurAt && (
+                          <span style={{ marginLeft: 4, fontSize: 10, color: '#64748B' }}>
+                            Next: {new Date(inv.nextRecurAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td style={{ padding: '12px 16px' }}>

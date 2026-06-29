@@ -119,6 +119,11 @@ router.get('/facilities', adminAuth, async (req, res) => {
       include: {
         subscription: true,
         _count: { select: { shifts: true } },
+        users: {
+          take: 1,
+          orderBy: { createdAt: 'asc' },
+          include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

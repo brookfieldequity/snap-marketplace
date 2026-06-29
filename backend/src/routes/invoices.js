@@ -129,6 +129,7 @@ router.post('/', adminAuth, async (req, res) => {
       // Meta
       notes,
       dueDays = 30,
+      billingCycle = 'ONCE', // 'ONCE' | 'MONTHLY'
     } = req.body
 
     // Compute platform line item
@@ -225,6 +226,16 @@ router.post('/', adminAuth, async (req, res) => {
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + dueDays)
 
+    // For monthly billing, schedule first auto-send on the 1st of next month
+    let nextRecurAt = null
+    if (billingCycle === 'MONTHLY') {
+      const d = new Date()
+      d.setMonth(d.getMonth() + 1)
+      d.setDate(1)
+      d.setHours(8, 0, 0, 0)
+      nextRecurAt = d
+    }
+
     const inv = await prisma.snapInvoice.create({
       data: {
         invoiceNumber,
@@ -241,6 +252,8 @@ router.post('/', adminAuth, async (req, res) => {
         promoExpiresAt,
         notes: notes || null,
         dueDate,
+        billingCycle,
+        nextRecurAt,
       },
     })
 
@@ -402,4 +415,78 @@ router.delete('/:id', adminAuth, async (req, res) => {
   }
 })
 
-module.exports = router
+// ── Monthly recurring invoice auto-send ──────────────────────────────────────
+// Called by the daily cron in src/index.js. Finds all MONTHLY invoices whose
+// nextRecurAt is today or earlier (non-VOID), sends the email, then advances
+// nextRecurAt by one month.
+async function processMonthlyInvoices() {
+  if (!process.env.SENDGRID_API_KEY) return
+
+  const due = await prisma.snapInvoice.findMany({
+    where: { billingCycle: 'MONTHLY', nextRecurAt: { lte: new Date() }, status: { not: 'VOID' } },
+  })
+  if (!due.length) return
+
+  const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const dateStr = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const monthLabel = (d) => new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  for (const inv of due) {
+    try {
+      const period = monthLabel(inv.nextRecurAt)
+      const html = `
+<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;margin:0;padding:20px">
+<div style="max-width:680px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+  <div style="background:#2563EB;padding:28px 32px;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="color:#fff;font-size:24px;font-weight:800">SNAP</div><div style="color:#BFDBFE;font-size:12px">Medical Technologies</div></div>
+    <div style="text-align:right"><div style="color:#fff;font-size:22px;font-weight:700">INVOICE</div><div style="color:#BFDBFE;font-size:13px"># ${esc(inv.invoiceNumber)} · ${esc(period)}</div></div>
+  </div>
+  <div style="padding:28px 32px">
+    <div style="background:#EFF6FF;border-radius:8px;padding:12px 18px;margin-bottom:20px;font-size:13px;color:#1D4ED8">
+      <strong>Monthly installment</strong> — ${esc(period)}. This invoice is sent automatically each month.
+    </div>
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Bill To</div>
+      <div style="font-size:16px;font-weight:700;color:#0F172A">${esc(inv.billingName)}</div>
+      <div style="color:#475569">${esc(inv.billingEmail)}</div>
+    </div>
+    <div style="background:#2563EB;border-radius:8px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#fff;font-size:15px;font-weight:700">AMOUNT DUE — ${esc(period)}</span>
+      <span style="color:#fff;font-size:20px;font-weight:800">${fmt(inv.amountDue)}</span>
+    </div>
+    ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
+    <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">
+    <div style="font-size:12px;color:#64748B">
+      <strong>Payment Instructions:</strong><br>
+      Monthly installment due within 30 days. Make checks payable to SNAP Medical Technologies.<br>
+      For wire / ACH details contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+
+      await sgMail.send({
+        to: inv.billingEmail,
+        from: { email: FROM_EMAIL, name: 'SNAP Medical Technologies' },
+        subject: `Monthly invoice ${inv.invoiceNumber} from SNAP Medical — ${period}`,
+        html,
+      })
+
+      // Advance nextRecurAt by one month
+      const next = new Date(inv.nextRecurAt)
+      next.setMonth(next.getMonth() + 1)
+
+      await prisma.snapInvoice.update({
+        where: { id: inv.id },
+        data: { sentAt: new Date(), status: 'SENT', nextRecurAt: next },
+      })
+
+      console.log(`[invoices] Monthly auto-send: ${inv.invoiceNumber} → ${period}`)
+    } catch (e) {
+      console.error(`[invoices] Monthly auto-send failed for ${inv.invoiceNumber}:`, e.message)
+    }
+  }
+}
+
+module.exports = { router, processMonthlyInvoices }

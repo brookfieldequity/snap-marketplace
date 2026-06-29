@@ -37,7 +37,7 @@ const ptoBuilderRoutes = require('./routes/ptoBuilder');
 const coverageTemplatesRoutes = require('./routes/coverageTemplates');
 const holidayRoutes = require('./routes/holidays');
 const automationEventsRoutes = require('./routes/automationEvents')
-const invoiceRoutes = require('./routes/invoices');
+const { router: invoiceRoutes, processMonthlyInvoices } = require('./routes/invoices');
 
 const { runSurgePricing, expireOldShifts, openPreferredShifts, notifySurgeExpiring } = require('./jobs/surge');
 const { checkAllVipStatuses } = require('./jobs/vip');
@@ -148,6 +148,11 @@ cron.schedule('0 */6 * * *', async () => {
 // Daily at 6 AM — credential expiration alerts
 cron.schedule('0 6 * * *', async () => {
   await runCredentialAlerts();
+});
+
+// Daily at 8 AM — auto-send monthly recurring invoices
+cron.schedule('0 8 * * *', async () => {
+  await processMonthlyInvoices();
 });
 
 // ── 404 + error handling ──────────────────────────────────────────────────────

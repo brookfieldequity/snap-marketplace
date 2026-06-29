@@ -554,11 +554,16 @@ model SnapInvoice {
   paidAt     DateTime?
   notes      String?
 
+  // Recurring billing
+  billingCycle  String    @default("ONCE") // ONCE | MONTHLY
+  nextRecurAt   DateTime? // next auto-send date when billingCycle = MONTHLY
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([facilityId])
   @@index([status])
+  @@index([billingCycle, nextRecurAt])
 }
 
 model FacilitySubscription {
