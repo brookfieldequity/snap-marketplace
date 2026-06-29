@@ -1247,7 +1247,7 @@ export default function InternalRosterPage({ onNavigate }) {
                     key={n}
                     type="button"
                     onClick={() => setF('adminQualityScore', form.adminQualityScore === n ? '' : n)}
-                    style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', opacity: form.adminQualityScore !== '' && n > form.adminQualityScore ? 0.3 : 1, padding: 0, lineHeight: 1 }}
+                    style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', color: form.adminQualityScore !== '' && n <= form.adminQualityScore ? '#F59E0B' : '#D1D5DB', padding: 0, lineHeight: 1 }}
                   >★</button>
                 ))}
                 {form.adminQualityScore !== '' && (
