@@ -190,14 +190,14 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
               {sorted.map((p, i) => (
                 <tr
                   key={p.rosterId}
-                  onClick={() => permission === 'COORDINATOR' && onNavigate(p.providerId ? `provider:${p.providerId}` : `roster:${p.rosterId}`)}
+                  onClick={() => permission !== 'BILLING' && onNavigate(p.providerId ? `provider:${p.providerId}` : `roster:${p.rosterId}`)}
                   style={{
                     borderTop: '1px solid #F1F5F9',
                     background: i % 2 === 0 ? '#fff' : '#FAFAFA',
-                    cursor: permission === 'COORDINATOR' ? 'pointer' : 'default',
+                    cursor: permission !== 'BILLING' ? 'pointer' : 'default',
                     transition: 'background 0.1s',
                   }}
-                  onMouseEnter={e => { if (permission === 'COORDINATOR') e.currentTarget.style.background = '#F0F4FF' }}
+                  onMouseEnter={e => { if (permission !== 'BILLING') e.currentTarget.style.background = '#F0F4FF' }}
                   onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#FAFAFA' }}
                 >
                   <td style={{ padding: '14px 16px' }}>
