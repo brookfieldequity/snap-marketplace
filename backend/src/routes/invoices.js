@@ -57,6 +57,26 @@ router.get('/pricing', adminAuth, (req, res) => {
   res.json({ tiers: PRICING, credListPrice: CRED_LIST_PRICE, credAnnualPrice: CRED_ANNUAL_PRICE })
 })
 
+// ── GET /api/admin/invoices/facility-admins/:facilityId ─────────────────────
+router.get('/facility-admins/:facilityId', adminAuth, async (req, res) => {
+  try {
+    const members = await prisma.facilityUser.findMany({
+      where: { facilityId: req.params.facilityId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { facilityRole: 'asc' },
+    })
+    res.json(members.map(m => ({
+      id: m.id,
+      userId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      role: m.facilityRole,
+    })))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ── GET /api/admin/invoices/:id — single invoice ────────────────────────────
 router.get('/:id', adminAuth, async (req, res) => {
   try {
@@ -346,8 +366,15 @@ router.post('/:id/send', adminAuth, async (req, res) => {
 </div>
 </body></html>`
 
+    // Build recipient list — billingEmail always included, plus any extra admins
+    const { recipientEmails } = req.body
+    const allEmails = Array.from(new Set([
+      inv.billingEmail,
+      ...(Array.isArray(recipientEmails) ? recipientEmails : []),
+    ].filter(Boolean)))
+
     await sgMail.send({
-      to: inv.billingEmail,
+      to: allEmails.length === 1 ? allEmails[0] : allEmails.map(e => ({ email: e })),
       from: { email: FROM_EMAIL, name: 'SNAP Medical Technologies' },
       subject: `Invoice ${inv.invoiceNumber} from SNAP Medical — Due ${dateStr(inv.dueDate)}`,
       html,

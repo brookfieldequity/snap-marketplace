@@ -57,6 +57,9 @@ export default function AdminInvoicesPage() {
   const [marking, setMarking] = useState({})
   const [creating, setCreating] = useState(false)
   const [msg, setMsg] = useState('')
+  // Send modal
+  const [sendModal, setSendModal] = useState(null) // { invoice, admins: [], selected: Set }
+  const [sendModalLoading, setSendModalLoading] = useState(false)
 
   // Builder form state
   const [form, setForm] = useState({
@@ -178,18 +181,45 @@ export default function AdminInvoicesPage() {
     }
   }
 
-  async function handleSend(id) {
-    setSending(s => ({ ...s, [id]: true }))
+  async function openSendModal(inv) {
+    setSendModal({ invoice: inv, admins: [], selected: new Set([inv.billingEmail]) })
+    if (inv.facilityId) {
+      setSendModalLoading(true)
+      try {
+        const admins = await adminAPI.getInvoiceFacilityAdmins(inv.facilityId)
+        setSendModal(m => m ? { ...m, admins } : m)
+      } catch (_) {}
+      setSendModalLoading(false)
+    }
+  }
+
+  async function handleSend() {
+    if (!sendModal) return
+    const { invoice, selected } = sendModal
+    const recipientEmails = Array.from(selected).filter(e => e !== invoice.billingEmail)
+    setSending(s => ({ ...s, [invoice.id]: true }))
     setMsg('')
     try {
-      const inv = await adminAPI.sendInvoice(id)
-      setInvoices(prev => prev.map(i => i.id === id ? inv : i))
-      setMsg(`Invoice sent to ${inv.billingEmail}`)
+      const inv = await adminAPI.sendInvoice(invoice.id, recipientEmails)
+      setInvoices(prev => prev.map(i => i.id === invoice.id ? inv : i))
+      const count = selected.size
+      setMsg(`Invoice sent to ${count} recipient${count !== 1 ? 's' : ''}`)
+      setSendModal(null)
     } catch (e) {
       setMsg('Send failed: ' + e.message)
     } finally {
-      setSending(s => ({ ...s, [id]: false }))
+      setSending(s => ({ ...s, [invoice.id]: false }))
     }
+  }
+
+  function toggleRecipient(email) {
+    setSendModal(m => {
+      if (!m) return m
+      const next = new Set(m.selected)
+      if (next.has(email)) next.delete(email)
+      else next.add(email)
+      return { ...m, selected: next }
+    })
   }
 
   async function handleMarkPaid(id) {
@@ -587,7 +617,7 @@ export default function AdminInvoicesPage() {
                       </a>
                       {inv.status !== 'PAID' && inv.status !== 'VOID' && (
                         <button
-                          onClick={() => handleSend(inv.id)}
+                          onClick={() => openSendModal(inv)}
                           disabled={!!sending[inv.id]}
                           style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#EFF6FF', color: '#2563EB', fontWeight: 600, border: '1px solid #BFDBFE', cursor: 'pointer' }}
                         >
@@ -619,7 +649,86 @@ export default function AdminInvoicesPage() {
           </table>
         )}
       </div>
+
+      {/* Send modal */}
+      {sendModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: '28px 30px', width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(15,23,42,0.22)' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+              Send Invoice {sendModal.invoice.invoiceNumber}
+            </div>
+            <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
+              Select who receives this invoice email.
+            </div>
+
+            {/* Billing email — always checked */}
+            <RecipientRow
+              email={sendModal.invoice.billingEmail}
+              name="Billing Contact"
+              role="Billing"
+              checked
+              locked
+            />
+
+            {sendModalLoading && (
+              <div style={{ fontSize: 13, color: '#94A3B8', padding: '8px 0' }}>Loading facility admins…</div>
+            )}
+
+            {sendModal.admins.filter(a => a.email !== sendModal.invoice.billingEmail).map(a => (
+              <RecipientRow
+                key={a.id}
+                email={a.email}
+                name={a.name || a.email}
+                role={a.role}
+                checked={sendModal.selected.has(a.email)}
+                onChange={() => toggleRecipient(a.email)}
+              />
+            ))}
+
+            {!sendModalLoading && sendModal.admins.length === 0 && !sendModal.invoice.facilityId && (
+              <div style={{ fontSize: 12, color: '#94A3B8', padding: '4px 0 12px' }}>
+                No facility linked — invoice will go to billing contact only.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              <button
+                onClick={handleSend}
+                disabled={!!sending[sendModal.invoice.id]}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#2563EB', color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer' }}
+              >
+                {sending[sendModal.invoice.id] ? 'Sending…' : `Send to ${sendModal.selected.size} recipient${sendModal.selected.size !== 1 ? 's' : ''}`}
+              </button>
+              <button
+                onClick={() => setSendModal(null)}
+                style={{ padding: '10px 18px', borderRadius: 8, background: '#F1F5F9', color: '#374151', fontSize: 14, fontWeight: 600, border: '1px solid #E2E8F0', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function RecipientRow({ email, name, role, checked, locked, onChange }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #F1F5F9', cursor: locked ? 'default' : 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={locked}
+        onChange={onChange}
+        style={{ width: 16, height: 16, accentColor: '#2563EB', cursor: locked ? 'default' : 'pointer', flexShrink: 0 }}
+      />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{name}</div>
+        <div style={{ fontSize: 12, color: '#64748B' }}>{email} · {role}</div>
+      </div>
+      {locked && <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>ALWAYS</span>}
+    </label>
   )
 }
 
