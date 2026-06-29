@@ -15,9 +15,9 @@ PART 1 — SUBSCRIPTION TERMS
 
 1. SERVICES. SNAP Medical grants Facility a non-exclusive, non-transferable license to access and use the SNAP Medical platform (including SNAP Shifts, SNAP Marketplace, SNAP Credentialing, and SNAP Ops) during the subscription term, subject to the selected tier.
 
-2. FEES & BILLING. Subscription fees are charged monthly in advance at the rate corresponding to your selected tier (Basic: $2,500/mo; Professional: $5,000/mo; Enterprise: $10,000/mo). Fees are due upon invoice. Unpaid invoices accrue interest at 1.5% per month. Prices may be updated with 30 days written notice.
+2. FEES & BILLING. Subscription fees are billed annually at the rate corresponding to your selected tier and provider count. SNAP Core: $18,000–$48,000/yr; SNAP Staff IQ: $30,000–$78,000/yr; SNAP Complete: $40,000–$105,000/yr (rate varies by provider band: up to 25 / 26–75 / 76–150 providers). SNAP Complete subscribers are also subject to a 4% transaction fee on external marketplace shift fills. Fees are due upon invoice. Unpaid invoices accrue interest at 1.5% per month. Prices may be updated with 30 days written notice.
 
-3. TERM & CANCELLATION. The subscription continues on a monthly basis until cancelled. Either party may cancel with 30 days written notice. No refunds are issued for partial months.
+3. TERM & CANCELLATION. The subscription term is annual. Either party may cancel at end of term with 30 days written notice. No refunds are issued for the unused portion of an annual term unless otherwise agreed in writing.
 
 4. ACCEPTABLE USE. Facility agrees to use the platform solely for lawful workforce management purposes. Facility shall not resell access, reverse engineer the platform, or use it to violate applicable law.
 
@@ -55,66 +55,75 @@ This Business Associate Agreement ("BAA") is entered into pursuant to the Health
 
 By clicking "I Agree & Confirm Plan", you (a) represent that you have authority to bind the Facility to this Agreement, (b) acknowledge that you have read and understood these terms, and (c) agree that your electronic acceptance constitutes a legally binding signature.`
 
+// DB enum values stay BASIC/PROFESSIONAL/ENTERPRISE; display names updated to
+// match Ryan's annual tier model (locked 2026-06-29).
 const TIERS = [
   {
     id: 'BASIC',
-    name: 'Basic',
-    price: '$2,500',
-    per: '/mo',
+    name: 'SNAP Core',
+    tagline: 'Scheduling, credential tracking & Snappy AI',
+    // Annual price by provider band
+    bands: [
+      { label: 'Up to 25 providers',  price: '$18,000/yr' },
+      { label: '26–75 providers',     price: '$30,000/yr' },
+      { label: '76–150 providers',    price: '$48,000/yr' },
+    ],
     color: '#2563EB',
     accent: '#EFF6FF',
     features: [
-      { text: 'Full scheduling & marketplace access', included: true },
-      { text: 'Credentialed provider pool', included: true },
-      { text: 'Cost savings dashboard', included: true },
-      { text: 'Email support', included: true },
-      { text: 'Preferred provider list', included: false },
-      { text: 'Featured listings', included: false },
-      { text: 'Surge pricing', included: false },
-      { text: 'Dedicated account manager', included: false },
+      { text: 'Internal scheduling & shift management', included: true },
+      { text: 'Credential tracking, expiry alerts & coordinator portal', included: true },
+      { text: 'Snappy AI assistant', included: true },
+      { text: 'Internal roster & availability windows', included: true },
+      { text: 'Schedule builder & coverage templates', included: true },
+      { text: 'Email & in-app support', included: true },
+      { text: 'StaffIQ optimization & savings analytics', included: false },
+      { text: 'SNAP Marketplace access', included: false },
     ],
   },
   {
     id: 'PROFESSIONAL',
-    name: 'Professional',
-    price: '$5,000',
-    per: '/mo',
+    name: 'SNAP Staff IQ',
+    tagline: 'Adds optimization engine & savings analytics',
+    bands: [
+      { label: 'Up to 25 providers',  price: '$30,000/yr' },
+      { label: '26–75 providers',     price: '$48,000/yr' },
+      { label: '76–150 providers',    price: '$78,000/yr' },
+    ],
     color: '#1E3A8A',
-    accent: '#F3E8FF',
+    accent: '#EFF6FF',
     popular: true,
     features: [
-      { text: 'Full scheduling & marketplace access', included: true },
-      { text: 'Credentialed provider pool', included: true },
-      { text: 'Cost savings dashboard', included: true },
+      { text: 'Everything in SNAP Core', included: true },
+      { text: 'StaffIQ optimization engine', included: true },
+      { text: 'Savings & ROI analytics dashboard', included: true },
+      { text: 'Out-list builder & rules engine', included: true },
+      { text: 'PTO & tiered request management', included: true },
       { text: 'Priority email & phone support', included: true },
-      { text: 'Preferred provider list', included: true },
-      { text: 'Early access posting (1–4 hrs)', included: true },
-      { text: 'Featured listings', included: true },
-      { text: 'Surge pricing', included: true },
-      { text: 'Dedicated account manager', included: false },
+      { text: 'SNAP Marketplace access', included: false },
+      { text: 'Provider search & pipelines', included: false },
     ],
   },
   {
     id: 'ENTERPRISE',
-    name: 'Enterprise',
-    price: '$10,000',
-    per: '/mo',
+    name: 'SNAP Complete',
+    tagline: 'Full platform: marketplace, search & pipelines',
+    bands: [
+      { label: 'Up to 25 providers',  price: '$40,000/yr' },
+      { label: '26–75 providers',     price: '$65,000/yr' },
+      { label: '76–150 providers',    price: '$105,000/yr' },
+    ],
     color: '#0F172A',
     accent: '#F8FAFC',
     features: [
-      { text: 'Unlimited usage', included: true },
-      { text: 'Credentialed provider pool', included: true },
-      { text: 'Cost savings dashboard', included: true },
-      { text: 'Dedicated account manager', included: true },
-      { text: 'Preferred provider list', included: true },
-      { text: 'Early access posting (1–4 hrs)', included: true },
-      { text: 'Featured listings', included: true },
-      { text: 'Surge pricing', included: true },
+      { text: 'Everything in SNAP Staff IQ', included: true },
+      { text: 'SNAP Marketplace access', included: true },
+      { text: 'Provider search & candidate pipelines', included: true },
+      { text: 'Surge pricing & fill-rate analytics', included: true },
       { text: 'VIP provider access', included: true },
-      { text: 'Custom contract terms', included: true },
-      { text: 'Volume pricing for large multi-site groups & health systems', included: true },
+      { text: 'Dedicated account manager', included: true },
       { text: 'Multi-location support', included: true },
-      { text: 'API access', included: true },
+      { text: '4% fee on external marketplace fills only', included: true },
     ],
   },
 ]
@@ -149,7 +158,7 @@ function AgreementModal({ tier, onConfirm, onCancel, loading }) {
             Subscription Agreement & BAA
           </div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
-            Confirm {tierConfig?.name} Plan — {tierConfig?.price}/mo
+            Confirm {tierConfig?.name} Plan
           </div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
             Please read and accept the terms below to activate your plan.
@@ -322,7 +331,7 @@ export default function SubscriptionPage() {
             </span>
           </div>
           <div style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
-            {currentConfig.price}{currentConfig.per} · Billed monthly
+            Billed annually · Contact billing@snapmedical.app for your rate
           </div>
         </div>
       </div>
@@ -363,12 +372,17 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
-              <div style={{ fontWeight: 700, fontSize: 20, color: '#0F172A', marginBottom: 4 }}>
+              <div style={{ fontWeight: 800, fontSize: 20, color: '#0F172A', marginBottom: 2 }}>
                 {tier.name}
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: 24 }}>
-                <span style={{ fontSize: 36, fontWeight: 900, color: tier.color }}>{tier.price}</span>
-                <span style={{ fontSize: 14, color: '#94A3B8' }}>{tier.per}</span>
+              <div style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>{tier.tagline}</div>
+              <div style={{ marginBottom: 20 }}>
+                {tier.bands.map((b) => (
+                  <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+                    <span style={{ color: '#64748B' }}>{b.label}</span>
+                    <span style={{ fontWeight: 700, color: tier.color }}>{b.price}</span>
+                  </div>
+                ))}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 24 }}>
