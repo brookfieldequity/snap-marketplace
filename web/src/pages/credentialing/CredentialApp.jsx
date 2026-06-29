@@ -65,6 +65,7 @@ import CredentialProviderList from './CredentialProviderList.jsx'
 import CredentialProviderFile from './CredentialProviderFile.jsx'
 import CredentialSettings from './CredentialSettings.jsx'
 import CredentialAuditLog from './CredentialAuditLog.jsx'
+import CredentialRosterSettings from './CredentialRosterSettings.jsx'
 
 export default function CredentialApp({ onBack }) {
   const [token, setToken] = useState(() => localStorage.getItem('snapCredToken') || null)
@@ -184,6 +185,10 @@ export default function CredentialApp({ onBack }) {
             onBack={() => { setPage('providers'); setProviderDetailId(null); setRosterDetailId(null) }}
           />
         )
+
+      case 'roster':
+        if (permission !== 'COORDINATOR') return null
+        return <CredentialRosterSettings />
 
       case 'audit':
         if (permission !== 'COORDINATOR') return null
