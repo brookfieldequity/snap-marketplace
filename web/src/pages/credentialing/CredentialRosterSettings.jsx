@@ -38,6 +38,7 @@ export default function CredentialRosterSettings() {
   const [error, setError]           = useState('')
   const [success, setSuccess]       = useState('')
   const [inviting, setInviting]     = useState(null)
+  const [inviteEmail, setInviteEmail] = useState({})  // id → email string
   const [removing, setRemoving]     = useState(null)
 
   // NPI search state
@@ -132,11 +133,14 @@ export default function CredentialRosterSettings() {
   }
 
   async function handleInvite(entry) {
+    const email = (inviteEmail[entry.id] || '').trim()
+    if (!email) return
     setInviting(entry.id)
     setError('')
     try {
-      await credentialAPI.inviteRosterEntry(entry.id)
-      setSuccess(`Invitation sent to ${entry.firstName} ${entry.lastName}.`)
+      await credentialAPI.inviteRosterEntry(entry.id, email)
+      setSuccess(`Invitation sent to ${email}.`)
+      setInviteEmail(prev => { const n = { ...prev }; delete n[entry.id]; return n })
       load()
     } catch (err) {
       setError(err.message || 'Failed to send invitation.')
@@ -325,15 +329,39 @@ export default function CredentialRosterSettings() {
                   <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{entry.credentialType?.replace(/_/g, ' ')}</td>
                   <td style={{ padding: '14px 20px' }}><MatchBadge status={entry.matchStatus} /></td>
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
                       {entry.matchStatus === 'NOT_INVITED' && (
-                        <button
-                          onClick={() => handleInvite(entry)}
-                          disabled={inviting === entry.id}
-                          style={{ padding: '6px 14px', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 6, color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          {inviting === entry.id ? 'Sending…' : 'Invite'}
-                        </button>
+                        inviteEmail[entry.id] !== undefined ? (
+                          <>
+                            <input
+                              autoFocus
+                              type="email"
+                              placeholder="provider@email.com"
+                              value={inviteEmail[entry.id]}
+                              onChange={e => setInviteEmail(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleInvite(entry); if (e.key === 'Escape') setInviteEmail(prev => { const n = { ...prev }; delete n[entry.id]; return n }) }}
+                              style={{ padding: '5px 10px', border: '1px solid #BFDBFE', borderRadius: 6, fontSize: 12, color: '#0F172A', width: 180 }}
+                            />
+                            <button
+                              onClick={() => handleInvite(entry)}
+                              disabled={inviting === entry.id || !inviteEmail[entry.id]?.trim()}
+                              style={{ padding: '5px 12px', background: '#2563EB', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              {inviting === entry.id ? 'Sending…' : 'Send'}
+                            </button>
+                            <button
+                              onClick={() => setInviteEmail(prev => { const n = { ...prev }; delete n[entry.id]; return n })}
+                              style={{ padding: '5px 8px', background: 'none', border: 'none', color: '#94A3B8', fontSize: 12, cursor: 'pointer' }}
+                            >✕</button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setInviteEmail(prev => ({ ...prev, [entry.id]: '' }))}
+                            style={{ padding: '6px 14px', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 6, color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            Invite
+                          </button>
+                        )
                       )}
                       <button
                         onClick={() => handleRemove(entry.id, `${entry.firstName} ${entry.lastName}`)}
