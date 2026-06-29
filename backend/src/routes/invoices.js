@@ -11,27 +11,15 @@ if (process.env.SENDGRID_API_KEY) {
 const FROM_EMAIL = process.env.SENDGRID_FROM || 'noreply@snapmedical.app'
 const router = express.Router()
 
-// Returns an HTML block with ACH / wire transfer details if env vars are set.
-function buildAchBlock(esc) {
-  const bank      = process.env.ACH_BANK_NAME
-  const routing   = process.env.ACH_ROUTING_NUMBER
-  const account   = process.env.ACH_ACCOUNT_NUMBER
-  const payableTo = process.env.ACH_PAYABLE_TO || 'SNAP Medical Technologies, LLC'
-  const acctType  = process.env.ACH_ACCOUNT_TYPE || 'Checking'
-  if (!bank && !routing && !account) return ''
-  const row = (label, val) => val
-    ? `<tr><td style="padding-right:24px;font-weight:600;white-space:nowrap">${label}</td><td>${esc(val)}</td></tr>`
-    : ''
+// Returns a "Pay Now" button if ACH_PAYMENT_LINK env var is set.
+function buildPaymentBlock() {
+  const link = process.env.ACH_PAYMENT_LINK
+  if (!link) return ''
   return `
-    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px 20px;margin:12px 0">
-      <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">ACH / Wire Transfer</div>
-      <table style="font-size:13px;color:#166534;line-height:2;border-collapse:collapse">
-        ${row('Payable To', payableTo)}
-        ${row('Bank', bank)}
-        ${row('Routing #', routing)}
-        ${row('Account #', account)}
-        ${row('Account Type', acctType)}
-      </table>
+    <div style="text-align:center;margin:20px 0">
+      <a href="${link}" style="display:inline-block;background:#2563EB;color:#fff;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none">
+        Pay Now via ACH →
+      </a>
     </div>`
 }
 
@@ -400,7 +388,7 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong>
       Please remit payment by ${dateStr(inv.dueDate)}.
-      ${buildAchBlock(esc)}
+      ${buildPaymentBlock()}
       <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
@@ -489,7 +477,7 @@ async function processMonthlyInvoices() {
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong>
       Monthly installment due within 30 days.
-      ${buildAchBlock(esc)}
+      ${buildPaymentBlock()}
       <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
