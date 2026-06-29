@@ -11,6 +11,7 @@ const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sen
 const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = require('../utils/credentialStatus')
 const { getSavings: getAutomationSavings } = require('../services/automationEvents')
 const { searchByName: nppesSearchByName } = require('../services/nppesLookup')
+const passportClient = require('../services/passportClient')
 
 const router = express.Router()
 
@@ -1241,6 +1242,42 @@ router.get('/npi-search', credentialAuth, async (req, res) => {
   } catch (err) {
     console.error('[credentialing/npi-search] error:', err)
     res.status(500).json({ error: 'NPI lookup failed' })
+  }
+})
+
+// GET /provider/:providerId/cme — CME history for a provider (proxied from passport)
+router.get('/provider/:providerId/cme', credentialAuth, async (req, res) => {
+  try {
+    const provider = await prisma.providerCredential.findFirst({
+      where: { id: req.params.providerId },
+      include: { rosterEntry: { select: { npi: true } } },
+    })
+    const npi = provider?.npi || provider?.rosterEntry?.npiNumber
+    if (!npi) return res.json({ entries: [], totalHours: 0, found: false })
+    if (!passportClient.isConfigured()) return res.json({ entries: [], totalHours: 0, found: false, bridgeUnconfigured: true })
+    const data = await passportClient.getCmeHistory(npi)
+    res.json(data)
+  } catch (err) {
+    console.error('[credentialing/cme] error:', err)
+    res.status(500).json({ error: 'Failed to fetch CME history' })
+  }
+})
+
+// GET /roster/:rosterId/cme — CME history looked up via roster entry NPI
+router.get('/roster/:rosterId/cme', credentialAuth, async (req, res) => {
+  try {
+    const entry = await prisma.facilityRosterEntry.findUnique({
+      where: { id: req.params.rosterId },
+      select: { npiNumber: true },
+    })
+    const npi = entry?.npiNumber
+    if (!npi) return res.json({ entries: [], totalHours: 0, found: false })
+    if (!passportClient.isConfigured()) return res.json({ entries: [], totalHours: 0, found: false, bridgeUnconfigured: true })
+    const data = await passportClient.getCmeHistory(npi)
+    res.json(data)
+  } catch (err) {
+    console.error('[credentialing/cme] error:', err)
+    res.status(500).json({ error: 'Failed to fetch CME history' })
   }
 })
 

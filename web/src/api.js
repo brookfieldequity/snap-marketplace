@@ -627,6 +627,8 @@ export const credentialAPI = {
   // Returns { thisWeek, thisMonth, total } where each is
   // { eventCount, minutesSaved, hoursSaved, dollarsSaved }.
   getSavings: () => apiFetch(`${BASE}/credentialing/savings`, { headers: credHeaders() }),
+  getProviderCme: (providerId) => apiFetch(`${BASE}/credentialing/provider/${providerId}/cme`, { headers: credHeaders() }),
+  getRosterCme: (rosterId) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/cme`, { headers: credHeaders() }),
 }
 
 // ─── Admin API ────────────────────────────────────────────────────────────────

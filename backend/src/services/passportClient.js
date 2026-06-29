@@ -162,10 +162,26 @@ async function invite(npi, facilityId, { facilityName, firstName, lastName, scop
   throw err;
 }
 
+/**
+ * GET /api/cme/by-npi/:npi
+ *
+ * Returns CME history for a provider identified by NPI. Returns
+ * { entries, totalHours, found } — found=false means provider has no
+ * passport yet (not an error; just show "No CME records yet").
+ */
+async function getCmeHistory(npi) {
+  const { status, body, ok } = await callPassportApi(`/api/cme/by-npi/${encodeURIComponent(npi)}`);
+  if (ok) return body;
+  const err = new Error(body?.error || `CME lookup failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
   getPassport,
   requestGrant,
   invite,
+  getCmeHistory,
 };

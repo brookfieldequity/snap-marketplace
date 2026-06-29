@@ -204,6 +204,60 @@ function actionBtn(color) {
   }
 }
 
+function CmeSection({ providerId, rosterId }) {
+  const [cme, setCme] = useState(null)
+  useEffect(() => {
+    const fetch = providerId
+      ? credentialAPI.getProviderCme(providerId)
+      : rosterId ? credentialAPI.getRosterCme(rosterId) : Promise.resolve(null)
+    fetch.then(d => { if (d) setCme(d) }).catch(() => {})
+  }, [providerId, rosterId])
+
+  if (!cme) return null
+  if (!cme.found && cme.entries?.length === 0) return (
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>CME History</div>
+      <div style={{ fontSize: 13, color: '#94A3B8' }}>No CME records yet — provider logs credits via the SNAP app.</div>
+    </div>
+  )
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>CME History</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB' }}>{cme.totalHours?.toFixed(1)} total hours</div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+            {['Date', 'Activity', 'Hours', 'Accreditation', 'Certificate'].map(h => (
+              <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(cme.entries || []).map(e => (
+            <tr key={e.id} style={{ borderBottom: '1px solid #F8FAFC' }}>
+              <td style={{ padding: '8px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{new Date(e.date).toLocaleDateString('en-US')}</td>
+              <td style={{ padding: '8px 10px', color: '#0F172A', fontWeight: 600 }}>
+                {e.title}
+                {e.topic && <div style={{ fontSize: 11, color: '#64748B', fontWeight: 400 }}>{e.topic}</div>}
+              </td>
+              <td style={{ padding: '8px 10px', color: '#374151' }}>{e.hours}</td>
+              <td style={{ padding: '8px 10px', color: '#64748B' }}>{e.accreditationBody || '—'}</td>
+              <td style={{ padding: '8px 10px' }}>
+                {e.certificateUrl
+                  ? <button onClick={() => window.open(e.certificateUrl, '_blank', 'noopener')} style={{ background: '#EFF6FF', border: 'none', borderRadius: 6, color: '#2563EB', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>View</button>
+                  : <span style={{ color: '#CBD5E1' }}>—</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function ActivityLog({ providerId }) {
   const [log, setLog] = useState([])
 
@@ -387,6 +441,8 @@ export default function CredentialProviderFile({ providerId, rosterId, permissio
           onRefresh={load}
         />
       ))}
+
+      <CmeSection providerId={providerId} rosterId={rosterId} />
 
       {permission === 'COORDINATOR' && !isRoster && <ActivityLog providerId={providerId} />}
 

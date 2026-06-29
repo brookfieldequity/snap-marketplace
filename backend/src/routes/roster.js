@@ -332,7 +332,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
       scheduleAccessRevoked,
-      ptoDaysAnnual, ptoEligible, seniorityRank,
+      ptoDaysAnnual, ptoEligible, seniorityRank, adminQualityScore,
     } = req.body;
 
     // Re-check linkage if email OR NPI is being changed. Either change
@@ -393,6 +393,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(ptoDaysAnnual !== undefined && { ptoDaysAnnual: ptoDaysAnnual != null && ptoDaysAnnual !== '' ? parseInt(ptoDaysAnnual) : null }),
         ...(ptoEligible !== undefined && { ptoEligible: typeof ptoEligible === 'boolean' ? ptoEligible : null }),
         ...(seniorityRank !== undefined && { seniorityRank: seniorityRank != null && seniorityRank !== '' ? parseInt(seniorityRank) : null }),
+        ...(adminQualityScore !== undefined && { adminQualityScore: adminQualityScore != null && adminQualityScore !== '' ? Math.min(5, Math.max(1, parseInt(adminQualityScore))) : null }),
         ...linkFields,
         ...(Array.isArray(locations)
           ? { locations: { deleteMany: {}, create: locations.filter((l) => l && l.facilityName).map(toProviderLocation) } }
@@ -1619,7 +1620,7 @@ async function handleMultiSheetUpload(workbook, req, res) {
     // "1099 part time" / "employee full time" style labels — we keep
     // employmentCategory for the scheduler and surface is1099 + isFullTime
     // for cost attribution on the roster card.
-    const { employmentCategory: employment, is1099, isFullTime } =
+    const { employmentCategory: employment, is1099: is1099Raw, isFullTime } =
       parseEmploymentLabel(payroll.employment);
 
     const email = String(staff.email ?? '').trim().toLowerCase() || null;
@@ -1627,7 +1628,19 @@ async function handleMultiSheetUpload(workbook, req, res) {
     const hourlyRate = parseNumber(payroll.hrRate);
     const fteHours = parseNumber(payroll.baseHrs);
     const payrollSystemId = String(payroll.payrollId ?? '').trim() || null;
-    const employer = String(payroll.employer ?? '').trim() || null;
+    let employer = String(payroll.employer ?? '').trim() || null;
+    let is1099 = is1099Raw;
+    // Auto-derive employer + tax status from Payroll ID when not explicitly set.
+    // CAPA convention: payrollId = "APNE" → 1099 contractor staffed by APNE;
+    //                  payrollId = "CAPA" → W-2 employee of CAPA.
+    if (payrollSystemId) {
+      const pid = payrollSystemId.toUpperCase();
+      if (!employer && (pid === 'APNE' || pid === 'CAPA')) employer = pid;
+      if (is1099 == null) {
+        if (pid === 'APNE') is1099 = true;
+        else if (pid === 'CAPA') is1099 = false;
+      }
+    }
     // Use Staff's Initials for the rosterCode (customer-internal short code)
     // and to bridge to the location sheets. Falls back to Payroll's Initials
     // if Staff is missing it.

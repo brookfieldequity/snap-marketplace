@@ -866,6 +866,10 @@ model InternalRosterEntry {
   // late arrivals, cancellations). null = not yet computed; algorithm treats
   // null as the practice's average (currently 0.85 as a sensible default).
   reliabilityScore Float?
+  // Admin-assigned quality score 1–5 (null = unrated). Set by the facility
+  // coordinator to reward proven excellence. Feeds the HIGHEST_QUALITY and
+  // HYBRID schedule builder modes as a 20% weight alongside reliability.
+  adminQualityScore Int?
 
   // ── PTO (paid time off) — see docs / pto-builder-spec ───────────────────────
   // Annual PTO-day allotment shown on the profile card ("PTO days annual").

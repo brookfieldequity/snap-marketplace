@@ -158,9 +158,6 @@ function effectiveReliability(rosterEntry) {
  * produce believable differentiation between candidates.
  */
 function qualityScore(rosterEntry) {
-  // We don't currently store yearsExperience on InternalRosterEntry, but the
-  // schema is set up to add it; for v1 we infer from employment category as
-  // a stand-in (FULL_TIME tends to be senior, LOCUMS often newer to a site).
   const experienceProxy = {
     FULL_TIME: 0.8,
     PER_DIEM: 0.65,
@@ -168,8 +165,14 @@ function qualityScore(rosterEntry) {
   }[rosterEntry.employmentCategory] || 0.5;
   const reliability = effectiveReliability(rosterEntry);
   const locumPenalty = rosterEntry.employmentCategory === 'LOCUMS' ? 0.1 : 0;
-  // Weighted: experience 35% + reliability 55% + locum penalty −10%
-  return Math.max(0, Math.min(1, 0.35 * experienceProxy + 0.55 * reliability - locumPenalty));
+  const computed = Math.max(0, Math.min(1, 0.35 * experienceProxy + 0.55 * reliability - locumPenalty));
+  // Admin-set score (1–5) overrides the computed component with 20% weight
+  // so the coordinator's explicit signal nudges the ranking without dominating.
+  if (rosterEntry.adminQualityScore != null) {
+    const adminNorm = (rosterEntry.adminQualityScore - 1) / 4; // 1→0, 5→1
+    return Math.max(0, Math.min(1, 0.8 * computed + 0.2 * adminNorm));
+  }
+  return computed;
 }
 
 /**

@@ -53,6 +53,7 @@ const BLANK_FORM = {
   // PTO. ptoDaysAnnual '' = use system default; ptoEligible '' = derive from
   // employment (W-2 / full-time eligible); seniorityRank '' = unset.
   ptoDaysAnnual: '', ptoEligible: '', seniorityRank: '',
+  adminQualityScore: '',
 }
 
 function isExpiringSoon(dateStr) {
@@ -354,6 +355,7 @@ export default function InternalRosterPage({ onNavigate }) {
       ptoDaysAnnual: p.ptoDaysAnnual ?? '',
       ptoEligible: p.ptoEligible == null ? '' : (p.ptoEligible ? 'YES' : 'NO'),
       seniorityRank: p.seniorityRank ?? '',
+      adminQualityScore: p.adminQualityScore ?? '',
     })
     setLocationInput('')
     setShowModal(true)
@@ -405,6 +407,7 @@ export default function InternalRosterPage({ onNavigate }) {
         ptoDaysAnnual: form.ptoDaysAnnual !== '' ? parseInt(form.ptoDaysAnnual) : null,
         ptoEligible: form.ptoEligible === '' ? null : form.ptoEligible === 'YES',
         seniorityRank: form.seniorityRank !== '' ? parseInt(form.seniorityRank) : null,
+        adminQualityScore: form.adminQualityScore !== '' ? parseInt(form.adminQualityScore) : null,
       }
       if (editTarget) {
         await facilityAPI.updateRosterEntry(editTarget.id, payload)
@@ -989,6 +992,9 @@ export default function InternalRosterPage({ onNavigate }) {
                     {p.employer && (
                       <Badge bg="#FEF3C7" color="#92400E" label={`🏢 ${p.employer}`} />
                     )}
+                    {p.adminQualityScore != null && (
+                      <Badge bg="#FFFBEB" color="#B45309" label={`${'★'.repeat(p.adminQualityScore)} Quality`} />
+                    )}
                     {p.scheduleAccessRevoked && p.scheduleAccessRequested && (
                       <Badge bg="#FEE2E2" color="#B91C1C" label="🙋 Schedule access requested" />
                     )}
@@ -1233,6 +1239,22 @@ export default function InternalRosterPage({ onNavigate }) {
             </Field>
             <Field label="Seniority Rank">
               <input style={inputStyle} type="number" min="1" value={form.seniorityRank} onChange={(e) => setF('seniorityRank', e.target.value)} placeholder="1 = most senior (optional)" />
+            </Field>
+            <Field label="Quality Score">
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 6 }}>
+                {[1,2,3,4,5].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setF('adminQualityScore', form.adminQualityScore === n ? '' : n)}
+                    style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', opacity: form.adminQualityScore !== '' && n > form.adminQualityScore ? 0.3 : 1, padding: 0, lineHeight: 1 }}
+                  >★</button>
+                ))}
+                {form.adminQualityScore !== '' && (
+                  <button type="button" onClick={() => setF('adminQualityScore', '')} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }}>Clear</button>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Weights the schedule builder toward this provider in Quality mode</div>
             </Field>
           </div>
 
