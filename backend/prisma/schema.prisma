@@ -336,6 +336,7 @@ model Facility {
   outListRules           Json?
   isDemo                 Boolean       @default(false)
 
+  invoices            SnapInvoice[]
   users               FacilityUser[]
   subscription        FacilitySubscription?
   shifts              Shift[]
@@ -517,6 +518,47 @@ model FacilityUser {
   createdAt    DateTime @default(now())
 
   @@unique([userId, facilityId])
+}
+
+// ── SNAP Platform Invoices ────────────────────────────────────────────────────
+// Pre-Stripe manual invoicing. Admin generates + emails a PDF invoice to any
+// facility. Supports full pricing, Founder's pricing, and timed promo upgrades.
+model SnapInvoice {
+  id            String    @id @default(cuid())
+  invoiceNumber String    @unique // e.g. SNAP-2026-001
+  facilityId    String?
+  facility      Facility? @relation(fields: [facilityId], references: [id])
+
+  // Bill-to (denormalized so invoice is immutable even if facility changes)
+  billingName   String
+  billingEmail  String
+  billingAddress String?
+
+  // Line items JSON array: { description, detail, listPrice, discount, discountLabel, amount }
+  lineItems     Json
+
+  // Totals
+  listTotal     Float   // sum of listPrice (what they would pay at full rate)
+  discountTotal Float   @default(0)
+  amountDue     Float   // listTotal - discountTotal
+
+  // Promo / Founder's config — stored for audit trail + auto-expiry reminders
+  discountType   String?  // 'FOUNDER' | 'PROMO_1MO' | 'PROMO_2MO' | 'PROMO_3MO' | 'PROMO_6MO'
+  promoFeatures  String?  // e.g. 'SNAP Complete' — what they get free during promo
+  promoExpiresAt DateTime?
+
+  status     String   @default("DRAFT") // DRAFT | SENT | PAID | VOID
+  invoiceDate DateTime @default(now())
+  dueDate    DateTime
+  sentAt     DateTime?
+  paidAt     DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([facilityId])
+  @@index([status])
 }
 
 model FacilitySubscription {

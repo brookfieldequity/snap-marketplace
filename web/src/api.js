@@ -774,6 +774,15 @@ export const adminAPI = {
   resetCredentialUserPassword: (id) => apiFetch(`${BASE}/admin/credential-users/${id}/reset-password`, { method: 'POST', headers: adminHeaders() }),
   updateCredentialUser: (id, data) => apiFetch(`${BASE}/admin/credential-users/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(data) }),
 
+  // Invoices
+  listInvoices: () => apiFetch(`${BASE}/admin/invoices`, { headers: adminHeaders() }),
+  getInvoicePricing: () => apiFetch(`${BASE}/admin/invoices/pricing`, { headers: adminHeaders() }),
+  createInvoice: (data) => apiFetch(`${BASE}/admin/invoices`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),
+  updateInvoice: (id, data) => apiFetch(`${BASE}/admin/invoices/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(data) }),
+  sendInvoice: (id) => apiFetch(`${BASE}/admin/invoices/${id}/send`, { method: 'POST', headers: adminHeaders() }),
+  voidInvoice: (id) => apiFetch(`${BASE}/admin/invoices/${id}`, { method: 'DELETE', headers: adminHeaders() }),
+  getInvoicePdfUrl: (id) => `${BASE}/admin/invoices/${id}/pdf`,
+
   // ROI Tracker
   getRoiFacilities: () => apiFetch(`${BASE}/admin/roi/facilities`, { headers: adminHeaders() }),
   getRoiRollup: () => apiFetch(`${BASE}/admin/roi/rollup`, { headers: adminHeaders() }),

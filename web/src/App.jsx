@@ -56,6 +56,7 @@ import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
 import AdminMarketplaceFeesPage from './pages/admin/AdminMarketplaceFeesPage.jsx'
 import AdminFeatureFlagsPage from './pages/admin/AdminFeatureFlagsPage.jsx'
 import AdminDemoPage from './pages/admin/AdminDemoPage.jsx'
+import AdminInvoicesPage from './pages/admin/AdminInvoicesPage.jsx'
 import CredentialApp from './pages/credentialing/CredentialApp.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
 
@@ -471,6 +472,7 @@ export default function App() {
           {adminPage === 'admin-incentives'  && <AdminIncentivesPage />}
           {adminPage === 'admin-uploads'     && <AdminUploadsPage />}
           {adminPage === 'credential-users' && <AdminCredentialUsersPage />}
+          {adminPage === 'invoices'         && <AdminInvoicesPage />}
         </main>
       </div>
     )
