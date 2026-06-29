@@ -543,6 +543,7 @@ export const credentialAPI = {
 
   // Roster
   getRoster: () => apiFetch(`${BASE}/credentialing/roster`, { headers: credHeaders() }),
+  searchNpi: (firstName, lastName) => apiFetch(`${BASE}/credentialing/npi-search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, { headers: credHeaders() }),
   addRosterEntry: (data) => apiFetch(`${BASE}/credentialing/roster`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
   removeRosterEntry: (id) => apiFetch(`${BASE}/credentialing/roster/${id}`, { method: 'DELETE', headers: credHeaders() }),
   inviteRosterEntry: (id) => apiFetch(`${BASE}/credentialing/roster/${id}/invite`, { method: 'POST', headers: credHeaders() }),

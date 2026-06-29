@@ -10,6 +10,7 @@ const { sign, signDocToken, verifyDocToken } = require('../middleware/credential
 const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sendWelcomeEmail, sendPasswordResetEmail, credTypeName } = require('../services/credentialEmail')
 const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = require('../utils/credentialStatus')
 const { getSavings: getAutomationSavings } = require('../services/automationEvents')
+const { searchByName: nppesSearchByName } = require('../services/nppesLookup')
 
 const router = express.Router()
 
@@ -1224,6 +1225,20 @@ router.get('/savings', credentialAuth, async (req, res) => {
   } catch (err) {
     console.error('[credentialing/savings] error:', err)
     res.status(500).json({ error: 'Failed to load savings.' })
+  }
+})
+
+// GET /npi-search?firstName=Jane&lastName=Smith — proxy NPPES search through
+// the backend to avoid browser CORS restrictions on the government API.
+router.get('/npi-search', credentialAuth, async (req, res) => {
+  try {
+    const { firstName = '', lastName = '' } = req.query
+    if (!lastName.trim()) return res.status(400).json({ error: 'lastName is required' })
+    const matches = await nppesSearchByName({ firstName: firstName.trim(), lastName: lastName.trim() })
+    res.json({ matches })
+  } catch (err) {
+    console.error('[credentialing/npi-search] error:', err)
+    res.status(500).json({ error: 'NPI lookup failed' })
   }
 })
 

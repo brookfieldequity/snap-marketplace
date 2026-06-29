@@ -19,33 +19,6 @@ function MatchBadge({ status }) {
   )
 }
 
-async function searchNppes(firstName, lastName) {
-  const params = new URLSearchParams({
-    version: '2.1',
-    enumeration_type: 'NPI-1',
-    limit: '8',
-  })
-  if (firstName.trim()) params.set('first_name', firstName.trim())
-  if (lastName.trim())  params.set('last_name',  lastName.trim())
-
-  const res = await fetch(`https://npiregistry.cms.hhs.gov/api/?${params}`)
-  if (!res.ok) throw new Error('NPPES lookup failed')
-  const data = await res.json()
-  const results = Array.isArray(data.results) ? data.results : []
-  return results
-    .filter(r => r.basic && r.basic.status === 'A')
-    .map(r => ({
-      npi:             r.number,
-      firstName:       r.basic.first_name  || '',
-      lastName:        r.basic.last_name   || '',
-      credential:      r.basic.credential  || '',
-      primaryTaxonomy: (r.taxonomies || []).find(t => t.primary)?.desc || '',
-      location:        (() => {
-        const addr = (r.addresses || []).find(a => a.address_purpose === 'LOCATION' || a.address_purpose === 'MAILING')
-        return addr ? `${addr.city}, ${addr.state}` : ''
-      })(),
-    }))
-}
 
 function guessCredType(taxonomy) {
   const t = (taxonomy || '').toLowerCase()
@@ -97,7 +70,8 @@ export default function CredentialRosterSettings() {
     setSearchErr('')
     setCandidates(null)
     try {
-      const results = await searchNppes(form.firstName, form.lastName)
+      const data = await credentialAPI.searchNpi(form.firstName, form.lastName)
+      const results = data.matches || []
       setCandidates(results)
       if (results.length === 0) setSearchErr('No active providers found. Try a different spelling or use first initial only.')
     } catch {
