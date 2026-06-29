@@ -388,6 +388,22 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
 
                 {/* Calendar */}
                 <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px' }}>
+                  {/* Month nav — also on the calendar so you don't scroll up */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+                    <button
+                      onClick={() => changeMonth(-1)}
+                      style={{ width: 36, height: 36, border: '1.5px solid #E2E8F0', borderRadius: 9, background: '#F8FAFC', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontWeight: 700 }}
+                      title="Previous month"
+                    >‹</button>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', minWidth: 160, textAlign: 'center' }}>
+                      {MONTH_NAMES[month0]} {year}
+                    </div>
+                    <button
+                      onClick={() => changeMonth(1)}
+                      style={{ width: 36, height: 36, border: '1.5px solid #E2E8F0', borderRadius: 9, background: '#F8FAFC', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontWeight: 700 }}
+                      title="Next month"
+                    >›</button>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 6 }}>
                     {WEEKDAY_LABELS.map((d, i) => (
                       <div key={i} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>{d}</div>
