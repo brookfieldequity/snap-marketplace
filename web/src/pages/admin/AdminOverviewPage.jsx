@@ -80,9 +80,9 @@ export default function AdminOverviewPage() {
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 20 }}>Subscription Revenue (MRR)</h3>
           {[
-            { label: 'Basic',        count: subCounts.BASIC || 0,        rev: subRev.BASIC || 0,        color: '#2563EB' },
-            { label: 'Professional', count: subCounts.PROFESSIONAL || 0, rev: subRev.PROFESSIONAL || 0, color: '#1E3A8A' },
-            { label: 'Enterprise',   count: subCounts.ENTERPRISE || 0,   rev: subRev.ENTERPRISE || 0,   color: '#0F172A' },
+            { label: 'SNAP Core',     count: subCounts.BASIC || 0,        rev: subRev.BASIC || 0,        color: '#2563EB' },
+            { label: 'SNAP Staff IQ', count: subCounts.PROFESSIONAL || 0, rev: subRev.PROFESSIONAL || 0, color: '#1E3A8A' },
+            { label: 'SNAP Complete', count: subCounts.ENTERPRISE || 0,   rev: subRev.ENTERPRISE || 0,   color: '#0F172A' },
           ].map(({ label, count, rev, color }) => (
             <div key={label} style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>

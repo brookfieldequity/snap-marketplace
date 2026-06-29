@@ -7,7 +7,14 @@ const TIER_COLORS = {
   ENTERPRISE:   { bg: '#0F172A', text: '#fff',    border: '#334155' },
 }
 
-const TIER_PRICES = { BASIC: '$2,500', PROFESSIONAL: '$5,000', ENTERPRISE: '$10,000' }
+const TIER_LABELS = {
+  BASIC:        'SNAP Core',
+  PROFESSIONAL: 'SNAP Staff IQ',
+  ENTERPRISE:   'SNAP Complete',
+}
+
+// Annual starting price (≤25 providers band); actual price scales by provider count
+const TIER_PRICES = { BASIC: 'from $18K', PROFESSIONAL: 'from $30K', ENTERPRISE: 'from $40K' }
 
 // Values must match the FacilityType enum in the Prisma schema; labels are for display.
 const FACILITY_TYPES = [
@@ -132,9 +139,9 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
           const count = facilities.filter((f) => (f.subscription?.tier) === tier).length
           return (
             <div key={tier} style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 12, padding: '12px 20px', minWidth: 140 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: cfg.text, letterSpacing: '0.05em', marginBottom: 4 }}>{tier}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: cfg.text, letterSpacing: '0.05em', marginBottom: 4 }}>{TIER_LABELS[tier]}</div>
               <div style={{ fontSize: 24, fontWeight: 900, color: cfg.text }}>{count}</div>
-              <div style={{ fontSize: 12, color: cfg.text, opacity: 0.7 }}>{TIER_PRICES[tier]}/mo</div>
+              <div style={{ fontSize: 12, color: cfg.text, opacity: 0.7 }}>{TIER_PRICES[tier]}/yr</div>
             </div>
           )
         })}
@@ -200,7 +207,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                   background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}`,
                   borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700,
                 }}>
-                  {f._tier}
+                  {TIER_LABELS[f._tier] || f._tier}
                 </span>
               </div>
 
@@ -221,7 +228,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                   }}
                 >
                   {['BASIC', 'PROFESSIONAL', 'ENTERPRISE'].map((t) => (
-                    <option key={t} value={t}>{t} — {TIER_PRICES[t]}/mo</option>
+                    <option key={t} value={t}>{TIER_LABELS[t]} — {TIER_PRICES[t]}/yr</option>
                   ))}
                 </select>
               </div>
@@ -447,8 +454,8 @@ function NewFacilityModal({ onClose, onCreated }) {
                     textAlign: 'center',
                   }}
                 >
-                  {t}<br/>
-                  <span style={{ fontWeight: 500, opacity: 0.75 }}>{TIER_PRICES[t]}/mo</span>
+                  {TIER_LABELS[t]}<br/>
+                  <span style={{ fontWeight: 500, opacity: 0.75 }}>{TIER_PRICES[t]}/yr</span>
                 </button>
               )
             })}
