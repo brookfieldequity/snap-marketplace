@@ -957,7 +957,8 @@ router.get('/roster/:rosterId/documents/:type/token', credentialAuth, requireCoo
 
     await logAccess(req.facilityId, req.credUser.id, rosterId, 'VIEW_DOCUMENT', type, cred.documentName, req)
     const token = signDocToken(cred.documentPath)
-    res.json({ token, url: `/api/credentialing/doc/${token}` })
+    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    res.json({ token, url: `${apiBase}/api/credentialing/doc/${token}` })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Internal server error' })
@@ -1041,7 +1042,8 @@ router.get('/providers/:providerId/documents/:type/token', credentialAuth, requi
     await logAccess(req.facilityId, req.credUser.id, providerId, 'VIEW_DOCUMENT', type, cred.documentName, req)
 
     const token = signDocToken(cred.documentPath)
-    res.json({ token, url: `/api/credentialing/doc/${token}` })
+    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    res.json({ token, url: `${apiBase}/api/credentialing/doc/${token}` })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Internal server error' })
