@@ -67,6 +67,7 @@ export default function AdminInvoicesPage() {
     billingName: '',
     billingEmail: '',
     billingAddress: '',
+    billingCcEmails: [],  // additional recipients, always CC'd on every send
     platformTier: 'CORE',
     providerBand: 75,
     includePlatform: true,
@@ -166,6 +167,7 @@ export default function AdminInvoicesPage() {
         billingName: form.billingName,
         billingEmail: form.billingEmail,
         billingAddress: form.billingAddress || undefined,
+        billingCcEmails: form.billingCcEmails.filter(Boolean).join(','),
         ...(form.includePlatform ? { platformTier: form.platformTier, providerCount: form.providerBand } : {}),
         ...(form.includeCred ? { credProviderCount: form.credProviderCount, credType: form.credType } : { credProviderCount: 0 }),
         ...(form.includeMarketplace ? { marketplaceFeeAmount: form.marketplaceFeeAmount } : {}),
@@ -313,6 +315,35 @@ export default function AdminInvoicesPage() {
                 <div>
                   <Label>Billing Address</Label>
                   <input value={form.billingAddress} onChange={e => setForm(f => ({ ...f, billingAddress: e.target.value }))} style={inputStyle} placeholder="123 Main St, Boston MA 02101" />
+                </div>
+
+                <div>
+                  <Label>Additional billing recipients (CC'd on every send)</Label>
+                  {form.billingCcEmails.map((email, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setForm(f => {
+                          const cc = [...f.billingCcEmails]
+                          cc[idx] = e.target.value
+                          return { ...f, billingCcEmails: cc }
+                        })}
+                        style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+                        placeholder="ap@facility.com"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, billingCcEmails: f.billingCcEmails.filter((_, i) => i !== idx) }))}
+                        style={{ padding: '0 10px', background: '#FEF2F2', color: '#DC2626', border: '1.5px solid #FECACA', borderRadius: 6, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+                      >×</button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, billingCcEmails: [...f.billingCcEmails, ''] }))}
+                    style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', fontWeight: 600 }}
+                  >+ Add CC recipient</button>
                 </div>
 
                 {/* Platform subscription */}

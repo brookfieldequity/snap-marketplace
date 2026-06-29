@@ -11,6 +11,30 @@ if (process.env.SENDGRID_API_KEY) {
 const FROM_EMAIL = process.env.SENDGRID_FROM || 'noreply@snapmedical.app'
 const router = express.Router()
 
+// Returns an HTML block with ACH / wire transfer details if env vars are set.
+function buildAchBlock(esc) {
+  const bank      = process.env.ACH_BANK_NAME
+  const routing   = process.env.ACH_ROUTING_NUMBER
+  const account   = process.env.ACH_ACCOUNT_NUMBER
+  const payableTo = process.env.ACH_PAYABLE_TO || 'SNAP Medical Technologies, LLC'
+  const acctType  = process.env.ACH_ACCOUNT_TYPE || 'Checking'
+  if (!bank && !routing && !account) return ''
+  const row = (label, val) => val
+    ? `<tr><td style="padding-right:24px;font-weight:600;white-space:nowrap">${label}</td><td>${esc(val)}</td></tr>`
+    : ''
+  return `
+    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px 20px;margin:12px 0">
+      <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">ACH / Wire Transfer</div>
+      <table style="font-size:13px;color:#166534;line-height:2;border-collapse:collapse">
+        ${row('Payable To', payableTo)}
+        ${row('Bank', bank)}
+        ${row('Routing #', routing)}
+        ${row('Account #', account)}
+        ${row('Account Type', acctType)}
+      </table>
+    </div>`
+}
+
 // Pricing table — Ryan's doc (annual, per provider band)
 const PRICING = {
   CORE:     { '25': 18000,  '75': 30000,  '150': 48000  },
@@ -130,6 +154,7 @@ router.post('/', adminAuth, async (req, res) => {
       notes,
       dueDays = 30,
       billingCycle = 'ONCE', // 'ONCE' | 'MONTHLY'
+      billingCcEmails = '',  // comma-separated CC recipients
     } = req.body
 
     // Compute platform line item
@@ -243,6 +268,7 @@ router.post('/', adminAuth, async (req, res) => {
         billingName,
         billingEmail,
         billingAddress: billingAddress || null,
+        billingCcEmails: billingCcEmails || '',
         lineItems,
         listTotal,
         discountTotal,
@@ -372,18 +398,21 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">
     <div style="font-size:12px;color:#64748B">
-      <strong>Payment Instructions:</strong><br>
-      Please remit payment by ${dateStr(inv.dueDate)}. Make checks payable to SNAP Medical Technologies.<br>
-      For wire transfer or ACH details, contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a>
+      <strong>Payment Instructions:</strong>
+      Please remit payment by ${dateStr(inv.dueDate)}.
+      ${buildAchBlock(esc)}
+      <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
 </div>
 </body></html>`
 
-    // Build recipient list — billingEmail always included, plus any extra admins
+    // Build recipient list — billingEmail + stored CC list always included; per-send extras added on top
     const { recipientEmails } = req.body
+    const ccStored = (inv.billingCcEmails || '').split(',').map(e => e.trim()).filter(Boolean)
     const allEmails = Array.from(new Set([
       inv.billingEmail,
+      ...ccStored,
       ...(Array.isArray(recipientEmails) ? recipientEmails : []),
     ].filter(Boolean)))
 
@@ -458,16 +487,19 @@ async function processMonthlyInvoices() {
     ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">
     <div style="font-size:12px;color:#64748B">
-      <strong>Payment Instructions:</strong><br>
-      Monthly installment due within 30 days. Make checks payable to SNAP Medical Technologies.<br>
-      For wire / ACH details contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a>
+      <strong>Payment Instructions:</strong>
+      Monthly installment due within 30 days.
+      ${buildAchBlock(esc)}
+      <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
 </div>
 </body></html>`
 
+      const ccStored = (inv.billingCcEmails || '').split(',').map(e => e.trim()).filter(Boolean)
+      const allEmails = Array.from(new Set([inv.billingEmail, ...ccStored].filter(Boolean)))
       await sgMail.send({
-        to: inv.billingEmail,
+        to: allEmails.length === 1 ? allEmails[0] : allEmails.map(e => ({ email: e })),
         from: { email: FROM_EMAIL, name: 'SNAP Medical Technologies' },
         subject: `Monthly invoice ${inv.invoiceNumber} from SNAP Medical — ${period}`,
         html,

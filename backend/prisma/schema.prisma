@@ -530,9 +530,10 @@ model SnapInvoice {
   facility      Facility? @relation(fields: [facilityId], references: [id])
 
   // Bill-to (denormalized so invoice is immutable even if facility changes)
-  billingName   String
-  billingEmail  String
-  billingAddress String?
+  billingName     String
+  billingEmail    String
+  billingAddress  String?
+  billingCcEmails String  @default("") // comma-separated; always included on every send
 
   // Line items JSON array: { description, detail, listPrice, discount, discountLabel, amount }
   lineItems     Json
