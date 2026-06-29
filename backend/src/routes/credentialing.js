@@ -46,7 +46,7 @@ function getUpload(facilityId, providerId, credType) {
     // S3 storage — multer-s3 wired up when AWS_S3_BUCKET is set
     const multerS3 = require('multer-s3')
     const { S3Client } = require('@aws-sdk/client-s3')
-    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' })
+    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
     return multer({
       storage: multerS3({
         s3,
@@ -1092,7 +1092,7 @@ router.get('/doc/:token', async (req, res) => {
     if (process.env.AWS_S3_BUCKET) {
       const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
       const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
-      const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' })
+      const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
       const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: filePath }), { expiresIn: 900 })
       return res.redirect(url)
     }
