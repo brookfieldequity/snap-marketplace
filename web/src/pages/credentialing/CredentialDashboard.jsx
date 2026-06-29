@@ -73,7 +73,7 @@ export default function CredentialDashboard({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>🚨 Requires Immediate Action</div>
             {urgent.length > 0 && (
-              <button onClick={() => onNavigate('expiring')} style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => onNavigate('providers')} style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 View all →
               </button>
             )}
@@ -85,8 +85,8 @@ export default function CredentialDashboard({ onNavigate }) {
           ) : urgent.map(p => (
             <div
               key={p.rosterId}
-              onClick={() => p.providerId && onNavigate(`provider:${p.providerId}`)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F1F5F9', cursor: p.providerId ? 'pointer' : 'default' }}
+              onClick={() => onNavigate(p.providerId ? `provider:${p.providerId}` : `roster:${p.rosterId}`)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}
             >
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{p.lastName}, {p.firstName}</div>
