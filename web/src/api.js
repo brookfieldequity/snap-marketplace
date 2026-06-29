@@ -102,11 +102,11 @@ export const facilityAPI = {
       headers: facilityHeaders(),
     }),
 
-  upgradeSubscription: (tier) =>
+  upgradeSubscription: (tier, agreementVersion) =>
     apiFetch(`${BASE}/facilities/me/subscription/upgrade`, {
       method: 'POST',
       headers: facilityHeaders(),
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, agreedToTerms: true, agreementVersion }),
     }),
 
   getShifts: () =>

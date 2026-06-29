@@ -229,6 +229,7 @@ model User {
   facilityInvitesSent        FacilityInvite[]   @relation("FacilityInviteSentBy")
   facilityInvitesClaimed     FacilityInvite[]   @relation("FacilityInviteClaimedBy")
   passwordResets             PasswordReset[]
+  agreementAcceptances       AgreementAcceptance[]
 }
 
 model PasswordReset {
@@ -365,6 +366,7 @@ model Facility {
   roiBaseline         FacilityRoiBaseline?
   roiSnapshots        FacilityRoiSnapshot[]
   facilityInvites     FacilityInvite[]
+  agreementAcceptances AgreementAcceptance[]
   scheduleRequests    ScheduleRequest[]
   featureFlags        FacilityFeatureFlag[]
   payrollTemplates    PayrollTemplateConfig[]
@@ -2125,4 +2127,23 @@ model MarketplaceFeeLedger {
 
   @@index([facilityId, status])
   @@index([status, accruedAt])
+}
+
+// ── Agreement Acceptance ──────────────────────────────────────────────────────
+// Records in-portal click-wrap acceptance of Terms of Service + BAA at the
+// moment a facility selects or upgrades a subscription tier.
+
+model AgreementAcceptance {
+  id               String   @id @default(cuid())
+  facilityId       String
+  facility         Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  agreementVersion String   // e.g. "v1.0-2026-06-29"
+  tier             String   // tier selected at time of acceptance
+  ipAddress        String?
+  userAgent        String?
+  acceptedAt       DateTime @default(now())
+
+  @@index([facilityId])
 }

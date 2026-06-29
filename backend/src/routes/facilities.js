@@ -240,9 +240,9 @@ router.get('/me/subscription', facilityAuth, async (req, res) => {
       where: { facilityId: req.facility.id },
     });
     const TIERS = {
-      BASIC: { price: 750, label: 'Basic', shiftLimit: 10, features: ['Up to 10 shifts/month', 'Standard matching'] },
-      PROFESSIONAL: { price: 2000, label: 'Professional', shiftLimit: null, features: ['Unlimited shifts', 'Preferred provider early access', 'Featured placement', 'Fill rate analytics'] },
-      ENTERPRISE: { price: 5000, label: 'Enterprise', shiftLimit: null, features: ['Everything in Professional', 'Multi-facility dashboard', 'Custom reporting', 'Dedicated account manager', 'Priority matching'] },
+      BASIC:        { price: 2500,  label: 'Basic',        shiftLimit: null },
+      PROFESSIONAL: { price: 5000,  label: 'Professional', shiftLimit: null },
+      ENTERPRISE:   { price: 10000, label: 'Enterprise',   shiftLimit: null },
     };
     res.json({ subscription: sub, tiers: TIERS });
   } catch (err) {
@@ -250,17 +250,35 @@ router.get('/me/subscription', facilityAuth, async (req, res) => {
   }
 });
 
+// Records click-wrap acceptance of ToS + BAA, then upgrades the tier.
 router.post('/me/subscription/upgrade', facilityAuth, async (req, res) => {
   try {
-    const { tier } = req.body;
+    const { tier, agreedToTerms, agreementVersion } = req.body;
     if (!['BASIC', 'PROFESSIONAL', 'ENTERPRISE'].includes(tier)) {
       return res.status(400).json({ error: 'Invalid tier' });
     }
-    const sub = await prisma.facilitySubscription.update({
-      where: { facilityId: req.facility.id },
-      data: { tier },
-    });
-    res.json({ subscription: sub, message: 'Tier updated. Payment processing coming soon.' });
+    if (!agreedToTerms || !agreementVersion) {
+      return res.status(400).json({ error: 'Agreement acceptance required' });
+    }
+
+    const [sub] = await prisma.$transaction([
+      prisma.facilitySubscription.update({
+        where: { facilityId: req.facility.id },
+        data: { tier },
+      }),
+      prisma.agreementAcceptance.create({
+        data: {
+          facilityId:       req.facility.id,
+          userId:           req.user.userId,
+          agreementVersion,
+          tier,
+          ipAddress:        req.ip,
+          userAgent:        req.headers['user-agent'] || null,
+        },
+      }),
+    ]);
+
+    res.json({ subscription: sub });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update subscription' });
   }
