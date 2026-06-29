@@ -28,7 +28,7 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
       top: 0,
       left: 0,
       width: 240,
-      height: '100vh',
+      height: '100dvh',
       background: '#0F172A',
       display: 'flex',
       flexDirection: 'column',
