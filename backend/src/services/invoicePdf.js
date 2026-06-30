@@ -142,7 +142,15 @@ function generateInvoicePdf(invoice, res) {
   doc.fill(MID).fontSize(9).font('Helvetica')
     .text('Please remit payment by the due date above. Make checks payable to SNAP Medical Technologies.', L, y, { width: W })
   y += 14
-  doc.text('For wire transfer or ACH details, contact billing@snapmedical.app', L, y, { width: W })
+
+  if (invoice.paymentLink) {
+    doc.fill(SNAP_BLUE).fontSize(9).font('Helvetica-Bold').text('Pay online:', L, y)
+    doc.fill(SNAP_BLUE).fontSize(9).font('Helvetica').text(invoice.paymentLink, L + 58, y, { width: W - 58, link: invoice.paymentLink })
+    y += 14
+  }
+
+  doc.fill(MID).fontSize(9).font('Helvetica')
+    .text('For wire transfer or ACH details, contact billing@snapmedical.app', L, y, { width: W })
   y += 20
   doc.fill(LIGHT).fontSize(8).text('Questions? Contact us at billing@snapmedical.app  ·  snapmedical.app', L, y, { width: W })
 

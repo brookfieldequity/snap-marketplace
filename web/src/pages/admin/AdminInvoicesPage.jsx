@@ -704,8 +704,11 @@ export default function AdminInvoicesPage() {
                           try {
                             const blob = await adminAPI.getInvoicePdf(inv.id)
                             const url = URL.createObjectURL(blob)
-                            window.open(url, '_blank')
-                            setTimeout(() => URL.revokeObjectURL(url), 60000)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `SNAP-Invoice-${inv.invoiceNumber}.pdf`
+                            a.click()
+                            setTimeout(() => URL.revokeObjectURL(url), 10000)
                           } catch (e) {
                             alert('Could not load PDF: ' + e.message)
                           }
