@@ -52,6 +52,15 @@ function nextInvoiceNumber(last) {
 }
 
 // ── GET /api/admin/invoices — list all ──────────────────────────────────────
+// ── GET /api/admin/invoices/config — verify env vars are loaded ──────────────
+router.get('/config', adminAuth, (req, res) => {
+  const link = process.env.ACH_PAYMENT_LINK
+  res.json({
+    achPaymentLink: link ? `${link.slice(0, 30)}…` : null,
+    achPaymentLinkSet: !!link,
+  })
+})
+
 router.get('/', adminAuth, async (req, res) => {
   try {
     const invoices = await prisma.snapInvoice.findMany({
