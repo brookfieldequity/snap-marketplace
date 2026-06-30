@@ -307,6 +307,13 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const lineItems = Array.isArray(inv.lineItems) ? inv.lineItems : JSON.parse(inv.lineItems || '[]')
 
+    // Resolve payment link before building template
+    const { recipientEmails, paymentLink: paymentLinkOverride } = req.body
+    const effectivePaymentLink = paymentLinkOverride || inv.paymentLink
+    if (paymentLinkOverride && paymentLinkOverride !== inv.paymentLink) {
+      await prisma.snapInvoice.update({ where: { id: inv.id }, data: { paymentLink: paymentLinkOverride } })
+    }
+
     const lineRows = lineItems.map(item => `
       <tr>
         <td style="padding:12px 16px;border-bottom:1px solid #E2E8F0;">
@@ -396,12 +403,6 @@ router.post('/:id/send', adminAuth, async (req, res) => {
 </body></html>`
 
     // Build recipient list — billingEmail + stored CC list always included; per-send extras added on top
-    const { recipientEmails, paymentLink: paymentLinkOverride } = req.body
-    // Allow payment link to be set/overridden at send time and persist it
-    const effectivePaymentLink = paymentLinkOverride || inv.paymentLink
-    if (paymentLinkOverride && paymentLinkOverride !== inv.paymentLink) {
-      await prisma.snapInvoice.update({ where: { id: inv.id }, data: { paymentLink: paymentLinkOverride } })
-    }
     const ccStored = (inv.billingCcEmails || '').split(',').map(e => e.trim()).filter(Boolean)
     const allEmails = Array.from(new Set([
       inv.billingEmail,
