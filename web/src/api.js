@@ -782,7 +782,14 @@ export const adminAPI = {
   sendInvoice: (id, recipientEmails = []) => apiFetch(`${BASE}/admin/invoices/${id}/send`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ recipientEmails }) }),
   getInvoiceFacilityAdmins: (facilityId) => apiFetch(`${BASE}/admin/invoices/facility-admins/${facilityId}`, { headers: adminHeaders() }),
   voidInvoice: (id) => apiFetch(`${BASE}/admin/invoices/${id}`, { method: 'DELETE', headers: adminHeaders() }),
-  getInvoicePdfUrl: (id) => `${BASE}/admin/invoices/${id}/pdf`,
+  getInvoicePdf: async (id) => {
+    const token = getAdminToken()
+    const res = await fetch(`${BASE}/admin/invoices/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Failed to load PDF')
+    return res.blob()
+  },
 
   // ROI Tracker
   getRoiFacilities: () => apiFetch(`${BASE}/admin/roi/facilities`, { headers: adminHeaders() }),

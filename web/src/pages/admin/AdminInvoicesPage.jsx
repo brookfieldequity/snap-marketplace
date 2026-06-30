@@ -683,14 +683,21 @@ export default function AdminInvoicesPage() {
                   <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
                   <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <a
-                        href={adminAPI.getInvoicePdfUrl(inv.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#F1F5F9', color: '#374151', fontWeight: 600, textDecoration: 'none', border: '1px solid #E2E8F0' }}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const blob = await adminAPI.getInvoicePdf(inv.id)
+                            const url = URL.createObjectURL(blob)
+                            window.open(url, '_blank')
+                            setTimeout(() => URL.revokeObjectURL(url), 60000)
+                          } catch (e) {
+                            alert('Could not load PDF: ' + e.message)
+                          }
+                        }}
+                        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#F1F5F9', color: '#374151', fontWeight: 600, border: '1px solid #E2E8F0', cursor: 'pointer' }}
                       >
                         PDF
-                      </a>
+                      </button>
                       {inv.status !== 'PAID' && inv.status !== 'VOID' && (
                         <button
                           onClick={() => openSendModal(inv)}
