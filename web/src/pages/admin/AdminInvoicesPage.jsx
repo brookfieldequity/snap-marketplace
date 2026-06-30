@@ -193,7 +193,8 @@ export default function AdminInvoicesPage() {
   }
 
   async function openSendModal(inv) {
-    setSendModal({ invoice: inv, admins: [], selected: new Set([inv.billingEmail]) })
+    const savedLink = localStorage.getItem('snapLastPaymentLink') || ''
+    setSendModal({ invoice: inv, admins: [], selected: new Set([inv.billingEmail]), paymentLink: inv.paymentLink || savedLink })
     if (inv.facilityId) {
       setSendModalLoading(true)
       try {
@@ -211,7 +212,8 @@ export default function AdminInvoicesPage() {
     setSending(s => ({ ...s, [invoice.id]: true }))
     setMsg('')
     try {
-      const inv = await adminAPI.sendInvoice(invoice.id, recipientEmails)
+      if (sendModal.paymentLink) localStorage.setItem('snapLastPaymentLink', sendModal.paymentLink)
+      const inv = await adminAPI.sendInvoice(invoice.id, recipientEmails, sendModal.paymentLink)
       setInvoices(prev => prev.map(i => i.id === invoice.id ? inv : i))
       const count = selected.size
       setMsg(`Invoice sent to ${count} recipient${count !== 1 ? 's' : ''}`)
@@ -788,7 +790,18 @@ export default function AdminInvoicesPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Payment Link (shown as button in email)</div>
+              <input
+                type="url"
+                value={sendModal.paymentLink || ''}
+                onChange={e => setSendModal(m => ({ ...m, paymentLink: e.target.value }))}
+                placeholder="https://buy.stripe.com/..."
+                style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button
                 onClick={handleSend}
                 disabled={!!sending[sendModal.invoice.id]}

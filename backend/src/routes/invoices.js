@@ -388,7 +388,7 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong>
       Please remit payment by ${dateStr(inv.dueDate)}.
-      ${buildPaymentBlock(inv.paymentLink)}
+      ${buildPaymentBlock(effectivePaymentLink)}
       <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
@@ -396,7 +396,12 @@ router.post('/:id/send', adminAuth, async (req, res) => {
 </body></html>`
 
     // Build recipient list — billingEmail + stored CC list always included; per-send extras added on top
-    const { recipientEmails } = req.body
+    const { recipientEmails, paymentLink: paymentLinkOverride } = req.body
+    // Allow payment link to be set/overridden at send time and persist it
+    const effectivePaymentLink = paymentLinkOverride || inv.paymentLink
+    if (paymentLinkOverride && paymentLinkOverride !== inv.paymentLink) {
+      await prisma.snapInvoice.update({ where: { id: inv.id }, data: { paymentLink: paymentLinkOverride } })
+    }
     const ccStored = (inv.billingCcEmails || '').split(',').map(e => e.trim()).filter(Boolean)
     const allEmails = Array.from(new Set([
       inv.billingEmail,

@@ -779,7 +779,7 @@ export const adminAPI = {
   getInvoicePricing: () => apiFetch(`${BASE}/admin/invoices/pricing`, { headers: adminHeaders() }),
   createInvoice: (data) => apiFetch(`${BASE}/admin/invoices`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),
   updateInvoice: (id, data) => apiFetch(`${BASE}/admin/invoices/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(data) }),
-  sendInvoice: (id, recipientEmails = []) => apiFetch(`${BASE}/admin/invoices/${id}/send`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ recipientEmails }) }),
+  sendInvoice: (id, recipientEmails = [], paymentLink) => apiFetch(`${BASE}/admin/invoices/${id}/send`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ recipientEmails, ...(paymentLink ? { paymentLink } : {}) }) }),
   getInvoiceFacilityAdmins: (facilityId) => apiFetch(`${BASE}/admin/invoices/facility-admins/${facilityId}`, { headers: adminHeaders() }),
   voidInvoice: (id) => apiFetch(`${BASE}/admin/invoices/${id}`, { method: 'DELETE', headers: adminHeaders() }),
   getInvoicePdf: async (id) => {
