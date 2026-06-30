@@ -386,6 +386,14 @@ export const facilityAPI = {
 
   // Feature flags — this facility's effective access (drives nav gating)
   getFeatureFlags: () => apiFetch(`${BASE}/feature-flags/me`, { headers: facilityHeaders() }),
+
+  // Provider Availability Self-Submission — coordinator side
+  sendAvailabilityRequests: (body) =>
+    apiFetch(`${BASE}/schedule/availability-requests/send`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  getAvailabilityRequests: (month, year) =>
+    apiFetch(`${BASE}/schedule/availability-requests?month=${month}&year=${year}`, { headers: facilityHeaders() }),
+  remindAvailabilityRequest: (id) =>
+    apiFetch(`${BASE}/schedule/availability-requests/${id}/remind`, { method: 'POST', headers: facilityHeaders() }),
 }
 
 // ─── Payroll Builder API (SNAP Shifts) ────────────────────────────────────────
@@ -819,5 +827,20 @@ export const facilityClaimAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
+    }),
+}
+
+// ─── Public Availability Submission API ───────────────────────────────────────
+// No auth — the URL token is the credential.
+export const availAPI = {
+  getRequest: (token) =>
+    apiFetch(`${BASE}/avail/${token}`, {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  submit: (token, dates) =>
+    apiFetch(`${BASE}/avail/${token}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dates }),
     }),
 }

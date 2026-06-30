@@ -380,6 +380,7 @@ model Facility {
   employerLinks       EmployerFacilityLink[]
   hourEntries         ProviderHourEntry[]
   locations           FacilityLocation[]
+  availabilityRequests AvailabilityRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -943,10 +944,11 @@ model InternalRosterEntry {
   scheduleRequests    ScheduleRequest[]
   rateHistory         RosterRateHistory[]
   payrollLineItems    PayrollRunProvider[]
-  ptoBids             PtoBid[]
-  ptoAllocations      PtoAllocation[]
-  costComponents      AssignmentCostComponent[] // EOR pass-throughs (Phase 0)
-  hourEntries         ProviderHourEntry[]
+  ptoBids              PtoBid[]
+  ptoAllocations       PtoAllocation[]
+  costComponents       AssignmentCostComponent[] // EOR pass-throughs (Phase 0)
+  hourEntries          ProviderHourEntry[]
+  availabilityRequests AvailabilityRequest[]
 
   @@index([rosterCode])
   @@index([facilityId, npi])
@@ -2199,4 +2201,53 @@ model AgreementAcceptance {
   acceptedAt       DateTime @default(now())
 
   @@index([facilityId])
+}
+
+// ── Provider Availability Self-Submission ─────────────────────────────────────
+// Coordinators send a tokenized link to each internal roster member. The
+// provider opens the link (no login required) and marks available/unavailable
+// for every day in the target month. Submissions are merged into the schedule
+// builder's availability signal (provider layer — admin override still wins).
+//
+// AvailabilityRequest — one per (facility, rosterEntry, year, month). Created
+// when the coordinator clicks "Send" in the Provider Availability panel.
+// token is the bearer credential embedded in the link; it never expires but
+// the deadline signals when submissions should stop.
+model AvailabilityRequest {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  facilityId    String
+  rosterEntryId String
+  year          Int
+  month         Int
+  deadline      DateTime
+  sentAt        DateTime?
+  sentVia       String?   // "SMS" | "EMAIL" | "BOTH"
+  submittedAt   DateTime? // when the provider first submitted
+  lastUpdatedAt DateTime? // updated on every subsequent submit
+  createdAt     DateTime  @default(now())
+
+  facility       Facility            @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  rosterEntry    InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  daySubmissions AvailDaySubmission[]
+
+  @@unique([facilityId, rosterEntryId, year, month])
+  @@index([facilityId])
+}
+
+// AvailDaySubmission — one row per (request, date). Full-replace on each
+// submit: existing rows for the request are deleted, then new ones created.
+model AvailDaySubmission {
+  id        String   @id @default(cuid())
+  requestId String
+  date      DateTime @db.Date
+  available Boolean
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  request AvailabilityRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, date])
+  @@index([requestId])
 }

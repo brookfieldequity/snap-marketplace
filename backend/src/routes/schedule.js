@@ -1119,6 +1119,28 @@ router.post('/build', facilityAuth, async (req, res) => {
       if (rid) providerMap.set(`${rid}::${isoOf(p.date)}`, p.available);
     }
 
+    // Provider self-submitted availability via the tokenized availability-request
+    // link. Merged at the provider layer so admin overrides still win. Only
+    // applies when there is a submitted AvailabilityRequest for this facility /
+    // month and the admin has NOT set an explicit override for that (entry, date).
+    const availSubmissions = await prisma.availDaySubmission.findMany({
+      where: {
+        request: { facilityId: req.facility.id, year: yr, month: mo },
+        date: { gte: monthStart, lt: monthEnd },
+      },
+      include: { request: { select: { rosterEntryId: true } } },
+    });
+    for (const sub of availSubmissions) {
+      const key = `${sub.request.rosterEntryId}::${isoOf(sub.date)}`;
+      if (!adminMap.has(key)) {
+        // Provider self-submit is a signal, not an override — write into
+        // providerMap unless already set (RosterAvailability PROVIDER rows win).
+        if (!providerMap.has(key)) {
+          providerMap.set(key, sub.available);
+        }
+      }
+    }
+
     const unavailableKeys = new Set();
     const uniqueDayISOs = [...new Set(scheduleDays.map((d) => isoOf(d.date)))];
     for (const r of roster) {
@@ -1843,6 +1865,269 @@ router.get('/ical/:rosterEntryId/:rest', async (req, res) => {
   } catch (err) {
     console.error('[schedule] ical feed failed:', err);
     res.status(500).send('Internal server error');
+  }
+});
+
+// ── Provider Availability Requests (coordinator) ───────────────────────────────
+//
+// POST /availability-requests/send
+//   Body: { month, year, deadline, rosterEntryIds, via }
+//   via = "SMS" | "EMAIL" | "BOTH"
+//   Upserts one AvailabilityRequest per rosterEntryId (by unique composite key),
+//   generates a token for new requests, sends SMS if via includes SMS.
+//
+// GET /availability-requests
+//   Query: month, year
+//   Returns all requests for the facility + submission count.
+//
+// POST /availability-requests/:id/remind
+//   Re-sends the SMS/email for one request.
+
+const MONTH_NAMES_LONG = [
+  '', 'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function availPublicBaseUrl() {
+  // MARKETING_URL env or default prod URL — the web app serves /avail/:token
+  return (process.env.MARKETING_URL || 'https://snapmedical.app').replace(/\/$/, '');
+}
+
+router.post('/availability-requests/send', facilityAuth, async (req, res) => {
+  try {
+    const { month, year, deadline, rosterEntryIds, via } = req.body || {};
+    const mo = Number(month);
+    const yr = Number(year);
+    if (!Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'month must be 1-12' });
+    }
+    if (!Number.isInteger(yr) || yr < 2000 || yr > 2200) {
+      return res.status(400).json({ error: 'year is required and must be valid' });
+    }
+    if (!deadline) {
+      return res.status(400).json({ error: 'deadline is required' });
+    }
+    if (!Array.isArray(rosterEntryIds) || rosterEntryIds.length === 0) {
+      return res.status(400).json({ error: 'rosterEntryIds array is required' });
+    }
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return res.status(400).json({ error: 'deadline must be a valid date' });
+    }
+
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { name: true },
+    });
+    const facilityName = facility?.name || 'Your facility';
+    const monthName = MONTH_NAMES_LONG[mo] || String(mo);
+    const deadlineStr = deadlineDate.toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    });
+    const baseUrl = availPublicBaseUrl();
+    const sendSMS_ = sendSMS; // already imported at top of file
+    const sendVia = (via || 'SMS').toUpperCase();
+
+    // Load roster entries to get phone numbers
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { id: { in: rosterEntryIds }, facilityId: req.facility.id },
+      select: { id: true, providerName: true, phoneNumber: true },
+    });
+    const entryMap = new Map(entries.map((e) => [e.id, e]));
+
+    const results = [];
+    for (const rosterEntryId of rosterEntryIds) {
+      const entry = entryMap.get(rosterEntryId);
+      if (!entry) {
+        results.push({ rosterEntryId, token: null, sent: false, error: 'Roster entry not found' });
+        continue;
+      }
+
+      try {
+        // Upsert: find existing or create new. New records get a fresh token.
+        let record = await prisma.availabilityRequest.findUnique({
+          where: {
+            facilityId_rosterEntryId_year_month: {
+              facilityId: req.facility.id,
+              rosterEntryId,
+              year: yr,
+              month: mo,
+            },
+          },
+        });
+
+        if (!record) {
+          const token = require('crypto').randomBytes(16).toString('hex');
+          record = await prisma.availabilityRequest.create({
+            data: {
+              token,
+              facilityId: req.facility.id,
+              rosterEntryId,
+              year: yr,
+              month: mo,
+              deadline: deadlineDate,
+              sentAt: new Date(),
+              sentVia: sendVia,
+            },
+          });
+        } else {
+          // Update deadline and sentVia in case they changed
+          record = await prisma.availabilityRequest.update({
+            where: { id: record.id },
+            data: {
+              deadline: deadlineDate,
+              sentAt: new Date(),
+              sentVia: sendVia,
+            },
+          });
+        }
+
+        const link = `${baseUrl}/avail/${record.token}`;
+        let sent = false;
+        let sendError = null;
+
+        // Send SMS if requested and phone is available
+        if ((sendVia === 'SMS' || sendVia === 'BOTH') && entry.phoneNumber) {
+          const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link}`;
+          try {
+            await sendSMS_(entry.phoneNumber, smsBody);
+            sent = true;
+          } catch (smsErr) {
+            sendError = smsErr.message;
+          }
+        } else if (sendVia === 'EMAIL' || sendVia === 'BOTH') {
+          // Email not yet wired (no email on InternalRosterEntry) — mark not sent
+          sent = false;
+          sendError = entry.phoneNumber ? null : 'No phone number on file';
+        }
+
+        results.push({ rosterEntryId, token: record.token, sent, error: sendError });
+      } catch (entryErr) {
+        console.error('[schedule] avail-send entry failed:', rosterEntryId, entryErr.message);
+        results.push({ rosterEntryId, token: null, sent: false, error: entryErr.message });
+      }
+    }
+
+    res.json({ results });
+  } catch (err) {
+    console.error('[schedule] availability-requests/send failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/availability-requests', facilityAuth, async (req, res) => {
+  try {
+    const mo = Number(req.query.month);
+    const yr = Number(req.query.year);
+    if (!Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'month query param must be 1-12' });
+    }
+    if (!Number.isInteger(yr) || yr < 2000 || yr > 2200) {
+      return res.status(400).json({ error: 'year query param is required and must be valid' });
+    }
+
+    const requests = await prisma.availabilityRequest.findMany({
+      where: { facilityId: req.facility.id, year: yr, month: mo },
+      include: {
+        rosterEntry: {
+          select: { id: true, providerName: true, providerType: true, employmentCategory: true, phoneNumber: true },
+        },
+        daySubmissions: { select: { id: true, available: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const baseUrl = availPublicBaseUrl();
+    const now = new Date();
+
+    const data = requests.map((r) => {
+      const isLocked = now > new Date(r.deadline);
+      const daysAvailable = r.daySubmissions.filter((s) => s.available).length;
+      const submissionCount = r.daySubmissions.length;
+
+      let status = 'NOT_SENT';
+      if (r.sentAt) {
+        if (isLocked && submissionCount > 0) status = 'LOCKED';
+        else if (r.submittedAt) status = 'SUBMITTED';
+        else status = 'PENDING';
+      }
+
+      return {
+        id: r.id,
+        token: r.token,
+        link: `${baseUrl}/avail/${r.token}`,
+        rosterEntryId: r.rosterEntryId,
+        providerName: r.rosterEntry?.providerName || '',
+        providerType: r.rosterEntry?.providerType || null,
+        employmentCategory: r.rosterEntry?.employmentCategory || null,
+        phoneNumber: r.rosterEntry?.phoneNumber || null,
+        deadline: r.deadline.toISOString(),
+        sentAt: r.sentAt?.toISOString() || null,
+        sentVia: r.sentVia || null,
+        submittedAt: r.submittedAt?.toISOString() || null,
+        lastUpdatedAt: r.lastUpdatedAt?.toISOString() || null,
+        status,
+        isLocked,
+        daysAvailable,
+        submissionCount,
+      };
+    });
+
+    res.json({ requests: data });
+  } catch (err) {
+    console.error('[schedule] availability-requests GET failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/availability-requests/:id/remind', facilityAuth, async (req, res) => {
+  try {
+    const record = await prisma.availabilityRequest.findUnique({
+      where: { id: req.params.id },
+      include: {
+        facility: { select: { name: true } },
+        rosterEntry: { select: { providerName: true, phoneNumber: true } },
+      },
+    });
+
+    if (!record || record.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Availability request not found' });
+    }
+
+    const now = new Date();
+    if (now > new Date(record.deadline)) {
+      return res.status(400).json({ error: 'Cannot remind — deadline has already passed' });
+    }
+
+    const facilityName = record.facility?.name || 'Your facility';
+    const monthName = MONTH_NAMES_LONG[record.month] || String(record.month);
+    const deadlineStr = new Date(record.deadline).toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    });
+    const link = `${availPublicBaseUrl()}/avail/${record.token}`;
+    const smsBody = `${facilityName}: Reminder — submit your ${monthName} availability by ${deadlineStr}. ${link}`;
+
+    let sent = false;
+    let error = null;
+    if (record.rosterEntry?.phoneNumber) {
+      try {
+        await sendSMS(record.rosterEntry.phoneNumber, smsBody);
+        sent = true;
+        await prisma.availabilityRequest.update({
+          where: { id: record.id },
+          data: { sentAt: now },
+        });
+      } catch (smsErr) {
+        error = smsErr.message;
+      }
+    } else {
+      error = 'No phone number on file';
+    }
+
+    res.json({ ok: true, sent, error });
+  } catch (err) {
+    console.error('[schedule] availability-requests remind failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

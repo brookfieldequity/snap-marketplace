@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import AvailabilityPage from './pages/public/AvailabilityPage.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import SnappyWidget from './components/SnappyWidget.jsx'
 import AdminSidebar from './components/AdminSidebar.jsx'
@@ -66,6 +67,14 @@ export default function App() {
   // is what the recipient sees first after clicking the invite email link.
   // After successful claim, FacilityClaimPage stores snapFacilityToken and
   // hard-redirects to "/" so the normal facility-portal flow takes over.
+  // Public provider availability self-submission — /avail/:token
+  // No login required; the token in the URL is the credential.
+  const availMatch = typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/avail\/([^/?#]+)/)
+  if (availMatch) {
+    return <AvailabilityPage token={decodeURIComponent(availMatch[1])} />
+  }
+
   const claimMatch = typeof window !== 'undefined' &&
     window.location.pathname.match(/^\/facility-claim\/([^/?#]+)/)
   if (claimMatch) {

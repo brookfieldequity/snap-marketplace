@@ -1,5 +1,416 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { facilityAPI } from '../../api.js'
+
+// ── Provider Availability Panel ──────────────────────────────────────────────
+// Shown above the Build button. Lets coordinators request and track
+// provider self-submitted availability for the selected month.
+
+const AVAIL_STATUS_META = {
+  NOT_SENT: { label: 'Not sent', bg: '#F1F5F9', color: '#64748B' },
+  PENDING:  { label: 'Pending',  bg: '#FEF3C7', color: '#92400E' },
+  SUBMITTED:{ label: 'Submitted',bg: '#ECFDF5', color: '#065F46' },
+  LOCKED:   { label: 'Locked',   bg: '#F1F5F9', color: '#475569' },
+}
+
+function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
+  const [requests, setRequests]         = useState([])
+  const [loadingReqs, setLoadingReqs]   = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [sendState, setSendState]       = useState({
+    deadline: '',
+    deadlineTime: '23:59',
+    selectedIds: null, // null = not yet seeded
+    via: 'SMS',
+    sending: false,
+    result: null,
+  })
+  const [copiedToken, setCopiedToken]   = useState(null)
+  const [reminding, setReminding]       = useState(null) // id being reminded
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
+
+  // Default deadline = 5 days before first of month at 23:59
+  function defaultDeadline() {
+    const d = new Date(year, month - 1, 1)
+    d.setDate(d.getDate() - 5)
+    return d.toISOString().slice(0, 10)
+  }
+
+  function loadRequests() {
+    setLoadingReqs(true)
+    facilityAPI.getAvailabilityRequests(month, year)
+      .then((res) => setRequests(res.requests || []))
+      .catch(() => {})
+      .finally(() => setLoadingReqs(false))
+  }
+
+  useEffect(() => { loadRequests() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Seed modal state when opening
+  function openSendModal() {
+    // Per-diem & locums checked by default, full-time unchecked
+    const defaultSelected = new Set(
+      roster.filter((r) => r.employmentCategory === 'PER_DIEM' || r.employmentCategory === 'LOCUMS').map((r) => r.id)
+    )
+    setSendState({
+      deadline: defaultDeadline(),
+      deadlineTime: '23:59',
+      selectedIds: defaultSelected,
+      via: 'SMS',
+      sending: false,
+      result: null,
+    })
+    setShowSendModal(true)
+  }
+
+  async function handleSend() {
+    const { deadline, deadlineTime, selectedIds, via } = sendState
+    if (!deadline || selectedIds.size === 0) return
+    const deadlineISO = `${deadline}T${deadlineTime}:00`
+    setSendState((s) => ({ ...s, sending: true, result: null }))
+    try {
+      const res = await facilityAPI.sendAvailabilityRequests({
+        month,
+        year,
+        deadline: deadlineISO,
+        rosterEntryIds: [...selectedIds],
+        via,
+      })
+      const sentCount = (res.results || []).filter((r) => r.sent).length
+      const failCount = (res.results || []).filter((r) => !r.sent).length
+      setSendState((s) => ({ ...s, sending: false, result: { sentCount, failCount } }))
+      loadRequests()
+    } catch (err) {
+      setSendState((s) => ({ ...s, sending: false, result: { error: err.message } }))
+    }
+  }
+
+  async function handleRemind(id) {
+    setReminding(id)
+    try {
+      await facilityAPI.remindAvailabilityRequest(id)
+      loadRequests()
+    } catch (err) {
+      alert('Could not send reminder: ' + (err.message || 'Unknown error'))
+    } finally {
+      setReminding(null)
+    }
+  }
+
+  function copyLink(link) {
+    navigator.clipboard.writeText(link).catch(() => {})
+    setCopiedToken(link)
+    setTimeout(() => setCopiedToken(null), 2000)
+  }
+
+  function toggleRosterId(id) {
+    setSendState((s) => {
+      const next = new Set(s.selectedIds)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return { ...s, selectedIds: next }
+    })
+  }
+
+  // SMS preview text
+  const smsPreview = sendState.deadline
+    ? `[FacilityName]: Submit your ${monthName} availability by ${new Date(sendState.deadline + 'T' + sendState.deadlineTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. https://snapmedical.app/avail/[token]`
+    : ''
+
+  // Roster split
+  const perDiemLocums = roster.filter((r) => r.employmentCategory === 'PER_DIEM' || r.employmentCategory === 'LOCUMS')
+  const fullTime = roster.filter((r) => r.employmentCategory === 'FULL_TIME')
+  const other = roster.filter((r) => !r.employmentCategory)
+
+  // Map existing request ids by rosterEntryId
+  const reqByRosterId = new Map(requests.map((r) => [r.rosterEntryId, r]))
+
+  const inputSt = {
+    padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: 8,
+    fontSize: 13, color: '#0F172A', background: '#F8FAFC',
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+          📅 Provider Availability — {monthName} {year}
+        </div>
+        <button
+          onClick={openSendModal}
+          style={{ padding: '8px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Request Availability
+        </button>
+      </div>
+
+      {loadingReqs ? (
+        <div style={{ fontSize: 13, color: '#94A3B8', padding: '8px 0' }}>Loading…</div>
+      ) : requests.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#94A3B8', padding: '4px 0' }}>
+          No requests sent yet. Click "Request Availability" to send tokenized links to your roster.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                {['Provider', 'Type', 'Status', 'Days Avail', 'Actions'].map((h) => (
+                  <th key={h} style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#64748B', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((req) => {
+                const meta = AVAIL_STATUS_META[req.status] || AVAIL_STATUS_META.NOT_SENT
+                return (
+                  <tr key={req.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td style={{ padding: '8px 8px', color: '#0F172A', fontWeight: 500 }}>{req.providerName}</td>
+                    <td style={{ padding: '8px 8px', color: '#64748B' }}>
+                      {req.employmentCategory === 'PER_DIEM' ? 'Per-Diem'
+                        : req.employmentCategory === 'LOCUMS' ? 'Locums'
+                        : req.employmentCategory === 'FULL_TIME' ? 'Full-Time'
+                        : '—'}
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <span style={{ background: meta.bg, color: meta.color, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 8px', color: '#475569' }}>
+                      {req.submittedAt ? `${req.daysAvailable} / ${req.submissionCount}` : '—'}
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {req.status === 'NOT_SENT' && (
+                          <button
+                            onClick={() => {
+                              setSendState((s) => ({ ...s, selectedIds: new Set([req.rosterEntryId]), deadline: defaultDeadline(), deadlineTime: '23:59', via: 'SMS', result: null }))
+                              setShowSendModal(true)
+                            }}
+                            style={{ padding: '4px 10px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            Send
+                          </button>
+                        )}
+                        {req.status === 'PENDING' && (
+                          <button
+                            onClick={() => handleRemind(req.id)}
+                            disabled={reminding === req.id}
+                            style={{ padding: '4px 10px', background: '#F59E0B', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: reminding === req.id ? 0.6 : 1 }}
+                          >
+                            {reminding === req.id ? '…' : 'Remind'}
+                          </button>
+                        )}
+                        {(req.status === 'PENDING' || req.status === 'SUBMITTED') && req.link && (
+                          <button
+                            onClick={() => copyLink(req.link)}
+                            style={{ padding: '4px 10px', background: '#F8FAFC', color: '#2563EB', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            {copiedToken === req.link ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Send modal ── */}
+      {showSendModal && sendState.selectedIds && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Request Availability</h2>
+              <button onClick={() => setShowSendModal(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B' }}>✕</button>
+            </div>
+
+            {/* Month + year (read-only display) */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Month</div>
+              <div style={{ fontSize: 14, color: '#0F172A', fontWeight: 500 }}>{monthName} {year}</div>
+            </div>
+
+            {/* Deadline */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Submission deadline</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="date"
+                  value={sendState.deadline}
+                  onChange={(e) => setSendState((s) => ({ ...s, deadline: e.target.value }))}
+                  style={inputSt}
+                />
+                <select
+                  value={sendState.deadlineTime}
+                  onChange={(e) => setSendState((s) => ({ ...s, deadlineTime: e.target.value }))}
+                  style={{ ...inputSt, minWidth: 110 }}
+                >
+                  {['08:00','09:00','10:00','11:00','12:00','15:00','17:00','20:00','23:59'].map((t) => (
+                    <option key={t} value={t}>{t === '23:59' ? '11:59 PM' : new Date(`2000-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Roster checkboxes */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Who to send to</div>
+
+              {perDiemLocums.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <input
+                      type="checkbox"
+                      id="all-perdiem"
+                      checked={perDiemLocums.every((r) => sendState.selectedIds.has(r.id))}
+                      onChange={(e) => {
+                        setSendState((s) => {
+                          const next = new Set(s.selectedIds)
+                          perDiemLocums.forEach((r) => e.target.checked ? next.add(r.id) : next.delete(r.id))
+                          return { ...s, selectedIds: next }
+                        })
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <label htmlFor="all-perdiem" style={{ fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                      Per-Diem &amp; Locums <span style={{ color: '#64748B', fontWeight: 400 }}>(select all)</span>
+                    </label>
+                  </div>
+                  {perDiemLocums.map((r) => (
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                      <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
+                      <span style={{ flex: 1 }}>{r.providerName}</span>
+                      {r.phoneNumber
+                        ? <span style={{ fontSize: 11, color: '#64748B' }}>{r.phoneNumber}</span>
+                        : <span style={{ fontSize: 11, color: '#EF4444' }}>No contact info</span>
+                      }
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {fullTime.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <input
+                      type="checkbox"
+                      id="all-fulltime"
+                      checked={fullTime.every((r) => sendState.selectedIds.has(r.id))}
+                      onChange={(e) => {
+                        setSendState((s) => {
+                          const next = new Set(s.selectedIds)
+                          fullTime.forEach((r) => e.target.checked ? next.add(r.id) : next.delete(r.id))
+                          return { ...s, selectedIds: next }
+                        })
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <label htmlFor="all-fulltime" style={{ fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                      Full-Time
+                    </label>
+                    <span style={{ fontSize: 11, color: '#64748B' }}>Uncheck unless there's a scheduling exception</span>
+                  </div>
+                  {fullTime.map((r) => (
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                      <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
+                      <span style={{ flex: 1 }}>{r.providerName}</span>
+                      {r.phoneNumber
+                        ? <span style={{ fontSize: 11, color: '#64748B' }}>{r.phoneNumber}</span>
+                        : <span style={{ fontSize: 11, color: '#EF4444' }}>No contact info</span>
+                      }
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {other.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Other</div>
+                  {other.map((r) => (
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                      <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
+                      <span style={{ flex: 1 }}>{r.providerName}</span>
+                      {r.phoneNumber
+                        ? <span style={{ fontSize: 11, color: '#64748B' }}>{r.phoneNumber}</span>
+                        : <span style={{ fontSize: 11, color: '#EF4444' }}>No contact info</span>
+                      }
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Send via */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Send via</div>
+              <div style={{ display: 'flex', gap: 0, background: '#F1F5F9', borderRadius: 8, padding: 3, width: 'fit-content' }}>
+                {['SMS', 'EMAIL', 'BOTH'].map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setSendState((s) => ({ ...s, via: v }))}
+                    style={{
+                      padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: 13,
+                      fontWeight: 600, cursor: 'pointer',
+                      background: sendState.via === v ? '#2563EB' : 'transparent',
+                      color: sendState.via === v ? '#fff' : '#64748B',
+                    }}
+                  >
+                    {v === 'BOTH' ? 'SMS + Email' : v}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* SMS preview */}
+            {(sendState.via === 'SMS' || sendState.via === 'BOTH') && smsPreview && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>SMS preview</div>
+                <div style={{ background: '#F1F5F9', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+                  {smsPreview}
+                </div>
+              </div>
+            )}
+
+            {/* Result */}
+            {sendState.result && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13,
+                background: sendState.result.error ? '#FEF2F2' : '#ECFDF5',
+                color: sendState.result.error ? '#991B1B' : '#065F46',
+                border: `1px solid ${sendState.result.error ? '#FECACA' : '#A7F3D0'}`,
+              }}>
+                {sendState.result.error
+                  ? `Error: ${sendState.result.error}`
+                  : `Sent ${sendState.result.sentCount} message${sendState.result.sentCount !== 1 ? 's' : ''}${sendState.result.failCount > 0 ? ` · ${sendState.result.failCount} failed (no phone number)` : ''}.`
+                }
+              </div>
+            )}
+
+            <button
+              onClick={handleSend}
+              disabled={sendState.sending || sendState.selectedIds.size === 0}
+              style={{
+                width: '100%', padding: '12px', background: sendState.selectedIds.size > 0 ? '#2563EB' : '#CBD5E1',
+                color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700,
+                cursor: sendState.selectedIds.size > 0 && !sendState.sending ? 'pointer' : 'default',
+              }}
+            >
+              {sendState.sending
+                ? 'Sending…'
+                : `Send ${sendState.selectedIds.size} Request${sendState.selectedIds.size !== 1 ? 's' : ''}`
+              }
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 import ScheduleBuildFlow from './ScheduleBuildFlow.jsx'
 import StaffIQRecommendations from './StaffIQRecommendations.jsx'
 import OutListModal from './OutListModal.jsx'
@@ -825,6 +1236,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* Provider Availability — request + track self-submission from roster members */}
+      <ProviderAvailabilityPanel
+        year={year}
+        month={month}
+        roster={roster}
+        facilityId={facility?.id}
+      />
 
       {facility && (
         <CostComparisonPanel

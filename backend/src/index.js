@@ -127,6 +127,8 @@ app.use('/api/facilities', holidayRoutes); // mounts /:id/holidays/* under /api/
 // Cost-savings / time-saved tracking for the dashboard + credentialing
 // portal widgets. See services/automationEvents.js.
 app.use('/api/automation-events', automationEventsRoutes);
+// Provider availability self-submission — public, token-gated (no auth middleware).
+app.use('/api/avail', require('./routes/avail'));
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 
