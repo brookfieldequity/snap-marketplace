@@ -534,6 +534,7 @@ model SnapInvoice {
   billingEmail    String
   billingAddress  String?
   billingCcEmails String  @default("") // comma-separated; always included on every send
+  paymentLink     String? // e.g. Stripe payment link URL, shown as button in invoice email
 
   // Line items JSON array: { description, detail, listPrice, discount, discountLabel, amount }
   lineItems     Json

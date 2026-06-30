@@ -68,6 +68,7 @@ export default function AdminInvoicesPage() {
     billingEmail: '',
     billingAddress: '',
     billingCcEmails: [],  // additional recipients, always CC'd on every send
+    paymentLink: localStorage.getItem('snapLastPaymentLink') || '',
     platformTier: 'CORE',
     providerBand: 75,
     includePlatform: true,
@@ -168,6 +169,7 @@ export default function AdminInvoicesPage() {
         billingEmail: form.billingEmail,
         billingAddress: form.billingAddress || undefined,
         billingCcEmails: form.billingCcEmails.filter(Boolean).join(','),
+        paymentLink: form.paymentLink || undefined,
         ...(form.includePlatform ? { platformTier: form.platformTier, providerCount: form.providerBand } : {}),
         ...(form.includeCred ? { credProviderCount: form.credProviderCount, credType: form.credType } : { credProviderCount: 0 }),
         ...(form.includeMarketplace ? { marketplaceFeeAmount: form.marketplaceFeeAmount } : {}),
@@ -179,6 +181,7 @@ export default function AdminInvoicesPage() {
         billingCycle: form.billingCycle,
       }
       const inv = await adminAPI.createInvoice(payload)
+      if (form.paymentLink) localStorage.setItem('snapLastPaymentLink', form.paymentLink)
       setInvoices(prev => [inv, ...prev])
       setShowBuilder(false)
       setMsg(`Invoice ${inv.invoiceNumber} created.`)
@@ -315,6 +318,17 @@ export default function AdminInvoicesPage() {
                 <div>
                   <Label>Billing Address</Label>
                   <input value={form.billingAddress} onChange={e => setForm(f => ({ ...f, billingAddress: e.target.value }))} style={inputStyle} placeholder="123 Main St, Boston MA 02101" />
+                </div>
+
+                <div>
+                  <Label>Payment link (shown as button in invoice email)</Label>
+                  <input
+                    type="url"
+                    value={form.paymentLink}
+                    onChange={e => setForm(f => ({ ...f, paymentLink: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="https://buy.stripe.com/..."
+                  />
                 </div>
 
                 <div>

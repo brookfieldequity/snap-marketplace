@@ -11,14 +11,12 @@ if (process.env.SENDGRID_API_KEY) {
 const FROM_EMAIL = process.env.SENDGRID_FROM || 'noreply@snapmedical.app'
 const router = express.Router()
 
-// Returns a "Pay Now" button if ACH_PAYMENT_LINK env var is set.
-function buildPaymentBlock() {
-  const link = process.env.ACH_PAYMENT_LINK
+function buildPaymentBlock(link) {
   if (!link) return ''
   return `
     <div style="text-align:center;margin:20px 0">
       <a href="${link}" style="display:inline-block;background:#2563EB;color:#fff;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none">
-        Pay Now via ACH →
+        Pay Now →
       </a>
     </div>`
 }
@@ -52,15 +50,6 @@ function nextInvoiceNumber(last) {
 }
 
 // ── GET /api/admin/invoices — list all ──────────────────────────────────────
-// ── GET /api/admin/invoices/config — verify env vars are loaded ──────────────
-router.get('/config', adminAuth, (req, res) => {
-  const link = process.env.ACH_PAYMENT_LINK
-  res.json({
-    achPaymentLink: link ? `${link.slice(0, 30)}…` : null,
-    achPaymentLinkSet: !!link,
-  })
-})
-
 router.get('/', adminAuth, async (req, res) => {
   try {
     const invoices = await prisma.snapInvoice.findMany({
@@ -152,6 +141,7 @@ router.post('/', adminAuth, async (req, res) => {
       dueDays = 30,
       billingCycle = 'ONCE', // 'ONCE' | 'MONTHLY'
       billingCcEmails = '',  // comma-separated CC recipients
+      paymentLink = null,    // e.g. Stripe payment link URL
     } = req.body
 
     // Compute platform line item
@@ -266,6 +256,7 @@ router.post('/', adminAuth, async (req, res) => {
         billingEmail,
         billingAddress: billingAddress || null,
         billingCcEmails: billingCcEmails || '',
+        paymentLink: paymentLink || null,
         lineItems,
         listTotal,
         discountTotal,
@@ -397,7 +388,7 @@ router.post('/:id/send', adminAuth, async (req, res) => {
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong>
       Please remit payment by ${dateStr(inv.dueDate)}.
-      ${buildPaymentBlock()}
+      ${buildPaymentBlock(inv.paymentLink)}
       <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
@@ -486,7 +477,7 @@ async function processMonthlyInvoices() {
     <div style="font-size:12px;color:#64748B">
       <strong>Payment Instructions:</strong>
       Monthly installment due within 30 days.
-      ${buildPaymentBlock()}
+      ${buildPaymentBlock(inv.paymentLink)}
       <span style="margin-top:8px;display:block">Questions? Contact <a href="mailto:billing@snapmedical.app" style="color:#2563EB">billing@snapmedical.app</a></span>
     </div>
   </div>
