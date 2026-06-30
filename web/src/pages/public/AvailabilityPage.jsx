@@ -70,6 +70,7 @@ export default function AvailabilityPage({ token }) {
   const [saved, setSaved] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const backdropRef = useRef(null)
+  const longPressTimer = useRef(null)
 
   useEffect(() => {
     if (!token) {
@@ -376,26 +377,35 @@ export default function AvailabilityPage({ token }) {
                 textColor = '#fff'
                 border = 'none'
               } else if (state === 'unavailable') {
-                bg = '#FEE2E2'
-                textColor = '#DC2626'
+                bg = '#DC2626'
+                textColor = '#fff'
                 border = 'none'
               } else {
-                bg = '#F1F5F9'
-                textColor = '#94A3B8'
-                border = isWeekend ? '1.5px solid #CBD5E1' : 'none'
+                bg = isWeekend ? '#F8FAFC' : '#F1F5F9'
+                textColor = isWeekend ? '#CBD5E1' : '#94A3B8'
+                border = '1.5px solid #E2E8F0'
               }
+
+              const isSet = state === 'available' || state === 'unavailable'
 
               return (
                 <div
                   key={iso}
                   onClick={() => cycleDay(iso)}
                   onContextMenu={(e) => { e.preventDefault(); openNote(iso) }}
+                  onTouchStart={() => {
+                    if (isLocked) return
+                    longPressTimer.current = setTimeout(() => openNote(iso), 500)
+                  }}
+                  onTouchEnd={() => clearTimeout(longPressTimer.current)}
+                  onTouchMove={() => clearTimeout(longPressTimer.current)}
+                  onTouchCancel={() => clearTimeout(longPressTimer.current)}
                   style={{
                     position: 'relative',
-                    minHeight: 52,
+                    minHeight: 58,
                     background: bg,
                     border,
-                    borderRadius: 8,
+                    borderRadius: 10,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -407,25 +417,9 @@ export default function AvailabilityPage({ token }) {
                     padding: '4px 2px',
                   }}
                 >
-                  {/* Note dot (top-right) */}
-                  {hasNote && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      background: state === 'available' ? 'rgba(255,255,255,0.8)' : '#2563EB',
-                    }} />
-                  )}
-
                   {/* Day number */}
                   <div style={{ fontSize: 15, fontWeight: 600, color: textColor, lineHeight: 1 }}>
                     {day}
-                    {state === 'unavailable' && (
-                      <span style={{ fontSize: 10, verticalAlign: 'super', marginLeft: 1, color: '#DC2626' }}>×</span>
-                    )}
                   </div>
 
                   {/* Holiday name */}
@@ -445,17 +439,20 @@ export default function AvailabilityPage({ token }) {
                     </div>
                   )}
 
-                  {/* Note icon — show if note exists and tap area for note */}
-                  {hasNote && !holiday && (
+                  {/* Note icon — pencil on set days, filled dot if note exists */}
+                  {isSet && !isLocked && (
                     <button
                       onClick={(e) => { e.stopPropagation(); openNote(iso) }}
                       style={{
-                        background: 'none', border: 'none', fontSize: 9, cursor: 'pointer',
-                        color: state === 'available' ? 'rgba(255,255,255,0.7)' : '#64748B',
-                        marginTop: 2, padding: 0, lineHeight: 1,
+                        position: 'absolute', top: 3, right: 3,
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 11, lineHeight: 1, padding: 2,
+                        color: hasNote
+                          ? (state === 'available' ? '#fff' : '#fff')
+                          : (state === 'available' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.5)'),
                       }}
                     >
-                      note
+                      {hasNote ? '📝' : '✎'}
                     </button>
                   )}
                 </div>
@@ -467,7 +464,7 @@ export default function AvailabilityPage({ token }) {
         {/* Add note hint */}
         {!isLocked && (
           <div style={{ padding: '8px 16px', fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>
-            Tap a day to set availability. Long-press or right-click to add a note.
+            Tap a day to mark available or unavailable. Tap ✎ to add a note.
           </div>
         )}
       </div>
