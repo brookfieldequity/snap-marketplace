@@ -23,6 +23,7 @@ async function sendSMS(to, body) {
     await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: e164 });
   } catch (err) {
     console.error('Twilio SMS error:', err.message);
+    throw err;
   }
 }
 

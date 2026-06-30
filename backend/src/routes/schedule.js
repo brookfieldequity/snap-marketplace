@@ -1889,8 +1889,9 @@ const MONTH_NAMES_LONG = [
 ];
 
 function availPublicBaseUrl() {
-  // MARKETING_URL env or default prod URL — the web app serves /avail/:token
-  return (process.env.MARKETING_URL || 'https://snapmedical.app').replace(/\/$/, '');
+  // APP_URL should point to the marketplace web app (not the marketing site).
+  // Set APP_URL in Railway backend env vars to the marketplace web URL.
+  return (process.env.APP_URL || process.env.MARKETING_URL || 'https://www.snapmedical.app').replace(/\/$/, '');
 }
 
 router.post('/availability-requests/send', facilityAuth, async (req, res) => {
