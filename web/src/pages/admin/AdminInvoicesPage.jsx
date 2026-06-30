@@ -257,6 +257,16 @@ export default function AdminInvoicesPage() {
     }
   }
 
+  async function handleDelete(id) {
+    if (!confirm('Permanently delete this voided invoice? This cannot be undone.')) return
+    try {
+      await adminAPI.deleteInvoice(id)
+      setInvoices(prev => prev.filter(i => i.id !== id))
+    } catch (e) {
+      setMsg('Failed: ' + e.message)
+    }
+  }
+
   const totals = computeTotals()
 
   return (
@@ -741,6 +751,14 @@ export default function AdminInvoicesPage() {
                           style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#FEF2F2', color: '#DC2626', fontWeight: 600, border: '1px solid #FECACA', cursor: 'pointer' }}
                         >
                           Void
+                        </button>
+                      )}
+                      {inv.status === 'VOID' && (
+                        <button
+                          onClick={() => handleDelete(inv.id)}
+                          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#FEF2F2', color: '#DC2626', fontWeight: 600, border: '1px solid #FECACA', cursor: 'pointer' }}
+                        >
+                          Delete
                         </button>
                       )}
                     </div>

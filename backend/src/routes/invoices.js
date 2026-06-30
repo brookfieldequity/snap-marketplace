@@ -428,10 +428,23 @@ router.post('/:id/send', adminAuth, async (req, res) => {
   }
 })
 
-// ── DELETE /api/admin/invoices/:id — void/delete ─────────────────────────────
+// ── DELETE /api/admin/invoices/:id — void ────────────────────────────────────
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
     await prisma.snapInvoice.update({ where: { id: req.params.id }, data: { status: 'VOID' } })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── DELETE /api/admin/invoices/:id/permanent — hard delete VOID invoices ─────
+router.delete('/:id/permanent', adminAuth, async (req, res) => {
+  try {
+    const inv = await prisma.snapInvoice.findUnique({ where: { id: req.params.id } })
+    if (!inv) return res.status(404).json({ error: 'Not found' })
+    if (inv.status !== 'VOID') return res.status(400).json({ error: 'Only VOID invoices can be permanently deleted' })
+    await prisma.snapInvoice.delete({ where: { id: req.params.id } })
     res.json({ ok: true })
   } catch (e) {
     res.status(500).json({ error: e.message })
