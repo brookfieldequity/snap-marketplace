@@ -28,6 +28,51 @@ function fmtNoteDate(ymd) {
 }
 function monthKey(y, m0) { return `${y}-${String(m0 + 1).padStart(2, '0')}` }
 
+// Deterministic tiny tilt so the sticky wall feels physical but doesn't jump on re-render.
+function tiltFor(seed) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
+  return ((h % 7) - 3) // -3..+3 degrees
+}
+
+// A provider note rendered as a physical Post-it, color-coded by availability.
+function PostitNote({ name, dateLabel, note, available, source, seed }) {
+  const tilt = tiltFor(seed)
+  const paper = available === false
+    ? 'linear-gradient(160deg, #FECACA 0%, #FBB4B4 100%)' // unavailable → red
+    : available === true
+    ? 'linear-gradient(160deg, #BFDBFE 0%, #A9CBF7 100%)' // available → blue
+    : 'linear-gradient(160deg, #FEF08A 0%, #FDE047 100%)' // neutral → yellow
+  const sourceLabel = source === 'PROVIDER' ? 'from provider' : source === 'ADMIN' ? 'set by admin' : source === 'PTO' ? 'PTO' : ''
+  return (
+    <div style={{
+      position: 'relative',
+      width: 210,
+      minHeight: 172,
+      background: paper,
+      padding: '20px 16px 16px',
+      transform: `rotate(${tilt}deg)`,
+      boxShadow: '0 10px 22px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.5)',
+      borderRadius: 2,
+      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+      cursor: 'default',
+    }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'rotate(0deg) scale(1.04)'; e.currentTarget.style.boxShadow = '0 16px 32px rgba(15,23,42,0.24)'; e.currentTarget.style.zIndex = 5 }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = `rotate(${tilt}deg)`; e.currentTarget.style.boxShadow = '0 10px 22px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.5)'; e.currentTarget.style.zIndex = 1 }}
+    >
+      {/* tape strip */}
+      <div style={{ position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%) rotate(-3deg)', width: 70, height: 20, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }} />
+      <div style={{ fontFamily: '"Kalam", cursive', fontSize: 17, fontWeight: 700, color: '#1E293B', lineHeight: 1.1 }}>{name}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(30,41,59,0.6)', marginTop: 3 }}>
+        {dateLabel}{sourceLabel ? ` · ${sourceLabel}` : ''}
+      </div>
+      <div style={{ fontFamily: '"Kalam", cursive', fontSize: 16, color: '#1E293B', marginTop: 10, lineHeight: 1.45, wordBreak: 'break-word' }}>
+        {note}
+      </div>
+    </div>
+  )
+}
+
 export default function RequestsNotesPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -55,6 +100,16 @@ export default function RequestsNotesPage() {
   }, [mk])
 
   useEffect(() => { load() }, [load])
+
+  // Handwriting font for the Post-it notes (loaded once).
+  useEffect(() => {
+    if (document.getElementById('snap-kalam-font')) return
+    const link = document.createElement('link')
+    link.id = 'snap-kalam-font'
+    link.rel = 'stylesheet'
+    link.href = 'https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap'
+    document.head.appendChild(link)
+  }, [])
 
   function prevMonth() { if (month0 === 0) { setYear((y) => y - 1); setMonth0(11) } else setMonth0((m) => m - 1) }
   function nextMonth() { if (month0 === 11) { setYear((y) => y + 1); setMonth0(0) } else setMonth0((m) => m + 1) }
@@ -136,20 +191,20 @@ export default function RequestsNotesPage() {
           {notes.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No availability notes this month.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 22,
+              padding: '10px 6px 6px',
+            }}>
               {notes.map((n, i) => (
-                <div key={`${n.name}-${n.date}-${i}`} style={card}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: '#0F172A' }}>{n.name}</span>
-                    <span style={pill(n.available
-                      ? { bg: '#F0FDF4', color: '#15803D' }
-                      : { bg: '#FEF2F2', color: '#B91C1C' })}>{n.available ? 'Available' : 'Unavailable'}</span>
-                    <span style={{ fontSize: 13, color: '#475569' }}><strong>{fmtNoteDate(n.date)}</strong>
-                      <span style={{ color: '#94A3B8' }}> · {n.source === 'PROVIDER' ? 'from provider' : n.source === 'ADMIN' ? 'set by admin' : n.source === 'PTO' ? 'PTO' : ''}</span>
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 13, color: '#64748B', marginTop: 6, fontStyle: 'italic' }}>“{n.note}”</div>
-                </div>
+                <PostitNote
+                  key={`${n.name}-${n.date}-${i}`}
+                  seed={`${n.name}-${n.date}`}
+                  name={n.name}
+                  dateLabel={fmtNoteDate(n.date)}
+                  note={n.note}
+                  available={n.available}
+                  source={n.source}
+                />
               ))}
             </div>
           )}
