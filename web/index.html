@@ -13,7 +13,31 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <style>
+      @keyframes snapSplashSpin { to { transform: rotate(360deg); } }
+      @keyframes snapSplashFade { from { opacity: 0; } to { opacity: 1; } }
+      #snap-splash {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 55%, #3B82F6 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        animation: snapSplashFade 0.3s ease;
+      }
+      #snap-splash .wm { font-size: 34px; font-weight: 900; color: #fff; letter-spacing: -0.05em; }
+      #snap-splash .sub { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); letter-spacing: 0.14em; margin-top: 2px; }
+      #snap-splash .ring {
+        margin-top: 26px; width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff;
+        animation: snapSplashSpin 0.8s linear infinite;
+      }
+    </style>
+    <div id="root">
+      <div id="snap-splash">
+        <div class="wm">SNAP</div>
+        <div class="sub">MEDICAL TECHNOLOGIES</div>
+        <div class="ring"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

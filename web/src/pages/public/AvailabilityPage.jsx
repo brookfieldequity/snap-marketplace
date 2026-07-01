@@ -485,21 +485,23 @@ export default function AvailabilityPage({ token }) {
           </div>
 
           {/* Day-of-week headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 5, marginBottom: 6 }}>
             {DAY_ABBREVS.map((d) => (
               <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#94A3B8', padding: '2px 0' }}>{d}</div>
             ))}
           </div>
 
           {/* Day cells */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 5 }}>
             {cells.map((day, idx) => {
               if (!day) return <div key={idx} />
               const iso = padIso(year, month, day)
               const state = dayStates.get(iso) || 'unset'
               const holiday = FEDERAL_HOLIDAYS_2026[iso]
               const hasNote = !!notesByDate.get(iso)
-              const isWeekend = [0, 6].includes((firstDow + idx) % 7)
+              // cells[] already has firstDow leading blanks, so the column is
+              // just idx % 7 (0 = Sunday … 6 = Saturday).
+              const isWeekend = [0, 6].includes(idx % 7)
 
               let bg, textColor, border, shadow
               if (state === 'available') {
