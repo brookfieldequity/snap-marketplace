@@ -46,6 +46,24 @@ function requestCoversDay(r, dISO) {
   return dISO >= start && dISO <= end
 }
 
+// Deterministic tiny tilt from an id so the sticky board feels physical but
+// never jumps between renders.
+function tiltFor(seed) {
+  const s = String(seed)
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return ((h % 5) - 2) // -2..+2 degrees
+}
+
+// Post-it paper color for a request card. Tiered cards take their tier hue;
+// untriaged cards are warm yellow; declined cards fade to gray.
+const TIER_PAPER = { 1: '#E9D5FF', 2: '#BFDBFE', 3: '#A5F3FC', 4: '#E2E8F0' }
+function paperFor(r, declined) {
+  if (declined) return '#E5E7EB'
+  if (r._tier) return TIER_PAPER[r._tier] || '#FEF08A'
+  return '#FEF08A' // unassigned → classic yellow sticky
+}
+
 export default function RequestsPage() {
   const [requests, setRequests]   = useState([])
   const [loading, setLoading]     = useState(true)
@@ -76,6 +94,23 @@ export default function RequestsPage() {
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Handwriting font + sticky-note "deal out" animation (loaded once).
+  useEffect(() => {
+    if (!document.getElementById('snap-kalam-font')) {
+      const link = document.createElement('link')
+      link.id = 'snap-kalam-font'
+      link.rel = 'stylesheet'
+      link.href = 'https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap'
+      document.head.appendChild(link)
+    }
+    if (!document.getElementById('snap-postit-kf')) {
+      const style = document.createElement('style')
+      style.id = 'snap-postit-kf'
+      style.textContent = `@keyframes postitDeal{0%{transform:translateY(10px) rotate(0deg);opacity:0}100%{opacity:1}}`
+      document.head.appendChild(style)
+    }
+  }, [])
 
   useEffect(() => {
     const tierable = requests.filter(
@@ -524,57 +559,81 @@ function KanbanColumn({ title, subtitle, count, color, bg, border, light, isDrop
   )
 }
 
-// ── Request card ──────────────────────────────────────────────────────────────
+// ── Request card — a physical Post-it note ─────────────────────────────────────
 function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp, onDown, tierColor, declined }) {
   const t = TYPE_STYLE[r.type] || TYPE_STYLE.WORK
+  const paper = paperFor(r, declined)
+  const tilt = tiltFor(r.id)
+  const ink = declined ? '#64748B' : '#1E293B'
+
+  const straighten = (e) => {
+    if (declined) return
+    e.currentTarget.style.transform = 'rotate(0deg) translateY(-2px)'
+    e.currentTarget.style.boxShadow = '0 12px 22px rgba(15,23,42,0.22)'
+    e.currentTarget.style.zIndex = 5
+  }
+  const settle = (e) => {
+    e.currentTarget.style.transform = `rotate(${tilt}deg)`
+    e.currentTarget.style.boxShadow = '0 6px 12px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.5)'
+    e.currentTarget.style.zIndex = 1
+  }
+
   return (
     <div
       draggable={!declined}
       onDragStart={onDragStart}
+      onMouseEnter={straighten}
+      onMouseLeave={settle}
       style={{
-        background: '#fff',
-        border: `1px solid ${declined ? '#E2E8F0' : '#E2E8F0'}`,
-        borderLeft: `3px solid ${declined ? '#CBD5E1' : tierColor || t.color}`,
-        borderRadius: 10,
-        padding: '11px 12px',
-        marginBottom: 7,
+        position: 'relative',
+        background: paper,
+        borderRadius: 3,
+        padding: '12px 13px 11px',
+        marginBottom: 13,
         cursor: declined ? 'default' : 'grab',
-        opacity: declined ? 0.55 : 1,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        opacity: declined ? 0.6 : 1,
+        boxShadow: '0 6px 12px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.5)',
         userSelect: 'none',
-        transition: 'box-shadow 0.15s',
+        transform: `rotate(${tilt}deg)`,
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        animation: 'postitDeal 0.28s ease both',
       }}
     >
+      {/* Tape strip */}
+      {!declined && (
+        <div style={{ position: 'absolute', top: -8, left: 14, width: 46, height: 16, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', transform: 'rotate(-4deg)', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }} />
+      )}
+
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 5 }}>
         <div style={{ minWidth: 0 }}>
-          {rank != null && <span style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', marginRight: 5 }}>#{rank}</span>}
-          <span style={{ fontWeight: 800, fontSize: 13, color: '#0F172A' }}>{r.rosterEntry?.providerName || 'Provider'}</span>
+          {rank != null && <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(30,41,59,0.5)', marginRight: 5 }}>#{rank}</span>}
+          <span style={{ fontWeight: 800, fontSize: 13.5, color: ink }}>{r.rosterEntry?.providerName || 'Provider'}</span>
           {r.rosterEntry?.providerType && (
-            <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 5 }}>{r.rosterEntry.providerType}</span>
+            <span style={{ fontSize: 10, color: 'rgba(30,41,59,0.55)', marginLeft: 5 }}>{r.rosterEntry.providerType}</span>
           )}
         </div>
-        <span style={{ flexShrink: 0, background: t.bg, color: t.color, border: `1px solid ${t.border}`, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>
+        <span style={{ flexShrink: 0, background: 'rgba(255,255,255,0.7)', color: t.color, border: `1px solid ${t.border}`, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>
           {t.label}
         </span>
       </div>
 
       {/* Date + site */}
-      <div style={{ fontSize: 12, color: '#374151', marginBottom: r.note ? 5 : 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(30,41,59,0.8)', marginBottom: r.note ? 6 : 0 }}>
         {dateLabel(r)}
-        {r.siteName && <span style={{ color: '#94A3B8' }}> · {r.siteName}</span>}
+        {r.siteName && <span style={{ color: 'rgba(30,41,59,0.55)' }}> · {r.siteName}</span>}
       </div>
 
-      {/* Note */}
+      {/* Note — in the provider's own hand */}
       {r.note && (
-        <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', background: '#F8FAFC', borderRadius: 6, padding: '4px 7px', marginBottom: 5 }}>
-          "{r.note}"
+        <div style={{ fontFamily: '"Kalam", cursive', fontSize: 15, lineHeight: 1.35, color: ink, marginBottom: 4, wordBreak: 'break-word' }}>
+          {r.note}
         </div>
       )}
 
       {/* Actions */}
       {!declined ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 7, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
           {onUp && (
             <button onClick={onUp} title="Move up" style={miniBtn}>↑</button>
           )}
@@ -590,7 +649,7 @@ function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp,
                 onClick={() => onTier(tier.n)}
                 style={{
                   width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800,
-                  background: active ? tier.color : '#fff',
+                  background: active ? tier.color : 'rgba(255,255,255,0.85)',
                   color: active ? '#fff' : tier.color,
                   border: `1.5px solid ${active ? tier.color : tier.border}`,
                 }}
@@ -602,7 +661,7 @@ function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp,
           <button onClick={onDecline} title="Decline" style={{ ...miniBtn, color: '#B91C1C', borderColor: '#FCA5A5', marginLeft: 'auto' }}>✕</button>
         </div>
       ) : (
-        <button onClick={onRestore} style={{ marginTop: 8, padding: '4px 10px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={onRestore} style={{ marginTop: 8, padding: '4px 10px', background: 'rgba(255,255,255,0.85)', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
           Restore
         </button>
       )}
@@ -612,7 +671,7 @@ function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp,
 
 const miniBtn = {
   width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700,
-  background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0',
+  background: 'rgba(255,255,255,0.85)', color: '#475569', border: '1.5px solid rgba(148,163,184,0.5)',
 }
 
 // ── History list ──────────────────────────────────────────────────────────────
