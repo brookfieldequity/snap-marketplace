@@ -64,7 +64,20 @@ function paperFor(r, declined) {
   return '#FEF08A' // unassigned → classic yellow sticky
 }
 
+// Track a narrow (tablet/phone) viewport so the board can restack + scroll.
+function useIsNarrow(bp = 860) {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < bp)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < bp)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [bp])
+  return narrow
+}
+
 export default function RequestsPage() {
+  const narrow = useIsNarrow()
   const [requests, setRequests]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [busy, setBusy]           = useState({})
@@ -281,14 +294,16 @@ export default function RequestsPage() {
   const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#F8FAFC' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: narrow ? 'auto' : '100%', minHeight: narrow ? '100%' : 0, background: '#F8FAFC' }}>
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 28px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#fff', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
+      <div style={{ padding: narrow ? '14px 16px 12px' : '20px 28px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#fff', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
+          <h1 style={{ fontSize: narrow ? 19 : 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>
-            Drag cards into priority tiers · the schedule builder honors them in order
+            {narrow
+              ? 'Tap a card’s 1–4 buttons to set its priority tier'
+              : 'Drag cards into priority tiers · the schedule builder honors them in order'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -317,10 +332,10 @@ export default function RequestsPage() {
 
       {/* ── BOARD ────────────────────────────────────────────────────────── */}
       {!loading && tab === 'BOARD' && (
-        <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: narrow ? 'column' : 'row', minHeight: 0, overflow: narrow ? 'visible' : 'hidden' }}>
 
           {/* Left: calendar + PTO */}
-          <div style={{ width: 232, flexShrink: 0, borderRight: '1px solid #E2E8F0', background: '#fff', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          <div style={{ width: narrow ? '100%' : 232, flexShrink: 0, borderRight: narrow ? 'none' : '1px solid #E2E8F0', borderBottom: narrow ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', overflowY: narrow ? 'visible' : 'auto' }}>
 
             {/* Mini calendar */}
             <div style={{ padding: '18px 16px 12px' }}>
@@ -418,7 +433,7 @@ export default function RequestsPage() {
           </div>
 
           {/* Right: Kanban board */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: narrow ? 'visible' : 'hidden' }}>
 
             {/* Day header bar */}
             {selDay && (
@@ -427,14 +442,18 @@ export default function RequestsPage() {
                 {' · '}{(filteredUnassigned.length + filteredTierGroups.reduce((s, g) => s + g.items.length, 0))} request{filteredUnassigned.length + filteredTierGroups.reduce((s, g) => s + g.items.length, 0) !== 1 ? 's' : ''}
               </div>
             )}
+            {narrow && (
+              <div style={{ padding: '8px 16px', fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>Swipe sideways to see all tiers →</div>
+            )}
 
-            {/* Five columns */}
-            <div style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, overflow: 'hidden' }}>
+            {/* Five columns — a horizontal Post-it strip on narrow screens */}
+            <div style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden', WebkitOverflowScrolling: 'touch' }}>
 
               {/* Unassigned column */}
               <KanbanColumn
+                narrow={narrow}
                 title="Unassigned"
-                subtitle="Drag to a tier →"
+                subtitle={narrow ? 'Set a tier below' : 'Drag to a tier →'}
                 count={filteredUnassigned.length}
                 color="#92400E"
                 bg="#FFFBEB"
@@ -472,6 +491,7 @@ export default function RequestsPage() {
               {filteredTierGroups.map(({ t, items }, gi) => (
                 <KanbanColumn
                   key={t.n}
+                  narrow={narrow}
                   title={`${t.n} · ${t.label}`}
                   subtitle={t.blurb}
                   count={items.length}
@@ -528,14 +548,15 @@ export default function RequestsPage() {
 }
 
 // ── Kanban column ─────────────────────────────────────────────────────────────
-function KanbanColumn({ title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
+function KanbanColumn({ narrow, title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
   return (
     <div
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       style={{
-        flex: 1,
+        flex: narrow ? '0 0 auto' : 1,
+        width: narrow ? 'min(82vw, 320px)' : 'auto',
         display: 'flex',
         flexDirection: 'column',
         borderRight: isLast ? 'none' : '1px solid #E2E8F0',
@@ -545,14 +566,14 @@ function KanbanColumn({ title, subtitle, count, color, bg, border, light, isDrop
       }}
     >
       {/* Column header */}
-      <div style={{ padding: '12px 14px 10px', borderBottom: `2px solid ${isDrop ? color : border}`, background: isDrop ? (light || bg) : bg, transition: 'all 0.15s', flexShrink: 0 }}>
+      <div style={{ padding: '12px 14px 10px', borderBottom: `2px solid ${isDrop ? color : border}`, background: isDrop ? (light || bg) : bg, transition: 'all 0.15s', flexShrink: 0, position: narrow ? 'sticky' : 'static', top: 0, zIndex: 2 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           {title}{count > 0 ? <span style={{ marginLeft: 6, background: color, color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10 }}>{count}</span> : null}
         </div>
         {subtitle && <div style={{ fontSize: 10.5, color, opacity: 0.65, marginTop: 2 }}>{subtitle}</div>}
       </div>
       {/* Cards */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px 20px' }}>
+      <div style={{ flex: 1, overflowY: narrow ? 'visible' : 'auto', padding: '10px 10px 20px' }}>
         {children}
       </div>
     </div>
