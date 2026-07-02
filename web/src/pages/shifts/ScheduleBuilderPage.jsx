@@ -114,7 +114,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
 
   // SMS preview text
   const smsPreview = sendState.deadline
-    ? `[FacilityName]: Submit your ${monthName} availability by ${new Date(sendState.deadline + 'T' + sendState.deadlineTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. https://snapmedical.app/avail/[token]`
+    ? `[FacilityName]: Submit your ${monthName} availability by ${new Date(sendState.deadline + 'T' + sendState.deadlineTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. https://ai.snapmedical.app/avail/[token]`
     : ''
 
   // Roster split
