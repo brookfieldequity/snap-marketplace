@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { startAutoUpdate } from './lib/autoUpdate.js'
 
 // Top-level error boundary — never show a blank white screen. If any render
 // throws (including on mobile Safari, which we can't always reproduce), show
@@ -53,3 +54,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </React.StrictMode>
 )
+
+// Keep every open tab on the latest deployed build (no more hard-refresh).
+startAutoUpdate()

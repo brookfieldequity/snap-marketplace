@@ -83,6 +83,7 @@ export default function RequestsPage() {
   const [busy, setBusy]           = useState({})
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
+  const [dirty, setDirty]         = useState(false) // unsaved tier edits — blocks auto-update reload
   const [showAdd, setShowAdd]     = useState(false)
   const [roster, setRoster]       = useState([])
   const [locations, setLocations] = useState([])
@@ -107,6 +108,12 @@ export default function RequestsPage() {
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Tell the auto-updater not to reload over un-saved tier arrangements.
+  useEffect(() => {
+    window.__snapDirty = dirty
+    return () => { window.__snapDirty = false }
+  }, [dirty])
 
   // Handwriting font + sticky-note "deal out" animation (loaded once).
   useEffect(() => {
@@ -148,12 +155,16 @@ export default function RequestsPage() {
       _tier:   r.status === 'ACCEPTED' && r.tier ? r.tier : null,
     })))
     setSaved(false)
+    setDirty(false) // freshly (re)loaded from server — nothing unsaved
   }, [requests])
 
   const ptoPending = requests.filter((r) => r.type === 'PTO' && r.status === 'PENDING')
 
+  // Every board edit clears the saved state and flags unsaved work.
+  const markEdited = () => { setSaved(false); setDirty(true) }
+
   const assignTier = (id, tier) => {
-    setSaved(false)
+    markEdited()
     setWork((prev) => {
       const item = prev.find((w) => w.id === id)
       if (!item) return prev
@@ -168,19 +179,19 @@ export default function RequestsPage() {
     })
   }
   const unassign = (id) => {
-    setSaved(false)
+    markEdited()
     setWork((prev) => prev.map((w) => w.id === id ? { ...w, _status: 'PENDING', _tier: null } : w))
   }
   const decline = (id) => {
-    setSaved(false)
+    markEdited()
     setWork((prev) => prev.map((w) => w.id === id ? { ...w, _status: 'DECLINED', _tier: null } : w))
   }
   const restore = (id) => {
-    setSaved(false)
+    markEdited()
     setWork((prev) => prev.map((w) => w.id === id ? { ...w, _status: 'PENDING', _tier: null } : w))
   }
   const moveInTier = (id, dir) => {
-    setSaved(false)
+    markEdited()
     setWork((prev) => {
       const arr  = [...prev]
       const idx  = arr.findIndex((w) => w.id === id)
@@ -209,6 +220,7 @@ export default function RequestsPage() {
       })
       await facilityAPI.triageScheduleRequests(items)
       setSaved(true)
+      setDirty(false)
       load()
     } catch (e) {
       alert('Failed to save: ' + e.message)

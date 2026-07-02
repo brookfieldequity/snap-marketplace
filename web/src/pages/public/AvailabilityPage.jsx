@@ -155,6 +155,12 @@ export default function AvailabilityPage({ token }) {
       })
   }, [token])
 
+  // Let the auto-updater know not to reload over unsaved day selections.
+  useEffect(() => {
+    window.__snapDirty = hasChanges
+    return () => { window.__snapDirty = false }
+  }, [hasChanges])
+
   // Inject keyframes + handwriting font once
   useEffect(() => {
     const fontLink = document.createElement('link')
