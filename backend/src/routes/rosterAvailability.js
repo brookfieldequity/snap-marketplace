@@ -89,6 +89,27 @@ router.get('/', facilityAuth, async (req, res) => {
       if (rid) providerMap.set(`${rid}::${isoOf(p.date)}`, { available: p.available, note: p.note });
     }
 
+    // Provider self-submissions from the tokenized availability link
+    // (AvailDaySubmission). The schedule builder already merges these
+    // (schedule.js); without this, link submissions were invisible to the
+    // coordinator-facing availability/notes views. Same precedence as the
+    // builder: admin rows win, then RosterAvailability PROVIDER rows, then
+    // link submissions.
+    const mQ = /^(\d{4})-(\d{2})$/.exec(String(req.query.month));
+    const availSubs = await prisma.availDaySubmission.findMany({
+      where: {
+        request: { facilityId, year: Number(mQ[1]), month: Number(mQ[2]) },
+        date: { gte: bounds.start, lt: bounds.end },
+      },
+      include: { request: { select: { rosterEntryId: true } } },
+    });
+    for (const sub of availSubs) {
+      const key = `${sub.request.rosterEntryId}::${isoOf(sub.date)}`;
+      if (!providerMap.has(key)) {
+        providerMap.set(key, { available: sub.available, note: sub.note });
+      }
+    }
+
     // Resolve every key that has any signal.
     const overrides = {};
     const allKeys = new Set([...adminMap.keys(), ...ptoSet, ...providerMap.keys()]);

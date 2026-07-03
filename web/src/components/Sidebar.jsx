@@ -17,7 +17,6 @@ const SHIFTS_NAV = [
       { key: 'windows',           label: 'Availability Windows', icon: '🗓' },
       { key: 'availability',      label: 'Set Availability',     icon: '✅' },
       { key: 'requests',          label: 'Provider Requests',    icon: '✋' },
-      { key: 'requests-notes',    label: 'Requests & Notes',     icon: '🗒️' },
       { key: 'pto-builder',       label: 'PTO Builder',          icon: '🌴', flag: 'pto_builder' },
     ],
   },

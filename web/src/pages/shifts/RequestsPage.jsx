@@ -66,7 +66,13 @@ function paperFor(r, declined) {
 }
 
 export default function RequestsPage() {
+  // Two responsive modes on top of desktop:
+  //  narrow  (<860px): tier columns become a horizontal swipe strip
+  //  stacked (<620px): additionally, the calendar panel stacks above the board
+  // Between 620–859 (iPad portrait), the calendar panel stays fixed on the
+  // left — always on screen — while only the strip swipes.
   const narrow = useIsNarrow()
+  const stacked = useIsNarrow(620)
   const [requests, setRequests]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [busy, setBusy]           = useState({})
@@ -105,6 +111,28 @@ export default function RequestsPage() {
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Provider availability notes for the shown month (admin overrides, PTO
+  // reasons, app + tokenized-link self-submissions). Formerly its own
+  // "Requests & Notes" page — now folded into this board.
+  const [notes, setNotes] = useState([])
+  useEffect(() => {
+    const mk = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`
+    facilityAPI.getRosterAvailability(mk)
+      .then((res) => {
+        const nameById = {}
+        for (const m of res.members || []) nameById[m.rosterEntryId] = m.name
+        const out = []
+        for (const [rid, byDate] of Object.entries(res.overrides || {})) {
+          for (const [date, ov] of Object.entries(byDate)) {
+            if (ov && ov.note) out.push({ rid, name: nameById[rid] || 'Provider', date, available: ov.available, source: ov.source, note: ov.note })
+          }
+        }
+        out.sort((a, b) => a.date.localeCompare(b.date))
+        setNotes(out)
+      })
+      .catch(() => setNotes([]))
+  }, [calYear, calMonth])
 
   // Tell the auto-updater not to reload over un-saved tier arrangements.
   useEffect(() => {
@@ -365,11 +393,25 @@ export default function RequestsPage() {
   }, [touchDragId, work]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived data ─────────────────────────────────────────────────────────
-  const unassigned   = work.filter((w) => w._status === 'PENDING')
-  const declined     = work.filter((w) => w._status === 'DECLINED')
+  // The board shows ONLY requests that touch the month on the calendar —
+  // navigate the calendar to see other months. (Saving still sends every
+  // request, so off-month tiers are never lost.)
+  const mm = String(calMonth + 1).padStart(2, '0')
+  const monthStartISO = `${calYear}-${mm}-01`
+  const monthEndISO = calMonth === 11
+    ? `${calYear + 1}-01-01`
+    : `${calYear}-${String(calMonth + 2).padStart(2, '0')}-01`
+  const inShownMonth = (r) => {
+    const start = iso(r.date)
+    const end = r.endDate ? iso(r.endDate) : start
+    return start < monthEndISO && end >= monthStartISO
+  }
+
+  const unassigned   = work.filter((w) => w._status === 'PENDING' && inShownMonth(w))
+  const declined     = work.filter((w) => w._status === 'DECLINED' && inShownMonth(w))
   const tierGroups   = useMemo(
-    () => TIERS.map((t) => ({ t, items: work.filter((w) => w._status === 'ACCEPTED' && w._tier === t.n) })),
-    [work]
+    () => TIERS.map((t) => ({ t, items: work.filter((w) => w._status === 'ACCEPTED' && w._tier === t.n && inShownMonth(w)) })),
+    [work, monthStartISO, monthEndISO] // eslint-disable-line react-hooks/exhaustive-deps
   )
   const pendingBadge = unassigned.length + ptoPending.length
   const touchDragItem = touchDragId ? work.find((w) => w.id === touchDragId) : null
@@ -381,6 +423,7 @@ export default function RequestsPage() {
   const filteredTierGroups = selDay
     ? tierGroups.map(({ t, items }) => ({ t, items: items.filter((r) => requestCoversDay(r, selDay)) }))
     : tierGroups
+  const visibleNotes = selDay ? notes.filter((n) => n.date === selDay) : notes
 
   // ── Calendar data ────────────────────────────────────────────────────────
   const calDays = useMemo(() => {
@@ -403,7 +446,7 @@ export default function RequestsPage() {
   const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: narrow ? 'auto' : '100%', minHeight: narrow ? '100%' : 0, background: '#F8FAFC' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: stacked ? 'auto' : '100%', minHeight: stacked ? '100%' : 0, background: '#F8FAFC' }}>
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
       <div style={{ padding: narrow ? '14px 16px 12px' : '20px 28px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#fff', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
@@ -441,12 +484,12 @@ export default function RequestsPage() {
 
       {/* ── BOARD ────────────────────────────────────────────────────────── */}
       {!loading && tab === 'BOARD' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: narrow ? 'column' : 'row', minHeight: 0, overflow: narrow ? 'visible' : 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: stacked ? 'column' : 'row', minHeight: 0, overflow: stacked ? 'visible' : 'hidden' }}>
 
-          {/* Left: calendar + PTO. On narrow screens the panel is full-width but
-              its content is capped (~420px) and centered so an iPad-portrait
-              calendar stays mini instead of stretching across the screen. */}
-          <div style={{ width: narrow ? '100%' : 232, flexShrink: 0, borderRight: narrow ? 'none' : '1px solid #E2E8F0', borderBottom: narrow ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: narrow ? 'center' : 'stretch', overflowY: narrow ? 'visible' : 'auto' }}>
+          {/* Left: calendar + PTO + notes. Phones stack it above the board;
+              iPad/desktop keep it as a fixed left column that never moves when
+              the tier strip swipes. Content capped so the calendar stays mini. */}
+          <div style={{ width: stacked ? '100%' : (narrow ? 264 : 232), flexShrink: 0, borderRight: stacked ? 'none' : '1px solid #E2E8F0', borderBottom: stacked ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: stacked ? 'center' : 'stretch', overflowY: stacked ? 'visible' : 'auto' }}>
 
             {/* Mini calendar */}
             <div style={{ padding: '18px 16px 12px', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
@@ -536,7 +579,52 @@ export default function RequestsPage() {
               </div>
             )}
 
-            {work.length === 0 && ptoPending.length === 0 && (
+            {/* Provider notes — availability notes for the shown month, from
+                admin overrides, PTO reasons, the provider app, and the
+                tokenized availability link. (Replaces the old Requests & Notes
+                page.) Tap a note to jump the board to that day. */}
+            {visibleNotes.length > 0 && (
+              <div style={{ padding: 14, width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+                  Provider Notes ({visibleNotes.length})
+                </div>
+                {visibleNotes.map((n, i) => {
+                  const tilt = tiltFor(`${n.rid}-${n.date}`)
+                  const paper = n.available === false
+                    ? 'linear-gradient(160deg, #FECACA, #FBB4B4)'
+                    : n.available === true
+                    ? 'linear-gradient(160deg, #BFDBFE, #A9CBF7)'
+                    : 'linear-gradient(160deg, #FEF08A, #FDE047)'
+                  return (
+                    <div
+                      key={`${n.rid}-${n.date}-${i}`}
+                      onClick={() => setSelDay(selDay === n.date ? null : n.date)}
+                      title="Show this day on the board"
+                      style={{
+                        position: 'relative', background: paper, borderRadius: 3,
+                        padding: '10px 12px', marginBottom: 12, cursor: 'pointer',
+                        transform: `rotate(${tilt}deg)`,
+                        boxShadow: '0 5px 10px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.5)',
+                        outline: selDay === n.date ? '2px solid #2563EB' : 'none',
+                      }}
+                    >
+                      <div style={{ position: 'absolute', top: -6, left: 12, width: 38, height: 13, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', transform: 'rotate(-4deg)' }} />
+                      <div style={{ fontWeight: 800, fontSize: 12.5, color: '#1E293B' }}>
+                        {n.name}
+                        <span style={{ fontWeight: 600, color: 'rgba(30,41,59,0.55)', marginLeft: 6, fontSize: 11 }}>
+                          {fmtDate(n.date)}{n.source === 'PROVIDER' ? ' · from provider' : n.source === 'PTO' ? ' · PTO' : ''}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: '"Kalam", cursive', fontSize: 14, lineHeight: 1.35, color: '#1E293B', marginTop: 4, wordBreak: 'break-word' }}>
+                        {n.note}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {work.length === 0 && ptoPending.length === 0 && notes.length === 0 && (
               <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
                 No requests yet.
               </div>
@@ -544,7 +632,7 @@ export default function RequestsPage() {
           </div>
 
           {/* Right: Kanban board */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: narrow ? 'visible' : 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: stacked ? 'visible' : 'hidden' }}>
 
             {/* Day header bar */}
             {selDay && (
@@ -563,11 +651,12 @@ export default function RequestsPage() {
                 NOTE: no -webkit-overflow-scrolling:touch here — iOS momentum
                 scrolling ignores programmatic scrollLeft during an active
                 touch, which broke drag-to-edge auto-scroll on iPad. */}
-            <div ref={stripRef} style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden' }}>
+            <div ref={stripRef} style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: stacked ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: stacked ? 'visible' : 'hidden' }}>
 
               {/* Unassigned column */}
               <KanbanColumn
                 narrow={narrow}
+                stacked={stacked}
                 dropId="unassigned"
                 title="Unassigned"
                 subtitle="Drag to a tier →"
@@ -613,6 +702,7 @@ export default function RequestsPage() {
                 <KanbanColumn
                   key={t.n}
                   narrow={narrow}
+                  stacked={stacked}
                   dropId={t.n}
                   title={`${t.n} · ${t.label}`}
                   subtitle={t.blurb}
@@ -706,7 +796,7 @@ export default function RequestsPage() {
 }
 
 // ── Kanban column ─────────────────────────────────────────────────────────────
-function KanbanColumn({ narrow, dropId, title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
+function KanbanColumn({ narrow, stacked, dropId, title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
   return (
     <div
       data-drop={dropId}
@@ -725,14 +815,14 @@ function KanbanColumn({ narrow, dropId, title, subtitle, count, color, bg, borde
       }}
     >
       {/* Column header */}
-      <div style={{ padding: '12px 14px 10px', borderBottom: `2px solid ${isDrop ? color : border}`, background: isDrop ? (light || bg) : bg, transition: 'all 0.15s', flexShrink: 0, position: narrow ? 'sticky' : 'static', top: 0, zIndex: 2 }}>
+      <div style={{ padding: '12px 14px 10px', borderBottom: `2px solid ${isDrop ? color : border}`, background: isDrop ? (light || bg) : bg, transition: 'all 0.15s', flexShrink: 0, position: stacked ? 'sticky' : 'static', top: 0, zIndex: 2 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           {title}{count > 0 ? <span style={{ marginLeft: 6, background: color, color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10 }}>{count}</span> : null}
         </div>
         {subtitle && <div style={{ fontSize: 10.5, color, opacity: 0.65, marginTop: 2 }}>{subtitle}</div>}
       </div>
       {/* Cards */}
-      <div style={{ flex: 1, overflowY: narrow ? 'visible' : 'auto', padding: '10px 10px 20px' }}>
+      <div style={{ flex: 1, overflowY: stacked ? 'visible' : 'auto', padding: '10px 10px 20px' }}>
         {children}
       </div>
     </div>

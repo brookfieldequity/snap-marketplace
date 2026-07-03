@@ -50,7 +50,6 @@ const ScheduleBuilderPage      = lazyPage(() => import('./pages/shifts/ScheduleB
 const DailyViewPage            = lazyPage(() => import('./pages/shifts/DailyViewPage.jsx'))
 const GapsPage                 = lazyPage(() => import('./pages/shifts/GapsPage.jsx'))
 const RequestsPage             = lazyPage(() => import('./pages/shifts/RequestsPage.jsx'))
-const RequestsNotesPage        = lazyPage(() => import('./pages/shifts/RequestsNotesPage.jsx'))
 const StaffIQInsightsPage      = lazyPage(() => import('./pages/shifts/StaffIQInsightsPage.jsx'))
 const StaffIQCalculatorPage    = lazyPage(() => import('./pages/shifts/StaffIQCalculatorPage.jsx'))
 const StaffIQInputsPage        = lazyPage(() => import('./pages/shifts/StaffIQInputsPage.jsx'))
@@ -457,9 +456,6 @@ export default function App() {
             )}
             {isShiftsMode && featureFlags.pto_builder && facilityPage === 'pto-builder' && (
               <PtoBuilderPage />
-            )}
-            {isShiftsMode && facilityPage === 'requests-notes' && (
-              <RequestsNotesPage />
             )}
             {isShiftsMode && facilityPage === 'gaps' && (
               <GapsPage onNavigate={setFacilityPage} />
