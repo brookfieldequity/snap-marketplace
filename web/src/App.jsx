@@ -1,65 +1,99 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
+import { facilityAPI } from './api.js'
+
+// ── Eager imports — everything a first paint can need ─────────────────────────
+// Public token pages (no login; the SMS/email link IS the first impression) and
+// the login/landing screens stay in the entry bundle so they render instantly.
 import AvailabilityPage from './pages/public/AvailabilityPage.jsx'
+import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
+import PtoRankPage from './pages/PtoRankPage.jsx'
+import SmsTermsPage from './pages/SmsTermsPage.jsx'
+import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
+import FacilityRegisterPage from './pages/FacilityRegisterPage.jsx'
+import AdminLoginPage from './pages/AdminLoginPage.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import SnappyWidget from './components/SnappyWidget.jsx'
 import AdminSidebar from './components/AdminSidebar.jsx'
-import { facilityAPI } from './api.js'
-import PayrollBuilderPage from './pages/shifts/PayrollBuilderPage.jsx'
-import PayrollHistoryPage from './pages/shifts/PayrollHistoryPage.jsx'
-import AgencyInvoicePage from './pages/shifts/AgencyInvoicePage.jsx'
-import HourEntryPage from './pages/shifts/HourEntryPage.jsx'
-import AgencyMetricsPage from './pages/shifts/AgencyMetricsPage.jsx'
-import PtoBuilderPage from './pages/shifts/PtoBuilderPage.jsx'
-import PtoRankPage from './pages/PtoRankPage.jsx'
 
-// Facility pages
-import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
-import FacilityRegisterPage from './pages/FacilityRegisterPage.jsx'
-import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
-import DashboardPage from './pages/DashboardPage.jsx'
-import PostShiftPage from './pages/PostShiftPage.jsx'
-import ShiftsPage from './pages/ShiftsPage.jsx'
-import ProvidersPage from './pages/ProvidersPage.jsx'
-import FacilityProfilePage from './pages/FacilityProfilePage.jsx'
-import SubscriptionPage from './pages/SubscriptionPage.jsx'
+// ── Lazy imports — portal pages load on demand (code-splitting) ────────────────
+// Each page becomes its own chunk fetched the first time it renders, so a
+// provider opening /avail/:token never downloads the portals. If a fetch fails
+// because a deploy replaced the old hashed chunks, reload once to pick up the
+// new build (the auto-updater in lib/autoUpdate.js usually gets there first).
+const lazyPage = (loader) => lazy(() =>
+  loader()
+    .then((m) => { sessionStorage.removeItem('snapChunkReload'); return m })
+    .catch((err) => {
+      if (!sessionStorage.getItem('snapChunkReload')) {
+        sessionStorage.setItem('snapChunkReload', '1')
+        window.location.reload()
+      }
+      throw err
+    })
+)
+
+// Facility marketplace pages
+const DashboardPage       = lazyPage(() => import('./pages/DashboardPage.jsx'))
+const PostShiftPage       = lazyPage(() => import('./pages/PostShiftPage.jsx'))
+const ShiftsPage          = lazyPage(() => import('./pages/ShiftsPage.jsx'))
+const ProvidersPage       = lazyPage(() => import('./pages/ProvidersPage.jsx'))
+const FacilityProfilePage = lazyPage(() => import('./pages/FacilityProfilePage.jsx'))
+const SubscriptionPage    = lazyPage(() => import('./pages/SubscriptionPage.jsx'))
 
 // SNAP Shifts pages
-import SnapShiftsDashboard from './pages/shifts/SnapShiftsDashboard.jsx'
-import InternalRosterPage from './pages/shifts/InternalRosterPage.jsx'
-import AvailabilityWindowsPage from './pages/shifts/AvailabilityWindowsPage.jsx'
-import FacilityAvailabilityPage from './pages/shifts/FacilityAvailabilityPage.jsx'
-import ScheduleBuilderPage from './pages/shifts/ScheduleBuilderPage.jsx'
-import DailyViewPage from './pages/shifts/DailyViewPage.jsx'
-import GapsPage from './pages/shifts/GapsPage.jsx'
-import RequestsPage from './pages/shifts/RequestsPage.jsx'
-import RequestsNotesPage from './pages/shifts/RequestsNotesPage.jsx'
-import StaffIQInsightsPage from './pages/shifts/StaffIQInsightsPage.jsx'
-import StaffIQCalculatorPage from './pages/shifts/StaffIQCalculatorPage.jsx'
-import StaffIQInputsPage from './pages/shifts/StaffIQInputsPage.jsx'
-import DataUploadPage from './pages/shifts/DataUploadPage.jsx'
-import CoverageTemplatesPage from './pages/shifts/CoverageTemplatesPage.jsx'
+const SnapShiftsDashboard      = lazyPage(() => import('./pages/shifts/SnapShiftsDashboard.jsx'))
+const InternalRosterPage       = lazyPage(() => import('./pages/shifts/InternalRosterPage.jsx'))
+const AvailabilityWindowsPage  = lazyPage(() => import('./pages/shifts/AvailabilityWindowsPage.jsx'))
+const FacilityAvailabilityPage = lazyPage(() => import('./pages/shifts/FacilityAvailabilityPage.jsx'))
+const ScheduleBuilderPage      = lazyPage(() => import('./pages/shifts/ScheduleBuilderPage.jsx'))
+const DailyViewPage            = lazyPage(() => import('./pages/shifts/DailyViewPage.jsx'))
+const GapsPage                 = lazyPage(() => import('./pages/shifts/GapsPage.jsx'))
+const RequestsPage             = lazyPage(() => import('./pages/shifts/RequestsPage.jsx'))
+const RequestsNotesPage        = lazyPage(() => import('./pages/shifts/RequestsNotesPage.jsx'))
+const StaffIQInsightsPage      = lazyPage(() => import('./pages/shifts/StaffIQInsightsPage.jsx'))
+const StaffIQCalculatorPage    = lazyPage(() => import('./pages/shifts/StaffIQCalculatorPage.jsx'))
+const StaffIQInputsPage        = lazyPage(() => import('./pages/shifts/StaffIQInputsPage.jsx'))
+const DataUploadPage           = lazyPage(() => import('./pages/shifts/DataUploadPage.jsx'))
+const CoverageTemplatesPage    = lazyPage(() => import('./pages/shifts/CoverageTemplatesPage.jsx'))
+const PtoBuilderPage           = lazyPage(() => import('./pages/shifts/PtoBuilderPage.jsx'))
+
+// SNAP Ops pages
+const PayrollBuilderPage  = lazyPage(() => import('./pages/shifts/PayrollBuilderPage.jsx'))
+const PayrollHistoryPage  = lazyPage(() => import('./pages/shifts/PayrollHistoryPage.jsx'))
+const AgencyInvoicePage   = lazyPage(() => import('./pages/shifts/AgencyInvoicePage.jsx'))
+const HourEntryPage       = lazyPage(() => import('./pages/shifts/HourEntryPage.jsx'))
+const AgencyMetricsPage   = lazyPage(() => import('./pages/shifts/AgencyMetricsPage.jsx'))
 
 // Admin pages
-import AdminLoginPage from './pages/AdminLoginPage.jsx'
-import AdminOverviewPage from './pages/admin/AdminOverviewPage.jsx'
-import AdminProvidersPage from './pages/admin/AdminProvidersPage.jsx'
-import AdminFacilitiesPage from './pages/admin/AdminFacilitiesPage.jsx'
-import AdminShiftsPage from './pages/admin/AdminShiftsPage.jsx'
-import AdminDisputesPage from './pages/admin/AdminDisputesPage.jsx'
-import AdminMessagesPage from './pages/admin/AdminMessagesPage.jsx'
-import AdminStaffIQPage from './pages/admin/AdminStaffIQPage.jsx'
-import AdminLeadsPage from './pages/admin/AdminLeadsPage.jsx'
-import AdminWindowsPage from './pages/admin/AdminWindowsPage.jsx'
-import AdminIncentivesPage from './pages/admin/AdminIncentivesPage.jsx'
-import AdminUploadsPage from './pages/admin/AdminUploadsPage.jsx'
-import AdminCredentialUsersPage from './pages/admin/AdminCredentialUsersPage.jsx'
-import AdminRoiPage from './pages/admin/AdminRoiPage.jsx'
-import AdminMarketplaceFeesPage from './pages/admin/AdminMarketplaceFeesPage.jsx'
-import AdminFeatureFlagsPage from './pages/admin/AdminFeatureFlagsPage.jsx'
-import AdminDemoPage from './pages/admin/AdminDemoPage.jsx'
-import AdminInvoicesPage from './pages/admin/AdminInvoicesPage.jsx'
-import CredentialApp from './pages/credentialing/CredentialApp.jsx'
-import SmsTermsPage from './pages/SmsTermsPage.jsx'
+const AdminOverviewPage        = lazyPage(() => import('./pages/admin/AdminOverviewPage.jsx'))
+const AdminProvidersPage       = lazyPage(() => import('./pages/admin/AdminProvidersPage.jsx'))
+const AdminFacilitiesPage      = lazyPage(() => import('./pages/admin/AdminFacilitiesPage.jsx'))
+const AdminShiftsPage          = lazyPage(() => import('./pages/admin/AdminShiftsPage.jsx'))
+const AdminDisputesPage        = lazyPage(() => import('./pages/admin/AdminDisputesPage.jsx'))
+const AdminMessagesPage        = lazyPage(() => import('./pages/admin/AdminMessagesPage.jsx'))
+const AdminStaffIQPage         = lazyPage(() => import('./pages/admin/AdminStaffIQPage.jsx'))
+const AdminLeadsPage           = lazyPage(() => import('./pages/admin/AdminLeadsPage.jsx'))
+const AdminWindowsPage         = lazyPage(() => import('./pages/admin/AdminWindowsPage.jsx'))
+const AdminIncentivesPage      = lazyPage(() => import('./pages/admin/AdminIncentivesPage.jsx'))
+const AdminUploadsPage         = lazyPage(() => import('./pages/admin/AdminUploadsPage.jsx'))
+const AdminCredentialUsersPage = lazyPage(() => import('./pages/admin/AdminCredentialUsersPage.jsx'))
+const AdminRoiPage             = lazyPage(() => import('./pages/admin/AdminRoiPage.jsx'))
+const AdminMarketplaceFeesPage = lazyPage(() => import('./pages/admin/AdminMarketplaceFeesPage.jsx'))
+const AdminFeatureFlagsPage    = lazyPage(() => import('./pages/admin/AdminFeatureFlagsPage.jsx'))
+const AdminDemoPage            = lazyPage(() => import('./pages/admin/AdminDemoPage.jsx'))
+const AdminInvoicesPage        = lazyPage(() => import('./pages/admin/AdminInvoicesPage.jsx'))
+
+// Credentialing portal
+const CredentialApp = lazyPage(() => import('./pages/credentialing/CredentialApp.jsx'))
+
+// Shown while a lazily loaded portal page's chunk is fetched (usually <100ms).
+function PageLoader() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240, color: '#94A3B8', fontSize: 14 }}>
+      Loading…
+    </div>
+  )
+}
 
 export default function App() {
   // Public claim route — short-circuits all portal / auth logic. When the
@@ -355,6 +389,7 @@ export default function App() {
             featureFlags={featureFlags}
           />
           <main style={{ flex: 1, marginLeft: 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
+            <Suspense fallback={<PageLoader />}>
             {/* SNAP Shifts pages */}
             {isShiftsMode && facilityPage === 'shifts-dashboard' && (
               <SnapShiftsDashboard onNavigate={setFacilityPage} />
@@ -440,6 +475,7 @@ export default function App() {
             {facilityPage === 'subscription' && (
               <SubscriptionPage />
             )}
+            </Suspense>
           </main>
         </div>
         {/* Snappy AI assistant — facility portal (Task #17) */}
@@ -458,6 +494,7 @@ export default function App() {
           onLogout={handleAdminLogout}
         />
         <main style={{ flex: 1, marginLeft: 240, minHeight: '100vh', background: '#F8FAFC' }}>
+          <Suspense fallback={<PageLoader />}>
           {adminPage === 'overview'          && <AdminOverviewPage />}
           {adminPage === 'demo'             && <AdminDemoPage />}
           {adminPage === 'providers'         && <AdminProvidersPage />}
@@ -482,6 +519,7 @@ export default function App() {
           {adminPage === 'admin-uploads'     && <AdminUploadsPage />}
           {adminPage === 'credential-users' && <AdminCredentialUsersPage />}
           {adminPage === 'invoices'         && <AdminInvoicesPage />}
+          </Suspense>
         </main>
       </div>
     )
@@ -489,7 +527,11 @@ export default function App() {
 
   // ── Credentialing portal ────────────────────────────────────────────────────
   if (portalChoice === 'credential') {
-    return <CredentialApp onBack={() => setPortalChoice(null)} />
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <CredentialApp onBack={() => setPortalChoice(null)} />
+      </Suspense>
+    )
   }
 
   // ── Portal choice / auth ────────────────────────────────────────────────────
