@@ -59,6 +59,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
   )
 }
 import CredentialSidebar from '../../components/CredentialSidebar.jsx'
+import useIsNarrow from '../../lib/useIsNarrow.js'
 import CredentialLoginPage from './CredentialLoginPage.jsx'
 import CredentialDashboard from './CredentialDashboard.jsx'
 import CredentialProviderList from './CredentialProviderList.jsx'
@@ -74,6 +75,9 @@ export default function CredentialApp({ onBack }) {
   const [page, setPage] = useState('dashboard')
   const [providerDetailId, setProviderDetailId] = useState(null)
   const [rosterDetailId, setRosterDetailId] = useState(null)
+  // Phone layout: sidebar becomes a hamburger drawer (desktop unchanged).
+  const narrow = useIsNarrow()
+  const [navOpen, setNavOpen] = useState(false)
 
   // Verify stored token on mount
   useEffect(() => {
@@ -205,13 +209,39 @@ export default function CredentialApp({ onBack }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#F8FAFC' }}>
+      {/* Phone-only top bar — hosts the hamburger since there's no desktop header */}
+      {narrow && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 300,
+          background: '#0F172A', display: 'flex', alignItems: 'center', gap: 12,
+          padding: '0 14px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <button
+            onClick={() => setNavOpen((v) => !v)}
+            aria-label="Menu"
+            style={{
+              width: 36, height: 36, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 9,
+              background: 'transparent', cursor: 'pointer', fontSize: 17, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#CBD5E1',
+            }}
+          >
+            ☰
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</span>
+          <span style={{ fontSize: 11, color: '#60A5FA', fontWeight: 700 }}>Credentialing</span>
+        </div>
+      )}
       <CredentialSidebar
         activePage={activeSidebarKey}
         onNavigate={handleNavigate}
         user={user}
         onLogout={handleLogout}
+        narrow={narrow}
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+        topOffset={52}
       />
-      <main style={{ marginLeft: 240, flex: 1, minHeight: '100vh', overflowY: 'auto' }}>
+      <main style={{ marginLeft: narrow ? 0 : 240, paddingTop: narrow ? 52 : 0, flex: 1, minHeight: '100vh', overflowY: 'auto' }}>
         {renderPage()}
       </main>
     </div>

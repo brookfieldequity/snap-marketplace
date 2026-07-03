@@ -18,22 +18,40 @@ const NAV = {
   ],
 }
 
-export default function CredentialSidebar({ activePage, onNavigate, user, onLogout }) {
+export default function CredentialSidebar({ activePage, onNavigate, user, onLogout, narrow = false, open = false, onClose, topOffset = 52 }) {
   const permission = user?.permission || 'BILLING'
   const items = NAV[permission] || NAV.BILLING
 
+  // On phones the sidebar is an off-canvas drawer: picking a page closes it.
+  const navigate = (key) => {
+    onNavigate(key)
+    if (narrow && onClose) onClose()
+  }
+
   return (
+    <>
+      {/* Scrim behind the drawer (phone only) */}
+      {narrow && open && (
+        <div
+          onClick={onClose}
+          style={{ position: 'fixed', top: topOffset, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.5)', zIndex: 350 }}
+        />
+      )}
     <aside style={{
       position: 'fixed',
-      top: 0,
+      top: narrow ? topOffset : 0,
       left: 0,
       width: 240,
-      height: '100dvh',
+      height: narrow ? undefined : '100dvh',
+      bottom: narrow ? 0 : undefined,
       background: '#0F172A',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
-      zIndex: 100,
+      zIndex: narrow ? 400 : 100,
+      transform: narrow && !open ? 'translateX(-100%)' : 'translateX(0)',
+      transition: narrow ? 'transform 0.25s ease' : 'none',
+      boxShadow: narrow && open ? '8px 0 30px rgba(0,0,0,0.35)' : 'none',
     }}>
       {/* Logo */}
       <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
@@ -52,7 +70,7 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
         {items.map(item => (
           <button
             key={item.key}
-            onClick={() => onNavigate(item.key)}
+            onClick={() => navigate(item.key)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -90,5 +108,6 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
         </button>
       </div>
     </aside>
+    </>
   )
 }

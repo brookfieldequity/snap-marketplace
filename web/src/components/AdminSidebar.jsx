@@ -24,21 +24,37 @@ const SNAP_SHIFTS_ITEMS = [
   { key: 'admin-uploads',     label: 'Data Uploads',       icon: '📤' },
 ]
 
-export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
+export default function AdminSidebar({ activePage, onNavigate, onLogout, narrow = false, open = false, onClose, topOffset = 52 }) {
+  // On phones the sidebar is an off-canvas drawer: picking a page closes it.
+  const navigate = (key) => {
+    onNavigate(key)
+    if (narrow && onClose) onClose()
+  }
   return (
+    <>
+      {/* Scrim behind the drawer (phone only) */}
+      {narrow && open && (
+        <div
+          onClick={onClose}
+          style={{ position: 'fixed', top: topOffset, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.5)', zIndex: 350 }}
+        />
+      )}
     <aside
       style={{
         width: 240,
-        minHeight: '100vh',
+        minHeight: narrow ? undefined : '100vh',
         background: '#0F172A',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
         position: 'fixed',
-        top: 0,
+        top: narrow ? topOffset : 0,
         left: 0,
         bottom: 0,
-        zIndex: 100,
+        zIndex: narrow ? 400 : 100,
+        transform: narrow && !open ? 'translateX(-100%)' : 'translateX(0)',
+        transition: narrow ? 'transform 0.25s ease' : 'none',
+        boxShadow: narrow && open ? '8px 0 30px rgba(0,0,0,0.35)' : 'none',
       }}
     >
       {/* Logo */}
@@ -88,7 +104,7 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
           return (
             <button
               key={item.key}
-              onClick={() => onNavigate(item.key)}
+              onClick={() => navigate(item.key)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -144,7 +160,7 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
           return (
             <button
               key={item.key}
-              onClick={() => onNavigate(item.key)}
+              onClick={() => navigate(item.key)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -216,5 +232,6 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout }) {
         </button>
       </div>
     </aside>
+    </>
   )
 }

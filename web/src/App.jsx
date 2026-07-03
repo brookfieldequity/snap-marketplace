@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { facilityAPI } from './api.js'
+import useIsNarrow from './lib/useIsNarrow.js'
 
 // ── Eager imports — everything a first paint can need ─────────────────────────
 // Public token pages (no login; the SMS/email link IS the first impression) and
@@ -147,6 +148,11 @@ export default function App() {
     () => localStorage.getItem('snapAdminToken')
   )
   const [facilityIsDemo, setFacilityIsDemo] = useState(false)
+
+  // Phone/tablet layout: portal sidebars become off-canvas drawers behind a
+  // hamburger button. Desktop (≥860px) renders exactly as before.
+  const narrow = useIsNarrow()
+  const [navOpen, setNavOpen] = useState(false)
 
   // Facility-side state
   const [facilityPage, setFacilityPage] = useState('dashboard')
@@ -321,14 +327,27 @@ export default function App() {
             padding: '0 24px',
           }}
         >
-          {/* Left: SNAP wordmark + mascot (no "Snappy" name — that's the assistant only) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 200 }}>
+          {/* Left: hamburger (phone) + SNAP wordmark + mascot */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: narrow ? 'auto' : 200 }}>
+            {narrow && (
+              <button
+                onClick={() => setNavOpen((v) => !v)}
+                aria-label="Menu"
+                style={{
+                  width: 38, height: 38, border: '1px solid #E2E8F0', borderRadius: 9,
+                  background: '#fff', cursor: 'pointer', fontSize: 18, lineHeight: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155',
+                }}
+              >
+                ☰
+              </button>
+            )}
             <span style={{ fontSize: 22, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em', lineHeight: 1 }}>SNAP</span>
-            <img src="/snappy-mascot.png" alt="" style={{ height: 42, width: 'auto', display: 'block' }} />
+            {!narrow && <img src="/snappy-mascot.png" alt="" style={{ height: 42, width: 'auto', display: 'block' }} />}
           </div>
 
-          {/* Center: capability toggle pills (only the tabs this facility has) */}
-          {availableTabs.length > 1 && (
+          {/* Center: capability toggle pills (desktop; on phones they live in the drawer) */}
+          {!narrow && availableTabs.length > 1 && (
             <div
               style={{
                 display: 'flex',
@@ -364,7 +383,8 @@ export default function App() {
           {/* Right: facility name */}
           <div
             style={{
-              width: 200,
+              width: narrow ? undefined : 200,
+              maxWidth: narrow ? 160 : undefined,
               textAlign: 'right',
               fontSize: 13,
               fontWeight: 600,
@@ -387,8 +407,14 @@ export default function App() {
             onLogout={handleFacilityLogout}
             activeTab={activeTab}
             featureFlags={featureFlags}
+            narrow={narrow}
+            open={navOpen}
+            onClose={() => setNavOpen(false)}
+            topOffset={56 + demoBannerH}
+            tabs={availableTabs.map((t) => ({ key: t, label: TAB_META[t].label, active: activeTab === t }))}
+            onTab={navigateTab}
           />
-          <main style={{ flex: 1, marginLeft: 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
+          <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
             <Suspense fallback={<PageLoader />}>
             {/* SNAP Shifts pages */}
             {isShiftsMode && facilityPage === 'shifts-dashboard' && (
@@ -488,12 +514,39 @@ export default function App() {
   if (adminToken) {
     return (
       <div style={{ display: 'flex', minHeight: '100vh' }}>
+        {/* Phone-only top bar — the admin panel has no desktop header, so the
+            hamburger needs somewhere to live on small screens. */}
+        {narrow && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 300,
+            background: '#0F172A', display: 'flex', alignItems: 'center', gap: 12,
+            padding: '0 14px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            <button
+              onClick={() => setNavOpen((v) => !v)}
+              aria-label="Menu"
+              style={{
+                width: 36, height: 36, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 9,
+                background: 'transparent', cursor: 'pointer', fontSize: 17, lineHeight: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#CBD5E1',
+              }}
+            >
+              ☰
+            </button>
+            <span style={{ fontSize: 17, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</span>
+            <span style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 700, letterSpacing: '0.05em' }}>ADMIN</span>
+          </div>
+        )}
         <AdminSidebar
           activePage={adminPage}
           onNavigate={setAdminPage}
           onLogout={handleAdminLogout}
+          narrow={narrow}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+          topOffset={52}
         />
-        <main style={{ flex: 1, marginLeft: 240, minHeight: '100vh', background: '#F8FAFC' }}>
+        <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, paddingTop: narrow ? 52 : 0, minHeight: '100vh', background: '#F8FAFC' }}>
           <Suspense fallback={<PageLoader />}>
           {adminPage === 'overview'          && <AdminOverviewPage />}
           {adminPage === 'demo'             && <AdminDemoPage />}

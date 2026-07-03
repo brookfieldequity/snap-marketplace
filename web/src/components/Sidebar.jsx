@@ -213,7 +213,7 @@ function Divider() {
   )
 }
 
-export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, activeTab, featureFlags = {} }) {
+export default function Sidebar({ activePage, onNavigate, facilityName, onLogout, activeTab, featureFlags = {}, narrow = false, open = false, onClose, tabs = [], onTab, topOffset = 56 }) {
   // The header toggle picks one capability at a time; the sidebar shows just
   // that tab's nav (+ the always-on Account section) for a tidy menu.
   const shiftsNav = filterShiftsNav(featureFlags)
@@ -234,7 +234,21 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
 
   const toggleGroup = (id) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
 
+  // On phones the sidebar is an off-canvas drawer: picking a page closes it.
+  const navigate = (key) => {
+    onNavigate(key)
+    if (narrow && onClose) onClose()
+  }
+
   return (
+    <>
+      {/* Scrim behind the drawer (phone only) */}
+      {narrow && open && (
+        <div
+          onClick={onClose}
+          style={{ position: 'fixed', top: topOffset, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.5)', zIndex: 350 }}
+        />
+      )}
     <aside
       style={{
         width: 240,
@@ -243,11 +257,15 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         flexDirection: 'column',
         flexShrink: 0,
         position: 'fixed',
-        top: 56,
+        top: narrow ? topOffset : 56,
         left: 0,
         bottom: 0,
-        zIndex: 100,
+        zIndex: narrow ? 400 : 100,
         overflow: 'hidden',
+        // Off-canvas on phones; desktop keeps the always-visible column.
+        transform: narrow && !open ? 'translateX(-100%)' : 'translateX(0)',
+        transition: narrow ? 'transform 0.25s ease' : 'none',
+        boxShadow: narrow && open ? '8px 0 30px rgba(0,0,0,0.35)' : 'none',
       }}
     >
       {/* Facility Name */}
@@ -276,6 +294,32 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         </div>
       )}
 
+      {/* Capability switcher — lives in the drawer on phones (the header pills
+          are hidden there). Desktop keeps the header pills; this never shows. */}
+      {narrow && tabs.length > 1 && (
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 6 }}>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => onTab && onTab(t.key)}
+              style={{
+                flex: 1,
+                padding: '8px 4px',
+                borderRadius: 8,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: t.active ? '#2563EB' : 'rgba(255,255,255,0.06)',
+                color: t.active ? '#fff' : '#94A3B8',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Nav */}
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         {/* SNAP Shifts section */}
@@ -289,7 +333,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
                     key={node.key}
                     item={node}
                     isActive={activePage === node.key}
-                    onNavigate={onNavigate}
+                    onNavigate={navigate}
                   />
                 )
               }
@@ -309,7 +353,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
                         key={it.key}
                         item={it}
                         isActive={activePage === it.key}
-                        onNavigate={onNavigate}
+                        onNavigate={navigate}
                         indented
                       />
                     ))}
@@ -329,7 +373,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
                 key={item.key}
                 item={item}
                 isActive={activePage === item.key}
-                onNavigate={onNavigate}
+                onNavigate={navigate}
               />
             ))}
             <Divider />
@@ -345,7 +389,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
                 key={item.key}
                 item={item}
                 isActive={activePage === item.key}
-                onNavigate={onNavigate}
+                onNavigate={navigate}
               />
             ))}
             <Divider />
@@ -359,7 +403,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
             key={item.key}
             item={item}
             isActive={activePage === item.key}
-            onNavigate={onNavigate}
+            onNavigate={navigate}
           />
         ))}
       </nav>
@@ -397,5 +441,6 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
         </button>
       </div>
     </aside>
+    </>
   )
 }

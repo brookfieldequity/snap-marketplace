@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { facilityAPI } from '../../api.js'
+import useIsNarrow from '../../lib/useIsNarrow.js'
 
 // Coordinator triage: calendar on the left, kanban board on the right.
 // Click a day → its request cards appear in the Unassigned staging column.
@@ -62,18 +63,6 @@ function paperFor(r, declined) {
   if (declined) return '#E5E7EB'
   if (r._tier) return TIER_PAPER[r._tier] || '#FEF08A'
   return '#FEF08A' // unassigned → classic yellow sticky
-}
-
-// Track a narrow (tablet/phone) viewport so the board can restack + scroll.
-function useIsNarrow(bp = 860) {
-  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < bp)
-  useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < bp)
-    onResize()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [bp])
-  return narrow
 }
 
 export default function RequestsPage() {
