@@ -96,9 +96,17 @@ export default function RequestsPage() {
   const [calMonth, setCalMonth] = useState(now.getMonth())   // 0-indexed
   const [selDay,   setSelDay]   = useState(null)             // "2026-09-15" or null
 
-  // Drag state
+  // Drag state (desktop HTML5 DnD)
   const dragId  = useRef(null)
   const [dropTarget, setDropTarget] = useState(null)  // tier number or 'unassigned'
+
+  // Touch drag state (tablets/phones — HTML5 drag events never fire on touch).
+  // Long-press lifts the sticky note so it doesn't fight with scroll gestures.
+  const touchTimer = useRef(null)
+  const touchData  = useRef(null) // { id, x, y } at touchstart
+  const [touchDragId, setTouchDragId] = useState(null)
+  const ghostRef = useRef(null)   // floating sticky that follows the finger
+  const stripRef = useRef(null)   // the columns container (for edge auto-scroll)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -268,6 +276,97 @@ export default function RequestsPage() {
     dragId.current = null
   }
 
+  // ── Touch drag handlers ──────────────────────────────────────────────────
+  // Press-and-hold (~300ms) lifts a card; a quick swipe still scrolls.
+  function onCardTouchStart(e, id) {
+    if (e.target.closest('button')) return // taps on tier/decline buttons stay taps
+    const t = e.touches[0]
+    touchData.current = { id, x: t.clientX, y: t.clientY }
+    clearTimeout(touchTimer.current)
+    touchTimer.current = setTimeout(() => {
+      setTouchDragId(id)
+      if (navigator.vibrate) navigator.vibrate(15) // small haptic "lift" cue
+    }, 300)
+  }
+  function onCardTouchMove(e) {
+    if (touchDragId || !touchData.current) return
+    const t = e.touches[0]
+    // Finger moved before the hold completed → it's a scroll, not a lift.
+    if (Math.abs(t.clientX - touchData.current.x) > 10 || Math.abs(t.clientY - touchData.current.y) > 10) {
+      clearTimeout(touchTimer.current)
+    }
+  }
+  function onCardTouchEnd() {
+    clearTimeout(touchTimer.current)
+  }
+  useEffect(() => () => clearTimeout(touchTimer.current), [])
+
+  // While a card is lifted: follow the finger, highlight the column under it,
+  // auto-scroll the strip near the edges, and drop on release.
+  useEffect(() => {
+    if (!touchDragId) return
+    const targetUnder = (x, y) => {
+      const el = document.elementFromPoint(x, y)
+      const col = el && el.closest('[data-drop]')
+      if (!col) return null
+      return col.dataset.drop === 'unassigned' ? 'unassigned' : Number(col.dataset.drop)
+    }
+    let last = null // latest finger position — drives the rAF auto-scroll loop
+    const move = (e) => {
+      e.preventDefault() // keep the page/strip from scrolling under the drag
+      const t = e.touches[0]
+      last = { x: t.clientX, y: t.clientY }
+      if (ghostRef.current) {
+        ghostRef.current.style.left = t.clientX + 'px'
+        ghostRef.current.style.top = t.clientY + 'px'
+      }
+      setDropTarget(targetUnder(t.clientX, t.clientY))
+    }
+    // Holding the note near a screen edge keeps scrolling the strip even if
+    // the finger doesn't move (touchmove alone only fires on movement).
+    let raf
+    const autoScroll = () => {
+      const strip = stripRef.current
+      if (strip && last) {
+        let moved = false
+        if (last.x > window.innerWidth - 56) { strip.scrollLeft += 10; moved = true }
+        else if (last.x < 56) { strip.scrollLeft -= 10; moved = true }
+        if (moved) setDropTarget(targetUnder(last.x, last.y)) // content shifted under the finger
+      }
+      raf = requestAnimationFrame(autoScroll)
+    }
+    raf = requestAnimationFrame(autoScroll)
+    const finish = (e) => {
+      const t = e.changedTouches[0]
+      const target = t ? targetUnder(t.clientX, t.clientY) : null
+      const item = work.find((w) => w.id === touchDragId)
+      if (target != null && item) {
+        if (target === 'unassigned') {
+          if (item._status !== 'PENDING') unassign(touchDragId)
+        } else if (item._tier !== target) {
+          assignTier(touchDragId, target)
+        }
+      }
+      setTouchDragId(null)
+      setDropTarget(null)
+      touchData.current = null
+    }
+    const cancel = () => {
+      setTouchDragId(null)
+      setDropTarget(null)
+      touchData.current = null
+    }
+    document.addEventListener('touchmove', move, { passive: false })
+    document.addEventListener('touchend', finish)
+    document.addEventListener('touchcancel', cancel)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('touchmove', move)
+      document.removeEventListener('touchend', finish)
+      document.removeEventListener('touchcancel', cancel)
+    }
+  }, [touchDragId, work]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Derived data ─────────────────────────────────────────────────────────
   const unassigned   = work.filter((w) => w._status === 'PENDING')
   const declined     = work.filter((w) => w._status === 'DECLINED')
@@ -276,6 +375,7 @@ export default function RequestsPage() {
     [work]
   )
   const pendingBadge = unassigned.length + ptoPending.length
+  const touchDragItem = touchDragId ? work.find((w) => w.id === touchDragId) : null
 
   // Filter by selected day
   const filteredUnassigned = selDay
@@ -314,7 +414,7 @@ export default function RequestsPage() {
           <h1 style={{ fontSize: narrow ? 19 : 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>
             {narrow
-              ? 'Tap a card’s 1–4 buttons to set its priority tier'
+              ? 'Press and hold a sticky note to drag it into a tier'
               : 'Drag cards into priority tiers · the schedule builder honors them in order'}
           </p>
         </div>
@@ -455,17 +555,20 @@ export default function RequestsPage() {
               </div>
             )}
             {narrow && (
-              <div style={{ padding: '8px 16px', fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>Swipe sideways to see all tiers →</div>
+              <div style={{ padding: '8px 16px', fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>
+                Swipe sideways to see all tiers → · Press and hold a note to drag it
+              </div>
             )}
 
             {/* Five columns — a horizontal Post-it strip on narrow screens */}
-            <div style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden', WebkitOverflowScrolling: 'touch' }}>
+            <div ref={stripRef} style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden', WebkitOverflowScrolling: 'touch' }}>
 
               {/* Unassigned column */}
               <KanbanColumn
                 narrow={narrow}
+                dropId="unassigned"
                 title="Unassigned"
-                subtitle={narrow ? 'Set a tier below' : 'Drag to a tier →'}
+                subtitle="Drag to a tier →"
                 count={filteredUnassigned.length}
                 color="#92400E"
                 bg="#FFFBEB"
@@ -484,6 +587,10 @@ export default function RequestsPage() {
                   <RequestCard
                     key={r.id} r={r}
                     onDragStart={(e) => onDragStart(e, r.id)}
+                    onTouchStart={(e) => onCardTouchStart(e, r.id)}
+                    onTouchMove={onCardTouchMove}
+                    onTouchEnd={onCardTouchEnd}
+                    lifted={touchDragId === r.id}
                     onTier={(tier) => assignTier(r.id, tier)}
                     onDecline={() => decline(r.id)}
                   />
@@ -504,6 +611,7 @@ export default function RequestsPage() {
                 <KanbanColumn
                   key={t.n}
                   narrow={narrow}
+                  dropId={t.n}
                   title={`${t.n} · ${t.label}`}
                   subtitle={t.blurb}
                   count={items.length}
@@ -526,6 +634,10 @@ export default function RequestsPage() {
                     <RequestCard
                       key={r.id} r={r} rank={i + 1}
                       onDragStart={(e) => onDragStart(e, r.id)}
+                      onTouchStart={(e) => onCardTouchStart(e, r.id)}
+                      onTouchMove={onCardTouchMove}
+                      onTouchEnd={onCardTouchEnd}
+                      lifted={touchDragId === r.id}
                       onTier={(tier) => assignTier(r.id, tier)}
                       onDecline={() => decline(r.id)}
                       onUp={i > 0 ? () => moveInTier(r.id, 'up') : null}
@@ -555,14 +667,47 @@ export default function RequestsPage() {
           onCreated={() => { setShowAdd(false); setTab('BOARD'); load() }}
         />
       )}
+
+      {/* Floating sticky that follows the finger during a touch drag */}
+      {touchDragItem && (
+        <div
+          ref={ghostRef}
+          style={{
+            position: 'fixed',
+            left: touchData.current?.x ?? 0,
+            top: touchData.current?.y ?? 0,
+            transform: 'translate(-50%, -80%) rotate(-3deg) scale(1.05)',
+            width: 190,
+            background: paperFor(touchDragItem, false),
+            borderRadius: 3,
+            padding: '12px 13px',
+            boxShadow: '0 18px 36px rgba(15,23,42,0.38), inset 0 1px 0 rgba(255,255,255,0.5)',
+            zIndex: 600,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ fontWeight: 800, fontSize: 13.5, color: '#1E293B' }}>
+            {touchDragItem.rosterEntry?.providerName || 'Provider'}
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(30,41,59,0.8)', marginTop: 2 }}>
+            {dateLabel(touchDragItem)}
+          </div>
+          {touchDragItem.note && (
+            <div style={{ fontFamily: '"Kalam", cursive', fontSize: 14, lineHeight: 1.3, color: '#1E293B', marginTop: 4 }}>
+              {touchDragItem.note}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Kanban column ─────────────────────────────────────────────────────────────
-function KanbanColumn({ narrow, title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
+function KanbanColumn({ narrow, dropId, title, subtitle, count, color, bg, border, light, isDrop, onDragOver, onDragLeave, onDrop, children, isLast }) {
   return (
     <div
+      data-drop={dropId}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -593,7 +738,7 @@ function KanbanColumn({ narrow, title, subtitle, count, color, bg, border, light
 }
 
 // ── Request card — a physical Post-it note ─────────────────────────────────────
-function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp, onDown, tierColor, declined }) {
+function RequestCard({ r, rank, onDragStart, onTouchStart, onTouchMove, onTouchEnd, lifted, onTier, onDecline, onRestore, onUp, onDown, tierColor, declined }) {
   const t = TYPE_STYLE[r.type] || TYPE_STYLE.WORK
   const paper = paperFor(r, declined)
   const tilt = tiltFor(r.id)
@@ -615,6 +760,9 @@ function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp,
     <div
       draggable={!declined}
       onDragStart={onDragStart}
+      onTouchStart={declined ? undefined : onTouchStart}
+      onTouchMove={declined ? undefined : onTouchMove}
+      onTouchEnd={declined ? undefined : onTouchEnd}
       onMouseEnter={straighten}
       onMouseLeave={settle}
       style={{
@@ -624,12 +772,16 @@ function RequestCard({ r, rank, onDragStart, onTier, onDecline, onRestore, onUp,
         padding: '12px 13px 11px',
         marginBottom: 13,
         cursor: declined ? 'default' : 'grab',
-        opacity: declined ? 0.6 : 1,
+        opacity: lifted ? 0.35 : declined ? 0.6 : 1,
         boxShadow: '0 6px 12px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.5)',
         userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
         transform: `rotate(${tilt}deg)`,
-        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-        animation: 'postitDeal 0.28s ease both',
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease',
+        // 'backwards' (not 'both') — a persisted final keyframe would override
+        // the inline opacity used to dim the card while it's touch-dragged.
+        animation: 'postitDeal 0.28s ease backwards',
       }}
     >
       {/* Tape strip */}
