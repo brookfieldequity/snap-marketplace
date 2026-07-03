@@ -14,16 +14,22 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   } catch { /* twilio not installed or misconfigured — skip */ }
 }
 
+// Returns { sent: boolean, reason?: string }. Never throws — fire-and-forget
+// callers stay safe, and callers that care (the availability-request send
+// endpoint) get an honest status instead of a silent no-op reported as success.
 async function sendSMS(to, body) {
-  if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER || !to) return;
+  if (!twilioClient) return { sent: false, reason: 'SMS is not configured' };
+  if (!process.env.TWILIO_PHONE_NUMBER) return { sent: false, reason: 'No sender number configured' };
+  if (!to) return { sent: false, reason: 'No phone number on file' };
   const cleaned = to.replace(/\D/g, '');
-  if (cleaned.length < 10) return;
+  if (cleaned.length < 10) return { sent: false, reason: 'Invalid phone number' };
   const e164 = cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
   try {
     await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: e164 });
+    return { sent: true };
   } catch (err) {
     console.error('Twilio SMS error:', err.message);
-    throw err;
+    return { sent: false, reason: err.message };
   }
 }
 

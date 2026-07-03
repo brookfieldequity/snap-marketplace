@@ -1984,22 +1984,25 @@ router.post('/availability-requests/send', facilityAuth, async (req, res) => {
         }
 
         const link = `${baseUrl}/avail/${record.token}`;
+        const wantSMS = sendVia === 'SMS' || sendVia === 'BOTH';
+        const wantEmail = sendVia === 'EMAIL' || sendVia === 'BOTH';
         let sent = false;
         let sendError = null;
 
-        // Send SMS if requested and phone is available
-        if ((sendVia === 'SMS' || sendVia === 'BOTH') && entry.phoneNumber) {
-          const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link}`;
-          try {
-            await sendSMS_(entry.phoneNumber, smsBody);
-            sent = true;
-          } catch (smsErr) {
-            sendError = smsErr.message;
+        // SMS: only marked sent when Twilio actually accepted the message.
+        if (wantSMS) {
+          if (!entry.phoneNumber) {
+            sendError = 'No phone number on file';
+          } else {
+            const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link}`;
+            const r = await sendSMS_(entry.phoneNumber, smsBody);
+            sent = r.sent;
+            if (!r.sent) sendError = r.reason;
           }
-        } else if (sendVia === 'EMAIL' || sendVia === 'BOTH') {
-          // Email not yet wired (no email on InternalRosterEntry) — mark not sent
-          sent = false;
-          sendError = entry.phoneNumber ? null : 'No phone number on file';
+        }
+        // Email not yet wired.
+        if (wantEmail && !sent && !sendError) {
+          sendError = 'Email delivery is not yet available';
         }
 
         results.push({ rosterEntryId, token: record.token, sent, error: sendError });
