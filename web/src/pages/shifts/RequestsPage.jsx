@@ -300,6 +300,17 @@ export default function RequestsPage() {
       if (!col) return null
       return col.dataset.drop === 'unassigned' ? 'unassigned' : Number(col.dataset.drop)
     }
+    // Scroll the strip when the finger is near its edges. Zones are measured
+    // against the strip's own rect (not the window) and are generous (90px)
+    // so iPad-sized screens catch them reliably.
+    const edgeScroll = (x) => {
+      const strip = stripRef.current
+      if (!strip || strip.scrollWidth <= strip.clientWidth) return false
+      const r = strip.getBoundingClientRect()
+      if (x > r.right - 90) { strip.scrollLeft += 14; return true }
+      if (x < r.left + 90) { strip.scrollLeft -= 14; return true }
+      return false
+    }
     let last = null // latest finger position — drives the rAF auto-scroll loop
     const move = (e) => {
       e.preventDefault() // keep the page/strip from scrolling under the drag
@@ -309,18 +320,15 @@ export default function RequestsPage() {
         ghostRef.current.style.left = t.clientX + 'px'
         ghostRef.current.style.top = t.clientY + 'px'
       }
+      edgeScroll(t.clientX) // nudge immediately on movement too
       setDropTarget(targetUnder(t.clientX, t.clientY))
     }
-    // Holding the note near a screen edge keeps scrolling the strip even if
-    // the finger doesn't move (touchmove alone only fires on movement).
+    // Holding the note near an edge keeps scrolling even if the finger doesn't
+    // move (touchmove alone only fires on movement).
     let raf
     const autoScroll = () => {
-      const strip = stripRef.current
-      if (strip && last) {
-        let moved = false
-        if (last.x > window.innerWidth - 56) { strip.scrollLeft += 10; moved = true }
-        else if (last.x < 56) { strip.scrollLeft -= 10; moved = true }
-        if (moved) setDropTarget(targetUnder(last.x, last.y)) // content shifted under the finger
+      if (last && edgeScroll(last.x)) {
+        setDropTarget(targetUnder(last.x, last.y)) // content shifted under the finger
       }
       raf = requestAnimationFrame(autoScroll)
     }
@@ -435,11 +443,13 @@ export default function RequestsPage() {
       {!loading && tab === 'BOARD' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: narrow ? 'column' : 'row', minHeight: 0, overflow: narrow ? 'visible' : 'hidden' }}>
 
-          {/* Left: calendar + PTO */}
-          <div style={{ width: narrow ? '100%' : 232, flexShrink: 0, borderRight: narrow ? 'none' : '1px solid #E2E8F0', borderBottom: narrow ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', overflowY: narrow ? 'visible' : 'auto' }}>
+          {/* Left: calendar + PTO. On narrow screens the panel is full-width but
+              its content is capped (~420px) and centered so an iPad-portrait
+              calendar stays mini instead of stretching across the screen. */}
+          <div style={{ width: narrow ? '100%' : 232, flexShrink: 0, borderRight: narrow ? 'none' : '1px solid #E2E8F0', borderBottom: narrow ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: narrow ? 'center' : 'stretch', overflowY: narrow ? 'visible' : 'auto' }}>
 
             {/* Mini calendar */}
-            <div style={{ padding: '18px 16px 12px' }}>
+            <div style={{ padding: '18px 16px 12px', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1); setSelDay(null) }}
                   style={{ width: 28, height: 28, border: 'none', background: '#F1F5F9', borderRadius: 7, cursor: 'pointer', fontSize: 14, color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -495,7 +505,7 @@ export default function RequestsPage() {
             </div>
 
             {/* Legend */}
-            <div style={{ padding: '0 16px 12px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ padding: '0 16px 12px', display: 'flex', gap: 10, flexWrap: 'wrap', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
               {[['#10B981','Wants work'],['#EF4444','Day off'],['#6D28D9','PTO']].map(([c, l]) => (
                 <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
@@ -508,7 +518,7 @@ export default function RequestsPage() {
 
             {/* PTO section */}
             {ptoPending.length > 0 && (
-              <div style={{ padding: 14 }}>
+              <div style={{ padding: 14, width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#4338CA', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                   PTO Pending ({ptoPending.length})
                 </div>
@@ -549,8 +559,11 @@ export default function RequestsPage() {
               </div>
             )}
 
-            {/* Five columns — a horizontal Post-it strip on narrow screens */}
-            <div ref={stripRef} style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden', WebkitOverflowScrolling: 'touch' }}>
+            {/* Five columns — a horizontal Post-it strip on narrow screens.
+                NOTE: no -webkit-overflow-scrolling:touch here — iOS momentum
+                scrolling ignores programmatic scrollLeft during an active
+                touch, which broke drag-to-edge auto-scroll on iPad. */}
+            <div ref={stripRef} style={{ flex: 1, display: 'flex', minHeight: 0, gap: 0, alignItems: narrow ? 'flex-start' : 'stretch', overflowX: narrow ? 'auto' : 'hidden', overflowY: narrow ? 'visible' : 'hidden' }}>
 
               {/* Unassigned column */}
               <KanbanColumn

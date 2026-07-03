@@ -154,8 +154,13 @@ export default function App() {
   const narrow = useIsNarrow()
   const [navOpen, setNavOpen] = useState(false)
 
-  // Facility-side state
-  const [facilityPage, setFacilityPage] = useState('dashboard')
+  // Facility-side state. facilityPage starts null: the landing page is chosen
+  // by the tab-reconcile effect AFTER capabilities load, so a Shifts facility
+  // lands on the Shifts dashboard instead of flashing the marketplace one.
+  const [facilityPage, setFacilityPage] = useState(null)
+  // True once /facilities/me has answered (or failed) — the tab default must
+  // wait for the real snapMode, not the MARKETPLACE placeholder.
+  const [capsLoaded, setCapsLoaded] = useState(false)
   const [facilityName, setFacilityName] = useState('')
   const [authMode, setAuthMode] = useState('login') // 'login' | 'register'
   const [snapMode, setSnapMode] = useState('MARKETPLACE')
@@ -182,6 +187,7 @@ export default function App() {
   // Load snapMode whenever facilityToken is present
   useEffect(() => {
     if (!facilityToken) return
+    setCapsLoaded(false)
     facilityAPI.getMe()
       .then((facility) => {
         if (facility.snapMode) setSnapMode(facility.snapMode)
@@ -194,6 +200,7 @@ export default function App() {
       .catch(() => {
         // Silently ignore — default MARKETPLACE mode stays
       })
+      .finally(() => setCapsLoaded(true))
     facilityAPI.getFeatureFlags()
       .then((res) => setFeatureFlags(res.enabled || {}))
       .catch(() => {
@@ -214,17 +221,19 @@ export default function App() {
     featureFlags.payroll_builder && 'ops',
   ].filter(Boolean)
 
-  // Once capabilities load, ensure the active tab is one the facility actually
-  // has and align the visible page with it (so a Shifts-only facility doesn't
-  // land on the marketplace dashboard).
+  // Once capabilities load, pick the landing tab: SNAP Shifts first when the
+  // facility has it (availableTabs order), marketplace otherwise. Waiting for
+  // capsLoaded avoids locking in the MARKETPLACE placeholder before /me answers.
   useEffect(() => {
-    if (!facilityToken || availableTabs.length === 0) return
+    if (!facilityToken || !capsLoaded || availableTabs.length === 0) return
     if (!activeTab || !availableTabs.includes(activeTab)) {
       const t = availableTabs[0]
       setActiveTab(t)
       setFacilityPage(TAB_META[t].page)
+    } else if (!facilityPage) {
+      setFacilityPage(TAB_META[activeTab].page)
     }
-  }, [facilityToken, snapMode, featureFlags]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [facilityToken, capsLoaded, snapMode, featureFlags]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Switch the header tab: change the visible capability and jump to its home page.
   function navigateTab(tab) {
@@ -236,7 +245,10 @@ export default function App() {
     localStorage.setItem('snapFacilityToken', token)
     setFacilityToken(token)
     setFacilityName(name || '')
-    setFacilityPage('dashboard')
+    // Landing page is chosen by the tab-reconcile effect once /me loads
+    // (Shifts dashboard for Shifts/BOTH facilities, marketplace otherwise).
+    setActiveTab(null)
+    setFacilityPage(null)
   }
 
   async function handleModeSwitch(mode) {
@@ -416,6 +428,8 @@ export default function App() {
           />
           <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
             <Suspense fallback={<PageLoader />}>
+            {/* Brief moment before /me answers and the landing tab is chosen */}
+            {!facilityPage && <PageLoader />}
             {/* SNAP Shifts pages */}
             {isShiftsMode && facilityPage === 'shifts-dashboard' && (
               <SnapShiftsDashboard onNavigate={setFacilityPage} />
