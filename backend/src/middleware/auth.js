@@ -1,15 +1,28 @@
 const jwt = require('jsonwebtoken');
+const { assertSession } = require('../services/authSessions');
+const { audienceOf, sendSessionExpired } = require('./sessionUtil');
 
-module.exports = (req, res, next) => {
+// Generic JWT verify + server-side session check (Security HIGH-1). Tokens
+// without a live AuthSession (including all pre-session jti-less tokens) are
+// rejected — expiry and revocation are enforced in the database, not just
+// inside the signed token.
+module.exports = async (req, res, next) => {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'No token provided' });
   }
+  const token = header.split(' ')[1];
+  let payload;
   try {
-    const payload = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
-    req.user = payload;
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    return sendSessionExpired(res, audienceOf(jwt.decode(token)));
   }
+  try {
+    await assertSession(payload.jti);
+  } catch {
+    return sendSessionExpired(res, audienceOf(payload));
+  }
+  req.user = payload;
+  next();
 };

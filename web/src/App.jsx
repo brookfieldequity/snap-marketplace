@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react'
-import { facilityAPI } from './api.js'
+import { facilityAPI, authAPI } from './api.js'
 import useIsNarrow from './lib/useIsNarrow.js'
 
 // ── Eager imports — everything a first paint can need ─────────────────────────
@@ -260,6 +260,7 @@ export default function App() {
   }
 
   function handleFacilityLogout() {
+    authAPI.logout(localStorage.getItem('snapFacilityToken')) // revoke server session (best-effort)
     localStorage.removeItem('snapFacilityToken')
     setFacilityToken(null)
     setFacilityName('')
@@ -274,10 +275,30 @@ export default function App() {
   }
 
   function handleAdminLogout() {
+    authAPI.logout(localStorage.getItem('snapAdminToken')) // revoke server session (best-effort)
     localStorage.removeItem('snapAdminToken')
     setAdminToken(null)
     setPortalChoice(null)
   }
+
+  // When the server says a session died (expired, revoked, password reset),
+  // drop that portal's token and return to login — no half-broken UI making
+  // failing API calls with a dead token.
+  useEffect(() => {
+    const onExpired = (e) => {
+      const aud = e.detail?.audience
+      if (aud === 'PROVIDER') return // mobile app's concern, not the web portals
+      const map = { FACILITY: 'snapFacilityToken', ADMIN: 'snapAdminToken', CREDENTIAL: 'snapCredToken' }
+      if (aud && map[aud]) {
+        localStorage.removeItem(map[aud])
+      } else {
+        Object.values(map).forEach((k) => localStorage.removeItem(k))
+      }
+      window.location.href = '/'
+    }
+    window.addEventListener('snap:session-expired', onExpired)
+    return () => window.removeEventListener('snap:session-expired', onExpired)
+  }, [])
 
   // ── Facility portal ─────────────────────────────────────────────────────────
   if (facilityToken) {

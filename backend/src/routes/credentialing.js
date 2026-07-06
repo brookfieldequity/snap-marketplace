@@ -147,7 +147,7 @@ router.post('/auth/login', async (req, res) => {
 
     await prisma.credentialUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
 
-    const token = sign(user.id)
+    const token = await sign(user.id, req)
     res.json({
       token,
       user: {

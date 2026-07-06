@@ -2182,8 +2182,11 @@ router.post('/demo/launch', adminAuth, async (req, res) => {
     if (!facility) return res.status(404).json({ error: 'Demo not seeded — run POST /admin/demo/seed first' });
     const coordUser = await prisma.user.findUnique({ where: { email: 'demo.coordinator@snapmedical.app' } });
     if (!coordUser) return res.status(404).json({ error: 'Demo coordinator account not found' });
+    // Session-backed like every other token (Security HIGH-1); 24h demo window.
+    const { issueSession } = require('../services/authSessions');
+    const { jti } = await issueSession({ audience: 'FACILITY', userId: coordUser.id, req, ttlMs: 24 * 60 * 60 * 1000 });
     const token = jwt.sign(
-      { userId: coordUser.id, role: 'FACILITY_USER' },
+      { userId: coordUser.id, role: 'FACILITY_USER', jti },
       process.env.JWT_SECRET,
       { expiresIn: '24h' },
     );
@@ -2191,6 +2194,21 @@ router.post('/demo/launch', adminAuth, async (req, res) => {
     res.json({ token, url: `${baseUrl}/?demoToken=${token}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Revoke a user's sessions (support kill switch) ──────────────────────────────
+// POST /admin/users/:id/revoke-sessions — signs the user out everywhere
+// (all portals + mobile). Use when offboarding a coordinator or responding to
+// a suspected credential compromise.
+router.post('/users/:id/revoke-sessions', adminAuth, async (req, res) => {
+  try {
+    const { revokeAllForUser } = require('../services/authSessions');
+    const revoked = await revokeAllForUser(req.params.id);
+    res.json({ ok: true, revoked });
+  } catch (err) {
+    console.error('[admin] revoke-sessions failed:', err.message);
+    res.status(500).json({ error: 'Failed to revoke sessions' });
   }
 });
 

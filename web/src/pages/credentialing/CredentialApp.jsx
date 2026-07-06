@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { credentialAPI } from '../../api.js'
+import { credentialAPI, authAPI } from '../../api.js'
 
 function ForcePasswordChange({ user, onDone, onLogout }) {
   const [pw, setPw] = useState('')
@@ -99,6 +99,7 @@ export default function CredentialApp({ onBack }) {
   }
 
   function handleLogout() {
+    authAPI.logout(localStorage.getItem('snapCredToken')) // revoke server session (best-effort)
     localStorage.removeItem('snapCredToken')
     setToken(null)
     setUser(null)

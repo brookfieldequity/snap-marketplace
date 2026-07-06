@@ -9,8 +9,17 @@ const auth = require('../middleware/auth');
 const { checkAdminLockout, recordAdminFailure, clearAdminFailures } = require('../middleware/rateLimit');
 const { reverseLinkForProvider } = require('../services/rosterLink');
 const { sendEmail } = require('../services/notifications');
+const { issueSession, revokeByJti, revokeAllForUser, TTL_JWT } = require('../services/authSessions');
 
 const router = express.Router();
+
+// Sign a JWT backed by a server-side session (Security HIGH-1): the embedded
+// jti must match a live AuthSession row, making the token revocable and its
+// expiry enforceable server-side. audience: PROVIDER | FACILITY | ADMIN.
+async function issueToken(audience, payload, req) {
+  const { jti } = await issueSession({ audience, userId: payload.userId, req });
+  return jwt.sign({ ...payload, jti }, process.env.JWT_SECRET, { expiresIn: TTL_JWT[audience] });
+}
 
 const CONTACT_PATTERN = /(\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|@[a-zA-Z0-9.]+\.[a-zA-Z]{2,})/;
 
@@ -91,11 +100,7 @@ router.post('/provider/register', async (req, res) => {
       npiNumber: user.providerProfile.npiNumber || null,
     }).catch((e) => console.error('[auth] reverse-link on register failed:', e.message));
 
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = await issueToken('PROVIDER', { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile.id }, req);
 
     res.status(201).json({ token, user: { id: user.id, email: user.email, profileId: user.providerProfile.id } });
   } catch (err) {
@@ -148,11 +153,7 @@ router.post('/provider/login', async (req, res) => {
       }).catch((e) => console.error('[auth] reverse-link on login failed:', e.message));
     }
 
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile?.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = await issueToken('PROVIDER', { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile?.id }, req);
 
     res.json({ token, user: { id: user.id, email: user.email, profileId: user.providerProfile?.id } });
   } catch (err) {
@@ -261,11 +262,7 @@ async function loginOrCreateOAuthUser({ email, firstName, lastName }) {
     }).catch((e) => console.error('[auth] reverse-link on oauth failed:', e.message));
   }
 
-  const token = jwt.sign(
-    { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile?.id },
-    process.env.JWT_SECRET,
-    { expiresIn: '30d' }
-  );
+  const token = await issueToken('PROVIDER', { userId: user.id, email: user.email, role: user.role, profileId: user.providerProfile?.id }, null);
 
   return { token, user: { id: user.id, email: user.email, profileId: user.providerProfile?.id } };
 }
@@ -409,11 +406,7 @@ router.post('/_facility/register-legacy', async (req, res) => {
       include: { subscription: true },
     });
 
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: 'FACILITY_USER', facilityId: facility.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = await issueToken('FACILITY', { userId: user.id, email: user.email, role: 'FACILITY_USER', facilityId: facility.id }, req);
 
     res.status(201).json({ token, user: { id: user.id, email: user.email }, facility: { id: facility.id, name: facility.name } });
   } catch (err) {
@@ -438,11 +431,7 @@ router.post('/facility/login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
     const membership = user.facilityMemberships[0];
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: 'FACILITY_USER', facilityId: membership?.facilityId },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = await issueToken('FACILITY', { userId: user.id, email: user.email, role: 'FACILITY_USER', facilityId: membership?.facilityId }, req);
 
     res.json({
       token,
@@ -478,11 +467,7 @@ router.post('/admin/login', checkAdminLockout, async (req, res) => {
     }
 
     clearAdminFailures(req.ip);
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: 'ADMIN' },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = await issueToken('ADMIN', { userId: user.id, email: user.email, role: 'ADMIN' }, req);
     res.json({ token });
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
@@ -643,11 +628,33 @@ router.post('/reset-password', async (req, res) => {
       prisma.passwordReset.update({ where: { id: reset.id }, data: { attempts, used: true } }),
     ]);
 
+    // A password reset invalidates every existing login — anyone holding an
+    // old token (including whoever prompted the reset) is signed out.
+    await revokeAllForUser(user.id).catch(() => {});
+
     return res.json({ ok: true, message: 'Password updated. You can now sign in.' });
   } catch (err) {
     console.error('[auth] reset-password failed:', err);
     return res.status(500).json({ error: 'Could not process request. Please try again.' });
   }
+});
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+// Revokes the bearer token's server-side session. Deliberately tolerant: any
+// token (expired, malformed, already revoked) gets a 200 — logout must never
+// fail from the user's perspective, and the localStorage clear happens
+// client-side regardless.
+router.post('/logout', async (req, res) => {
+  try {
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      const payload = jwt.decode(header.split(' ')[1]);
+      if (payload?.jti) await revokeByJti(payload.jti);
+    }
+  } catch {
+    // fall through — logout always succeeds
+  }
+  res.json({ ok: true });
 });
 
 // ── Verify PIN ────────────────────────────────────────────────────────────────

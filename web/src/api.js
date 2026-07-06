@@ -38,6 +38,11 @@ async function apiFetch(url, options = {}) {
   const res = await fetch(url, options)
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
+    // Server-side session died (expired / revoked / logged out elsewhere).
+    // Tell the app which portal so it can clear that token and show login.
+    if (res.status === 401 && data.code === 'SESSION_EXPIRED' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('snap:session-expired', { detail: { audience: data.audience || null } }))
+    }
     const err = new Error(data.message || data.error || `HTTP ${res.status}`)
     err.status = res.status
     err.data = data
@@ -49,6 +54,15 @@ async function apiFetch(url, options = {}) {
 // ─── Shared auth API (forgot/reset password — OTP code flow, no auth header) ───
 
 export const authAPI = {
+  // Revoke the given token's server-side session. Best-effort — always
+  // resolves, so client-side logout is never blocked.
+  logout: (token) =>
+    token
+      ? apiFetch(`${BASE}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {})
+      : Promise.resolve(),
   forgotPassword: (email) =>
     apiFetch(`${BASE}/auth/forgot-password`, {
       method: 'POST',

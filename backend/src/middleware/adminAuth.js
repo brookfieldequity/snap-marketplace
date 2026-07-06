@@ -1,18 +1,28 @@
 const jwt = require('jsonwebtoken');
+const { assertSession } = require('../services/authSessions');
+const { audienceOf, sendSessionExpired } = require('./sessionUtil');
 
-module.exports = (req, res, next) => {
+// Admin JWT verify + server-side session check (Security HIGH-1).
+module.exports = async (req, res, next) => {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'No token' });
   }
+  const token = header.split(' ')[1];
+  let payload;
   try {
-    const payload = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
-    if (payload.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    req.user = payload;
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    return sendSessionExpired(res, audienceOf(jwt.decode(token)));
   }
+  if (payload.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    await assertSession(payload.jti);
+  } catch {
+    return sendSessionExpired(res, 'ADMIN');
+  }
+  req.user = payload;
+  next();
 };

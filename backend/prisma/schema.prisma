@@ -2070,6 +2070,26 @@ model ProviderHourEntry {
   @@index([facilityId, date])
 }
 
+// Server-side login sessions (Security HIGH-1). Every issued JWT carries a
+// jti that must match a live row here — so tokens are revocable (logout,
+// password reset, admin kill) and expiry is enforced server-side, not just
+// inside the signed token. Old jti-less tokens are rejected by middleware.
+model AuthSession {
+  id         String    @id @default(cuid())
+  jti        String    @unique // random id embedded in the JWT payload
+  audience   String // PROVIDER | FACILITY | ADMIN | CREDENTIAL
+  userId     String // User.id or CredentialUser.id (per audience)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime  @default(now())
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, audience])
+  @@index([expiresAt])
+}
+
 // A saved agency-invoice export (APNE → CAPA). The live Agency Invoice view
 // recomputes from current data, so numbers can drift after hours/rate edits —
 // this row freezes exactly what was billed: the line items, totals, and the

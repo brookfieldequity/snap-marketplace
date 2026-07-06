@@ -150,16 +150,20 @@ router.post('/:token', async (req, res) => {
       return { user, createdUser };
     });
 
-    // Issue a login token matching the shape /auth/facility/login produces.
+    // Issue a login token matching the shape /auth/facility/login produces —
+    // session-backed like every other login token (Security HIGH-1).
+    const { issueSession, TTL_JWT } = require('../services/authSessions');
+    const { jti } = await issueSession({ audience: 'FACILITY', userId: claimResult.user.id, req });
     const token = jwt.sign(
       {
         userId: claimResult.user.id,
         email: claimResult.user.email,
         role: 'FACILITY_USER',
         facilityId: invite.facilityId,
+        jti,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' },
+      { expiresIn: TTL_JWT.FACILITY },
     );
 
     res.status(201).json({

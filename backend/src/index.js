@@ -157,6 +157,15 @@ cron.schedule('0 8 * * *', async () => {
   await processMonthlyInvoices();
 });
 
+// Daily at 5 AM — purge week-dead auth sessions (expired/revoked rows)
+cron.schedule('0 5 * * *', async () => {
+  try {
+    await require('./services/authSessions').gcSessions();
+  } catch (err) {
+    console.error('[cron] session gc failed:', err.message);
+  }
+});
+
 // ── 404 + error handling ──────────────────────────────────────────────────────
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
