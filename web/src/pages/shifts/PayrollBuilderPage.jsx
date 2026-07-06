@@ -104,7 +104,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
         const res = await payrollAPI.preview({ payClass: cls, periodStart: period.start, periodEnd: period.end })
         setGrids((g) => ({
           ...g,
-          [cls]: { items: res.items, approved: new Set(), summary: res.summary },
+          [cls]: {
+            items: res.items,
+            // Approvals persist on the server (draft rows) — restore them so
+            // leaving the page doesn't reset review progress.
+            approved: new Set(res.items.filter((i) => i.approved).map((i) => i.rosterEntryId)),
+            summary: res.summary,
+          },
         }))
       } catch (e) {
         setError(e.message)
@@ -181,7 +187,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
       .then(() => setDraftError(false))
       .catch(() => setDraftError(true))
   }
-  function scheduleDraftSave(item, cls) {
+  function scheduleDraftSave(item, cls, approved) {
     const key = `${cls}:${item.rosterEntryId}`
     const payload = {
       payClass: cls,
@@ -192,6 +198,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
       bonusHours: item.bonusHours ?? null,
       bonusRate: item.bonusRate ?? null,
       reimbursement: item.reimbursement ?? null,
+      approved: !!approved,
     }
     pendingDrafts.current[key] = payload
     clearTimeout(draftTimers.current[key])
@@ -224,11 +231,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
     })
 
     // Persist bonus/reimbursement edits (hours/rates have their own homes:
-    // Provider Hours entries and the roster rate flow).
-    if (DRAFT_FIELDS.some((f) => f in patch)) scheduleDraftSave(edited, payClass)
+    // Provider Hours entries and the roster rate flow). Editing un-approves
+    // the row, so the saved draft records approved: false.
+    if (DRAFT_FIELDS.some((f) => f in patch)) scheduleDraftSave(edited, payClass, false)
   }
 
   function toggleApprove(item) {
+    const wasApproved = grids[payClass]?.approved?.has(item.rosterEntryId)
     setGrids((g) => {
       const cur = g[payClass]
       const approved = new Set(cur.approved)
@@ -236,6 +245,9 @@ export default function PayrollBuilderPage({ onNavigate }) {
       else approved.add(item.rosterEntryId)
       return { ...g, [payClass]: { ...cur, approved } }
     })
+    // Persist the checkmark (with the row's current values — the draft row
+    // is a wholesale snapshot of the editable fields).
+    scheduleDraftSave(item, payClass, !wasApproved)
   }
 
   function approveAll() {

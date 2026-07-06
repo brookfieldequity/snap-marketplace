@@ -2088,6 +2088,9 @@ model PayrollLineDraft {
   bonusHours    Float?
   bonusRate     Float?
   reimbursement Float?
+  // Row-level "Approved" checkmark in the review grid — persisted so leaving
+  // the page doesn't reset the coordinator's review progress.
+  approved      Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -425,6 +425,7 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
             bonusRate: draft.bonusRate,
             bonusTotal: computeBonus(draft),
             reimbursement: draft.reimbursement,
+            approved: !!draft.approved,
           };
         }
         const importedBonus = extrasByRoster[entry.id]?.bonus || 0;
@@ -434,6 +435,7 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
           bonusRate: null,
           bonusTotal: importedBonus > 0 ? importedBonus : 0,
           reimbursement: extrasByRoster[entry.id]?.reimbursement || null,
+          approved: false,
         };
       })(),
       shiftDetail,

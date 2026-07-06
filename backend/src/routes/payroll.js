@@ -284,7 +284,7 @@ router.get('/preview', async (req, res) => {
 // PUT /drafts — upsert the coordinator's edits for one line so leaving the
 // Payroll Builder never loses them. The preview overlays these on reload.
 router.put('/drafts', async (req, res) => {
-  const { payClass, periodStart, periodEnd, rosterEntryId, bonusFlat, bonusHours, bonusRate, reimbursement } = req.body || {};
+  const { payClass, periodStart, periodEnd, rosterEntryId, bonusFlat, bonusHours, bonusRate, reimbursement, approved } = req.body || {};
   const cls = String(payClass || '').toUpperCase();
   if (!VALID_CLASSES.includes(cls)) return res.status(400).json({ error: 'Invalid pay class' });
   if (!periodStart || !periodEnd || !rosterEntryId) {
@@ -302,6 +302,7 @@ router.put('/drafts', async (req, res) => {
       bonusHours: num(bonusHours),
       bonusRate: num(bonusRate),
       reimbursement: num(reimbursement),
+      approved: !!approved,
     };
     const where = {
       facilityId_rosterEntryId_payClass_periodStart_periodEnd: {
