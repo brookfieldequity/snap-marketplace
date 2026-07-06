@@ -98,10 +98,15 @@ export default function RequestsPage() {
   // Touch drag state (tablets/phones — HTML5 drag events never fire on touch).
   // Long-press lifts the sticky note so it doesn't fight with scroll gestures.
   const touchTimer = useRef(null)
-  const touchData  = useRef(null) // { id, x, y } at touchstart
-  const [touchDragId, setTouchDragId] = useState(null)
+  const touchData  = useRef(null) // { id | note, x, y } at touchstart
+  const [touchDragId, setTouchDragId] = useState(null)     // request card drag
+  const [touchDragNote, setTouchDragNote] = useState(null) // provider-note drag
   const ghostRef = useRef(null)   // floating sticky that follows the finger
   const stripRef = useRef(null)   // the columns container (for edge auto-scroll)
+
+  // Desktop HTML5 drag payload for a provider note (cards use dragId above).
+  const dragNoteRef = useRef(null)
+  const creatingNote = useRef(false) // guard against double-create on drop
 
   const load = useCallback(() => {
     setLoading(true)
@@ -286,11 +291,47 @@ export default function RequestsPage() {
   function onDrop(e, target) {
     e.preventDefault()
     setDropTarget(null)
+    // A provider note dropped on a tier becomes a real request there.
+    if (dragNoteRef.current) {
+      const n = dragNoteRef.current
+      dragNoteRef.current = null
+      dropNoteToTier(n, target)
+      return
+    }
     const id = dragId.current
     if (!id) return
     if (target === 'unassigned') unassign(id)
     else assignTier(id, target)
     dragId.current = null
+  }
+
+  // Turn a provider availability note into a schedule request in the given
+  // tier: available-day note → WORK ("wants to work"), unavailable-day note →
+  // DAY_OFF. If a request for that provider+day is already on the board, just
+  // move it to the tier instead of creating a duplicate.
+  async function dropNoteToTier(n, target) {
+    if (typeof target !== 'number') return // notes can't be dropped on Unassigned
+    const existing = work.find((w) =>
+      (w.rosterEntryId || w.rosterEntry?.id) === n.rid &&
+      requestCoversDay(w, n.date)
+    )
+    if (existing) { assignTier(existing.id, target); return }
+    if (creatingNote.current) return
+    creatingNote.current = true
+    try {
+      await facilityAPI.createFacilityScheduleRequest({
+        rosterEntryId: n.rid,
+        type: n.available === false ? 'DAY_OFF' : 'WORK',
+        date: n.date,
+        note: n.note || null,
+        tier: target,
+      })
+      load() // the new card arrives ACCEPTED in that tier
+    } catch (err) {
+      alert('Could not create a request from that note: ' + (err.message || 'unknown error'))
+    } finally {
+      creatingNote.current = false
+    }
   }
 
   // ── Touch drag handlers ──────────────────────────────────────────────────
@@ -305,8 +346,18 @@ export default function RequestsPage() {
       if (navigator.vibrate) navigator.vibrate(15) // small haptic "lift" cue
     }, 300)
   }
+  // Long-press on a provider note lifts it the same way as a card.
+  function onNoteTouchStart(e, n) {
+    const t = e.touches[0]
+    touchData.current = { note: n, x: t.clientX, y: t.clientY }
+    clearTimeout(touchTimer.current)
+    touchTimer.current = setTimeout(() => {
+      setTouchDragNote(n)
+      if (navigator.vibrate) navigator.vibrate(15)
+    }, 300)
+  }
   function onCardTouchMove(e) {
-    if (touchDragId || !touchData.current) return
+    if (touchDragId || touchDragNote || !touchData.current) return
     const t = e.touches[0]
     // Finger moved before the hold completed → it's a scroll, not a lift.
     if (Math.abs(t.clientX - touchData.current.x) > 10 || Math.abs(t.clientY - touchData.current.y) > 10) {
@@ -318,10 +369,10 @@ export default function RequestsPage() {
   }
   useEffect(() => () => clearTimeout(touchTimer.current), [])
 
-  // While a card is lifted: follow the finger, highlight the column under it,
-  // auto-scroll the strip near the edges, and drop on release.
+  // While a card or note is lifted: follow the finger, highlight the column
+  // under it, auto-scroll the strip near the edges, and drop on release.
   useEffect(() => {
-    if (!touchDragId) return
+    if (!touchDragId && !touchDragNote) return
     const targetUnder = (x, y) => {
       const el = document.elementFromPoint(x, y)
       const col = el && el.closest('[data-drop]')
@@ -364,20 +415,26 @@ export default function RequestsPage() {
     const finish = (e) => {
       const t = e.changedTouches[0]
       const target = t ? targetUnder(t.clientX, t.clientY) : null
-      const item = work.find((w) => w.id === touchDragId)
-      if (target != null && item) {
-        if (target === 'unassigned') {
-          if (item._status !== 'PENDING') unassign(touchDragId)
-        } else if (item._tier !== target) {
-          assignTier(touchDragId, target)
+      if (touchDragNote) {
+        if (target != null) dropNoteToTier(touchDragNote, target)
+      } else {
+        const item = work.find((w) => w.id === touchDragId)
+        if (target != null && item) {
+          if (target === 'unassigned') {
+            if (item._status !== 'PENDING') unassign(touchDragId)
+          } else if (item._tier !== target) {
+            assignTier(touchDragId, target)
+          }
         }
       }
       setTouchDragId(null)
+      setTouchDragNote(null)
       setDropTarget(null)
       touchData.current = null
     }
     const cancel = () => {
       setTouchDragId(null)
+      setTouchDragNote(null)
       setDropTarget(null)
       touchData.current = null
     }
@@ -390,7 +447,7 @@ export default function RequestsPage() {
       document.removeEventListener('touchend', finish)
       document.removeEventListener('touchcancel', cancel)
     }
-  }, [touchDragId, work]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [touchDragId, touchDragNote, work]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived data ─────────────────────────────────────────────────────────
   // The board shows ONLY requests that touch the month on the calendar —
@@ -585,8 +642,11 @@ export default function RequestsPage() {
                 page.) Tap a note to jump the board to that day. */}
             {visibleNotes.length > 0 && (
               <div style={{ padding: 14, width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
                   Provider Notes ({visibleNotes.length})
+                </div>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>
+                  Drag a note onto a tier to turn it into a request · tap to show its day
                 </div>
                 {visibleNotes.map((n, i) => {
                   const tilt = tiltFor(`${n.rid}-${n.date}`)
@@ -595,17 +655,27 @@ export default function RequestsPage() {
                     : n.available === true
                     ? 'linear-gradient(160deg, #BFDBFE, #A9CBF7)'
                     : 'linear-gradient(160deg, #FEF08A, #FDE047)'
+                  const onBoard = work.some((w) =>
+                    (w.rosterEntryId || w.rosterEntry?.id) === n.rid && requestCoversDay(w, n.date))
+                  const noteLifted = touchDragNote && touchDragNote.rid === n.rid && touchDragNote.date === n.date
                   return (
                     <div
                       key={`${n.rid}-${n.date}-${i}`}
+                      draggable
+                      onDragStart={(e) => { dragNoteRef.current = n; e.dataTransfer.effectAllowed = 'copy' }}
+                      onTouchStart={(e) => { if (!e.target.closest('button')) onNoteTouchStart(e, n) }}
+                      onTouchMove={onCardTouchMove}
+                      onTouchEnd={onCardTouchEnd}
                       onClick={() => setSelDay(selDay === n.date ? null : n.date)}
-                      title="Show this day on the board"
+                      title="Drag onto a tier to create a request · click to show this day"
                       style={{
                         position: 'relative', background: paper, borderRadius: 3,
-                        padding: '10px 12px', marginBottom: 12, cursor: 'pointer',
+                        padding: '10px 12px', marginBottom: 12, cursor: 'grab',
                         transform: `rotate(${tilt}deg)`,
                         boxShadow: '0 5px 10px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.5)',
                         outline: selDay === n.date ? '2px solid #2563EB' : 'none',
+                        opacity: noteLifted ? 0.35 : 1,
+                        userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
                       }}
                     >
                       <div style={{ position: 'absolute', top: -6, left: 12, width: 38, height: 13, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', transform: 'rotate(-4deg)' }} />
@@ -618,6 +688,11 @@ export default function RequestsPage() {
                       <div style={{ fontFamily: '"Kalam", cursive', fontSize: 14, lineHeight: 1.35, color: '#1E293B', marginTop: 4, wordBreak: 'break-word' }}>
                         {n.note}
                       </div>
+                      {onBoard && (
+                        <div style={{ marginTop: 6, display: 'inline-block', background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 20, padding: '1px 8px', fontSize: 10, fontWeight: 700, color: '#047857' }}>
+                          ✓ on board
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -758,6 +833,32 @@ export default function RequestsPage() {
           onClose={() => setShowAdd(false)}
           onCreated={() => { setShowAdd(false); setTab('BOARD'); load() }}
         />
+      )}
+
+      {/* Floating provider-note sticky during a touch drag */}
+      {touchDragNote && (
+        <div
+          ref={ghostRef}
+          style={{
+            position: 'fixed',
+            left: touchData.current?.x ?? 0,
+            top: touchData.current?.y ?? 0,
+            transform: 'translate(-50%, -80%) rotate(-3deg) scale(1.05)',
+            width: 190,
+            background: touchDragNote.available === false
+              ? 'linear-gradient(160deg, #FECACA, #FBB4B4)'
+              : 'linear-gradient(160deg, #BFDBFE, #A9CBF7)',
+            borderRadius: 3,
+            padding: '10px 12px',
+            boxShadow: '0 18px 36px rgba(15,23,42,0.38), inset 0 1px 0 rgba(255,255,255,0.5)',
+            zIndex: 600,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ fontWeight: 800, fontSize: 12.5, color: '#1E293B' }}>{touchDragNote.name}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(30,41,59,0.6)', marginTop: 2 }}>{fmtDate(touchDragNote.date)}</div>
+          <div style={{ fontFamily: '"Kalam", cursive', fontSize: 13, lineHeight: 1.3, color: '#1E293B', marginTop: 3 }}>{touchDragNote.note}</div>
+        </div>
       )}
 
       {/* Floating sticky that follows the finger during a touch drag */}
