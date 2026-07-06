@@ -349,15 +349,19 @@ function composeAgencyInvoices({ providerCosts = [], periodStart, periodEnd }) {
     // Include a provider if they have billable hours OR a CAPA reimbursement
     // (e.g. a mileage-only line).
     if (!hasHours && !(reimbursement > 0)) continue;
-    const key = r.employerId || r.employerName || 'UNASSIGNED';
+    // Group by normalized employer NAME first: duplicate Employer rows with
+    // the same name (or a name-only roster link) must not split one agency's
+    // billing into two invoice cards. Fall back to id, then UNASSIGNED.
+    const key = String(r.employerName || '').trim().toLowerCase() || r.employerId || 'UNASSIGNED';
     const inv = (byEmployer[key] = byEmployer[key] || {
-      employerId: r.employerId || null,
+      employerId: null,
       employerName: r.employerName || null,
       periodStart: periodStart || null,
       periodEnd: periodEnd || null,
       lines: [],
       total: 0,
     });
+    if (!inv.employerId && r.employerId) inv.employerId = r.employerId; // first non-null id wins
     const laborAmount = hasHours ? round2(r.facilityAllIn) : 0;
     const amount = round2(laborAmount + reimbursement); // hours×rate + reimbursement
     inv.lines.push({

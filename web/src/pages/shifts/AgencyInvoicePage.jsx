@@ -197,12 +197,16 @@ export default function AgencyInvoicePage({ onNavigate }) {
       ))}
 
       {/* ── Invoice history — every export is frozen exactly as billed ── */}
-      {runs.length > 0 && (
-        <div style={{ ...card, marginTop: 8, marginBottom: 24 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 2 }}>Invoice History</div>
-          <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
-            Each export is saved exactly as generated — re-downloads match the file you sent, even if hours or rates changed afterward.
+      <div style={{ ...card, marginTop: 8, marginBottom: 24 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 2 }}>Invoice History</div>
+        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+          Each export is saved exactly as generated — re-downloads match the file you sent, even if hours or rates changed afterward. Saved invoices can be renumbered or deleted here.
+        </div>
+        {runs.length === 0 ? (
+          <div style={{ padding: '18px 0', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+            No saved invoices yet — click “Download .xlsx” above and the export will be recorded here automatically.
           </div>
+        ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -265,8 +269,8 @@ export default function AgencyInvoicePage({ onNavigate }) {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
