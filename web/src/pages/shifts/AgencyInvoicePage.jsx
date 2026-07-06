@@ -30,6 +30,12 @@ export default function AgencyInvoicePage({ onNavigate }) {
   const [invoices, setInvoices] = useState(null)
   const [downloading, setDownloading] = useState('')
 
+  // Saved exports (history) — every download freezes a snapshot server-side.
+  const [runs, setRuns] = useState([])
+  const [runBusy, setRunBusy] = useState('') // run id being downloaded/deleted
+  const [editingRun, setEditingRun] = useState(null) // run id whose invoice # is being edited
+  const [invoiceNoDraft, setInvoiceNoDraft] = useState('')
+
   const load = useCallback(async () => {
     if (!period.start || !period.end) return
     setLoading(true)
@@ -47,6 +53,16 @@ export default function AgencyInvoicePage({ onNavigate }) {
 
   useEffect(() => { load() }, [load])
 
+  const loadRuns = useCallback(async () => {
+    try {
+      const res = await payrollAPI.getAgencyInvoiceRuns()
+      setRuns(res.runs || [])
+    } catch {
+      // History is non-critical — leave the list as-is on failure.
+    }
+  }, [])
+  useEffect(() => { loadRuns() }, [loadRuns])
+
   async function download(inv) {
     setDownloading(inv.employerId || inv.employerName || 'x')
     try {
@@ -56,10 +72,47 @@ export default function AgencyInvoicePage({ onNavigate }) {
         employerId: inv.employerId,
         fileName: `${(inv.employerName || 'agency').replace(/[^a-z0-9]+/gi, '-')}-invoice-${period.start}.xlsx`,
       })
+      loadRuns() // the export just added a history row
     } catch (err) {
       setError(err.message || 'Download failed')
     } finally {
       setDownloading('')
+    }
+  }
+
+  async function downloadRun(run) {
+    setRunBusy(run.id)
+    try {
+      await payrollAPI.downloadAgencyInvoiceRun({ id: run.id, fileName: run.fileName })
+    } catch (err) {
+      setError(err.message || 'Download failed')
+    } finally {
+      setRunBusy('')
+    }
+  }
+
+  async function deleteRun(run) {
+    if (!window.confirm(`Delete the saved invoice "${run.fileName}" from history? The exported file you downloaded is unaffected.`)) return
+    setRunBusy(run.id)
+    try {
+      await payrollAPI.deleteAgencyInvoiceRun(run.id)
+      setRuns((rs) => rs.filter((r) => r.id !== run.id))
+    } catch (err) {
+      setError(err.message || 'Delete failed')
+    } finally {
+      setRunBusy('')
+    }
+  }
+
+  async function saveInvoiceNumber(run) {
+    try {
+      await payrollAPI.updateAgencyInvoiceRun(run.id, { invoiceNumber: invoiceNoDraft })
+      setRuns((rs) => rs.map((r) => (r.id === run.id ? { ...r, invoiceNumber: invoiceNoDraft.trim() || null } : r)))
+    } catch (err) {
+      setError(err.message || 'Failed to save invoice number')
+    } finally {
+      setEditingRun(null)
+      setInvoiceNoDraft('')
     }
   }
 
@@ -142,6 +195,78 @@ export default function AgencyInvoicePage({ onNavigate }) {
           </table>
         </div>
       ))}
+
+      {/* ── Invoice history — every export is frozen exactly as billed ── */}
+      {runs.length > 0 && (
+        <div style={{ ...card, marginTop: 8, marginBottom: 24 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 2 }}>Invoice History</div>
+          <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+            Each export is saved exactly as generated — re-downloads match the file you sent, even if hours or rates changed afterward.
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Exported</th>
+                <th style={th}>Agency</th>
+                <th style={th}>Period</th>
+                <th style={th}>Invoice #</th>
+                <th style={{ ...th, textAlign: 'right' }}>Hours</th>
+                <th style={{ ...th, textAlign: 'right' }}>Total</th>
+                <th style={{ ...th, textAlign: 'right' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.id}>
+                  <td style={td}>{new Date(run.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                  <td style={td}>{run.employerName || 'Agency'}</td>
+                  <td style={td}>{fmtDate(run.periodStart)} → {fmtDate(run.periodEnd)}</td>
+                  <td style={td}>
+                    {editingRun === run.id ? (
+                      <span style={{ display: 'inline-flex', gap: 6 }}>
+                        <input
+                          style={{ ...inputStyle, padding: '4px 8px', fontSize: 12, width: 110 }}
+                          value={invoiceNoDraft}
+                          autoFocus
+                          onChange={(e) => setInvoiceNoDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveInvoiceNumber(run); if (e.key === 'Escape') { setEditingRun(null); setInvoiceNoDraft('') } }}
+                        />
+                        <button style={{ ...ghostBtn, padding: '4px 10px', fontSize: 12 }} onClick={() => saveInvoiceNumber(run)}>Save</button>
+                      </span>
+                    ) : (
+                      <button
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: run.invoiceNumber ? '#0F172A' : '#94A3B8', padding: 0, textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
+                        title="Edit invoice number"
+                        onClick={() => { setEditingRun(run.id); setInvoiceNoDraft(run.invoiceNumber || '') }}
+                      >
+                        {run.invoiceNumber || 'add #'}
+                      </button>
+                    )}
+                  </td>
+                  <td style={{ ...td, textAlign: 'right' }}>{run.hours}</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmtMoney(run.total)}</td>
+                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      style={{ ...ghostBtn, padding: '5px 12px', fontSize: 12, marginRight: 6, opacity: runBusy === run.id ? 0.5 : 1 }}
+                      disabled={!!runBusy}
+                      onClick={() => downloadRun(run)}
+                    >
+                      ⬇ Download
+                    </button>
+                    <button
+                      style={{ ...ghostBtn, padding: '5px 12px', fontSize: 12, color: '#B91C1C', borderColor: '#FCA5A5', opacity: runBusy === run.id ? 0.5 : 1 }}
+                      disabled={!!runBusy}
+                      onClick={() => deleteRun(run)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

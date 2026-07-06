@@ -499,6 +499,25 @@ export const payrollAPI = {
     a.remove()
     URL.revokeObjectURL(url)
   },
+  // Saved agency-invoice exports (history): every export freezes a snapshot.
+  getAgencyInvoiceRuns: () => apiFetch(`${BASE}/payroll/agency-invoice/runs`, { headers: facilityHeaders() }),
+  downloadAgencyInvoiceRun: async ({ id, fileName }) => {
+    const res = await fetch(`${BASE}/payroll/agency-invoice/runs/${id}/download`, { headers: facilityHeaders() })
+    if (!res.ok) throw new Error('Failed to download invoice')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName || 'agency-invoice.xlsx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
+  updateAgencyInvoiceRun: (id, { invoiceNumber }) =>
+    apiFetch(`${BASE}/payroll/agency-invoice/runs/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify({ invoiceNumber }) }),
+  deleteAgencyInvoiceRun: (id) =>
+    apiFetch(`${BASE}/payroll/agency-invoice/runs/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
 }
 
 // ─── PTO Builder API (Feature B) ──────────────────────────────────────────────

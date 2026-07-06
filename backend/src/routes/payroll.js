@@ -656,12 +656,111 @@ router.get('/agency-invoice/export', async (req, res) => {
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     const safeName = (invoice.employerName || 'agency').replace(/[^a-z0-9]+/gi, '-');
+    const fileName = `${safeName}-invoice-${fmtDate(periodStart)}.xlsx`;
+
+    // Freeze this export in history: what was billed can be re-downloaded
+    // byte-identically even after hours/rates change. Failures don't block
+    // the download itself.
+    try {
+      await prisma.agencyInvoiceRun.create({
+        data: {
+          facilityId: req.facility.id,
+          employerId: invoice.employerId || null,
+          employerName: invoice.employerName || null,
+          periodStart: new Date(periodStart),
+          periodEnd: new Date(periodEnd),
+          total: Math.round((Number(invoice.total) || 0) * 100) / 100,
+          hours: Math.round(invoice.lines.reduce((s, l) => s + (Number(l.hours) || 0), 0) * 100) / 100,
+          lines: invoice.lines,
+          fileName,
+          file: buf,
+        },
+      });
+    } catch (snapErr) {
+      console.error('[payroll/agency-invoice/export] snapshot failed:', snapErr.message);
+    }
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}-invoice-${fmtDate(periodStart)}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buf);
   } catch (err) {
     console.error('[payroll/agency-invoice/export]', err.message);
     res.status(500).json({ error: 'Failed to export agency invoice' });
+  }
+});
+
+// ── Agency invoice history ───────────────────────────────────────────────────────
+// GET /agency-invoice/runs — saved exports, newest first (no file bytes).
+router.get('/agency-invoice/runs', async (req, res) => {
+  try {
+    const runs = await prisma.agencyInvoiceRun.findMany({
+      where: { facilityId: req.facility.id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, employerId: true, employerName: true, periodStart: true, periodEnd: true,
+        invoiceNumber: true, total: true, hours: true, fileName: true, createdAt: true,
+      },
+      take: 200,
+    });
+    res.json({ runs });
+  } catch (err) {
+    console.error('[payroll/agency-invoice/runs]', err.message);
+    res.status(500).json({ error: 'Failed to load invoice history' });
+  }
+});
+
+// GET /agency-invoice/runs/:id/download — the exact bytes that were exported.
+router.get('/agency-invoice/runs/:id/download', async (req, res) => {
+  try {
+    const run = await prisma.agencyInvoiceRun.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+    });
+    if (!run) return res.status(404).json({ error: 'Invoice not found' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${run.fileName}"`);
+    res.send(Buffer.from(run.file));
+  } catch (err) {
+    console.error('[payroll/agency-invoice/runs download]', err.message);
+    res.status(500).json({ error: 'Failed to download invoice' });
+  }
+});
+
+// PATCH /agency-invoice/runs/:id — bookkeeping reference (invoice number) only.
+router.patch('/agency-invoice/runs/:id', async (req, res) => {
+  const { invoiceNumber } = req.body || {};
+  try {
+    const run = await prisma.agencyInvoiceRun.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+      select: { id: true, invoiceNumber: true },
+    });
+    if (!run) return res.status(404).json({ error: 'Invoice not found' });
+    const updated = await prisma.agencyInvoiceRun.update({
+      where: { id: run.id },
+      data: {
+        invoiceNumber: invoiceNumber != null ? (String(invoiceNumber).trim() || null) : run.invoiceNumber,
+      },
+      select: { id: true, invoiceNumber: true },
+    });
+    res.json({ run: updated });
+  } catch (err) {
+    console.error('[payroll/agency-invoice/runs PATCH]', err.message);
+    res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+// DELETE /agency-invoice/runs/:id — remove a saved export from history.
+router.delete('/agency-invoice/runs/:id', async (req, res) => {
+  try {
+    const run = await prisma.agencyInvoiceRun.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    if (!run) return res.status(404).json({ error: 'Invoice not found' });
+    await prisma.agencyInvoiceRun.delete({ where: { id: run.id } });
+    res.status(204).end();
+  } catch (err) {
+    console.error('[payroll/agency-invoice/runs DELETE]', err.message);
+    res.status(500).json({ error: 'Failed to delete invoice' });
   }
 });
 

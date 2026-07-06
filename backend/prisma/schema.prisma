@@ -2070,6 +2070,31 @@ model ProviderHourEntry {
   @@index([facilityId, date])
 }
 
+// A saved agency-invoice export (APNE → CAPA). The live Agency Invoice view
+// recomputes from current data, so numbers can drift after hours/rate edits —
+// this row freezes exactly what was billed: the line items, totals, and the
+// exact exported .xlsx bytes for byte-identical re-download. One row per
+// export click.
+model AgencyInvoiceRun {
+  id            String   @id @default(cuid())
+  facilityId    String
+  employerId    String?
+  employerName  String?
+  periodStart   DateTime @db.Date
+  periodEnd     DateTime @db.Date
+  invoiceNumber String? // editable after the fact (bookkeeping reference)
+  total         Float    @default(0)
+  hours         Float    @default(0)
+  lines         Json // snapshot of invoice.lines at export time
+  fileName      String
+  file          Bytes // the exact .xlsx that was downloaded
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([facilityId, createdAt])
+}
+
 // In-progress Payroll Builder edits (bonus + reimbursement) so leaving the page
 // doesn't lose them. One row per provider per pay period per pay class. The
 // presence of a row means "the coordinator touched this line" — its values
