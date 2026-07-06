@@ -160,6 +160,16 @@ router.post('/clear-period', async (req, res) => {
     const result = await prisma.providerHourEntry.deleteMany({
       where: { facilityId: req.facility.id, date: { gte: start, lte: end } },
     });
+    // A period clear is a full reset: also drop the Payroll Builder's saved
+    // bonus/reimbursement drafts for this period, so a re-import seeds fresh
+    // values instead of being overridden by stale edits.
+    await prisma.payrollLineDraft.deleteMany({
+      where: {
+        facilityId: req.facility.id,
+        periodStart: new Date(periodStart),
+        periodEnd: new Date(periodEnd),
+      },
+    });
     res.json({ deleted: result.count });
   } catch (err) {
     console.error('[hour-entry/clear-period]', err.message);
