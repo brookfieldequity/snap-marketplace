@@ -480,7 +480,16 @@ export default function RequestsPage() {
   const filteredTierGroups = selDay
     ? tierGroups.map(({ t, items }) => ({ t, items: items.filter((r) => requestCoversDay(r, selDay)) }))
     : tierGroups
-  const visibleNotes = selDay ? notes.filter((n) => n.date === selDay) : notes
+  // Notes workflow: a note is "handled" once a request exists for that
+  // provider + day (i.e. it was dragged onto a tier). Unhandled notes are the
+  // coordinator's to-do list — they show on the month-wide wall AND in the
+  // Unassigned column (day-scoped when a day is selected). Assigning a note
+  // clears it from both; the tiered card carries it from there.
+  const isHandled = (n) => work.some((w) =>
+    (w.rosterEntryId || w.rosterEntry?.id) === n.rid && requestCoversDay(w, n.date))
+  const unhandledNotes = notes.filter((n) => !isHandled(n))
+  const wallNotes = unhandledNotes // left panel: the whole month, always
+  const unassignedNotes = selDay ? unhandledNotes.filter((n) => n.date === selDay) : unhandledNotes
 
   // ── Calendar data ────────────────────────────────────────────────────────
   const calDays = useMemo(() => {
@@ -501,6 +510,50 @@ export default function RequestsPage() {
   }, [calYear, calMonth, work, ptoPending])
 
   const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  // One sticky-note renderer shared by the to-do wall and the Unassigned
+  // column — same drag/tap behavior in both places.
+  const renderNoteSticky = (n, i) => {
+    const tilt = tiltFor(`${n.rid}-${n.date}`)
+    const paper = n.available === false
+      ? 'linear-gradient(160deg, #FECACA, #FBB4B4)'
+      : n.available === true
+      ? 'linear-gradient(160deg, #BFDBFE, #A9CBF7)'
+      : 'linear-gradient(160deg, #FEF08A, #FDE047)'
+    const noteLifted = touchDragNote && touchDragNote.rid === n.rid && touchDragNote.date === n.date
+    return (
+      <div
+        key={`${n.rid}-${n.date}-${i}`}
+        draggable
+        onDragStart={(e) => { dragNoteRef.current = n; e.dataTransfer.effectAllowed = 'copy' }}
+        onTouchStart={(e) => { if (!e.target.closest('button')) onNoteTouchStart(e, n) }}
+        onTouchMove={onCardTouchMove}
+        onTouchEnd={onCardTouchEnd}
+        onClick={() => setSelDay(selDay === n.date ? null : n.date)}
+        title="Drag onto a tier to assign it · click to show this day"
+        style={{
+          position: 'relative', background: paper, borderRadius: 3,
+          padding: '10px 12px', marginBottom: 12, cursor: 'grab',
+          transform: `rotate(${tilt}deg)`,
+          boxShadow: '0 5px 10px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.5)',
+          outline: selDay === n.date ? '2px solid #2563EB' : 'none',
+          opacity: noteLifted ? 0.35 : 1,
+          userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
+        }}
+      >
+        <div style={{ position: 'absolute', top: -6, left: 12, width: 38, height: 13, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', transform: 'rotate(-4deg)' }} />
+        <div style={{ fontWeight: 800, fontSize: 12.5, color: '#1E293B' }}>
+          {n.name}
+          <span style={{ fontWeight: 600, color: 'rgba(30,41,59,0.55)', marginLeft: 6, fontSize: 11 }}>
+            {fmtDate(n.date)}{n.source === 'PROVIDER' ? ' · from provider' : n.source === 'PTO' ? ' · PTO' : ''}
+          </span>
+        </div>
+        <div style={{ fontFamily: '"Kalam", cursive', fontSize: 14, lineHeight: 1.35, color: '#1E293B', marginTop: 4, wordBreak: 'break-word' }}>
+          {n.note}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: stacked ? 'auto' : '100%', minHeight: stacked ? '100%' : 0, background: '#F8FAFC' }}>
@@ -636,66 +689,20 @@ export default function RequestsPage() {
               </div>
             )}
 
-            {/* Provider notes — availability notes for the shown month, from
-                admin overrides, PTO reasons, the provider app, and the
-                tokenized availability link. (Replaces the old Requests & Notes
-                page.) Tap a note to jump the board to that day. */}
-            {visibleNotes.length > 0 && (
+            {/* Provider notes to-do list — every UNHANDLED note for the whole
+                month (availability notes from admin overrides, PTO reasons,
+                the provider app, and the tokenized link). Dragging one onto a
+                tier assigns it, which clears it from here and from Unassigned
+                — the tiered card carries it from there. */}
+            {wallNotes.length > 0 && (
               <div style={{ padding: 14, width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                  Provider Notes ({visibleNotes.length})
+                  Provider Notes — to assign ({wallNotes.length})
                 </div>
                 <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>
-                  Drag a note onto a tier to turn it into a request · tap to show its day
+                  New notes for the month land here. Drag one onto a tier to assign it — it clears from this list.
                 </div>
-                {visibleNotes.map((n, i) => {
-                  const tilt = tiltFor(`${n.rid}-${n.date}`)
-                  const paper = n.available === false
-                    ? 'linear-gradient(160deg, #FECACA, #FBB4B4)'
-                    : n.available === true
-                    ? 'linear-gradient(160deg, #BFDBFE, #A9CBF7)'
-                    : 'linear-gradient(160deg, #FEF08A, #FDE047)'
-                  const onBoard = work.some((w) =>
-                    (w.rosterEntryId || w.rosterEntry?.id) === n.rid && requestCoversDay(w, n.date))
-                  const noteLifted = touchDragNote && touchDragNote.rid === n.rid && touchDragNote.date === n.date
-                  return (
-                    <div
-                      key={`${n.rid}-${n.date}-${i}`}
-                      draggable
-                      onDragStart={(e) => { dragNoteRef.current = n; e.dataTransfer.effectAllowed = 'copy' }}
-                      onTouchStart={(e) => { if (!e.target.closest('button')) onNoteTouchStart(e, n) }}
-                      onTouchMove={onCardTouchMove}
-                      onTouchEnd={onCardTouchEnd}
-                      onClick={() => setSelDay(selDay === n.date ? null : n.date)}
-                      title="Drag onto a tier to create a request · click to show this day"
-                      style={{
-                        position: 'relative', background: paper, borderRadius: 3,
-                        padding: '10px 12px', marginBottom: 12, cursor: 'grab',
-                        transform: `rotate(${tilt}deg)`,
-                        boxShadow: '0 5px 10px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.5)',
-                        outline: selDay === n.date ? '2px solid #2563EB' : 'none',
-                        opacity: noteLifted ? 0.35 : 1,
-                        userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
-                      }}
-                    >
-                      <div style={{ position: 'absolute', top: -6, left: 12, width: 38, height: 13, background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.6)', transform: 'rotate(-4deg)' }} />
-                      <div style={{ fontWeight: 800, fontSize: 12.5, color: '#1E293B' }}>
-                        {n.name}
-                        <span style={{ fontWeight: 600, color: 'rgba(30,41,59,0.55)', marginLeft: 6, fontSize: 11 }}>
-                          {fmtDate(n.date)}{n.source === 'PROVIDER' ? ' · from provider' : n.source === 'PTO' ? ' · PTO' : ''}
-                        </span>
-                      </div>
-                      <div style={{ fontFamily: '"Kalam", cursive', fontSize: 14, lineHeight: 1.35, color: '#1E293B', marginTop: 4, wordBreak: 'break-word' }}>
-                        {n.note}
-                      </div>
-                      {onBoard && (
-                        <div style={{ marginTop: 6, display: 'inline-block', background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 20, padding: '1px 8px', fontSize: 10, fontWeight: 700, color: '#047857' }}>
-                          ✓ on board
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                {wallNotes.map(renderNoteSticky)}
               </div>
             )}
 
@@ -744,9 +751,9 @@ export default function RequestsPage() {
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, 'unassigned')}
               >
-                {filteredUnassigned.length === 0 && (
+                {filteredUnassigned.length === 0 && unassignedNotes.length === 0 && (
                   <div style={{ padding: '24px 0', textAlign: 'center', color: '#D97706', fontSize: 12 }}>
-                    {selDay ? 'No unassigned requests this day.' : 'All requests tiered.'}
+                    {selDay ? 'Nothing unassigned this day.' : 'All requests tiered.'}
                   </div>
                 )}
                 {filteredUnassigned.map((r) => (
@@ -761,6 +768,16 @@ export default function RequestsPage() {
                     onDecline={() => decline(r.id)}
                   />
                 ))}
+                {/* Unhandled provider notes for the shown month/day — drag onto
+                    a tier to assign (clears here and on the to-do wall). */}
+                {unassignedNotes.length > 0 && (
+                  <div style={{ marginTop: filteredUnassigned.length ? 16 : 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                      Provider notes ({unassignedNotes.length})
+                    </div>
+                    {unassignedNotes.map(renderNoteSticky)}
+                  </div>
+                )}
                 {/* Declined bin at bottom of unassigned */}
                 {declined.length > 0 && !selDay && (
                   <div style={{ marginTop: 16 }}>
