@@ -324,6 +324,19 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
       : {};
   const hoursIds = Object.keys(submittedByRoster);
 
+  // Coordinator's saved Payroll Builder edits for this period/class. A draft
+  // row overrides the seeded bonus/reimbursement wholesale (nulls included) —
+  // it exists only if the coordinator touched that line.
+  const draftRows = await prisma.payrollLineDraft.findMany({
+    where: {
+      facilityId,
+      payClass,
+      periodStart: new Date(periodStart),
+      periodEnd: new Date(periodEnd),
+    },
+  });
+  const draftByRoster = Object.fromEntries(draftRows.map((d) => [d.rosterEntryId, d]));
+
   const roster = await prisma.internalRosterEntry.findMany({
     where: {
       facilityId,
@@ -399,13 +412,30 @@ async function seedLineItems({ facilityId, payClass, periodStart, periodEnd }) {
       hourlyRate,
       annualRate,
       grossPay: Math.round(grossPay * 100) / 100,
-      bonusFlat: null,
-      bonusHours: null,
-      bonusRate: null,
-      bonusTotal: 0,
-      // Reimbursement pre-filled from the imported payroll sheet, editable in
-      // the Payroll Builder. Paid to the contractor — separate from gross.
-      reimbursement: extrasByRoster[entry.id]?.reimbursement || null,
+      // Bonus + reimbursement: the coordinator's saved draft wins outright when
+      // one exists (they touched this line — including explicit clears);
+      // otherwise pre-fill both from the imported payroll sheet. The imported
+      // period bonus lands in bonusFlat (it's a lump, not hours × rate).
+      ...(() => {
+        const draft = draftByRoster[entry.id];
+        if (draft) {
+          return {
+            bonusFlat: draft.bonusFlat,
+            bonusHours: draft.bonusHours,
+            bonusRate: draft.bonusRate,
+            bonusTotal: computeBonus(draft),
+            reimbursement: draft.reimbursement,
+          };
+        }
+        const importedBonus = extrasByRoster[entry.id]?.bonus || 0;
+        return {
+          bonusFlat: importedBonus > 0 ? importedBonus : null,
+          bonusHours: null,
+          bonusRate: null,
+          bonusTotal: importedBonus > 0 ? importedBonus : 0,
+          reimbursement: extrasByRoster[entry.id]?.reimbursement || null,
+        };
+      })(),
       shiftDetail,
       // UI flags
       missingRate: hourlyRate == null && annualRate == null,

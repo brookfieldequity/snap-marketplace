@@ -2070,6 +2070,32 @@ model ProviderHourEntry {
   @@index([facilityId, date])
 }
 
+// In-progress Payroll Builder edits (bonus + reimbursement) so leaving the page
+// doesn't lose them. One row per provider per pay period per pay class. The
+// presence of a row means "the coordinator touched this line" — its values
+// override the seeded preview wholesale (including explicit clears, which are
+// stored as null). Hours/rates are NOT drafted here: hours persist on
+// ProviderHourEntry and rates on the roster card via their own flows.
+model PayrollLineDraft {
+  id            String   @id @default(cuid())
+  facilityId    String
+  rosterEntryId String
+  payClass      String // W2 | CONTRACTOR
+  periodStart   DateTime @db.Date
+  periodEnd     DateTime @db.Date
+
+  bonusFlat     Float?
+  bonusHours    Float?
+  bonusRate     Float?
+  reimbursement Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([facilityId, rosterEntryId, payClass, periodStart, periodEnd])
+  @@index([facilityId, periodStart, periodEnd])
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // EOR (Employer-of-Record) — Phase 0  (added 2026-06-18)
 // See capa-pilot/eor-model-spec.md. Half of CAPA's schedule is staffed by 1099s

@@ -424,6 +424,10 @@ export const payrollAPI = {
     apiFetch(`${BASE}/payroll/preview?payClass=${payClass}&periodStart=${periodStart}&periodEnd=${periodEnd}`, {
       headers: facilityHeaders(),
     }),
+  // Persist in-progress bonus/reimbursement edits so leaving the builder
+  // doesn't lose them; the preview overlays saved drafts on reload.
+  savePayrollDraft: (payload) =>
+    apiFetch(`${BASE}/payroll/drafts`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify(payload) }),
   getPayPeriods: () => apiFetch(`${BASE}/payroll/periods`, { headers: facilityHeaders() }),
   getPaySchedule: () => apiFetch(`${BASE}/payroll/pay-schedule`, { headers: facilityHeaders() }),
   setPaySchedule: ({ anchorDate, frequency }) =>

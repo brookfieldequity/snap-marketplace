@@ -280,6 +280,57 @@ router.get('/preview', async (req, res) => {
   }
 });
 
+// ── Draft: persist in-progress bonus/reimbursement edits ────────────────────────
+// PUT /drafts — upsert the coordinator's edits for one line so leaving the
+// Payroll Builder never loses them. The preview overlays these on reload.
+router.put('/drafts', async (req, res) => {
+  const { payClass, periodStart, periodEnd, rosterEntryId, bonusFlat, bonusHours, bonusRate, reimbursement } = req.body || {};
+  const cls = String(payClass || '').toUpperCase();
+  if (!VALID_CLASSES.includes(cls)) return res.status(400).json({ error: 'Invalid pay class' });
+  if (!periodStart || !periodEnd || !rosterEntryId) {
+    return res.status(400).json({ error: 'periodStart, periodEnd, and rosterEntryId are required' });
+  }
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+  try {
+    const entry = await prisma.internalRosterEntry.findFirst({
+      where: { id: rosterEntryId, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    if (!entry) return res.status(404).json({ error: 'Provider not on this facility roster' });
+    const values = {
+      bonusFlat: num(bonusFlat),
+      bonusHours: num(bonusHours),
+      bonusRate: num(bonusRate),
+      reimbursement: num(reimbursement),
+    };
+    const where = {
+      facilityId_rosterEntryId_payClass_periodStart_periodEnd: {
+        facilityId: req.facility.id,
+        rosterEntryId,
+        payClass: cls,
+        periodStart: new Date(periodStart),
+        periodEnd: new Date(periodEnd),
+      },
+    };
+    const draft = await prisma.payrollLineDraft.upsert({
+      where,
+      update: values,
+      create: {
+        facilityId: req.facility.id,
+        rosterEntryId,
+        payClass: cls,
+        periodStart: new Date(periodStart),
+        periodEnd: new Date(periodEnd),
+        ...values,
+      },
+    });
+    res.json({ ok: true, draftId: draft.id });
+  } catch (err) {
+    console.error('[payroll/drafts]', err.message);
+    res.status(500).json({ error: 'Failed to save draft' });
+  }
+});
+
 // ── Export: persist a run + generate the CSV ────────────────────────────────────
 // Body: { system, payClass, periodStart, periodEnd, lineItems: [...] }
 // lineItems are the admin-reviewed rows (edited hours/rates, all approved).

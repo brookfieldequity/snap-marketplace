@@ -167,22 +167,65 @@ export default function PayrollBuilderPage({ onNavigate }) {
     ? '2fr 1fr 0.8fr 0.8fr 1fr 1.2fr 110px'
     : '2fr 1fr 0.9fr 1fr 1.2fr 110px'
 
+  // Debounced per-row autosave of bonus/reimbursement edits — without this,
+  // leaving the page loses them (the grid is client state; only exported runs
+  // were persisted). The preview endpoint overlays saved drafts on reload.
+  const draftTimers = React.useRef({})
+  const pendingDrafts = React.useRef({}) // key -> payload not yet sent
+  const [draftError, setDraftError] = useState(false)
+  const DRAFT_FIELDS = ['bonusFlat', 'bonusHours', 'bonusRate', 'reimbursement']
+  function sendDraft(key, payload) {
+    delete pendingDrafts.current[key]
+    payrollAPI
+      .savePayrollDraft(payload)
+      .then(() => setDraftError(false))
+      .catch(() => setDraftError(true))
+  }
+  function scheduleDraftSave(item, cls) {
+    const key = `${cls}:${item.rosterEntryId}`
+    const payload = {
+      payClass: cls,
+      periodStart: period.start,
+      periodEnd: period.end,
+      rosterEntryId: item.rosterEntryId,
+      bonusFlat: item.bonusFlat ?? null,
+      bonusHours: item.bonusHours ?? null,
+      bonusRate: item.bonusRate ?? null,
+      reimbursement: item.reimbursement ?? null,
+    }
+    pendingDrafts.current[key] = payload
+    clearTimeout(draftTimers.current[key])
+    draftTimers.current[key] = setTimeout(() => sendDraft(key, payload), 600)
+  }
+  // On unmount, flush anything still inside the debounce window so a quick
+  // edit-then-navigate never loses the last keystroke.
+  useEffect(() => () => {
+    Object.values(draftTimers.current).forEach(clearTimeout)
+    for (const [key, payload] of Object.entries(pendingDrafts.current)) sendDraft(key, payload)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function updateItem(idx, patch) {
+    // Compute the edited row up front (outside the state updater — scheduling a
+    // network save inside setState would double-fire under StrictMode).
+    const curGrid = grids[payClass]
+    if (!curGrid || !curGrid.items[idx]) return
+    const edited = { ...curGrid.items[idx], ...patch }
+    edited.grossPay = Math.round(clientGross(edited) * 100) / 100
+    edited.missingRate = (edited.hourlyRate == null || edited.hourlyRate === '') && (edited.annualRate == null || edited.annualRate === '')
+
     setGrids((g) => {
       const cur = g[payClass]
       if (!cur) return g
-      const items = cur.items.map((it, i) => {
-        if (i !== idx) return it
-        const next = { ...it, ...patch }
-        next.grossPay = Math.round(clientGross(next) * 100) / 100
-        next.missingRate = (next.hourlyRate == null || next.hourlyRate === '') && (next.annualRate == null || next.annualRate === '')
-        return next
-      })
+      const items = cur.items.map((it, i) => (i === idx ? edited : it))
       // un-approve an edited row so the admin re-confirms
       const approved = new Set(cur.approved)
-      approved.delete(items[idx].rosterEntryId)
+      approved.delete(edited.rosterEntryId)
       return { ...g, [payClass]: { ...cur, items, approved } }
     })
+
+    // Persist bonus/reimbursement edits (hours/rates have their own homes:
+    // Provider Hours entries and the roster rate flow).
+    if (DRAFT_FIELDS.some((f) => f in patch)) scheduleDraftSave(edited, payClass)
   }
 
   function toggleApprove(item) {
@@ -341,6 +384,11 @@ export default function PayrollBuilderPage({ onNavigate }) {
       {error && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
           {error}
+        </div>
+      )}
+      {draftError && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+          Couldn’t save your latest bonus/reimbursement edits — they’ll be lost if you leave this page. Check your connection and edit the field again to retry.
         </div>
       )}
 
