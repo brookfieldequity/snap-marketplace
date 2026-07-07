@@ -234,28 +234,48 @@ async function submittedExtrasByRoster({ facilityId, periodStart, periodEnd }) {
 // APNE-site bucket. See eor-model-spec.md / APNE bridge.
 function parseApnePayrollSheet(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' }); // default keeps formulas in cell.f
-  // Pick the sheet whose header row has contractor_type + hours_worked.
+  // Pick the sheet whose header row has a contractor-type + hours column
+  // (synonym-tolerant, same lists as the column matcher below).
+  const TYPE_SYNS = ['contractor_type', 'contractor type', 'type'];
+  const HOURS_SYNS = ['hours_worked', 'hours worked', 'hours', 'regular_hours', 'regular hours'];
   let ws = null;
   for (const name of wb.SheetNames) {
     const s = wb.Sheets[name];
     const hdr = (XLSX.utils.sheet_to_json(s, { header: 1, defval: '', raw: false })[0] || [])
       .map((h) => String(h).trim().toLowerCase());
-    if (hdr.includes('contractor_type') && hdr.includes('hours_worked')) { ws = s; break; }
+    if (TYPE_SYNS.some((x) => hdr.includes(x)) && HOURS_SYNS.some((x) => hdr.includes(x))) { ws = s; break; }
   }
   if (!ws) return [];
 
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
   const hdr = rows[0].map((h) => String(h).trim().toLowerCase());
-  const ci = {
-    type: hdr.indexOf('contractor_type'),
-    first: hdr.indexOf('first_name'),
-    last: hdr.indexOf('last_name'),
-    business: hdr.indexOf('business_name'),
-    ein: hdr.indexOf('ein'),
-    hours: hdr.indexOf('hours_worked'),
-    reimb: hdr.indexOf('reimbursement'),
-    bonus: hdr.indexOf('bonus'),
+  // Header synonyms — exact-match-only silently imported zeros when a sheet
+  // was edited (e.g. "reimbursements" instead of "reimbursement"), which is
+  // invisible until payroll/invoice totals come up short.
+  const findCol = (names) => {
+    for (const n of names) {
+      const i = hdr.indexOf(n);
+      if (i >= 0) return i;
+    }
+    return -1;
   };
+  const ci = {
+    type: findCol(TYPE_SYNS),
+    first: findCol(['first_name', 'first name', 'firstname']),
+    last: findCol(['last_name', 'last name', 'lastname']),
+    business: findCol(['business_name', 'business name', 'businessname']),
+    ein: findCol(['ein', 'tax_id', 'tax id']),
+    hours: findCol(HOURS_SYNS),
+    reimb: findCol(['reimbursement', 'reimbursements', 'reimb', 'expense_reimbursement', 'expense reimbursement', 'expenses', 'expense', 'mileage']),
+    bonus: findCol(['bonus', 'bonuses', 'bonus_pay', 'bonus pay', 'bonus_amount', 'bonus amount']),
+  };
+  // Optional money columns the sheet didn't have — surfaced in the import
+  // response so a renamed column can't silently zero out payroll/invoices.
+  const columnsMissing = [
+    ...(ci.reimb < 0 ? ['reimbursement'] : []),
+    ...(ci.bonus < 0 ? ['bonus'] : []),
+    ...(ci.ein < 0 ? ['ein'] : []),
+  ];
   const cell = (r, c) => (c >= 0 ? rows[r][c] : '');
 
   const out = [];
@@ -294,6 +314,7 @@ function parseApnePayrollSheet(buffer) {
       bonusDetail,
     });
   }
+  out.columnsMissing = columnsMissing;
   return out;
 }
 
@@ -369,7 +390,15 @@ async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodE
     recorded += 1;
   }
 
-  return { rows: parsed.length, seeded, matched, recorded, periodStart, periodEnd };
+  return {
+    rows: parsed.length,
+    seeded,
+    matched,
+    recorded,
+    periodStart,
+    periodEnd,
+    columnsMissing: parsed.columnsMissing || [],
+  };
 }
 
 // ── All-in (CAPA) rate bulk import ───────────────────────────────────────────

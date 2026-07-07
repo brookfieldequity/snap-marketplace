@@ -36,7 +36,12 @@ router.post('/import-payroll-sheet', payrollUpload.single('file'), async (req, r
       periodStart,
       periodEnd,
     });
-    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.` });
+    // Surface missing money columns loudly — a renamed header otherwise
+    // silently imports zeros and only shows up as short payroll/invoices.
+    const warn = result.columnsMissing?.length
+      ? ` ⚠ Columns not found in the sheet: ${result.columnsMissing.join(', ')} — those values were imported as 0.`
+      : '';
+    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.${warn}` });
   } catch (err) {
     console.error('[hour-entry/import-payroll-sheet]', err.message);
     res.status(500).json({ error: err.message || 'Failed to import payroll sheet' });
