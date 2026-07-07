@@ -224,132 +224,17 @@ function UnifiedSavingsCard({ unified, loading }) {
 
       <div style={{ fontSize: 11, color: '#64748B', marginTop: 14, lineHeight: 1.5 }}>
         {isProjected
-          ? 'Projected from your inputs — refines automatically as your real schedules and fills come in.'
-          : `Based on your facility's own data · ${unified.confidence}% confidence and climbing.`}
-      </div>
-    </div>
-  )
-}
-
-// ─── Savings hero card ────────────────────────────────────────────────────────
-function SavingsCard({ label, monthValue, ytdValue, loading, size = 'normal' }) {
-  const isTotal = size === 'large'
-  return (
-    <div
-      style={{
-        flex: 1,
-        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-        borderRadius: 20,
-        padding: isTotal ? '36px 40px' : '28px 32px',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: isTotal
-          ? '0 24px 64px rgba(15,23,42,0.4), 0 0 0 2px rgba(251,191,36,0.25)'
-          : '0 16px 48px rgba(15,23,42,0.25)',
-        border: isTotal ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(37,99,235,0.2)',
-      }}
-    >
-      {/* Glow decorations */}
-      <div
-        style={{
-          position: 'absolute',
-          top: -80,
-          right: -80,
-          width: 240,
-          height: 240,
-          background: isTotal
-            ? 'radial-gradient(circle, rgba(251,191,36,0.18) 0%, transparent 70%)'
-            : 'radial-gradient(circle, rgba(37,99,235,0.2) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: -50,
-          left: -50,
-          width: 180,
-          height: 180,
-          background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: isTotal ? '#FCD34D' : '#64748B',
-          letterSpacing: '0.08em',
-          marginBottom: 6,
-          textTransform: 'uppercase',
-        }}
-      >
-        {isTotal ? '⭐ TOTAL SNAP SAVINGS' : label}
+          ? 'Projected from your inputs and industry-typical staffing patterns — your real schedules and fills replace the estimates automatically.'
+          : `Measured from your facility's own data over the last ${unified.realizedWindowDays || 30} days · ${unified.confidence}% confidence and climbing.`}
       </div>
 
-      {/* Month value */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: '#475569', fontWeight: 500, marginBottom: 4 }}>
-          This Month
+      {/* Honesty label: agency-rate basis. Entered rates make the number theirs;
+          estimates invite them to lock it in via StaffIQ Inputs. */}
+      {unified.assumptions?.agencyRateSource && unified.assumptions.agencyRateSource !== 'facility' && (
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 6, lineHeight: 1.5, fontStyle: 'italic' }}>
+          Agency savings use regional rate estimates — enter your actual agency bill rates in StaffIQ Inputs to lock this number in.
         </div>
-        {loading ? (
-          <Skeleton width="60%" height={isTotal ? 56 : 44} radius={8} />
-        ) : (
-          <div
-            style={{
-              fontSize: isTotal ? 64 : 48,
-              fontWeight: 900,
-              letterSpacing: '-0.04em',
-              lineHeight: 1,
-              background: isTotal
-                ? 'linear-gradient(135deg, #FCD34D 0%, #10B981 100%)'
-                : 'none',
-              WebkitBackgroundClip: isTotal ? 'text' : 'unset',
-              WebkitTextFillColor: isTotal ? 'transparent' : '#10B981',
-              color: isTotal ? 'transparent' : '#10B981',
-              textShadow: isTotal ? 'none' : '0 0 40px rgba(16,185,129,0.35)',
-            }}
-          >
-            {fmt(monthValue)}
-          </div>
-        )}
-      </div>
-
-      {/* YTD value */}
-      <div
-        style={{
-          borderTop: '1px solid rgba(255,255,255,0.07)',
-          paddingTop: 14,
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: 10,
-        }}
-      >
-        <div style={{ fontSize: 11, color: '#475569', fontWeight: 500, flexShrink: 0 }}>
-          Year to Date
-        </div>
-        {loading ? (
-          <Skeleton width="50%" height={24} radius={4} />
-        ) : (
-          <div
-            style={{
-              fontSize: isTotal ? 30 : 24,
-              fontWeight: 800,
-              letterSpacing: '-0.03em',
-              background: isTotal
-                ? 'linear-gradient(135deg, #FCD34D 0%, #10B981 100%)'
-                : 'none',
-              WebkitBackgroundClip: isTotal ? 'text' : 'unset',
-              WebkitTextFillColor: isTotal ? 'transparent' : '#10B981',
-              color: isTotal ? 'transparent' : '#10B981',
-            }}
-          >
-            {fmt(ytdValue)}
-          </div>
-        )}
-      </div>
-
+      )}
     </div>
   )
 }
@@ -463,21 +348,10 @@ export default function SnapShiftsDashboard({ onNavigate }) {
   }
 
   const d = data || {}
-  // Map the real /staffiq/dashboard response into the flat view-model this
-  // page renders. Backend savings are nested ({internal,agencyReplacement,
-  // total}:{month,ytd}); the stat fields are top-level. Unknown fields stay
-  // null/0 — never fabricated.
-  const rawSavings = d.savings || {}
-  const savings = {
-    efficiencyMonth:        rawSavings.internal?.month || 0,
-    efficiencyYtd:          rawSavings.internal?.ytd || 0,
-    agencyReplacementMonth: rawSavings.agencyReplacement?.month || 0,
-    agencyReplacementYtd:   rawSavings.agencyReplacement?.ytd || 0,
-    totalMonth:             rawSavings.total?.month || 0,
-    totalYtd:               rawSavings.total?.ytd || 0,
-  }
-  // The hero "StaffIQ saves you $X/month" number (single savings authority).
-  const unified = rawSavings.unified || null
+  // The hero "StaffIQ saves you $X/month" number — the single savings
+  // authority. The old parallel heuristic fields were retired backend-side;
+  // unknown fields stay null — never fabricated.
+  const unified = d.savings?.unified || null
   const upcoming = d.upcomingShifts || []
   const stats = {
     upcomingShifts14Days:         upcoming.length,

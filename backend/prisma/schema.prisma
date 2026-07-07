@@ -1268,6 +1268,12 @@ model StaffIQInput {
   pdCrnasPerMonth                 Int
   agencyAnesthesiologistsPerMonth Int
   agencyCrnasPerMonth             Int
+  // What an agency actually bills this facility per hour (coordinator-entered).
+  // Null = not entered; savings math falls back to network priors ($425/$300/$250)
+  // and labels the resulting figure "estimated".
+  agencyAnesthesiologistRate      Float?
+  agencyCrnaRate                  Float?
+  agencyAaRate                    Float?
   avgAnesthesiologistRate         Float
   avgCrnaRate                     Float
   avgShiftHours                   Float    @default(10)

@@ -581,6 +581,32 @@ router.get('/staffiq/analytics', adminAuth, async (req, res) => {
   }
 });
 
+// GET /staffiq/calibration — projected-vs-realized savings snapshots per
+// facility (the accuracy record behind the hero number). Measurement only;
+// auto-calibration stays OFF until turned on deliberately (see the Notion
+// task "Turn ON StaffIQ auto-calibration").
+router.get('/staffiq/calibration', adminAuth, async (req, res) => {
+  try {
+    const calibration = await require('../services/staffiqLearning').getSavingsCalibration();
+    res.json(calibration);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load StaffIQ calibration' });
+  }
+});
+
+// POST /staffiq/calibration/snapshot — record an ad-hoc snapshot run for all
+// facilities (the monthly cron does this automatically on the 1st).
+router.post('/staffiq/calibration/snapshot', adminAuth, async (req, res) => {
+  try {
+    const result = await require('../services/staffiqLearning').recordSavingsSnapshots();
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to record StaffIQ snapshots' });
+  }
+});
+
 // ── Leads Management ──────────────────────────────────────────────────────────
 
 router.get('/leads', adminAuth, async (req, res) => {
@@ -815,57 +841,18 @@ router.patch('/calculator-leads/:id', adminAuth, async (req, res) => {
   }
 });
 
-// GET /staffiq/facility-pitch — CAPA-specific pitch/presentation data
-router.get('/staffiq/facility-pitch', adminAuth, async (req, res) => {
+// POST /staffiq/pitch-projection — live first-meeting projection from prospect
+// inputs (the "2-minute baseline"). Runs the SAME savings engine as the facility
+// dashboard (staffiqLearning.projectFromInputs — one authority), persists
+// nothing, and never fabricates data: insufficient inputs return an explicit
+// 'insufficient' basis. Replaces the old CAPA-hardcoded /staffiq/facility-pitch.
+router.post('/staffiq/pitch-projection', adminAuth, async (req, res) => {
   try {
-    // Find CAPA facility
-    const facility = await prisma.facility.findFirst({
-      where: { name: { contains: 'CAPA', mode: 'insensitive' } },
-    });
-
-    if (!facility) {
-      // Return hardcoded presentation data if no matching facility / no uploads
-      return res.json({
-        facilityName: 'Your Facility',
-        page1: {
-          title: 'What StaffIQ Found in Your June Schedule',
-          metrics: [
-            { label: 'Inefficient days at Kenmore', value: '6 of 22 working days', pct: 27 },
-            { label: 'Inefficient days at Weymouth', value: '8 of 22 working days', pct: 36 },
-            { label: 'Combined estimated annual waste', value: '$295,500', raw: 295500 },
-          ],
-        },
-        page2: {
-          title: 'Your Friday CRNA Shortage Is Costing You',
-          kenmoreWeekdayRatio: 2.8,
-          kenmoreFridayRatio: 1.9,
-          weymouthWeekdayRatio: 2.6,
-          weymouthFridayRatio: 1.7,
-          fridayAnnualPremium: 104500,
-          totalSavingsOpportunity: { min: 400000, max: 500000 },
-        },
-        page3: {
-          title: 'How SNAP Fixes This',
-          bullets: [
-            'StaffIQ identifies every suboptimal staffing day before it costs you money',
-            'SNAP Shifts sends automatic incentive alerts to your CRNAs for high-cost coverage gaps',
-            'SNAP Marketplace connects you to external CRNAs when internal coverage falls short',
-          ],
-        },
-      });
-    }
-
-    // Try to load real data from uploads
-    const records = await prisma.schedulingRecord.findMany({
-      where: { facilityId: facility.id },
-      orderBy: { shiftDate: 'asc' },
-    });
-
-    // Return structured presentation data
-    res.json({ facilityName: facility.name, hasRealData: records.length > 0, recordCount: records.length });
+    const projection = require('../services/staffiqLearning').projectFromInputs(req.body || {});
+    res.json(projection);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to load presentation data' });
+    res.status(500).json({ error: 'Failed to compute pitch projection' });
   }
 });
 

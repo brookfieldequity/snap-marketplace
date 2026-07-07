@@ -33,6 +33,9 @@ router.post('/', facilityAuth, async (req, res) => {
       pdCrnasPerMonth,
       agencyAnesthesiologistsPerMonth,
       agencyCrnasPerMonth,
+      agencyAnesthesiologistRate,
+      agencyCrnaRate,
+      agencyAaRate,
       avgAnesthesiologistRate,
       avgCrnaRate,
       avgShiftHours,
@@ -55,6 +58,12 @@ router.post('/', facilityAuth, async (req, res) => {
       ? Number(avgCrnaRate)
       : 260;
     const resolvedTeamModel = primaryTeamModel || 'mixed';
+    // Agency bill rates are optional — null means "not entered", and the savings
+    // math falls back to network priors with an "estimated" label.
+    const toRateOrNull = (v) => (v != null && v !== '' ? Number(v) : null);
+    const resolvedAgencyAnesRate = toRateOrNull(agencyAnesthesiologistRate);
+    const resolvedAgencyCrnaRate = toRateOrNull(agencyCrnaRate);
+    const resolvedAgencyAaRate = toRateOrNull(agencyAaRate);
     const resolvedShiftHours = avgShiftHours != null && avgShiftHours !== '' ? Number(avgShiftHours) : 10;
     const resolvedOperatingDays = operatingDaysPerYear != null && operatingDaysPerYear !== '' ? Number(operatingDaysPerYear) : 250;
 
@@ -82,6 +91,9 @@ router.post('/', facilityAuth, async (req, res) => {
           pdCrnasPerMonth: Number(pdCrnasPerMonth ?? 0),
           agencyAnesthesiologistsPerMonth: Number(agencyAnesthesiologistsPerMonth ?? 0),
           agencyCrnasPerMonth: Number(agencyCrnasPerMonth ?? 0),
+          agencyAnesthesiologistRate: resolvedAgencyAnesRate,
+          agencyCrnaRate: resolvedAgencyCrnaRate,
+          agencyAaRate: resolvedAgencyAaRate,
           avgAnesthesiologistRate: resolvedAnesRate,
           avgCrnaRate: resolvedCrnaRate,
           avgShiftHours: resolvedShiftHours,

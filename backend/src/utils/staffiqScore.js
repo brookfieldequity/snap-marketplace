@@ -6,6 +6,15 @@ const DEFAULT_CRNA_RATE = 260;
 const DEFAULT_SHIFT_HOURS = 10;
 const DEFAULT_OPERATING_DAYS = 250;
 
+// Signup-projection floor (decided with Matt 2026-07-07): every projection built
+// from the 2-minute inputs form assumes at least this much team-model waste,
+// because form inputs can't reveal day-to-day inefficiency the way schedules do.
+// This is an INDUSTRY-TYPICAL assumption and must be labeled as such in any
+// drill-down ("based on industry-typical patterns — your uploaded schedules
+// replace this with your actual numbers"). Realized data overrides it entirely.
+// Future: derive from the network benchmark instead of a constant (option C).
+const PROJECTION_FLOOR_INEFF1_PCT = 2.0;
+
 // Friday-shortage detection tuning.
 // A Friday "shortage" means the facility spends materially MORE per staffed room
 // on Fridays than on comparable Mon–Thu days — typically because CRNAs are
@@ -210,39 +219,32 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
  */
 function calculateScoreFromAnalysis(facilities) {
   if (!facilities || facilities.length === 0) {
-    return { score: 84, deduction1: 8, deduction2: 5, deduction3: 3, details: [], calculationMethod: 'default' };
+    // No data → no score. Callers guard on records existing before invoking;
+    // never fabricate a number for an empty facility.
+    return { score: null, wasteRatioPct: null, deduction1: 0, deduction2: 0, deduction3: 0, details: [], calculationMethod: 'insufficient_data' };
   }
 
-  // Deduction 1: Team model inefficiency (weighted by room count)
-  const totalRooms = facilities.reduce((s, f) => s + f.avgRooms * f.totalDays, 0);
-  let weightedInefficiency = 0;
-  facilities.forEach(f => {
-    const weight = totalRooms > 0 ? (f.avgRooms * f.totalDays) / totalRooms : 1 / facilities.length;
-    weightedInefficiency += f.inefficiencyPct * weight;
-  });
-  const deduction1 = Math.round(weightedInefficiency * 0.5 * 10) / 10;
+  // One score formula everywhere: score = 100 − waste% of actual staffing spend,
+  // where waste = actual cost minus optimal care-team cost across every analyzed
+  // day. Friday inefficiency is already inside actual−optimal, so there is no
+  // separate Friday deduction (and no double-count). The gap from 100 IS the
+  // percentage of spend the facility is wasting — a CFO can recompute it.
+  const totalActual = facilities.reduce((s, f) => s + (f.totalActualCost || 0), 0);
+  const totalOptimal = facilities.reduce((s, f) => s + (f.totalOptimalCost || 0), 0);
+  const wasteRatioPct = totalActual > 0
+    ? Math.round(((totalActual - totalOptimal) / totalActual) * 1000) / 10
+    : 0;
 
-  // Deduction 2: Friday shortage (5 pts per affected facility)
-  const facilitiesWithFriday = facilities.filter(f => f.hasFridayShortage).length;
-  const deduction2 = facilitiesWithFriday * 5;
-
-  // Deduction 3: Utilization gap (compare actual avg utilization vs 75% target)
-  // Each 1% below 75% avg utilization = 0.3 pts deduction
-  const avgUtilization = facilities.reduce((s, f) => {
-    // Utilization: avgRoomsRun / maxRooms (we approximate maxRooms as avgRooms * 1.25 if no data)
-    return s + Math.min(f.avgRooms / (f.avgRooms * 1.15), 1);
-  }, 0) / facilities.length;
-  const utilizationGap = Math.max(0, 0.75 - avgUtilization) * 100;
-  const deduction3 = Math.round(utilizationGap * 0.3 * 10) / 10;
-
-  const score = Math.min(100, Math.max(0, Math.round(100 - deduction1 - deduction2 - deduction3)));
+  const score = Math.min(100, Math.max(0, Math.round(100 - wasteRatioPct)));
 
   return {
     score,
-    deduction1,
-    deduction2,
-    deduction3,
-    totalDeduction: Math.round((deduction1 + deduction2 + deduction3) * 10) / 10,
+    wasteRatioPct,
+    // Back-compat breakdown fields (the whole gap is measured waste now).
+    deduction1: wasteRatioPct,
+    deduction2: 0,
+    deduction3: 0,
+    totalDeduction: wasteRatioPct,
     details: facilities,
     calculationMethod: 'data_upload',
   };
@@ -276,25 +278,30 @@ function calculateStaffIQScore(inputs) {
   else if (primaryTeamModel === '1:2') crnaPerAnes = 2;
   else crnaPerAnes = 2.5; // mixed
 
-  // Inefficiency #1 — Team model
+  // Inefficiency #1 — Team model. Floored at PROJECTION_FLOOR_INEFF1_PCT
+  // (industry-typical assumption, labeled in the drill-down) — form inputs
+  // alone can't surface the day-to-day waste that schedule uploads reveal.
   let inefficiency1Pct;
-  if (crnaPerAnes >= 3) inefficiency1Pct = 1.0; // efficient
-  else if (crnaPerAnes === 0) inefficiency1Pct = 1.5; // solo - ok
-  else if (crnaPerAnes < 1) inefficiency1Pct = 7.5;
-  else inefficiency1Pct = Math.round((3 - crnaPerAnes) / 3 * 7.5 * 10) / 10;
+  if (crnaPerAnes < 1 && crnaPerAnes > 0) inefficiency1Pct = 7.5;
+  else if (crnaPerAnes > 0 && crnaPerAnes < 3) inefficiency1Pct = Math.round((3 - crnaPerAnes) / 3 * 7.5 * 10) / 10;
+  else inefficiency1Pct = PROJECTION_FLOOR_INEFF1_PCT; // efficient (>=1:3) or solo — floor only
+  inefficiency1Pct = Math.max(PROJECTION_FLOOR_INEFF1_PCT, inefficiency1Pct);
+  const floorApplied = inefficiency1Pct === PROJECTION_FLOOR_INEFF1_PCT;
 
   const totalBudget = rooms * ((anesRate + crnaPerAnes * crnaRate) / (1 + crnaPerAnes)) * shiftHours * operatingDays;
   const inefficiency1Cost = Math.round(totalBudget * (inefficiency1Pct / 100));
 
-  // Inefficiency #2 — Overstaffing to maximum capacity
+  // Inefficiency #2 — Overstaffing to maximum capacity (industry-typical
+  // assumption: ~25% of rooms carry a ~$35/hr staffing premium; also labeled
+  // as an estimate in the drill-down, replaced by realized data).
   const overstaffedRooms = rooms * 0.25;
   const inefficiency2Cost = Math.round(overstaffedRooms * 35 * shiftHours * operatingDays);
   const inefficiency2Pct = totalBudget > 0 ? Math.round((inefficiency2Cost / totalBudget) * 1000) / 10 : 0.5;
 
-  const deduction1 = inefficiency1Pct * 0.5;
-  const deduction2 = 0; // no Friday data from manual input
-  const deduction3 = inefficiency2Pct * 0.3;
-  const score = Math.min(100, Math.max(0, Math.round(100 - deduction1 - deduction2 - deduction3)));
+  // One score formula everywhere: score = 100 − waste% of staffing spend.
+  // The gap from 100 IS the waste percentage — a CFO can recompute it.
+  const wasteRatioPct = inefficiency1Pct + inefficiency2Pct;
+  const score = Math.min(100, Math.max(0, Math.round(100 - wasteRatioPct)));
 
   return {
     score,
@@ -303,9 +310,11 @@ function calculateStaffIQScore(inputs) {
     inefficiency1Cost,
     inefficiency2Cost,
     totalBudget: Math.round(totalBudget),
-    deduction1: Math.round(deduction1 * 10) / 10,
-    deduction2,
-    deduction3: Math.round(deduction3 * 10) / 10,
+    floorApplied, // true when the industry-typical floor set lever 1 (label it)
+    // Back-compat deduction breakdown: components now sum exactly to 100 − score.
+    deduction1: Math.round(inefficiency1Pct * 10) / 10,
+    deduction2: 0,
+    deduction3: Math.round(inefficiency2Pct * 10) / 10,
   };
 }
 
@@ -327,4 +336,5 @@ module.exports = {
   DEFAULT_CRNA_RATE,
   DEFAULT_SHIFT_HOURS,
   DEFAULT_OPERATING_DAYS,
+  PROJECTION_FLOOR_INEFF1_PCT,
 };

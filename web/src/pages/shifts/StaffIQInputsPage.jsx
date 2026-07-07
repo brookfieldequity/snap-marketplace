@@ -48,6 +48,8 @@ const DEFAULT_FORM = {
   pdCrnasPerMonth: '',
   agencyAnesthesiologistsPerMonth: '',
   agencyCrnasPerMonth: '',
+  agencyAnesthesiologistRate: '',
+  agencyCrnaRate: '',
   avgAnesthesiologistRate: '',
   avgCrnaRate: '',
   avgShiftHours: 10,
@@ -132,6 +134,8 @@ export default function StaffIQInputsPage({ onNavigate }) {
             pdCrnasPerMonth: data.pdCrnasPerMonth ?? '',
             agencyAnesthesiologistsPerMonth: data.agencyAnesthesiologistsPerMonth ?? '',
             agencyCrnasPerMonth: data.agencyCrnasPerMonth ?? '',
+            agencyAnesthesiologistRate: data.agencyAnesthesiologistRate ?? '',
+            agencyCrnaRate: data.agencyCrnaRate ?? '',
             avgAnesthesiologistRate: data.avgAnesthesiologistRate ?? '',
             avgCrnaRate: data.avgCrnaRate ?? '',
             avgShiftHours: data.avgShiftHours ?? 10,
@@ -171,6 +175,8 @@ export default function StaffIQInputsPage({ onNavigate }) {
       if (form.pdCrnasPerMonth !== '') payload.pdCrnasPerMonth = form.pdCrnasPerMonth
       if (form.agencyAnesthesiologistsPerMonth !== '') payload.agencyAnesthesiologistsPerMonth = form.agencyAnesthesiologistsPerMonth
       if (form.agencyCrnasPerMonth !== '') payload.agencyCrnasPerMonth = form.agencyCrnasPerMonth
+      if (form.agencyAnesthesiologistRate !== '') payload.agencyAnesthesiologistRate = form.agencyAnesthesiologistRate
+      if (form.agencyCrnaRate !== '') payload.agencyCrnaRate = form.agencyCrnaRate
       if (form.avgAnesthesiologistRate !== '') payload.avgAnesthesiologistRate = form.avgAnesthesiologistRate
       if (form.avgCrnaRate !== '') payload.avgCrnaRate = form.avgCrnaRate
       if (form.avgShiftHours) payload.avgShiftHours = form.avgShiftHours
@@ -308,6 +314,32 @@ export default function StaffIQInputsPage({ onNavigate }) {
                 value={form.agencyCrnasPerMonth}
                 onChange={e => setF('agencyCrnasPerMonth', e.target.value)}
                 placeholder="e.g. 3"
+              />
+            </Field>
+          </div>
+
+          {/* Row 4b: Agency bill rates — what agencies actually charge this
+              facility. Optional; when blank the savings math uses regional
+              estimates ($425/$300) and labels the number "estimated". */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
+            <Field label="Agency Bill Rate — Anesthesiologists ($/hr)" optional hint="What agencies charge you. Blank = regional estimate ($425/hr)">
+              <input
+                style={inputStyle}
+                type="number"
+                min="0"
+                value={form.agencyAnesthesiologistRate}
+                onChange={e => setF('agencyAnesthesiologistRate', e.target.value)}
+                placeholder="estimate: $425"
+              />
+            </Field>
+            <Field label="Agency Bill Rate — CRNAs ($/hr)" optional hint="What agencies charge you. Blank = regional estimate ($300/hr)">
+              <input
+                style={inputStyle}
+                type="number"
+                min="0"
+                value={form.agencyCrnaRate}
+                onChange={e => setF('agencyCrnaRate', e.target.value)}
+                placeholder="estimate: $300"
               />
             </Field>
           </div>

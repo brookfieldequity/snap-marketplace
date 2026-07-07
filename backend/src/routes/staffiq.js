@@ -5,18 +5,14 @@ const {
   analyzeFacilitySchedule,
   calculateScoreFromAnalysis,
   getScoreStatus,
+  DEFAULT_ANES_RATE,
+  DEFAULT_CRNA_RATE,
+  DEFAULT_SHIFT_HOURS,
+  DEFAULT_OPERATING_DAYS,
 } = require('../utils/staffiqScore');
 const learning = require('../services/staffiqLearning');
 
 const router = express.Router();
-
-// ── Agency default rates for savings calculations ─────────────────────────────
-
-const AGENCY_RATES = {
-  ANESTHESIOLOGIST: 425,
-  CRNA: 300,
-  ANESTHESIA_ASSISTANT: 250,
-};
 
 // ── SNAP solution copy per insight type ───────────────────────────────────────
 
@@ -175,14 +171,39 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       });
     }
 
+    // Cost basis: prefer rates carried in the uploaded records themselves
+    // (average by provider type), then the facility's entered StaffIQ inputs,
+    // then network defaults — so the analysis runs on THEIR numbers whenever
+    // we have them, never silently on defaults.
+    const latestInput = await prisma.staffIQInput.findFirst({
+      where: { facilityId },
+      orderBy: { calculatedAt: 'desc' },
+    });
+    const avgRecordRate = (matcher) => {
+      const vals = allRecords
+        .filter((r) => matcher((r.providerType || '').toUpperCase()) && r.rate != null && r.rate > 0)
+        .map((r) => r.rate);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const recordAnesRate = avgRecordRate((pt) => pt === 'ANESTHESIOLOGIST' || pt === 'ANES');
+    const recordCrnaRate = avgRecordRate((pt) => pt === 'CRNA');
+    const rates = {
+      anesRate: recordAnesRate || latestInput?.avgAnesthesiologistRate || DEFAULT_ANES_RATE,
+      crnaRate: recordCrnaRate || latestInput?.avgCrnaRate || DEFAULT_CRNA_RATE,
+      shiftHours: latestInput?.avgShiftHours || DEFAULT_SHIFT_HOURS,
+      operatingDays: latestInput?.operatingDaysPerYear || DEFAULT_OPERATING_DAYS,
+    };
+    const rateSource = (recordAnesRate || recordCrnaRate) ? 'uploaded_records'
+      : (latestInput ? 'facility_inputs' : 'defaults');
+
     // Analyze each facility location
     const facilityResults = Object.entries(byLocation).map(([locationName, dayRecords]) =>
-      analyzeFacilitySchedule(dayRecords, locationName)
+      analyzeFacilitySchedule(dayRecords, locationName, rates)
     );
 
     // Calculate overall score
     const scoreResult = calculateScoreFromAnalysis(facilityResults);
-    const status = getScoreStatus(scoreResult.score);
+    const status = scoreResult.score != null ? getScoreStatus(scoreResult.score) : null;
 
     // Build insights array
     const insights = [];
@@ -268,13 +289,15 @@ router.post('/analyze', facilityAuth, async (req, res) => {
     insights.push({ ...savedUtilization, logicalType: 'UTILIZATION', snapSolution: snapSolutions.UTILIZATION });
 
     // Save StaffIQ score history
-    await prisma.staffIQScoreHistory.create({
-      data: {
-        facilityId,
-        score: scoreResult.score,
-        calculationMethod: 'data_upload',
-      },
-    });
+    if (scoreResult.score != null) {
+      await prisma.staffIQScoreHistory.create({
+        data: {
+          facilityId,
+          score: scoreResult.score,
+          calculationMethod: 'data_upload',
+        },
+      });
+    }
 
     // ── Learning layer: fold this run into the facility's baseline, refresh the
     // network benchmark, and grade this facility against it. All best-effort —
@@ -320,6 +343,9 @@ router.post('/analyze', facilityAuth, async (req, res) => {
         baselineConfidence: dataReadiness.confidence,
         observationCount: profile?.observationCount || 0,
         uploadsAnalyzed: profile?.uploadsAnalyzed || 1,
+        // What every dollar figure in this analysis was costed with, and where
+        // those rates came from ('uploaded_records' | 'facility_inputs' | 'defaults').
+        costBasis: { ...rates, source: rateSource },
       },
     });
   } catch (err) {
@@ -335,63 +361,14 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
     const now = new Date();
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const yearStart = new Date(now.getFullYear(), 0, 1);
     const in14Days = new Date(now.getTime() + 14 * 86400000);
 
-    // ── Agency replacement savings ─────────────────────────────────────────────
-
-    const bookingsMonth = await prisma.shiftBooking.findMany({
-      where: {
-        shift: { facilityId },
-        confirmedAt: { gte: monthStart },
-        completedAt: { not: null },
-      },
-      include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
-    });
-
-    const bookingsYtd = await prisma.shiftBooking.findMany({
-      where: {
-        shift: { facilityId },
-        confirmedAt: { gte: yearStart },
-        completedAt: { not: null },
-      },
-      include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
-    });
-
-    function calcAgencySavings(bookings) {
-      return bookings.reduce((sum, b) => {
-        const agencyRate = AGENCY_RATES[b.shift.specialty] || 300;
-        const providerRate = b.providerHourlyRate || b.shift.currentRate || 0;
-        const hours = b.shiftDurationHours || b.shift.durationHours || 0;
-        return sum + Math.max(0, (agencyRate - providerRate) * hours);
-      }, 0);
-    }
-
-    const agencyMonth = calcAgencySavings(bookingsMonth);
-    const agencyYtd = calcAgencySavings(bookingsYtd);
-
-    // ── Internal efficiency savings (12% of late-fill cost via internal roster) ─
-
-    const recordsMonth = await prisma.schedulingRecord.findMany({
-      where: { facilityId, shiftDate: { gte: monthStart } },
-    });
-    const recordsYtd = await prisma.schedulingRecord.findMany({
-      where: { facilityId, shiftDate: { gte: yearStart } },
-    });
-
-    function calcInternalSavings(recs) {
-      const totalValue = recs.reduce((sum, r) => sum + (r.rate || 0) * (r.durationHours || 0), 0);
-      return totalValue * 0.12;
-    }
-
-    const internalMonth = calcInternalSavings(recordsMonth);
-    const internalYtd = calcInternalSavings(recordsYtd);
-
-    // ── Unified "StaffIQ saves you $X/month" (single savings authority) ────────
-    // The hero number. Built on the learning layer (projected from inputs/priors,
-    // realized from the learned baseline + actual fills). The legacy internal/
-    // agencyReplacement fields below are retained for back-compat but the UI now
-    // leads with `savings.unified`.
+    // ── Unified "StaffIQ saves you $X/month" (the ONLY savings authority) ──────
+    // Projected from the facility's inputs (with labeled industry-typical
+    // assumptions), realized from the learned baseline + actual fills over a
+    // trailing 30-day window. The old parallel heuristics (flat 12% internal
+    // efficiency + separately-computed agency replacement) are retired — one
+    // number, one methodology, or a CFO finds two answers.
     const unifiedSavings = await learning.projectFacilitySavings(facilityId);
 
     // ── Upcoming shifts (next 14 days from ScheduleDay) ───────────────────────
@@ -503,18 +480,6 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
     res.json({
       savings: {
         unified: unifiedSavings,
-        internal: {
-          month: Math.round(internalMonth),
-          ytd: Math.round(internalYtd),
-        },
-        agencyReplacement: {
-          month: Math.round(agencyMonth),
-          ytd: Math.round(agencyYtd),
-        },
-        total: {
-          month: Math.round(internalMonth + agencyMonth),
-          ytd: Math.round(internalYtd + agencyYtd),
-        },
       },
       upcomingShifts,
       predictedGaps,

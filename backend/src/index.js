@@ -166,6 +166,19 @@ cron.schedule('0 5 * * *', async () => {
   }
 });
 
+// Monthly (1st, 7 AM) — StaffIQ projected-vs-realized savings snapshots.
+// MEASUREMENT ONLY: builds the calibration history shown in the admin panel.
+// Auto-adjusting projections from it is deliberately OFF (Notion: "Turn ON
+// StaffIQ auto-calibration").
+cron.schedule('0 7 1 * *', async () => {
+  try {
+    const result = await require('./services/staffiqLearning').recordSavingsSnapshots();
+    console.log(`[cron] StaffIQ savings snapshots recorded: ${result.recorded}/${result.facilities ?? '?'}`);
+  } catch (err) {
+    console.error('[cron] StaffIQ savings snapshots failed:', err.message);
+  }
+});
+
 // ── 404 + error handling ──────────────────────────────────────────────────────
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

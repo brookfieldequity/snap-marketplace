@@ -798,6 +798,8 @@ export const adminAPI = {
     }),
 
   getStaffIQAnalytics: () => apiFetch(`${BASE}/admin/staffiq/analytics`, { headers: adminHeaders() }),
+  getStaffIQCalibration: () => apiFetch(`${BASE}/admin/staffiq/calibration`, { headers: adminHeaders() }),
+  runStaffIQCalibrationSnapshot: () => apiFetch(`${BASE}/admin/staffiq/calibration/snapshot`, { method: 'POST', headers: adminHeaders() }),
   getAdminLeads: (status) => apiFetch(`${BASE}/admin/leads${status ? `?status=${status}` : ''}`, { headers: adminHeaders() }),
   updateLeadStatus: (id, followUpStatus) => apiFetch(`${BASE}/admin/leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
   getAdminWindows: () => apiFetch(`${BASE}/admin/windows`, { headers: adminHeaders() }),
@@ -806,7 +808,7 @@ export const adminAPI = {
   getStaffIQScores: () => apiFetch(`${BASE}/admin/staffiq-scores`, { headers: adminHeaders() }),
   getCalculatorLeads: () => apiFetch(`${BASE}/admin/calculator-leads`, { headers: adminHeaders() }),
   updateCalculatorLead: (id, followUpStatus) => apiFetch(`${BASE}/admin/calculator-leads/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ followUpStatus }) }),
-  getFacilityPitch: () => apiFetch(`${BASE}/admin/staffiq/facility-pitch`, { headers: adminHeaders() }),
+  pitchProjection: (inputs) => apiFetch(`${BASE}/admin/staffiq/pitch-projection`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(inputs) }),
 
   // Demo mode
   getDemoStatus: () => apiFetch(`${BASE}/admin/demo/status`, { headers: adminHeaders() }),

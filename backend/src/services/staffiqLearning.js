@@ -9,8 +9,9 @@ const { calculateStaffIQScore } = require('../utils/staffiqScore');
  * defensible moat:
  *
  *   1. Per-facility learned baselines (FacilityStaffingProfile) — each facility's
- *      own normal patterns, blended as an exponential moving average so the
- *      baseline stabilizes and gains confidence as more schedule data arrives.
+ *      own normal patterns, recomputed over its full schedule history on every
+ *      analysis so the baseline is always exactly reproducible from the data,
+ *      and gains confidence only as genuinely new staffed days arrive.
  *
  *   2. Cross-facility network benchmarks (StaffIQBenchmark) — percentile context
  *      computed across every participating facility. Seeded with published-norm
@@ -114,21 +115,19 @@ function summarizeResults(facilityResults) {
   };
 }
 
-// ── Per-facility learned baseline (EMA) ─────────────────────────────────────────
-
-function ema(prev, observed, alpha) {
-  if (prev == null || Number.isNaN(prev)) return observed;
-  if (observed == null || Number.isNaN(observed)) return prev;
-  return alpha * observed + (1 - alpha) * prev;
-}
+// ── Per-facility learned baseline ────────────────────────────────────────────────
 
 /**
- * Fold a fresh analysis into the facility's learned profile.
+ * Refresh the facility's learned profile from a fresh analysis.
  *
- * The blend weight (alpha) is proportional to how much new data this run adds
- * relative to everything seen before — so the very first upload essentially sets
- * the baseline, and each subsequent upload nudges it less, letting the baseline
- * converge and grow more confident as the facility feeds more schedules.
+ * The analysis always runs over the facility's FULL schedule history, so the
+ * summarized metrics already ARE the properly day-weighted baseline across
+ * everything observed — the profile mirrors them directly (SET, not blend).
+ * Critically, observationCount is SET from the number of distinct staffed days
+ * in the dataset: re-running analysis on unchanged data must never raise the
+ * count, the confidence score, or flip the savings basis to "realized" (the
+ * old accumulate-on-every-run behavior inflated all three). Only genuinely new
+ * staffed days move confidence.
  *
  * @returns the updated profile, or null on failure (never throws).
  */
@@ -140,8 +139,7 @@ async function updateFacilityProfile(facilityId, facilityResults, score, dataSpa
     const existing = await prisma.facilityStaffingProfile.findUnique({ where: { facilityId } });
     const priorObs = existing?.observationCount || 0;
     const newObs = Math.max(1, Math.round(metrics.observationDays || 0));
-    // alpha capped at 0.6 so a single large upload can't fully overwrite history.
-    const alpha = existing ? Math.min(0.6, newObs / (newObs + priorObs)) : 1;
+    const hasNewData = !existing || newObs > priorObs;
 
     const roomsByDow = {
       weekday: round1(metrics.avgWeekdayRooms),
@@ -150,13 +148,14 @@ async function updateFacilityProfile(facilityId, facilityResults, score, dataSpa
 
     const data = {
       avgRoomsByDow: roomsByDow,
-      avgCareTeamRatio: round2(ema(existing?.avgCareTeamRatio, metrics.careTeamRatio, alpha)),
-      avgCostPerRoom: round0(ema(existing?.avgCostPerRoom, metrics.costPerRoom, alpha)),
-      avgWeekdayWastePerRoom: round0(ema(existing?.avgWeekdayWastePerRoom, metrics.wastePerRoom, alpha)),
-      avgFridayWastePerRoom: round0(ema(existing?.avgFridayWastePerRoom, metrics.fridayExcessPerRoom, alpha)),
-      fridayRoomIndex: round2(ema(existing?.fridayRoomIndex, metrics.fridayRoomIndex, alpha)),
-      observationCount: priorObs + newObs,
-      uploadsAnalyzed: (existing?.uploadsAnalyzed || 0) + 1,
+      avgCareTeamRatio: round2(metrics.careTeamRatio),
+      avgCostPerRoom: round0(metrics.costPerRoom),
+      avgWeekdayWastePerRoom: round0(metrics.wastePerRoom),
+      avgFridayWastePerRoom: round0(metrics.fridayExcessPerRoom),
+      fridayRoomIndex: round2(metrics.fridayRoomIndex),
+      observationCount: newObs,
+      // Counts uploads that actually added staffed days, not analyze clicks.
+      uploadsAnalyzed: (existing?.uploadsAnalyzed || 0) + (hasNewData ? 1 : 0),
       dataSpanDays: dataSpanDays != null ? dataSpanDays : existing?.dataSpanDays,
       lastScore: score != null ? Math.round(score) : existing?.lastScore,
     };
@@ -224,7 +223,12 @@ async function seedNetworkPriors() {
  */
 async function updateNetworkBenchmark() {
   try {
-    const profiles = await prisma.facilityStaffingProfile.findMany();
+    // Demo/test facilities must never shape the network benchmark — with a thin
+    // network even one fake profile would poison the percentiles every real
+    // facility is graded against.
+    const profiles = await prisma.facilityStaffingProfile.findMany({
+      where: { facility: { isDemo: false } },
+    });
 
     const series = {
       costPerRoom: [],
@@ -475,76 +479,121 @@ function assessDataReadiness({ totalRecords, dataSpanDays, uploadsAnalyzed, obse
 // lever 1 is staffing-MODEL efficiency (right-sizing the care team) and lever 2 is
 // agency-RATE displacement; they measure different dollars.
 
-// Agency rate priors (loaded $/hr a locum agency would charge). A network prior for
-// now; can later be learned per-facility from actual agency spend / marketplace fills.
+// Agency rate priors (loaded $/hr a locum agency would charge). Used only when
+// the facility hasn't entered its own agency bill rates in StaffIQ Inputs — the
+// facility's real rates always win, and the UI labels prior-based figures
+// "estimated" (decided with Matt 2026-07-07).
 const AGENCY_RATE_PRIORS = { ANESTHESIOLOGIST: 425, CRNA: 300, ANESTHESIA_ASSISTANT: 250 };
 const WEEKDAYS_PER_MONTH = 21.7;
 const FRIDAYS_PER_MONTH = 4.34;
 // Enough learned observation-days before we trust realized waste over the projection.
 const MIN_OBS_FOR_REALIZED = 20;
+// Realized savings window: trailing 30 days, NOT calendar month — "your savings
+// over the last 30 days" moves smoothly as fills land and age out, with no
+// artificial crash at month boundaries (decided with Matt 2026-07-07).
+const REALIZED_WINDOW_DAYS = 30;
 // Network median score: 100 − median facility waste (12%).
 // "You're 88; network median is 88" is the benchmark context shown in the UI.
 const NETWORK_MEDIAN_SCORE = 100 - SEED_PRIORS.inefficiencyPct.median; // 88
 
+/**
+ * Compute BOTH the projected and realized value of each savings lever.
+ * Shared by projectFacilitySavings (which picks the best available basis per
+ * lever for the hero number) and recordSavingsSnapshots (which stores both
+ * sides so projected-vs-realized calibration can be measured over time).
+ */
+async function computeSavingsLevers(facilityId) {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - REALIZED_WINDOW_DAYS * 86400000);
+
+  const [profile, latestInput, recentBookings] = await Promise.all([
+    prisma.facilityStaffingProfile.findUnique({ where: { facilityId } }),
+    prisma.staffIQInput.findFirst({ where: { facilityId }, orderBy: { calculatedAt: 'desc' } }),
+    prisma.shiftBooking.findMany({
+      where: { shift: { facilityId }, confirmedAt: { gte: windowStart }, completedAt: { not: null } },
+      include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
+    }),
+  ]);
+
+  // Effective agency bill rates: facility-entered when present, priors otherwise.
+  const agencyRates = {
+    ANESTHESIOLOGIST: latestInput?.agencyAnesthesiologistRate || AGENCY_RATE_PRIORS.ANESTHESIOLOGIST,
+    CRNA: latestInput?.agencyCrnaRate || AGENCY_RATE_PRIORS.CRNA,
+    ANESTHESIA_ASSISTANT: latestInput?.agencyAaRate || AGENCY_RATE_PRIORS.ANESTHESIA_ASSISTANT,
+  };
+  // 'facility' once both primary rates are theirs (AA is rare enough that its
+  // fallback doesn't demote the label); 'estimated' when nothing was entered.
+  const agencyRateSource =
+    latestInput?.agencyAnesthesiologistRate != null && latestInput?.agencyCrnaRate != null ? 'facility'
+      : (latestInput?.agencyAnesthesiologistRate != null || latestInput?.agencyCrnaRate != null ? 'mixed'
+        : 'estimated');
+
+  const profileReady = !!profile
+    && (profile.observationCount || 0) >= MIN_OBS_FOR_REALIZED
+    && profile.avgWeekdayWastePerRoom != null;
+
+  // ── Lever 1 — staffing-model efficiency ──────────────────────────────────
+  // Realized: learned waste-per-room (vs the optimal care team) over a month of
+  // room-days. avgWeekdayWastePerRoom applies across all weekdays; the Friday
+  // figure is the EXTRA shortfall on Fridays (see staffiqScore.js).
+  let lever1Realized = null;
+  if (profileReady) {
+    const rooms = profile.avgRoomsByDow || {};
+    const weekdayRooms = Number(rooms.weekday) || 0;
+    const fridayRooms = Number(rooms.friday) || weekdayRooms;
+    lever1Realized = (profile.avgWeekdayWastePerRoom || 0) * weekdayRooms * WEEKDAYS_PER_MONTH
+      + (profile.avgFridayWastePerRoom || 0) * fridayRooms * FRIDAYS_PER_MONTH;
+  }
+  // Projected: the team-model + overstaffing inefficiency the input form already
+  // computed (annual) → monthly. Includes the labeled industry-typical floor.
+  const lever1Projected = latestInput
+    ? ((latestInput.inefficiency1Cost || 0) + (latestInput.inefficiency2Cost || 0)) / 12
+    : null;
+
+  // ── Lever 2 — agency displacement ────────────────────────────────────────
+  // Realized: savings vs agency on shifts SNAP filled in the trailing window.
+  let lever2Realized = null;
+  if (recentBookings.length) {
+    lever2Realized = recentBookings.reduce((sum, b) => {
+      const agencyRate = agencyRates[b.shift.specialty] || agencyRates.CRNA;
+      const providerRate = b.providerHourlyRate || b.shift.currentRate || 0;
+      const hours = b.shiftDurationHours || b.shift.durationHours || 0;
+      return sum + Math.max(0, (agencyRate - providerRate) * hours);
+    }, 0);
+  }
+  // Projected: displace the facility's current agency shifts at SNAP rates.
+  let lever2Projected = null;
+  if (latestInput) {
+    const hrs = latestInput.avgShiftHours || 10;
+    const anesPrem = Math.max(0, (agencyRates.ANESTHESIOLOGIST - (latestInput.avgAnesthesiologistRate || 390)));
+    const crnaPrem = Math.max(0, (agencyRates.CRNA - (latestInput.avgCrnaRate || 260)));
+    lever2Projected = ((latestInput.agencyAnesthesiologistsPerMonth || 0) * anesPrem
+      + (latestInput.agencyCrnasPerMonth || 0) * crnaPrem) * hrs;
+  }
+
+  return {
+    profile,
+    latestInput,
+    profileReady,
+    agencyRates,
+    agencyRateSource,
+    bookingsInWindow: recentBookings.length,
+    lever1: { projected: lever1Projected, realized: lever1Realized },
+    lever2: { projected: lever2Projected, realized: lever2Realized },
+  };
+}
+
 async function projectFacilitySavings(facilityId) {
   try {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const L = await computeSavingsLevers(facilityId);
+    const { profile, latestInput, profileReady } = L;
 
-    const [profile, latestInput, bookingsMonth] = await Promise.all([
-      prisma.facilityStaffingProfile.findUnique({ where: { facilityId } }),
-      prisma.staffIQInput.findFirst({ where: { facilityId }, orderBy: { calculatedAt: 'desc' } }),
-      prisma.shiftBooking.findMany({
-        where: { shift: { facilityId }, confirmedAt: { gte: monthStart }, completedAt: { not: null } },
-        include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
-      }),
-    ]);
-
-    // ── Lever 1 — staffing-model efficiency ──────────────────────────────────
-    const profileReady = !!profile
-      && (profile.observationCount || 0) >= MIN_OBS_FOR_REALIZED
-      && profile.avgWeekdayWastePerRoom != null;
-
-    let lever1 = 0;
-    let lever1Basis = 'none';
-    if (profileReady) {
-      // Realized: learned waste-per-room (vs the optimal care team) over a month of
-      // room-days. avgWeekdayWastePerRoom applies across all weekdays; the Friday
-      // figure is the EXTRA shortfall on Fridays (see staffiqScore.js).
-      const rooms = profile.avgRoomsByDow || {};
-      const weekdayRooms = Number(rooms.weekday) || 0;
-      const fridayRooms = Number(rooms.friday) || weekdayRooms;
-      lever1 = (profile.avgWeekdayWastePerRoom || 0) * weekdayRooms * WEEKDAYS_PER_MONTH
-        + (profile.avgFridayWastePerRoom || 0) * fridayRooms * FRIDAYS_PER_MONTH;
-      lever1Basis = 'realized';
-    } else if (latestInput) {
-      // Projected: the team-model + overstaffing inefficiency the input form already
-      // computed (annual) → monthly.
-      lever1 = ((latestInput.inefficiency1Cost || 0) + (latestInput.inefficiency2Cost || 0)) / 12;
-      lever1Basis = 'projected';
-    }
-
-    // ── Lever 2 — agency displacement ────────────────────────────────────────
-    let lever2 = 0;
-    let lever2Basis = 'none';
-    if (bookingsMonth.length) {
-      // Realized: what we actually saved vs agency on shifts SNAP filled this month.
-      lever2 = bookingsMonth.reduce((sum, b) => {
-        const agencyRate = AGENCY_RATE_PRIORS[b.shift.specialty] || 300;
-        const providerRate = b.providerHourlyRate || b.shift.currentRate || 0;
-        const hours = b.shiftDurationHours || b.shift.durationHours || 0;
-        return sum + Math.max(0, (agencyRate - providerRate) * hours);
-      }, 0);
-      lever2Basis = 'realized';
-    } else if (latestInput) {
-      // Projected: displace the facility's current agency shifts at SNAP rates.
-      const hrs = latestInput.avgShiftHours || 10;
-      const anesPrem = Math.max(0, (AGENCY_RATE_PRIORS.ANESTHESIOLOGIST - (latestInput.avgAnesthesiologistRate || 390)));
-      const crnaPrem = Math.max(0, (AGENCY_RATE_PRIORS.CRNA - (latestInput.avgCrnaRate || 260)));
-      lever2 = ((latestInput.agencyAnesthesiologistsPerMonth || 0) * anesPrem
-        + (latestInput.agencyCrnasPerMonth || 0) * crnaPrem) * hrs;
-      lever2Basis = 'projected';
-    }
+    const lever1Basis = L.lever1.realized != null ? 'realized'
+      : (L.lever1.projected != null ? 'projected' : 'none');
+    const lever2Basis = L.lever2.realized != null ? 'realized'
+      : (L.lever2.projected != null ? 'projected' : 'none');
+    const lever1 = lever1Basis === 'realized' ? L.lever1.realized : (L.lever1.projected || 0);
+    const lever2 = lever2Basis === 'realized' ? L.lever2.realized : (L.lever2.projected || 0);
 
     const anyRealized = lever1Basis === 'realized' || lever2Basis === 'realized';
     const anyProjected = lever1Basis === 'projected' || lever2Basis === 'projected';
@@ -591,14 +640,200 @@ async function projectFacilitySavings(facilityId) {
       networkMedianScore: NETWORK_MEDIAN_SCORE, // 88 — benchmark context for "you're X, median is 88"
       confidence,
       savingsVersion: 'learned_v1',
+      realizedWindowDays: REALIZED_WINDOW_DAYS, // realized = trailing window, not calendar month
       components: [
         { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: lever1Basis },
         { key: 'agency_displacement', label: 'Agency displacement', monthly: Math.round(lever2), basis: lever2Basis },
       ],
+      // Drill-down honesty: every assumption behind the number, so the UI can
+      // label what's estimated vs entered vs measured.
+      assumptions: {
+        agencyRates: L.agencyRates,
+        agencyRateSource: L.agencyRateSource, // 'facility' | 'mixed' | 'estimated'
+        efficiencyFloorApplied: lever1Basis === 'projected' && !!latestInput
+          ? !!(calculateStaffIQScore(latestInput).floorApplied)
+          : false,
+      },
     };
   } catch (err) {
     console.error('projectFacilitySavings failed (non-fatal):', err.message);
     return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v1' };
+  }
+}
+
+/**
+ * Project the hero number from raw prospect inputs — no facility record, no
+ * persistence. This is the FIRST-SALES-MEETING quote: it runs exactly the same
+ * math as the facility dashboard's projected path (calculateStaffIQScore for
+ * lever 1, agency premium displacement for lever 2), so the number a prospect
+ * hears in the pitch is the number they see in the portal on day one.
+ * Insufficient inputs return an explicit 'insufficient' basis — never a
+ * fabricated number.
+ */
+function projectFromInputs(raw = {}) {
+  const num = (v) => (v != null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : null);
+  const rooms = num(raw.totalLocations);
+  if (!rooms || rooms <= 0) {
+    return { monthly: null, annual: null, basis: 'insufficient', components: [], savingsVersion: 'learned_v1' };
+  }
+
+  const inputs = {
+    totalLocations: rooms,
+    avgRoomsPerDay: num(raw.avgRoomsPerDay) ?? Math.round(rooms * 0.75),
+    avgAnesthesiologistRate: num(raw.avgAnesthesiologistRate) ?? 390,
+    avgCrnaRate: num(raw.avgCrnaRate) ?? 260,
+    avgShiftHours: num(raw.avgShiftHours) ?? 10,
+    operatingDaysPerYear: num(raw.operatingDaysPerYear) ?? 250,
+    primaryTeamModel: raw.primaryTeamModel || 'mixed',
+  };
+
+  // Lever 1 — staffing-model efficiency (same engine as StaffIQ Inputs).
+  const sc = calculateStaffIQScore(inputs);
+  const lever1 = ((sc.inefficiency1Cost || 0) + (sc.inefficiency2Cost || 0)) / 12;
+
+  // Lever 2 — agency displacement, at their agency rates when given.
+  const enteredAnes = num(raw.agencyAnesthesiologistRate);
+  const enteredCrna = num(raw.agencyCrnaRate);
+  const agencyRates = {
+    ANESTHESIOLOGIST: enteredAnes || AGENCY_RATE_PRIORS.ANESTHESIOLOGIST,
+    CRNA: enteredCrna || AGENCY_RATE_PRIORS.CRNA,
+    ANESTHESIA_ASSISTANT: num(raw.agencyAaRate) || AGENCY_RATE_PRIORS.ANESTHESIA_ASSISTANT,
+  };
+  const agencyRateSource = enteredAnes != null && enteredCrna != null ? 'facility'
+    : (enteredAnes != null || enteredCrna != null ? 'mixed' : 'estimated');
+  const anesPrem = Math.max(0, agencyRates.ANESTHESIOLOGIST - inputs.avgAnesthesiologistRate);
+  const crnaPrem = Math.max(0, agencyRates.CRNA - inputs.avgCrnaRate);
+  const lever2 = ((num(raw.agencyAnesthesiologistsPerMonth) || 0) * anesPrem
+    + (num(raw.agencyCrnasPerMonth) || 0) * crnaPrem) * inputs.avgShiftHours;
+
+  const monthly = Math.round(lever1 + lever2);
+  return {
+    monthly,
+    annual: monthly * 12,
+    basis: 'projected',
+    score: sc.score,
+    scoreBasis: 'projected',
+    networkMedianScore: NETWORK_MEDIAN_SCORE,
+    wasteRatioPct: Math.round(((sc.inefficiency1Pct || 0) + (sc.inefficiency2Pct || 0)) * 10) / 10,
+    totalBudget: sc.totalBudget, // annual staffing spend the waste% applies to
+    confidence: 35, // projection-only confidence, same as the dashboard's input-only state
+    savingsVersion: 'learned_v1',
+    inputs, // echo the resolved inputs so the pitch can show what was assumed
+    components: [
+      { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: 'projected' },
+      { key: 'agency_displacement', label: 'Agency displacement', monthly: Math.round(lever2), basis: 'projected' },
+    ],
+    assumptions: {
+      agencyRates,
+      agencyRateSource,
+      efficiencyFloorApplied: !!sc.floorApplied,
+    },
+  };
+}
+
+// ── Projected-vs-realized calibration (MEASURE ONLY — decided 2026-07-07) ──────
+//
+// Snapshots store what StaffIQ projected next to what it measured, per facility,
+// so accuracy can be tracked and shown (admin panel, eventually the facility
+// drill-down convergence chart). DELIBERATELY NOT USED to auto-adjust the
+// customer-facing projection yet — the turn-on task (3+ matched cycles, ±25%
+// cap, Matt's sign-off) is tracked in Notion: "Turn ON StaffIQ auto-calibration".
+
+/**
+ * Record one projected-vs-realized snapshot per (non-demo) facility.
+ * Run monthly by cron; safe to call ad hoc — each call appends a new snapshot.
+ */
+async function recordSavingsSnapshots() {
+  try {
+    const facilities = await prisma.facility.findMany({
+      where: { isDemo: false },
+      select: { id: true },
+    });
+
+    let recorded = 0;
+    for (const f of facilities) {
+      try {
+        const L = await computeSavingsLevers(f.id);
+        const projected = (L.lever1.projected != null || L.lever2.projected != null)
+          ? Math.round((L.lever1.projected || 0) + (L.lever2.projected || 0))
+          : null;
+        const realized = (L.lever1.realized != null || L.lever2.realized != null)
+          ? Math.round((L.lever1.realized || 0) + (L.lever2.realized || 0))
+          : null;
+        if (projected == null && realized == null) continue; // nothing to measure yet
+
+        await prisma.staffIQOutcome.create({
+          data: {
+            facilityId: f.id,
+            outcomeType: 'SAVINGS_SNAPSHOT',
+            predictedDollar: projected,
+            realizedDollar: realized,
+            metadata: {
+              lever1: { projected: round0(L.lever1.projected), realized: round0(L.lever1.realized) },
+              lever2: { projected: round0(L.lever2.projected), realized: round0(L.lever2.realized) },
+              agencyRateSource: L.agencyRateSource,
+              observationCount: L.profile?.observationCount || 0,
+              bookingsInWindow: L.bookingsInWindow,
+              realizedWindowDays: REALIZED_WINDOW_DAYS,
+              savingsVersion: 'learned_v1',
+            },
+          },
+        });
+        recorded++;
+      } catch (inner) {
+        console.error(`recordSavingsSnapshots: facility ${f.id} failed (non-fatal):`, inner.message);
+      }
+    }
+    return { recorded, facilities: facilities.length };
+  } catch (err) {
+    console.error('recordSavingsSnapshots failed (non-fatal):', err.message);
+    return { recorded: 0, error: err.message };
+  }
+}
+
+/**
+ * Summarize calibration history for the admin panel: per facility, the snapshot
+ * series plus how many cycles have BOTH sides and the average realized/projected
+ * ratio across them (the number that will eventually drive auto-calibration).
+ */
+async function getSavingsCalibration() {
+  try {
+    const snaps = await prisma.staffIQOutcome.findMany({
+      where: { outcomeType: 'SAVINGS_SNAPSHOT' },
+      orderBy: { createdAt: 'asc' },
+      include: { facility: { select: { id: true, name: true, isDemo: true } } },
+    });
+
+    const byFacility = new Map();
+    for (const s of snaps) {
+      if (!byFacility.has(s.facilityId)) {
+        byFacility.set(s.facilityId, { facilityId: s.facilityId, facilityName: s.facility?.name || s.facilityId, snapshots: [] });
+      }
+      byFacility.get(s.facilityId).snapshots.push({
+        at: s.createdAt,
+        projected: s.predictedDollar,
+        realized: s.realizedDollar,
+        detail: s.metadata || null,
+      });
+    }
+
+    const rows = [];
+    for (const row of byFacility.values()) {
+      const matched = row.snapshots.filter((s) => s.projected != null && s.realized != null && s.projected > 0);
+      const avgRatio = matched.length
+        ? matched.reduce((sum, s) => sum + s.realized / s.projected, 0) / matched.length
+        : null;
+      rows.push({
+        ...row,
+        matchedCycles: matched.length,
+        avgRealizedToProjected: avgRatio != null ? Math.round(avgRatio * 100) / 100 : null,
+        readyForCalibration: matched.length >= 3, // the agreed turn-on threshold
+      });
+    }
+    return { facilities: rows, autoCalibration: 'off' };
+  } catch (err) {
+    console.error('getSavingsCalibration failed:', err.message);
+    return { facilities: [], autoCalibration: 'off', error: err.message };
   }
 }
 
@@ -621,4 +856,8 @@ module.exports = {
   recordOutcome,
   assessDataReadiness,
   projectFacilitySavings,
+  projectFromInputs,
+  computeSavingsLevers,
+  recordSavingsSnapshots,
+  getSavingsCalibration,
 };
