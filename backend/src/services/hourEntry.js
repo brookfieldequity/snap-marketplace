@@ -277,6 +277,18 @@ function parseApnePayrollSheet(buffer) {
     ...(ci.ein < 0 ? ['ein'] : []),
   ];
   const cell = (r, c) => (c >= 0 ? rows[r][c] : '');
+  // Money/number columns are often currency-formatted; sheet_to_json with
+  // raw:false hands back the DISPLAY string ("$1,250.00"), which Number()
+  // turns into NaN → silently 0. Prefer the raw numeric cell value, then
+  // fall back to a tolerant parse (strip $ , spaces; (x) = negative).
+  const numCell = (r, c) => {
+    if (c < 0) return 0;
+    const rc = ws[XLSX.utils.encode_cell({ c, r })];
+    if (rc && typeof rc.v === 'number') return rc.v;
+    const s = String(cell(r, c) ?? '').replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   const out = [];
   for (let r = 1; r < rows.length; r++) {
@@ -286,8 +298,8 @@ function parseApnePayrollSheet(buffer) {
     if (!businessName && !firstName && !lastName) continue; // blank row
 
     const payeeType = String(cell(r, ci.type) || '').trim() || (businessName ? 'Business' : 'Individual');
-    const hoursWorked = Number(cell(r, ci.hours) || 0) || 0;
-    const reimbursement = ci.reimb >= 0 ? Number(cell(r, ci.reimb) || 0) || 0 : 0;
+    const hoursWorked = numCell(r, ci.hours);
+    const reimbursement = ci.reimb >= 0 ? numCell(r, ci.reimb) : 0;
 
     // Bonus: capture the computed value AND the source formula from the cell.
     let bonusAmount = 0;
@@ -297,7 +309,7 @@ function parseApnePayrollSheet(buffer) {
       const bc = ws[addr];
       if (bc) {
         if (typeof bc.v === 'number') bonusAmount = bc.v;
-        else bonusAmount = Number(cell(r, ci.bonus) || 0) || 0;
+        else bonusAmount = numCell(r, ci.bonus);
         if (bc.f) bonusDetail = String(bc.f);
       }
     }
@@ -315,6 +327,15 @@ function parseApnePayrollSheet(buffer) {
     });
   }
   out.columnsMissing = columnsMissing;
+  // Read-back totals: the import response echoes what the parser actually got
+  // out of the sheet, so a formatting/header problem is visible immediately
+  // instead of surfacing later as a short payroll or invoice.
+  const r2 = (n) => Math.round(n * 100) / 100;
+  out.sheetTotals = {
+    hours: r2(out.reduce((s, x) => s + (x.hoursWorked || 0), 0)),
+    reimbursement: r2(out.reduce((s, x) => s + (x.reimbursement || 0), 0)),
+    bonus: r2(out.reduce((s, x) => s + (x.bonusAmount || 0), 0)),
+  };
   return out;
 }
 
@@ -398,6 +419,7 @@ async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodE
     periodStart,
     periodEnd,
     columnsMissing: parsed.columnsMissing || [],
+    sheetTotals: parsed.sheetTotals || null,
   };
 }
 

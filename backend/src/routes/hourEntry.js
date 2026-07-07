@@ -41,7 +41,12 @@ router.post('/import-payroll-sheet', payrollUpload.single('file'), async (req, r
     const warn = result.columnsMissing?.length
       ? ` ⚠ Columns not found in the sheet: ${result.columnsMissing.join(', ')} — those values were imported as 0.`
       : '';
-    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.${warn}` });
+    // Echo what was actually read so formatting problems are visible NOW.
+    const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const totals = result.sheetTotals
+      ? ` Read from sheet: ${result.sheetTotals.hours} hrs · ${money(result.sheetTotals.reimbursement)} reimbursement · ${money(result.sheetTotals.bonus)} bonus.`
+      : '';
+    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.${totals}${warn}` });
   } catch (err) {
     console.error('[hour-entry/import-payroll-sheet]', err.message);
     res.status(500).json({ error: err.message || 'Failed to import payroll sheet' });
