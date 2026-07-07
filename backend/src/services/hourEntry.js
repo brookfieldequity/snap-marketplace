@@ -234,16 +234,26 @@ async function submittedExtrasByRoster({ facilityId, periodStart, periodEnd }) {
 // APNE-site bucket. See eor-model-spec.md / APNE bridge.
 function parseApnePayrollSheet(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' }); // default keeps formulas in cell.f
-  // Pick the sheet whose header row has a contractor-type + hours column
-  // (synonym-tolerant, same lists as the column matcher below).
+  // Pick the payroll sheet. TWO passes: exact canonical headers first
+  // (contractor_type + hours_worked — the real payroll tab), and only if no
+  // tab matches exactly, fall back to synonyms. A single synonym-tolerant
+  // pass could latch onto a summary tab whose loose "type"/"hours" columns
+  // appear earlier in the workbook than the payroll tab.
   const TYPE_SYNS = ['contractor_type', 'contractor type', 'type'];
   const HOURS_SYNS = ['hours_worked', 'hours worked', 'hours', 'regular_hours', 'regular hours'];
+  const headerOf = (s) => (XLSX.utils.sheet_to_json(s, { header: 1, defval: '', raw: false })[0] || [])
+    .map((h) => String(h).trim().toLowerCase());
   let ws = null;
+  let sheetName = null;
   for (const name of wb.SheetNames) {
-    const s = wb.Sheets[name];
-    const hdr = (XLSX.utils.sheet_to_json(s, { header: 1, defval: '', raw: false })[0] || [])
-      .map((h) => String(h).trim().toLowerCase());
-    if (TYPE_SYNS.some((x) => hdr.includes(x)) && HOURS_SYNS.some((x) => hdr.includes(x))) { ws = s; break; }
+    const hdr = headerOf(wb.Sheets[name]);
+    if (hdr.includes('contractor_type') && hdr.includes('hours_worked')) { ws = wb.Sheets[name]; sheetName = name; break; }
+  }
+  if (!ws) {
+    for (const name of wb.SheetNames) {
+      const hdr = headerOf(wb.Sheets[name]);
+      if (TYPE_SYNS.some((x) => hdr.includes(x)) && HOURS_SYNS.some((x) => hdr.includes(x))) { ws = wb.Sheets[name]; sheetName = name; break; }
+    }
   }
   if (!ws) return [];
 
@@ -327,6 +337,7 @@ function parseApnePayrollSheet(buffer) {
     });
   }
   out.columnsMissing = columnsMissing;
+  out.sheetName = sheetName;
   // Read-back totals: the import response echoes what the parser actually got
   // out of the sheet, so a formatting/header problem is visible immediately
   // instead of surfacing later as a short payroll or invoice.
@@ -420,6 +431,7 @@ async function importApnePayrollSheet({ facilityId, buffer, periodStart, periodE
     periodEnd,
     columnsMissing: parsed.columnsMissing || [],
     sheetTotals: parsed.sheetTotals || null,
+    sheetName: parsed.sheetName || null,
   };
 }
 

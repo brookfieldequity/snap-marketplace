@@ -44,9 +44,15 @@ router.post('/import-payroll-sheet', payrollUpload.single('file'), async (req, r
     // Echo what was actually read so formatting problems are visible NOW.
     const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const totals = result.sheetTotals
-      ? ` Read from sheet: ${result.sheetTotals.hours} hrs · ${money(result.sheetTotals.reimbursement)} reimbursement · ${money(result.sheetTotals.bonus)} bonus.`
+      ? ` Read from tab "${result.sheetName || '?'}": ${result.sheetTotals.hours} hrs · ${money(result.sheetTotals.reimbursement)} reimbursement · ${money(result.sheetTotals.bonus)} bonus.`
       : '';
-    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.${totals}${warn}` });
+    // Seeding brand-new roster cards during a RE-import usually means name
+    // matching failed (or the wrong tab was parsed) — new cards have no all-in
+    // rate, so their hours silently vanish from the agency invoice.
+    const seedWarn = result.seeded > 0
+      ? ` ⚠ ${result.seeded} NEW roster card(s) were created — if these providers already exist, check Internal Roster for duplicates (new cards have no all-in rate and won't bill on the agency invoice).`
+      : '';
+    res.json({ ...result, message: `Imported ${result.rows} rows — ${result.seeded} new providers, ${result.matched} matched.${totals}${seedWarn}${warn}` });
   } catch (err) {
     console.error('[hour-entry/import-payroll-sheet]', err.message);
     res.status(500).json({ error: err.message || 'Failed to import payroll sheet' });
