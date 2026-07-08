@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 ]
 
 const SNAP_SHIFTS_ITEMS = [
+  { key: 'pitch-deck',        label: 'Sales Pitch Deck',  icon: '🎤' },
   { key: 'staffiq-analytics', label: 'StaffIQ Analytics', icon: '🧠' },
   { key: 'roi',               label: 'ROI Tracker',        icon: '💰' },
   { key: 'leads',             label: 'Leads',              icon: '📬' },

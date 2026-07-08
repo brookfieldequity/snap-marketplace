@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
-// Set this to the contract PDF URL before presenting
-const AGREEMENT_URL = ''
+// Agreement is accepted IN-APP (click-wrap on the facility SubscriptionPage:
+// Subscription Agreement + HIPAA BAA, versioned + timestamped in
+// AgreementAcceptance) — there is no external document to sign, so the deck
+// closes on starting onboarding, not on a PDF link.
 
 // Live subscription tiers ($/month). Keep in sync with pricing.
 const PITCH_TIERS = [
@@ -493,11 +495,11 @@ function Slide7({ p, setup, onOpenSetup }) {
   )
 }
 
-// ─── Slide 8: Close / how we start ────────────────────────────────────────────
-function Slide8({ p, setup }) {
+// ─── Slide 8: Close / how we start (everything in-app — no paperwork) ─────────
+function Slide8({ p, setup, onStartOnboarding }) {
   const steps = [
-    { n: '1', title: 'Confirm the baseline', time: 'Day 1 — 2 minutes', desc: 'The numbers behind the projection you just saw, confirmed in your portal. Your projected savings are live on your dashboard the same day.' },
-    { n: '2', title: 'Feed it your schedules', time: 'Week 1', desc: 'Upload the last 2–3 months (any format — we parse it). StaffIQ starts measuring your actual staffing against optimal, day by day.' },
+    { n: '1', title: 'Accept & activate — in the app', time: 'Day 1 — one click', desc: 'We create your facility account from this meeting. Your administrator accepts the Subscription Agreement + HIPAA BAA right in the portal — electronic click-through, versioned and timestamped. No PDFs, no e-sign emails, no paper chase.' },
+    { n: '2', title: 'Feed it your schedules', time: 'Week 1', desc: 'Confirm the 2-minute baseline you just saw, then upload the last 2–3 months of schedules (any format — we parse it). StaffIQ starts measuring your actual staffing against optimal, day by day.' },
     { n: '3', title: 'See the realized number', time: 'Day 30', desc: 'Your dashboard flips from PROJECTED to REALIZED — savings measured from your own data. And every month, our accuracy report alongside it.' },
   ]
   const benefits = [
@@ -505,14 +507,12 @@ function Slide8({ p, setup }) {
     'White-glove onboarding and historical data migration',
     'Direct input on the SNAP product roadmap',
   ]
-  function handleSign() {
-    if (AGREEMENT_URL) window.open(AGREEMENT_URL, '_blank')
-  }
   return (
     <div style={{ width: '100%', maxWidth: 820, textAlign: 'center' }}>
       <SlideTitle
         kicker="How we start"
         title={p?.monthly != null ? `${fmt$(p.monthly)}/mo Starts With Three Steps` : 'Three Steps to Your Realized Number'}
+        sub="The entire process lives in the app — signup, agreement, baseline, savings. You could be live before this meeting ends."
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 26, textAlign: 'left' }}>
         {steps.map(s => (
@@ -533,21 +533,20 @@ function Slide8({ p, setup }) {
         ))}
       </div>
       <button
-        onClick={handleSign}
-        disabled={!AGREEMENT_URL}
+        onClick={onStartOnboarding}
         style={{
           padding: '18px 40px',
-          background: AGREEMENT_URL ? 'linear-gradient(135deg, #2563EB, #1E40AF)' : 'rgba(37,99,235,0.3)',
+          background: 'linear-gradient(135deg, #2563EB, #1E40AF)',
           border: 'none', borderRadius: 14, fontSize: 17, fontWeight: 800, color: '#fff',
-          cursor: AGREEMENT_URL ? 'pointer' : 'default',
-          boxShadow: AGREEMENT_URL ? '0 6px 24px rgba(37,99,235,0.5)' : 'none',
+          cursor: 'pointer',
+          boxShadow: '0 6px 24px rgba(37,99,235,0.5)',
         }}
       >
-        Sign the Agreement →
+        Start Onboarding — Create {setup?.prospectName?.trim() ? setup.prospectName.trim() + "'s" : 'Their'} Account →
       </button>
-      {!AGREEMENT_URL && (
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 10 }}>Set AGREEMENT_URL in AdminStaffIQPage.jsx to activate the signing link.</div>
-      )}
+      <div style={{ fontSize: 11, color: '#475569', marginTop: 10 }}>
+        Opens the Facilities admin — create the facility and send the coordinator invite. They accept the agreement in-app at first login.
+      </div>
     </div>
   )
 }
@@ -587,7 +586,7 @@ const SLIDES = [
   },
   {
     Component: Slide8,
-    script: 'Close on speed-to-proof: "Three steps. Your projected number is live on your dashboard day one. Your realized number lands in 30 days. If StaffIQ is wrong about you, you\'ll see it in writing — but it won\'t be." Then hand over the agreement.',
+    script: 'Close on speed-to-proof and zero friction: "Three steps, all in the app — no contracts to route, no e-sign emails. We create your account right now; your administrator clicks accept on the agreement at first login, and your projected number is live on your dashboard today. Your realized number lands in 30 days. If StaffIQ is wrong about you, you\'ll see it in writing — but it won\'t be." Then click Start Onboarding while they watch.',
   },
 ]
 const TOTAL_SLIDES = SLIDES.length
@@ -803,7 +802,10 @@ function CalibrationSection() {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export default function AdminStaffIQPage() {
+// autoPitch: open straight into presentation mode (the "Sales Pitch Deck"
+// sidebar entry). onNavigate: admin page navigation (used by the deck's
+// Start Onboarding close to jump to Facilities).
+export default function AdminStaffIQPage({ autoPitch = false, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -857,6 +859,19 @@ export default function AdminStaffIQPage() {
     // Recompute silently if a baseline is saved but nothing computed yet.
     if (!projection && setup.totalLocations) calculate()
     if (!setup.totalLocations) setShowSetup(true)
+  }
+
+  // "Sales Pitch Deck" sidebar entry lands directly in presentation mode.
+  useEffect(() => {
+    if (autoPitch) openPitchMode()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPitch])
+
+  // The deck's close: leave pitch mode and jump to Facilities to create the
+  // prospect's account (agreement is accepted in-app at their first login).
+  function startOnboarding() {
+    setPitchMode(false)
+    if (onNavigate) onNavigate('facilities')
   }
 
   const metrics = [
@@ -913,7 +928,7 @@ export default function AdminStaffIQPage() {
 
           {/* Slide content */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 80px', overflowY: 'auto' }}>
-            <CurrentSlide p={projection} setup={setup} onOpenSetup={() => setShowSetup(true)} />
+            <CurrentSlide p={projection} setup={setup} onOpenSetup={() => setShowSetup(true)} onStartOnboarding={startOnboarding} />
           </div>
 
           {/* Presenter script (talk track) — hidden with one click when screen-sharing */}

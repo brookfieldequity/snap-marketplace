@@ -595,7 +595,9 @@ export default function App() {
           {adminPage === 'marketplace-fees'  && <AdminMarketplaceFeesPage />}
           {adminPage === 'feature-flags'     && <AdminFeatureFlagsPage />}
           {adminPage === 'messages'          && <AdminMessagesPage />}
-          {adminPage === 'staffiq-analytics' && <AdminStaffIQPage />}
+          {adminPage === 'staffiq-analytics' && <AdminStaffIQPage onNavigate={setAdminPage} />}
+          {/* Dedicated sidebar entry that opens straight into presentation mode. */}
+          {adminPage === 'pitch-deck'        && <AdminStaffIQPage autoPitch onNavigate={setAdminPage} />}
           {adminPage === 'roi'               && <AdminRoiPage preselectedFacilityId={adminRoiFacilityId} />}
           {adminPage === 'leads'             && <AdminLeadsPage />}
           {adminPage === 'admin-windows'     && <AdminWindowsPage />}
