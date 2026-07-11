@@ -600,7 +600,7 @@ async function projectFacilitySavings(facilityId) {
     const basis = anyRealized ? 'realized' : (anyProjected ? 'projected' : 'insufficient');
 
     if (basis === 'insufficient') {
-      return { monthly: null, annual: null, basis, confidence: 0, components: [], savingsVersion: 'learned_v1' };
+      return { monthly: null, annual: null, basis, confidence: 0, components: [], savingsVersion: 'learned_v2' };
     }
 
     const monthly = Math.round(lever1 + lever2);
@@ -639,7 +639,7 @@ async function projectFacilitySavings(facilityId) {
       scoreBasis,                  // 'projected' | 'realized' | 'insufficient'
       networkMedianScore: NETWORK_MEDIAN_SCORE, // 88 — benchmark context for "you're X, median is 88"
       confidence,
-      savingsVersion: 'learned_v1',
+      savingsVersion: 'learned_v2',
       realizedWindowDays: REALIZED_WINDOW_DAYS, // realized = trailing window, not calendar month
       components: [
         { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: lever1Basis },
@@ -657,7 +657,7 @@ async function projectFacilitySavings(facilityId) {
     };
   } catch (err) {
     console.error('projectFacilitySavings failed (non-fatal):', err.message);
-    return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v1' };
+    return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v2' };
   }
 }
 
@@ -674,7 +674,7 @@ function projectFromInputs(raw = {}) {
   const num = (v) => (v != null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : null);
   const rooms = num(raw.totalLocations);
   if (!rooms || rooms <= 0) {
-    return { monthly: null, annual: null, basis: 'insufficient', components: [], savingsVersion: 'learned_v1' };
+    return { monthly: null, annual: null, basis: 'insufficient', components: [], savingsVersion: 'learned_v2' };
   }
 
   const inputs = {
@@ -717,7 +717,7 @@ function projectFromInputs(raw = {}) {
     wasteRatioPct: Math.round(((sc.inefficiency1Pct || 0) + (sc.inefficiency2Pct || 0)) * 10) / 10,
     totalBudget: sc.totalBudget, // annual staffing spend the waste% applies to
     confidence: 35, // projection-only confidence, same as the dashboard's input-only state
-    savingsVersion: 'learned_v1',
+    savingsVersion: 'learned_v2',
     inputs, // echo the resolved inputs so the pitch can show what was assumed
     components: [
       { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: 'projected' },
@@ -775,7 +775,7 @@ async function recordSavingsSnapshots() {
               observationCount: L.profile?.observationCount || 0,
               bookingsInWindow: L.bookingsInWindow,
               realizedWindowDays: REALIZED_WINDOW_DAYS,
-              savingsVersion: 'learned_v1',
+              savingsVersion: 'learned_v2',
             },
           },
         });

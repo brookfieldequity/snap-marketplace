@@ -188,14 +188,17 @@ function TeamModelPanel({ data }) {
         </div>
         <div style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, marginTop: 4 }}>{pct}% inefficient days</div>
       </div>
-      {/* Annual waste badge */}
+      {/* Recoverable waste badge — scheduling-only, the savings claim */}
       <div style={{ display: 'inline-block', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#DC2626', marginTop: 10 }}>
-        Estimated annual waste: {fmt(data?.annualWaste)}
+        Recoverable through scheduling: {fmt(data?.annualWaste)}/yr
       </div>
-      {/* Clinical override note */}
-      {data?.clinicalOverrideDays > 0 && (
-        <div style={{ marginTop: 12, fontSize: 12, color: '#94A3B8', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 6, padding: '8px 12px' }}>
-          Note: {data.clinicalOverrideDays} days flagged as potential clinical necessity (solo ANES) — excluded from waste calculation
+      {/* Structural opportunity — all-MD staffing vs care-team model; a
+          practice-model decision, deliberately kept out of the savings claim. */}
+      {data?.annualStructuralOpportunity > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12.5, color: '#92400E', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '8px 12px', lineHeight: 1.6 }}>
+          Additional <strong>{fmt(data.annualStructuralOpportunity)}/yr</strong> structural opportunity from
+          {data?.clinicalOverrideDays > 0 ? ` ${data.clinicalOverrideDays}` : ''} all-MD staffed days — requires a
+          care-team practice-model review, so it is reported separately and never counted in your savings number.
         </div>
       )}
     </div>
@@ -302,32 +305,40 @@ function UtilizationSummaryPanel({ data }) {
           </div>
         </div>
       )}
-      {/* Facility breakdown table */}
+      {/* Facility breakdown table — recoverable (the claim) and structural
+          (practice-model review) shown as separate columns, never blended. */}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: '#F8FAFC' }}>
-            {['Facility', 'Avg Rooms/Day', 'Inefficient Days %', 'Annual Waste'].map(h => (
+            {['Facility', 'Avg Rooms/Day', 'Inefficient Days %', 'Recoverable (Scheduling)', 'Structural (All-MD)'].map(h => (
               <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No data available</td></tr>
+            <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No data available</td></tr>
           ) : rows.map((r, i) => (
             <tr key={i} style={{ borderBottom: '1px solid #F1F5F9' }}>
               <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>{r.facilityName}</td>
               <td style={{ padding: '10px 12px', color: '#374151' }}>{r.avgRooms}</td>
               <td style={{ padding: '10px 12px', fontWeight: 700, color: r.inefficiencyPct > 30 ? '#EF4444' : '#F59E0B' }}>{r.inefficiencyPct}%</td>
               <td style={{ padding: '10px 12px', fontWeight: 700, color: '#DC2626' }}>{fmt(r.annualWaste)}</td>
+              <td style={{ padding: '10px 12px', fontWeight: 600, color: r.annualStructuralOpportunity > 0 ? '#B45309' : '#94A3B8' }}>{r.annualStructuralOpportunity > 0 ? fmt(r.annualStructuralOpportunity) : '—'}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {/* Total row */}
+      {/* Totals — two lines, two meanings */}
       {data?.totalAnnualWaste != null && (
         <div style={{ marginTop: 14, background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#DC2626' }}>
-          Combined annual waste: ${data.totalAnnualWaste.toLocaleString()}
+          Recoverable through scheduling: ${data.totalAnnualWaste.toLocaleString()}/yr
+        </div>
+      )}
+      {data?.totalStructuralOpportunity > 0 && (
+        <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '10px 14px', fontSize: 12.5, color: '#92400E', lineHeight: 1.6 }}>
+          <strong>${data.totalStructuralOpportunity.toLocaleString()}/yr</strong> additional structural opportunity
+          from all-MD staffed sites — subject to a care-team practice-model review; reported separately from your savings number.
         </div>
       )}
     </div>

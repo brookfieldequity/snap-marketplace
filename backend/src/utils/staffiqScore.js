@@ -109,14 +109,30 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
   let totalOptimalCost = 0;
   let totalRooms = 0;
 
+  // ── The waste SPLIT (methodology decision, 2026-07-08) ──────────────────────
+  // Care-team waste: cost above optimal on days that are NOT flagged as
+  // potential clinical overrides — recoverable through scheduling alone. This
+  // is the number StaffIQ claims as savings.
+  // Structural waste: cost above the care-team model on all-MD (3+ room) days —
+  // converting those sites is a practice-model decision, so it is reported as a
+  // SEPARATE opportunity, never blended into the recoverable figure.
+  let totalCareTeamWaste = 0;
+  let totalStructuralWaste = 0;
+
   // Care-team supervision ratios (display only) — computed solely on days with
   // both provider types present, so solo/independent days never skew them.
   const weekdayRatios = []; // Mon-Thu care-team days
   const fridayRatios = [];   // Friday care-team days
 
-  // Waste-per-room samples drive the actual Friday-shortage decision.
-  const weekdayWastePerRoom = [];
-  const fridayWastePerRoom = [];
+  // Two waste-per-room sample sets:
+  //  • recoverable (care-team basis) — feeds the learned baseline, lever-1
+  //    realized savings, and the network benchmark (conservative by design);
+  //  • total basis — drives Friday-shortage detection, which MUST keep override
+  //    days in view (an all-MD Friday backfilling a CRNA shortage is exactly
+  //    the pattern it exists to catch).
+  const weekdayRecoverableWPR = [];
+  const weekdayTotalWPR = [];
+  const fridayTotalWPR = [];
   let fridayRoomTotal = 0;
   let fridayDayCount = 0;
   let weekdayRoomTotal = 0;
@@ -131,7 +147,13 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     totalRooms += day.totalRooms;
 
     if (!day.isEfficient && !day.isPotentialClinicalOverride) inefficientDays++;
-    if (day.isPotentialClinicalOverride) clinicalOverrideDays++;
+    if (day.isPotentialClinicalOverride) {
+      clinicalOverrideDays++;
+      totalStructuralWaste += day.dailyWaste;
+    } else {
+      totalCareTeamWaste += day.dailyWaste;
+    }
+    const recoverableWPR = day.isPotentialClinicalOverride ? 0 : day.wastePerRoom;
 
     // Prefer the weekday the source file stated (rec.dayOfWeek, 0=Sun..6=Sat);
     // fall back to deriving it from the date string only if no label was carried.
@@ -142,18 +164,22 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     if (dow === 5) {
       fridayDayCount++;
       fridayRoomTotal += day.totalRooms;
-      fridayWastePerRoom.push(day.wastePerRoom);
+      fridayTotalWPR.push(day.wastePerRoom);
       if (day.isCareTeam) fridayRatios.push(day.supervisionRatio);
     } else if (dow >= 1 && dow <= 4) {
       weekdayDayCount++;
       weekdayRoomTotal += day.totalRooms;
-      weekdayWastePerRoom.push(day.wastePerRoom);
+      weekdayTotalWPR.push(day.wastePerRoom);
+      weekdayRecoverableWPR.push(recoverableWPR);
       if (day.isCareTeam) weekdayRatios.push(day.supervisionRatio);
     }
   });
 
   const inefficiencyPct = totalDays > 0 ? (inefficientDays / totalDays) * 100 : 0;
-  const annualWaste = (totalActualCost - totalOptimalCost) * (operatingDays / Math.max(totalDays, 1));
+  // Annualized on each location's own observed-day count. annualWaste is the
+  // RECOVERABLE (care-team) figure — the only number presented as savings.
+  const annualWaste = totalCareTeamWaste * (operatingDays / Math.max(totalDays, 1));
+  const annualStructuralOpportunity = totalStructuralWaste * (operatingDays / Math.max(totalDays, 1));
 
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
@@ -164,10 +190,14 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
 
   // Friday-shortage decision: do Fridays carry materially more cost-above-optimal
   // per room than Mon–Thu? This is true only when Fridays are genuinely staffed
-  // less efficiently (e.g. MD backfill) — not merely lighter.
-  const avgFridayWastePerRoom = avg(fridayWastePerRoom);
-  const avgWeekdayWastePerRoom = avg(weekdayWastePerRoom);
-  const excessWastePerRoom = Math.max(0, avgFridayWastePerRoom - avgWeekdayWastePerRoom);
+  // less efficiently (e.g. MD backfill) — not merely lighter. TOTAL-waste basis
+  // on both sides so all-MD Friday backfills stay visible.
+  const avgFridayWastePerRoom = avg(fridayTotalWPR);
+  const avgWeekdayTotalWastePerRoom = avg(weekdayTotalWPR);
+  const excessWastePerRoom = Math.max(0, avgFridayWastePerRoom - avgWeekdayTotalWastePerRoom);
+  // Recoverable (care-team) weekday waste per room — the conservative basis the
+  // learned profile, realized savings, and network benchmark run on.
+  const avgWeekdayWastePerRoom = avg(weekdayRecoverableWPR);
   const avgFridayRooms = fridayDayCount > 0 ? fridayRoomTotal / fridayDayCount : 0;
   const avgWeekdayRooms = weekdayDayCount > 0 ? weekdayRoomTotal / weekdayDayCount : 0;
 
@@ -207,6 +237,10 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     avgWeekdayWastePerRoom: Math.round(avgWeekdayWastePerRoom),
     excessWastePerRoom: Math.round(excessWastePerRoom),
     avgRooms: totalDays > 0 ? Math.round((totalRooms / totalDays) * 10) / 10 : 0,
+    // The split, in raw observed dollars (annualized versions above).
+    totalCareTeamWaste: Math.round(totalCareTeamWaste),
+    totalStructuralWaste: Math.round(totalStructuralWaste),
+    annualStructuralOpportunity: Math.round(annualStructuralOpportunity),
     weekdayRatios,
     fridayRatios,
   };
@@ -221,26 +255,34 @@ function calculateScoreFromAnalysis(facilities) {
   if (!facilities || facilities.length === 0) {
     // No data → no score. Callers guard on records existing before invoking;
     // never fabricate a number for an empty facility.
-    return { score: null, wasteRatioPct: null, deduction1: 0, deduction2: 0, deduction3: 0, details: [], calculationMethod: 'insufficient_data' };
+    return { score: null, wasteRatioPct: null, structuralRatioPct: null, deduction1: 0, deduction2: 0, deduction3: 0, details: [], calculationMethod: 'insufficient_data' };
   }
 
-  // One score formula everywhere: score = 100 − waste% of actual staffing spend,
-  // where waste = actual cost minus optimal care-team cost across every analyzed
-  // day. Friday inefficiency is already inside actual−optimal, so there is no
-  // separate Friday deduction (and no double-count). The gap from 100 IS the
-  // percentage of spend the facility is wasting — a CFO can recompute it.
+  // One score formula everywhere: score = 100 − RECOVERABLE waste% of actual
+  // staffing spend, where recoverable = care-team scheduling waste only
+  // (methodology decision 2026-07-08). All-MD clinical-override days are priced
+  // separately as structuralRatioPct and never counted against the score — a
+  // deliberate practice model is not a scheduling failure. Friday inefficiency
+  // is already inside the care-team waste, so there is no separate Friday
+  // deduction (and no double-count). The gap from 100 IS the percentage of
+  // spend recoverable through scheduling — a CFO can recompute it.
   const totalActual = facilities.reduce((s, f) => s + (f.totalActualCost || 0), 0);
-  const totalOptimal = facilities.reduce((s, f) => s + (f.totalOptimalCost || 0), 0);
+  const totalCareTeam = facilities.reduce((s, f) => s + (f.totalCareTeamWaste || 0), 0);
+  const totalStructural = facilities.reduce((s, f) => s + (f.totalStructuralWaste || 0), 0);
   const wasteRatioPct = totalActual > 0
-    ? Math.round(((totalActual - totalOptimal) / totalActual) * 1000) / 10
+    ? Math.round((totalCareTeam / totalActual) * 1000) / 10
+    : 0;
+  const structuralRatioPct = totalActual > 0
+    ? Math.round((totalStructural / totalActual) * 1000) / 10
     : 0;
 
   const score = Math.min(100, Math.max(0, Math.round(100 - wasteRatioPct)));
 
   return {
     score,
-    wasteRatioPct,
-    // Back-compat breakdown fields (the whole gap is measured waste now).
+    wasteRatioPct,        // recoverable (care-team) — the score basis
+    structuralRatioPct,   // all-MD structural opportunity — reported separately
+    // Back-compat breakdown fields (the whole gap is measured recoverable waste).
     deduction1: wasteRatioPct,
     deduction2: 0,
     deduction3: 0,

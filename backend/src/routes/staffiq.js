@@ -217,7 +217,8 @@ router.post('/analyze', facilityAuth, async (req, res) => {
           inefficientDays: fac.inefficientDays,
           totalDays: fac.totalDays,
           inefficiencyPct: fac.inefficiencyPct,
-          annualWaste: fac.annualWaste,
+          annualWaste: fac.annualWaste, // recoverable (care-team scheduling) only
+          annualStructuralOpportunity: fac.annualStructuralOpportunity, // all-MD sites — practice-model review
           avgRooms: fac.avgRooms,
           clinicalOverrideDays: fac.clinicalOverrideDays,
         };
@@ -262,8 +263,10 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       }
     }
 
-    // UTILIZATION insight (overall)
+    // UTILIZATION insight (overall). Both waste lines carried explicitly:
+    // recoverable (the savings claim) vs structural (practice-model review).
     const totalAnnualWaste = facilityResults.reduce((s, f) => s + f.annualWaste, 0);
+    const totalStructuralOpportunity = facilityResults.reduce((s, f) => s + (f.annualStructuralOpportunity || 0), 0);
     const utilizationData = {
       _logicalType: 'UTILIZATION',
       facilityBreakdown: facilityResults.map(f => ({
@@ -272,8 +275,12 @@ router.post('/analyze', facilityAuth, async (req, res) => {
         totalDays: f.totalDays,
         inefficiencyPct: f.inefficiencyPct,
         annualWaste: f.annualWaste,
+        annualStructuralOpportunity: f.annualStructuralOpportunity,
       })),
       totalAnnualWaste,
+      totalStructuralOpportunity,
+      wasteRatioPct: scoreResult.wasteRatioPct,
+      structuralRatioPct: scoreResult.structuralRatioPct,
       score: scoreResult.score,
       deduction1: scoreResult.deduction1,
       deduction2: scoreResult.deduction2,
@@ -333,7 +340,10 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       status,
       insights,
       facilityBreakdown: facilityResults,
-      totalAnnualWaste,
+      totalAnnualWaste,                 // recoverable via scheduling — the savings claim
+      totalStructuralOpportunity,       // all-MD sites vs care-team model — separate line
+      wasteRatioPct: scoreResult.wasteRatioPct,
+      structuralRatioPct: scoreResult.structuralRatioPct,
       recordsAnalyzed: allRecords.length,
       // Learning-layer context for the portal.
       learning: {
@@ -412,6 +422,7 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
     let facilityBreakdown = [];
     let fridayShortage = [];
     let totalAnnualWaste = 0;
+    let totalStructuralOpportunity = 0;
 
     if (latestUtilization?.insightData) {
       const data = latestUtilization.insightData;
@@ -419,6 +430,7 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
       if (data.facilityBreakdown) {
         facilityBreakdown = data.facilityBreakdown;
         totalAnnualWaste = data.totalAnnualWaste || 0;
+        totalStructuralOpportunity = data.totalStructuralOpportunity || 0;
         // Compute avg utilization rate as inverse of inefficiency
         const avgIneff = facilityBreakdown.reduce((s, f) => s + (f.inefficiencyPct || 0), 0) / Math.max(facilityBreakdown.length, 1);
         utilizationRate = Math.round((100 - avgIneff) * 10) / 10;
@@ -490,6 +502,7 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
       facilityBreakdown,
       fridayShortage,
       totalAnnualWaste,
+      totalStructuralOpportunity,
     });
   } catch (err) {
     console.error(err);

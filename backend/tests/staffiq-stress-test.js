@@ -147,21 +147,64 @@ section('2. Friday detection (the fixed false-positive)');
   check('dayOfWeek label from file is trusted over the date', lab.fridaySampleSize === 4, lab.fridaySampleSize);
 }
 
-section('3. Score consolidation (one formula everywhere)');
+section('3. Score consolidation (one formula everywhere, care-team basis)');
 {
-  const a = score.calculateScoreFromAnalysis([{ totalActualCost: 30000, totalOptimalCost: 27000 }]);
-  check('10% waste → score exactly 90', a.score === 90 && a.wasteRatioPct === 10, a);
+  const a = score.calculateScoreFromAnalysis([{ totalActualCost: 30000, totalCareTeamWaste: 3000, totalStructuralWaste: 0 }]);
+  check('10% recoverable waste → score exactly 90', a.score === 90 && a.wasteRatioPct === 10, a);
   const b = score.calculateScoreFromAnalysis([
-    { totalActualCost: 50000, totalOptimalCost: 50000 },
-    { totalActualCost: 50000, totalOptimalCost: 40000 },
+    { totalActualCost: 50000, totalCareTeamWaste: 0, totalStructuralWaste: 0 },
+    { totalActualCost: 50000, totalCareTeamWaste: 10000, totalStructuralWaste: 0 },
   ]);
   check('multi-location aggregates by dollars (10% blended)', b.score === 90, b);
-  const zero = score.calculateScoreFromAnalysis([{ totalActualCost: 0, totalOptimalCost: 0 }]);
+  const zero = score.calculateScoreFromAnalysis([{ totalActualCost: 0, totalCareTeamWaste: 0, totalStructuralWaste: 0 }]);
   check('zero-cost dataset → score 100, no NaN', zero.score === 100 && !Number.isNaN(zero.wasteRatioPct), zero);
   const emptyA = score.calculateScoreFromAnalysis([]);
   check('empty analysis → null score, never a fabricated 84', emptyA.score === null && emptyA.calculationMethod === 'insufficient_data');
-  const perfect = score.calculateScoreFromAnalysis([{ totalActualCost: 10000, totalOptimalCost: 12000 }]);
-  check('cheaper-than-optimal staffing clamps at 100 (no >100 score)', perfect.score === 100, perfect);
+
+  // THE SPLIT (methodology decision 2026-07-08): structural (all-MD) dollars
+  // never touch the score or the recoverable claim — reported separately.
+  const split = score.calculateScoreFromAnalysis([{ totalActualCost: 100000, totalCareTeamWaste: 4000, totalStructuralWaste: 11000 }]);
+  check('score built on RECOVERABLE waste only (4% → 96)', split.score === 96 && split.wasteRatioPct === 4, split);
+  check('structural opportunity reported separately (11%)', split.structuralRatioPct === 11, split);
+  const allStructural = score.calculateScoreFromAnalysis([{ totalActualCost: 100000, totalCareTeamWaste: 0, totalStructuralWaste: 30000 }]);
+  check('pure all-MD practice scores 100 (deliberate model ≠ scheduling failure)', allStructural.score === 100 && allStructural.structuralRatioPct === 30, allStructural);
+}
+
+section('3b. The waste split inside analyzeFacilitySchedule');
+{
+  // All-MD site: 4 weeks of 3-MD/0-CRNA days (clinical override).
+  const mdOnly = [];
+  for (let w = 0; w < 4; w++) for (let d = 1; d <= 4; d++) mdOnly.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 0, dayOfWeek: d });
+  const mo = score.analyzeFacilitySchedule(mdOnly, 'MDOnly');
+  check('all-MD site: recoverable annualWaste = $0', mo.annualWaste === 0, mo.annualWaste);
+  check('all-MD site: structural opportunity > $0', mo.annualStructuralOpportunity > 0, mo.annualStructuralOpportunity);
+  check('all-MD site: recoverable waste/room baseline = $0', mo.avgWeekdayWastePerRoom === 0, mo.avgWeekdayWastePerRoom);
+  check('all-MD site: override days all counted', mo.clinicalOverrideDays === mdOnly.length);
+
+  // Mixed site: care-team-inefficient days AND override days — split must sum
+  // exactly to total actual−optimal (no dollars lost or double-counted).
+  const mixed = [];
+  for (let w = 0; w < 4; w++) {
+    for (let d = 1; d <= 2; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 3, dayOfWeek: d }); // care-team inefficient
+    for (let d = 3; d <= 4; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 0, dayOfWeek: d }); // override
+  }
+  const mx = score.analyzeFacilitySchedule(mixed, 'Mixed');
+  check('split sums exactly: careTeam + structural = actual − optimal',
+    mx.totalCareTeamWaste + mx.totalStructuralWaste === mx.totalActualCost - mx.totalOptimalCost,
+    { careTeam: mx.totalCareTeamWaste, structural: mx.totalStructuralWaste, gap: mx.totalActualCost - mx.totalOptimalCost });
+  check('mixed site: both buckets positive', mx.totalCareTeamWaste > 0 && mx.totalStructuralWaste > 0);
+
+  // MD-heavy Friday (all-MD backfill) must STILL trip Friday detection — the
+  // Friday comparison runs on total waste so override days stay visible there.
+  const fridayBackfill = [];
+  for (let w = 0; w < 4; w++) {
+    for (let d = 1; d <= 4; d++) fridayBackfill.push({ date: `2026-06-0${d}`, anesCount: 2, crnaCount: 6, dayOfWeek: d }); // efficient
+    fridayBackfill.push({ date: '2026-06-05', anesCount: 3, crnaCount: 0, dayOfWeek: 5 }); // all-MD Friday (override)
+  }
+  const fb = score.analyzeFacilitySchedule(fridayBackfill, 'FridayBackfill');
+  check('all-MD Friday backfill still flags the Friday shortage', fb.hasFridayShortage === true, fb.excessWastePerRoom);
+  check('...while its dollars stay OUT of recoverable annualWaste', fb.annualWaste === 0 && fb.annualStructuralOpportunity > 0,
+    { recoverable: fb.annualWaste, structural: fb.annualStructuralOpportunity });
 }
 
 section('4. Projection floor (2%, labeled)');
