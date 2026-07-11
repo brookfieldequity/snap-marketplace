@@ -192,6 +192,28 @@ function TeamModelPanel({ data }) {
       <div style={{ display: 'inline-block', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#DC2626', marginTop: 10 }}>
         Recoverable through scheduling: {fmt(data?.annualWaste)}/yr
       </div>
+      {/* The low-hanging fruit, itemized: days where a supervisor ran under
+          capacity while additional MDs sat rooms solo — each row is a legible,
+          same-day scheduling fix. */}
+      {data?.topProblemDays?.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Problem days — supervision capacity unused while MDs sat rooms solo
+            {data?.problemDayCount > data.topProblemDays.length ? ` (top ${data.topProblemDays.length} of ${data.problemDayCount})` : ''}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {data.topProblemDays.map((p, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '6px 12px' }}>
+                <span style={{ color: '#374151' }}>
+                  <strong>{p.date || '—'}</strong> · {p.anesCount} MD + {p.crnaCount} CRNA → {p.rooms} rooms
+                  <span style={{ color: '#94A3B8' }}> ({p.supervisors} supervising, {p.soloMDs} solo)</span>
+                </span>
+                <span style={{ fontWeight: 700, color: '#DC2626' }}>+{fmt(p.dailyWaste)}/day</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Structural opportunity — all-MD staffing vs care-team model; a
           practice-model decision, deliberately kept out of the savings claim. */}
       {data?.annualStructuralOpportunity > 0 && (

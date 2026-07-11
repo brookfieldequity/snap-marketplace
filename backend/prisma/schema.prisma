@@ -335,6 +335,15 @@ model Facility {
   // use defaults. See services/outListRules.js.
   outListRules           Json?
   isDemo                 Boolean       @default(false)
+  // Per-location StaffIQ config, keyed by the upload's facilityLocation string
+  // (matched by normalized substring). Shape per location:
+  //   { "excludeFromSavings": bool,   // site reimbursed per provider — staffing
+  //                                   // mix carries no cost to this practice, so
+  //                                   // it is excluded from waste/score/savings
+  //     "billingModel": "per_provider_reimbursed" | "cost",
+  //     "reason": "...",              // shown wherever the exclusion is reported
+  //     "supervisionRatio": 3|4 }     // overrides coverage-template ratio
+  staffiqLocationConfig  Json?
 
   invoices            SnapInvoice[]
   users               FacilityUser[]

@@ -595,6 +595,39 @@ router.get('/staffiq/calibration', adminAuth, async (req, res) => {
   }
 });
 
+// PATCH /staffiq/location-config/:facilityId — set per-site StaffIQ config
+// (billing-model exclusions like CAPA's Shattuck, supervision-ratio overrides).
+// Body: { location: "Shattuck", config: { excludeFromSavings, billingModel,
+// reason, supervisionRatio } } — config: null removes the entry.
+router.patch('/staffiq/location-config/:facilityId', adminAuth, async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { location, config } = req.body || {};
+    if (!location || typeof location !== 'string') {
+      return res.status(400).json({ error: 'location (string) is required' });
+    }
+    const facility = await prisma.facility.findUnique({
+      where: { id: facilityId },
+      select: { staffiqLocationConfig: true },
+    });
+    if (!facility) return res.status(404).json({ error: 'Facility not found' });
+
+    const current = facility.staffiqLocationConfig || {};
+    if (config == null) delete current[location];
+    else current[location] = config;
+
+    const updated = await prisma.facility.update({
+      where: { id: facilityId },
+      data: { staffiqLocationConfig: current },
+      select: { id: true, staffiqLocationConfig: true },
+    });
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update StaffIQ location config' });
+  }
+});
+
 // POST /staffiq/calibration/snapshot — record an ad-hoc snapshot run for all
 // facilities (the monthly cron does this automatically on the 1st).
 router.post('/staffiq/calibration/snapshot', adminAuth, async (req, res) => {

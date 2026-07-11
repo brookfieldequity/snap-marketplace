@@ -39,45 +39,87 @@ function dayOfWeekFromLabel(label) {
   return key in DOW_LABELS ? DOW_LABELS[key] : null;
 }
 
-/**
- * Given a single day's staffing (anes count, crna count), determine if it's efficient.
- * Efficient configurations:
- *   - Solo ANES (0 CRNAs): always efficient
- *   - 1:3 (1 ANES per 3 CRNAs): optimal standard
- *   - 1:4 (1 ANES per 4 CRNAs): optimal low acuity
- *   - Ratio >= 1:3 (each ANES covering >= 3 CRNAs): efficient
- * Inefficient:
- *   - CRNAs present but ratio < 1:3 (each ANES covering < 3 CRNAs)
- */
-function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE, crnaRate = DEFAULT_CRNA_RATE, shiftHours = DEFAULT_SHIFT_HOURS) {
-  const totalRooms = anesCount + crnaCount;
-  const actualCost = (anesCount * anesRate + crnaCount * crnaRate) * shiftHours;
+// Conservative default when neither the location config nor the facility's
+// coverage templates declare a supervision ratio. 1:3 claims LESS waste than
+// 1:4 (a cheaper optimal is harder to beat), so unknown always errs low.
+const DEFAULT_SUPERVISION_RATIO = 3;
 
-  // Optimal: ceil(rooms/4) ANES, rest CRNAs
-  const optimalAnes = Math.ceil(totalRooms / 4);
-  const optimalCrnas = totalRooms - optimalAnes;
-  const optimalCost = (optimalAnes * anesRate + optimalCrnas * crnaRate) * shiftHours;
+/**
+ * Cheapest compliant staffing cost (per hour) for R rooms at a given max
+ * supervision ratio. A room is covered either by a solo MD, or by a CRNA
+ * supervised at up to 1:ratio — and the supervising MD NEVER sits a room
+ * (clinical rule locked with Matt 2026-07-10). Scans every solo/care-team mix,
+ * so all-MD, all-care-team, and hybrids all compete on price.
+ */
+function optimalStaffingCost(rooms, anesRate, crnaRate, supervisionRatio) {
+  if (rooms <= 0) return 0;
+  const ratio = Math.max(1, supervisionRatio || DEFAULT_SUPERVISION_RATIO);
+  let best = Infinity;
+  for (let solo = 0; solo <= rooms; solo++) {
+    const crnaRooms = rooms - solo;
+    const cost = solo * anesRate
+      + (crnaRooms > 0 ? Math.ceil(crnaRooms / ratio) * anesRate + crnaRooms * crnaRate : 0);
+    if (cost < best) best = cost;
+  }
+  return best;
+}
+
+/**
+ * Room model (learned_v3, locked with Matt 2026-07-10):
+ *   - A supervising MD medically directing CRNAs does NOT occupy a room.
+ *   - Rooms actually running = CRNAs + solo MDs.
+ *   - The acceptable supervision ratio comes from the schedule builder's
+ *     coverage templates (or per-site config), defaulting conservatively to 1:3.
+ *
+ * Day patterns:
+ *   PROBLEM_MIX — supervision capacity under-used while additional MDs sit
+ *                 rooms solo (paying supervision AND solo premiums at once).
+ *                 The low-hanging fruit; always recoverable.
+ *   ALL_MD      — multi-MD, zero CRNAs: a practice-model choice. Any waste is
+ *                 structural, never recoverable, never hits the score. (At 1:3
+ *                 and typical rates an all-MD day is cost-neutral anyway.)
+ *   CARE_TEAM / SOLO_MD / CRNA_ONLY / EMPTY — self-describing.
+ */
+function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE, crnaRate = DEFAULT_CRNA_RATE, shiftHours = DEFAULT_SHIFT_HOURS, supervisionRatio = DEFAULT_SUPERVISION_RATIO) {
+  const ratio = Math.max(1, supervisionRatio || DEFAULT_SUPERVISION_RATIO);
+  const supervisors = crnaCount > 0 ? Math.min(anesCount, Math.ceil(crnaCount / ratio)) : 0;
+  const soloMDs = Math.max(0, anesCount - supervisors);
+  const totalRooms = crnaCount + soloMDs;
+
+  const actualCost = (anesCount * anesRate + crnaCount * crnaRate) * shiftHours;
+  const optimalCost = optimalStaffingCost(totalRooms, anesRate, crnaRate, ratio) * shiftHours;
 
   const dailyWaste = Math.max(0, actualCost - optimalCost);
   const isEfficient = dailyWaste === 0;
   // Waste per room is volume-independent: it answers "how much more than the
-  // optimal mix does each staffed room cost on this day?" — the basis for a fair
-  // Friday-vs-weekday comparison regardless of how many rooms ran.
+  // cheapest compliant staffing does each running room cost on this day?" — the
+  // basis for a fair Friday-vs-weekday comparison regardless of room count.
   const wastePerRoom = totalRooms > 0 ? dailyWaste / totalRooms : 0;
 
-  // Clinical override flag: all-ANES days with 3+ rooms (may be intentional high-acuity)
-  const isPotentialClinicalOverride = crnaCount === 0 && anesCount >= 3;
+  let pattern;
+  if (anesCount === 0 && crnaCount === 0) pattern = 'EMPTY';
+  else if (anesCount === 0) pattern = 'CRNA_ONLY';
+  else if (crnaCount === 0) pattern = anesCount === 1 ? 'SOLO_MD' : 'ALL_MD';
+  else if (soloMDs >= 1 && dailyWaste > 0) pattern = 'PROBLEM_MIX';
+  else pattern = 'CARE_TEAM';
+
+  // All-MD staffing is a practice-model choice, not a scheduling failure.
+  const isPotentialClinicalOverride = pattern === 'ALL_MD';
 
   // A true care-team day has both provider types present — the only configuration
   // where the supervision ratio is meaningful. Solo-MD and independent-CRNA days
   // are excluded from ratio statistics so they don't distort Friday detection.
   const isCareTeam = anesCount > 0 && crnaCount > 0;
 
-  // Supervision ratio (CRNAs per ANES)
-  const supervisionRatio = anesCount > 0 ? crnaCount / anesCount : 0;
+  // Supervision ratio (CRNAs per ANES) — display statistic, unchanged semantics.
+  const supervisionRatio_ = anesCount > 0 ? crnaCount / anesCount : 0;
 
   return {
     totalRooms,
+    supervisors,
+    soloMDs,
+    pattern,
+    supervisionRatioUsed: ratio,
     actualCost,
     optimalCost,
     dailyWaste,
@@ -85,9 +127,7 @@ function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE
     isEfficient,
     isPotentialClinicalOverride,
     isCareTeam,
-    supervisionRatio,
-    optimalAnes,
-    optimalCrnas,
+    supervisionRatio: supervisionRatio_,
   };
 }
 
@@ -101,6 +141,9 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
   const crnaRate = rates.crnaRate || DEFAULT_CRNA_RATE;
   const shiftHours = rates.shiftHours || DEFAULT_SHIFT_HOURS;
   const operatingDays = rates.operatingDays || DEFAULT_OPERATING_DAYS;
+  // This location's acceptable care-team leverage — from per-site config or
+  // the schedule builder's coverage templates; conservative 1:3 when unknown.
+  const supervisionRatio = rates.supervisionRatio || DEFAULT_SUPERVISION_RATIO;
 
   let totalDays = 0;
   let inefficientDays = 0;
@@ -109,15 +152,21 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
   let totalOptimalCost = 0;
   let totalRooms = 0;
 
-  // ── The waste SPLIT (methodology decision, 2026-07-08) ──────────────────────
-  // Care-team waste: cost above optimal on days that are NOT flagged as
-  // potential clinical overrides — recoverable through scheduling alone. This
-  // is the number StaffIQ claims as savings.
-  // Structural waste: cost above the care-team model on all-MD (3+ room) days —
-  // converting those sites is a practice-model decision, so it is reported as a
-  // SEPARATE opportunity, never blended into the recoverable figure.
+  // ── The waste SPLIT (2026-07-08, room model corrected 2026-07-10) ────────────
+  // Recoverable (care-team) waste: cost above the cheapest compliant staffing on
+  // every day EXCEPT all-MD days — dominated by PROBLEM_MIX days (a supervisor
+  // running under capacity while other MDs sit rooms solo). Fixable by
+  // scheduling; this is the only number StaffIQ claims as savings.
+  // Structural waste: all-MD days priced against the cheapest compliant mix —
+  // converting those sites is a practice-model decision, reported SEPARATELY.
   let totalCareTeamWaste = 0;
   let totalStructuralWaste = 0;
+
+  // The low-hanging fruit, itemized: every PROBLEM_MIX day, so the portal (and
+  // the report appendix) can show exactly which days and which configurations.
+  let problemDayCount = 0;
+  let problemDayWaste = 0;
+  const problemDays = [];
 
   // Care-team supervision ratios (display only) — computed solely on days with
   // both provider types present, so solo/independent days never skew them.
@@ -140,7 +189,7 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
 
   records.forEach(rec => {
     if (rec.isWeekend) return;
-    const day = analyzeDayEfficiency(rec.anesCount, rec.crnaCount, anesRate, crnaRate, shiftHours);
+    const day = analyzeDayEfficiency(rec.anesCount, rec.crnaCount, anesRate, crnaRate, shiftHours, supervisionRatio);
     totalDays++;
     totalActualCost += day.actualCost;
     totalOptimalCost += day.optimalCost;
@@ -152,6 +201,21 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
       totalStructuralWaste += day.dailyWaste;
     } else {
       totalCareTeamWaste += day.dailyWaste;
+    }
+    if (day.pattern === 'PROBLEM_MIX') {
+      problemDayCount++;
+      problemDayWaste += day.dailyWaste;
+      if (problemDays.length < 31) {
+        problemDays.push({
+          date: rec.date || null,
+          anesCount: rec.anesCount,
+          crnaCount: rec.crnaCount,
+          rooms: day.totalRooms,
+          supervisors: day.supervisors,
+          soloMDs: day.soloMDs,
+          dailyWaste: Math.round(day.dailyWaste),
+        });
+      }
     }
     const recoverableWPR = day.isPotentialClinicalOverride ? 0 : day.wastePerRoom;
 
@@ -241,6 +305,12 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     totalCareTeamWaste: Math.round(totalCareTeamWaste),
     totalStructuralWaste: Math.round(totalStructuralWaste),
     annualStructuralOpportunity: Math.round(annualStructuralOpportunity),
+    // The low-hanging fruit, itemized (PROBLEM_MIX days).
+    supervisionRatioUsed: supervisionRatio,
+    problemDayCount,
+    problemDayWaste: Math.round(problemDayWaste),
+    annualProblemDayWaste: Math.round(problemDayWaste * (operatingDays / Math.max(totalDays, 1))),
+    problemDays,
     weekdayRatios,
     fridayRatios,
   };
@@ -374,9 +444,11 @@ module.exports = {
   calculateStaffIQScore,
   getScoreStatus,
   dayOfWeekFromLabel,
+  optimalStaffingCost,
   DEFAULT_ANES_RATE,
   DEFAULT_CRNA_RATE,
   DEFAULT_SHIFT_HOURS,
   DEFAULT_OPERATING_DAYS,
+  DEFAULT_SUPERVISION_RATIO,
   PROJECTION_FLOOR_INEFF1_PCT,
 };

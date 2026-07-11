@@ -9,6 +9,7 @@ const {
   DEFAULT_CRNA_RATE,
   DEFAULT_SHIFT_HOURS,
   DEFAULT_OPERATING_DAYS,
+  DEFAULT_SUPERVISION_RATIO,
 } = require('../utils/staffiqScore');
 const learning = require('../services/staffiqLearning');
 
@@ -196,9 +197,56 @@ router.post('/analyze', facilityAuth, async (req, res) => {
     const rateSource = (recordAnesRate || recordCrnaRate) ? 'uploaded_records'
       : (latestInput ? 'facility_inputs' : 'defaults');
 
-    // Analyze each facility location
-    const facilityResults = Object.entries(byLocation).map(([locationName, dayRecords]) =>
-      analyzeFacilitySchedule(dayRecords, locationName, rates)
+    // ── Per-location config: billing-model exclusions + supervision ratios ────
+    // Upload location strings ("Kenmore") rarely match builder/template strings
+    // ("Atrius Kenmore") exactly, so both lookups match by normalized substring.
+    const [facilityRow, templateDays] = await Promise.all([
+      prisma.facility.findUnique({ where: { id: facilityId }, select: { staffiqLocationConfig: true } }),
+      prisma.coverageTemplateDay.findMany({
+        where: { template: { facilityId } },
+        select: { location: true, supervisionRatio: true },
+      }),
+    ]);
+    const locCfg = facilityRow?.staffiqLocationConfig || {};
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const matches = (a, b) => { const na = norm(a), nb = norm(b); return na && nb && (na === nb || na.includes(nb) || nb.includes(na)); };
+    const cfgFor = (loc) => {
+      for (const [key, cfg] of Object.entries(locCfg)) if (matches(key, loc)) return cfg;
+      return null;
+    };
+    // Ratio: per-site config override → schedule-builder coverage template
+    // (the builder defines what leverage is acceptable — Matt, 2026-07-10) →
+    // conservative 1:3 default. Template ratio 0/null = declared MD-only site;
+    // its all-MD days are the declared model and land in the structural bucket.
+    const ratioFor = (loc) => {
+      const cfg = cfgFor(loc);
+      if (cfg?.supervisionRatio > 0) return cfg.supervisionRatio;
+      let best = null;
+      for (const t of templateDays) {
+        if (matches(t.location, loc) && t.supervisionRatio > 0) best = Math.max(best || 0, t.supervisionRatio);
+      }
+      return best || DEFAULT_SUPERVISION_RATIO;
+    };
+
+    // Sites reimbursed per provider carry no staffing cost to this practice —
+    // excluded from waste/score/savings entirely, and reported as such.
+    const excludedLocations = [];
+    const analyzableLocations = Object.entries(byLocation).filter(([locationName]) => {
+      const cfg = cfgFor(locationName);
+      if (cfg?.excludeFromSavings) {
+        excludedLocations.push({
+          location: locationName,
+          billingModel: cfg.billingModel || 'per_provider_reimbursed',
+          reason: cfg.reason || null,
+        });
+        return false;
+      }
+      return true;
+    });
+
+    // Analyze each (non-excluded) facility location at its own ratio
+    const facilityResults = analyzableLocations.map(([locationName, dayRecords]) =>
+      analyzeFacilitySchedule(dayRecords, locationName, { ...rates, supervisionRatio: ratioFor(locationName) })
     );
 
     // Calculate overall score
@@ -221,6 +269,12 @@ router.post('/analyze', facilityAuth, async (req, res) => {
           annualStructuralOpportunity: fac.annualStructuralOpportunity, // all-MD sites — practice-model review
           avgRooms: fac.avgRooms,
           clinicalOverrideDays: fac.clinicalOverrideDays,
+          // The low-hanging fruit: days where a supervisor ran under capacity
+          // while additional MDs sat rooms solo — itemized for the drill-down.
+          supervisionRatioUsed: fac.supervisionRatioUsed,
+          problemDayCount: fac.problemDayCount,
+          annualProblemDayWaste: fac.annualProblemDayWaste,
+          topProblemDays: (fac.problemDays || []).slice(0, 10),
         };
         const saved = await saveInsight(
           facilityId,
@@ -344,6 +398,9 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       totalStructuralOpportunity,       // all-MD sites vs care-team model — separate line
       wasteRatioPct: scoreResult.wasteRatioPct,
       structuralRatioPct: scoreResult.structuralRatioPct,
+      // Sites reimbursed per provider — no staffing cost to this practice, so
+      // excluded from every dollar figure and the score (e.g. CAPA's Shattuck).
+      excludedLocations,
       recordsAnalyzed: allRecords.length,
       // Learning-layer context for the portal.
       learning: {
@@ -355,7 +412,12 @@ router.post('/analyze', facilityAuth, async (req, res) => {
         uploadsAnalyzed: profile?.uploadsAnalyzed || 1,
         // What every dollar figure in this analysis was costed with, and where
         // those rates came from ('uploaded_records' | 'facility_inputs' | 'defaults').
-        costBasis: { ...rates, source: rateSource },
+        costBasis: {
+          ...rates,
+          source: rateSource,
+          // Per-site acceptable leverage (config → builder templates → 1:3 default).
+          supervisionRatios: Object.fromEntries(analyzableLocations.map(([name]) => [name, ratioFor(name)])),
+        },
       },
     });
   } catch (err) {

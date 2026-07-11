@@ -86,22 +86,43 @@ const daysAgo = (n) => new Date(NOW - n * 86400000);
 
 (async () => {
 
-section('1. Day-level efficiency math');
+section('1. Day-level efficiency math (room model: supervisor sits NO room)');
 {
   const solo = score.analyzeDayEfficiency(1, 0);
-  check('solo MD day is efficient (zero waste)', solo.dailyWaste === 0 && solo.isEfficient, solo);
+  check('solo MD day is efficient (zero waste)', solo.dailyWaste === 0 && solo.isEfficient && solo.pattern === 'SOLO_MD', solo);
   const optimal = score.analyzeDayEfficiency(1, 3);
-  check('1:3 care team is optimal (zero waste)', optimal.dailyWaste === 0, optimal);
-  const wasteful = score.analyzeDayEfficiency(3, 3); // 6 rooms: optimal = 2 ANES + 4 CRNA
-  const expected = ((3 * 390 + 3 * 260) - (2 * 390 + 4 * 260)) * 10; // one ANES swapped for CRNA
-  check('3 ANES + 3 CRNA (6 rooms) wastes exactly one ANES-CRNA swap', wasteful.dailyWaste === expected, { got: wasteful.dailyWaste, expected });
+  check('1 MD supervising 3 CRNAs = 3 rooms, zero waste', optimal.dailyWaste === 0 && optimal.totalRooms === 3, optimal);
+  check('supervising MD occupies no room (supervisors=1, soloMDs=0)', optimal.supervisors === 1 && optimal.soloMDs === 0);
+
+  // Matt's canonical problem day: 1 MD covering 2 CRNAs + 2 MDs sitting solo.
+  const problem = score.analyzeDayEfficiency(3, 2, 390, 260, 10, 4);
+  check('PROBLEM_MIX detected: 3 MD + 2 CRNA @1:4 → 4 rooms (1 supervising, 2 solo)',
+    problem.pattern === 'PROBLEM_MIX' && problem.totalRooms === 4 && problem.supervisors === 1 && problem.soloMDs === 2, problem);
+  check('problem day priced at FULL cost @1:4: $2,600/day', problem.dailyWaste === 2600, problem.dailyWaste);
+  const problemR3 = score.analyzeDayEfficiency(3, 2, 390, 260, 10, 3);
+  check('same day @1:3 (stricter leverage) = $1,300/day — ratio is decisive', problemR3.dailyWaste === 1300, problemR3.dailyWaste);
+
+  const smallMix = score.analyzeDayEfficiency(2, 2, 390, 260, 10, 3);
+  check('2 MD + 2 CRNA @1:3 → 3 rooms, $1,300/day PROBLEM_MIX', smallMix.dailyWaste === 1300 && smallMix.pattern === 'PROBLEM_MIX', smallMix);
+
+  // Matt (2026-07-10): "all-MD days don't necessarily increase costs."
+  const allMd3 = score.analyzeDayEfficiency(3, 0, 390, 260, 10, 3);
+  check('all-MD 3-room day @1:3 is COST-NEUTRAL (zero waste)', allMd3.dailyWaste === 0 && allMd3.pattern === 'ALL_MD', allMd3);
+  const allMd4r4 = score.analyzeDayEfficiency(4, 0, 390, 260, 10, 4);
+  check('all-MD 4-room day @1:4 carries structural waste ($1,300)', allMd4r4.dailyWaste === 1300 && allMd4r4.isPotentialClinicalOverride === true, allMd4r4);
+  const allMd4r3 = score.analyzeDayEfficiency(4, 0, 390, 260, 10, 3);
+  check('all-MD 4-room day @1:3 is cost-neutral (care team saves nothing at 1:3 default rates)', allMd4r3.dailyWaste === 0, allMd4r3);
+
   const crnaOnly = score.analyzeDayEfficiency(0, 4);
-  check('independent-CRNA day never shows negative waste', crnaOnly.dailyWaste === 0 && crnaOnly.wastePerRoom === 0, crnaOnly);
+  check('independent-CRNA day never shows negative waste', crnaOnly.dailyWaste === 0 && crnaOnly.wastePerRoom === 0 && crnaOnly.pattern === 'CRNA_ONLY', crnaOnly);
   check('CRNA-only day is not a care-team day (excluded from ratios)', crnaOnly.isCareTeam === false);
-  const override = score.analyzeDayEfficiency(4, 0);
-  check('all-MD 4-room day flags potential clinical override', override.isPotentialClinicalOverride === true);
   const empty = score.analyzeDayEfficiency(0, 0);
-  check('zero-staff day: no division-by-zero, zero waste-per-room', empty.wastePerRoom === 0 && !Number.isNaN(empty.wastePerRoom));
+  check('zero-staff day: no division-by-zero, zero waste-per-room', empty.wastePerRoom === 0 && !Number.isNaN(empty.wastePerRoom) && empty.pattern === 'EMPTY');
+
+  // Cheapest-compliant pricing sanity.
+  check('1 room: solo MD ($390) beats supervised single CRNA ($650)', score.optimalStaffingCost(1, 390, 260, 4) === 390);
+  check('4 rooms @1:4: care team ($1,430) beats 4 solo MDs ($1,560)', score.optimalStaffingCost(4, 390, 260, 4) === 1430);
+  check('3 rooms @1:3: care team ties all-MD at $1,170 (default-rate equivalence)', score.optimalStaffingCost(3, 390, 260, 3) === 1170);
 }
 
 section('2. Friday detection (the fixed false-positive)');
@@ -170,41 +191,69 @@ section('3. Score consolidation (one formula everywhere, care-team basis)');
   check('pure all-MD practice scores 100 (deliberate model ≠ scheduling failure)', allStructural.score === 100 && allStructural.structuralRatioPct === 30, allStructural);
 }
 
-section('3b. The waste split inside analyzeFacilitySchedule');
+section('3b. The waste split inside analyzeFacilitySchedule (room model)');
 {
-  // All-MD site: 4 weeks of 3-MD/0-CRNA days (clinical override).
+  // Declared MD-only site (like CAPA's Natick/Medford), 3 rooms daily at 1:3:
+  // the practice model is cost-neutral — NO waste in either bucket. Matt's
+  // "all-MD days don't necessarily increase costs", verified end-to-end.
   const mdOnly = [];
   for (let w = 0; w < 4; w++) for (let d = 1; d <= 4; d++) mdOnly.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 0, dayOfWeek: d });
-  const mo = score.analyzeFacilitySchedule(mdOnly, 'MDOnly');
-  check('all-MD site: recoverable annualWaste = $0', mo.annualWaste === 0, mo.annualWaste);
-  check('all-MD site: structural opportunity > $0', mo.annualStructuralOpportunity > 0, mo.annualStructuralOpportunity);
-  check('all-MD site: recoverable waste/room baseline = $0', mo.avgWeekdayWastePerRoom === 0, mo.avgWeekdayWastePerRoom);
+  const mo = score.analyzeFacilitySchedule(mdOnly, 'MDOnly', { supervisionRatio: 3 });
+  check('3-room all-MD site @1:3: recoverable = $0 AND structural = $0 (cost-neutral)',
+    mo.annualWaste === 0 && mo.annualStructuralOpportunity === 0, { rec: mo.annualWaste, str: mo.annualStructuralOpportunity });
   check('all-MD site: override days all counted', mo.clinicalOverrideDays === mdOnly.length);
+  check('all-MD site: recoverable waste/room baseline = $0', mo.avgWeekdayWastePerRoom === 0);
 
-  // Mixed site: care-team-inefficient days AND override days — split must sum
-  // exactly to total actual−optimal (no dollars lost or double-counted).
+  // Big all-MD site at a 1:4 facility: care team genuinely wins → structural.
+  const bigMd = [];
+  for (let w = 0; w < 4; w++) for (let d = 1; d <= 4; d++) bigMd.push({ date: `2026-06-0${d}`, anesCount: 6, crnaCount: 0, dayOfWeek: d });
+  const bm = score.analyzeFacilitySchedule(bigMd, 'BigMD', { supervisionRatio: 4 });
+  check('6-room all-MD site @1:4: structural > $0, recoverable = $0',
+    bm.annualStructuralOpportunity > 0 && bm.annualWaste === 0, { str: bm.annualStructuralOpportunity });
+
+  // Mixed site: problem-mix days AND big all-MD days — split must sum exactly
+  // to total actual−optimal (no dollars lost or double-counted).
   const mixed = [];
   for (let w = 0; w < 4; w++) {
-    for (let d = 1; d <= 2; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 3, dayOfWeek: d }); // care-team inefficient
-    for (let d = 3; d <= 4; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 0, dayOfWeek: d }); // override
+    for (let d = 1; d <= 2; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 3, dayOfWeek: d }); // problem mix @1:4
+    for (let d = 3; d <= 4; d++) mixed.push({ date: `2026-06-0${d}`, anesCount: 6, crnaCount: 0, dayOfWeek: d }); // big all-MD
   }
-  const mx = score.analyzeFacilitySchedule(mixed, 'Mixed');
-  check('split sums exactly: careTeam + structural = actual − optimal',
+  const mx = score.analyzeFacilitySchedule(mixed, 'Mixed', { supervisionRatio: 4 });
+  check('split sums exactly: recoverable + structural = actual − optimal',
     mx.totalCareTeamWaste + mx.totalStructuralWaste === mx.totalActualCost - mx.totalOptimalCost,
     { careTeam: mx.totalCareTeamWaste, structural: mx.totalStructuralWaste, gap: mx.totalActualCost - mx.totalOptimalCost });
   check('mixed site: both buckets positive', mx.totalCareTeamWaste > 0 && mx.totalStructuralWaste > 0);
 
-  // MD-heavy Friday (all-MD backfill) must STILL trip Friday detection — the
-  // Friday comparison runs on total waste so override days stay visible there.
-  const fridayBackfill = [];
+  // Problem-day itemization: Matt's low-hanging fruit, parsed cleanly.
+  const shattuckLike = [];
+  for (let w = 0; w < 4; w++) for (let d = 1; d <= 4; d++) shattuckLike.push({ date: `2026-06-0${d}`, anesCount: 3, crnaCount: 1, dayOfWeek: d });
+  const sl = score.analyzeFacilitySchedule(shattuckLike, 'ShattuckLike', { supervisionRatio: 3 });
+  check('problem days counted and itemized', sl.problemDayCount === shattuckLike.length && sl.problemDays.length > 0, sl.problemDayCount);
+  check('itemized day carries the fix-legible config (1 supervising, 2 solo)',
+    sl.problemDays[0].supervisors === 1 && sl.problemDays[0].soloMDs === 2 && sl.problemDays[0].dailyWaste === 2600, sl.problemDays[0]);
+  check('problem-day waste is recoverable (in annualWaste, not structural)',
+    sl.annualWaste > 0 && sl.annualStructuralOpportunity === 0);
+
+  // Friday problem-mix (supervisor under capacity + solo MDs on Fridays) still
+  // trips Friday detection...
+  const fridayProblem = [];
   for (let w = 0; w < 4; w++) {
-    for (let d = 1; d <= 4; d++) fridayBackfill.push({ date: `2026-06-0${d}`, anesCount: 2, crnaCount: 6, dayOfWeek: d }); // efficient
-    fridayBackfill.push({ date: '2026-06-05', anesCount: 3, crnaCount: 0, dayOfWeek: 5 }); // all-MD Friday (override)
+    for (let d = 1; d <= 4; d++) fridayProblem.push({ date: `2026-06-0${d}`, anesCount: 2, crnaCount: 6, dayOfWeek: d }); // efficient
+    fridayProblem.push({ date: '2026-06-05', anesCount: 3, crnaCount: 1, dayOfWeek: 5 }); // problem-mix Friday
   }
-  const fb = score.analyzeFacilitySchedule(fridayBackfill, 'FridayBackfill');
-  check('all-MD Friday backfill still flags the Friday shortage', fb.hasFridayShortage === true, fb.excessWastePerRoom);
-  check('...while its dollars stay OUT of recoverable annualWaste', fb.annualWaste === 0 && fb.annualStructuralOpportunity > 0,
-    { recoverable: fb.annualWaste, structural: fb.annualStructuralOpportunity });
+  const fp = score.analyzeFacilitySchedule(fridayProblem, 'FridayProblem', { supervisionRatio: 3 });
+  check('problem-mix Friday flags the Friday shortage', fp.hasFridayShortage === true, fp.excessWastePerRoom);
+  check('...and its dollars are recoverable', fp.annualWaste > 0);
+
+  // ...but a cost-neutral all-MD Friday must NOT false-flag (the old engine
+  // would have — Matt's correction).
+  const fridayAllMd = [];
+  for (let w = 0; w < 4; w++) {
+    for (let d = 1; d <= 4; d++) fridayAllMd.push({ date: `2026-06-0${d}`, anesCount: 2, crnaCount: 6, dayOfWeek: d });
+    fridayAllMd.push({ date: '2026-06-05', anesCount: 3, crnaCount: 0, dayOfWeek: 5 }); // all-MD 3-room Friday
+  }
+  const fa = score.analyzeFacilitySchedule(fridayAllMd, 'FridayAllMd', { supervisionRatio: 3 });
+  check('cost-neutral all-MD 3-room Friday does NOT false-flag', fa.hasFridayShortage === false, fa.excessWastePerRoom);
 }
 
 section('4. Projection floor (2%, labeled)');
