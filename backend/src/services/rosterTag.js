@@ -10,8 +10,35 @@
 const prisma = require('../config/db');
 const { buildNameKey } = require('./nameKey');
 
+// Roster names arrive messy: "Mary Ann Vann" (double first name), "Audrey
+// Long (O'Connor)" (parenthetical surname), plain "Cristin McMurray" whose
+// schedule cells say just "McMurray". Each entry therefore contributes SEVERAL
+// deterministic key variants; a schedule token matches only when it resolves
+// to exactly ONE roster entry across all variants (CAPA-verified 2026-07-13).
+function keyVariants(providerName) {
+  const cleaned = String(providerName || '').replace(/[()]/g, ' ');
+  const tokens = cleaned.split(/[\s,]+/).map((t) => t.replace(/[^a-zA-Z0-9]/g, '')).filter((t) => t.length > 0);
+  const lower = tokens.map((t) => t.toLowerCase());
+  const variants = new Set();
+  const canonical = buildNameKey(providerName);
+  if (canonical) variants.add(canonical);
+  if (lower.length >= 2) {
+    const last = lower[lower.length - 1];
+    // first-initial + last token (parenthetical-stripped view)
+    variants.add(lower[0][0] + last);
+    // all leading initials + last token ("Mary Ann Vann" → mavann)
+    variants.add(lower.slice(0, -1).map((t) => t[0]).join('') + last);
+    // first-initial + EACH non-first token ("Audrey Long (O'Connor)" → along, aoconnor)
+    for (let i = 1; i < lower.length; i++) variants.add(lower[0][0] + lower[i]);
+  }
+  // each token alone, length ≥ 4 (last-name-only schedule cells: "McMurray")
+  for (const t of lower) if (t.length >= 4) variants.add(t);
+  return [...variants];
+}
+
 /**
- * Load the facility's roster as a Map of nameKey → rosterEntryId.
+ * Load the facility's roster as a variant index:
+ * { byKey: Map<keyVariant, Set<rosterEntryId>>, allKeys: [{ key, id }] }.
  * Matches against ALL roster entries (past members' historical shifts were
  * roster shifts when worked).
  */
@@ -20,12 +47,36 @@ async function buildRosterKeyMap(facilityId) {
     where: { facilityId },
     select: { id: true, providerName: true },
   });
-  const map = new Map();
+  const byKey = new Map();
+  const allKeys = [];
   for (const entry of roster) {
-    const key = buildNameKey(entry.providerName);
-    if (key && !map.has(key)) map.set(key, entry.id);
+    for (const key of keyVariants(entry.providerName)) {
+      if (!byKey.has(key)) byKey.set(key, new Set());
+      byKey.get(key).add(entry.id);
+      allKeys.push({ key, id: entry.id });
+    }
   }
-  return map;
+  return { byKey, allKeys };
+}
+
+// Levenshtein distance ≤ 1 check (one insert/delete/substitute) — used ONLY
+// to rescue spelling variants ("SWilliander" vs roster "Sten Willander" →
+// swillander) and ONLY toward roster: a false fuzzy hit can merely move a
+// record agency→roster, which UNDERSTATES agency dependence — the
+// conservative direction for the published metric.
+function withinOneEdit(a, b) {
+  if (a === b) return true;
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < la && j < lb) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (la > lb) i++;
+    else if (lb > la) j++;
+    else { i++; j++; }
+  }
+  return edits + (la - i) + (lb - j) <= 1;
 }
 
 /**
@@ -48,36 +99,64 @@ function looksLikeCompactName(rawName) {
 }
 
 /**
- * Tag one record-shaped object against the roster key map.
- * Two-token names ("First Last" / "Last, First") match by exact fingerprint.
- * Compact single tokens match when they are a prefix of exactly ONE roster
- * fingerprint (one-directional — truncation only shortens; verified against
- * CAPA data 2026-07-13: 56/60 tokens unique, 0 ambiguous). Ambiguity or an
- * unparseable name stays untagged — never guessed.
+ * Tag one record-shaped object against the roster variant index.
+ *
+ * Resolution ladder (each step requires exactly ONE roster entry — ambiguity
+ * at any step stays untagged, never guessed):
+ *   1. Exact variant hit (covers "First Last", compact "BFerla", last-name-
+ *      only "McMurray", double-initial "MAVann", parenthetical surnames).
+ *   2. Prefix hit — schedule token as a prefix of a roster variant
+ *      (Schedule4 truncation: "JEpst" → jepstein).
+ *   3. Edit-distance-1 hit, tokens ≥ 6 chars — spelling variants
+ *      ("SWilliander" → swillander). Fuzzy only ever tags TOWARD roster,
+ *      which understates agency dependence (conservative by construction).
+ *   4. Unmatched: name-like tokens (≥2 capitals) or parseable two-token
+ *      names → agency; markers ("None", "off") → untagged.
+ *
  * Returns { isAgency, matchedRosterId }.
  */
-function tagRecord(providerName, keyMap) {
+function tagRecord(providerName, rosterIndex) {
+  const { byKey, allKeys } = rosterIndex;
   const key = buildNameKey(providerName);
-  if (key) {
-    const rosterId = keyMap.get(key);
-    return rosterId
-      ? { isAgency: false, matchedRosterId: rosterId }
-      : { isAgency: true, matchedRosterId: null };
-  }
-
   const ck = compactKey(providerName);
-  if (!ck) return { isAgency: null, matchedRosterId: null };
+  const probe = key || ck;
+  if (!probe) return { isAgency: null, matchedRosterId: null };
 
-  const hits = [];
-  for (const [k, id] of keyMap) {
-    if (k === ck || k.startsWith(ck)) hits.push(id);
-    if (hits.length > 1) break;
+  const uniqueOf = (ids) => {
+    const set = ids instanceof Set ? ids : new Set(ids);
+    return set.size === 1 ? [...set][0] : (set.size > 1 ? 'AMBIGUOUS' : null);
+  };
+
+  // 1. exact variant
+  if (byKey.has(probe)) {
+    const u = uniqueOf(byKey.get(probe));
+    if (u && u !== 'AMBIGUOUS') return { isAgency: false, matchedRosterId: u };
+    if (u === 'AMBIGUOUS') return { isAgency: null, matchedRosterId: null };
   }
-  if (hits.length === 1) return { isAgency: false, matchedRosterId: hits[0] };
-  if (hits.length > 1) return { isAgency: null, matchedRosterId: null }; // ambiguous — never guess
-  return looksLikeCompactName(providerName)
-    ? { isAgency: true, matchedRosterId: null }
-    : { isAgency: null, matchedRosterId: null };
+
+  // 2. prefix (truncated compact tokens)
+  const prefixIds = new Set();
+  for (const { key: k, id } of allKeys) if (k.startsWith(probe)) prefixIds.add(id);
+  const pu = uniqueOf(prefixIds);
+  if (pu && pu !== 'AMBIGUOUS') return { isAgency: false, matchedRosterId: pu };
+  if (pu === 'AMBIGUOUS') return { isAgency: null, matchedRosterId: null };
+
+  // 3. edit-distance 1 (spelling variants) — toward roster only
+  if (probe.length >= 6) {
+    const fuzzyIds = new Set();
+    for (const { key: k, id } of allKeys) {
+      if (k.length >= 6 && withinOneEdit(probe, k)) fuzzyIds.add(id);
+    }
+    const fu = uniqueOf(fuzzyIds);
+    if (fu && fu !== 'AMBIGUOUS') return { isAgency: false, matchedRosterId: fu };
+    if (fu === 'AMBIGUOUS') return { isAgency: null, matchedRosterId: null };
+  }
+
+  // 4. no roster match
+  if (key || looksLikeCompactName(providerName)) {
+    return { isAgency: true, matchedRosterId: null };
+  }
+  return { isAgency: null, matchedRosterId: null };
 }
 
 /**
@@ -132,4 +211,4 @@ async function backfillUntagged(facilityId) {
   }
 }
 
-module.exports = { buildRosterKeyMap, tagRecord, backfillUntagged };
+module.exports = { buildRosterKeyMap, tagRecord, backfillUntagged, keyVariants };
