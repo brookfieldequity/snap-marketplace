@@ -98,12 +98,29 @@ section('1. Day-level efficiency math (room model: supervisor sits NO room)');
   const problem = score.analyzeDayEfficiency(3, 2, 390, 260, 10, 4);
   check('PROBLEM_MIX detected: 3 MD + 2 CRNA @1:4 → 4 rooms (1 supervising, 2 solo)',
     problem.pattern === 'PROBLEM_MIX' && problem.totalRooms === 4 && problem.supervisors === 1 && problem.soloMDs === 2, problem);
-  check('problem day priced at FULL cost @1:4: $2,600/day', problem.dailyWaste === 2600, problem.dailyWaste);
+  check('problem day @1:4 = $2,600/day (= 2 MD→CRNA swaps × $130/hr × 10h, headcount preserved)', problem.dailyWaste === 2600, problem.dailyWaste);
   const problemR3 = score.analyzeDayEfficiency(3, 2, 390, 260, 10, 3);
   check('same day @1:3 (stricter leverage) = $1,300/day — ratio is decisive', problemR3.dailyWaste === 1300, problemR3.dailyWaste);
 
   const smallMix = score.analyzeDayEfficiency(2, 2, 390, 260, 10, 3);
   check('2 MD + 2 CRNA @1:3 → 3 rooms, $1,300/day PROBLEM_MIX', smallMix.dailyWaste === 1300 && smallMix.pattern === 'PROBLEM_MIX', smallMix);
+
+  // Matt (2026-07-12): problem-mix waste is the SUBSTITUTION delta — the rate
+  // difference of MD→CRNA swaps against the cheapest compliant mix covering
+  // the SAME rooms with the SAME headcount — never the cost of a provider's
+  // full day. A full day is charged only when a position is genuinely
+  // redundant (the compliant optimum uses fewer people).
+  const oneSwap = score.analyzeDayEfficiency(2, 3, 390, 260, 10, 4);
+  check('substitution identity: 2 MD + 3 CRNA @1:4 = ONE swap × ($390−$260) × 10h = $1,300',
+    oneSwap.dailyWaste === 1 * (390 - 260) * 10 && oneSwap.pattern === 'PROBLEM_MIX', oneSwap.dailyWaste);
+  check('substitution identity: 3 MD + 2 CRNA @1:4 = TWO swaps × ($390−$260) × 10h = $2,600',
+    problem.dailyWaste === 2 * (390 - 260) * 10, problem.dailyWaste);
+  const customRateSwap = score.analyzeDayEfficiency(3, 2, 400, 300, 8, 4);
+  check('substitution identity holds at arbitrary rates/hours: 2 swaps × ($400−$300) × 8h = $1,600',
+    customRateSwap.dailyWaste === 2 * (400 - 300) * 8, customRateSwap.dailyWaste);
+  const redundant = score.analyzeDayEfficiency(3, 1, 390, 260, 10, 3);
+  check('redundant-provider day: 3 MD + 1 CRNA @1:3 → optimal is 3 solo MDs, waste = full CRNA day ($2,600)',
+    redundant.dailyWaste === 260 * 10 && redundant.totalRooms === 3, redundant);
 
   // Matt (2026-07-10): "all-MD days don't necessarily increase costs."
   const allMd3 = score.analyzeDayEfficiency(3, 0, 390, 260, 10, 3);
