@@ -12,6 +12,7 @@ const {
   DEFAULT_SUPERVISION_RATIO,
 } = require('../utils/staffiqScore');
 const learning = require('../services/staffiqLearning');
+const { backfillUntagged } = require('../services/rosterTag');
 
 const router = express.Router();
 
@@ -115,6 +116,11 @@ router.post('/analyze', facilityAuth, async (req, res) => {
   try {
     const facilityId = req.facility.id;
 
+    // Roster-vs-agency tagging backfill: records uploaded before the tagging
+    // pipeline (or after roster changes) get matched now, so agency-dependence
+    // stats always cover the full dataset. Best-effort — never blocks analysis.
+    const tagBackfill = await backfillUntagged(facilityId);
+
     // Load all scheduling records for this facility
     const allRecords = await prisma.schedulingRecord.findMany({
       where: { facilityId },
@@ -127,6 +133,7 @@ router.post('/analyze', facilityAuth, async (req, res) => {
         dayOfWeek: true,
         rate: true,
         caseType: true,
+        isAgency: true,
       },
     });
 
@@ -252,6 +259,48 @@ router.post('/analyze', facilityAuth, async (req, res) => {
     // Calculate overall score
     const scoreResult = calculateScoreFromAnalysis(facilityResults);
     const status = scoreResult.score != null ? getScoreStatus(scoreResult.score) : null;
+
+    // ── Agency dependence (benchmark metric 3) — counting only ────────────────
+    // Provider-day basis over analyzable (non-excluded) locations, weekdays
+    // only, consistent with every other benchmark stat. Dollars (the agency
+    // premium) are deliberately NOT computed here — pricing agency dependence
+    // interacts with lever 2 and the frozen methodology, so it lands with the
+    // report template, not as a side effect of instrumentation.
+    const analyzableNames = new Set(analyzableLocations.map(([name]) => name));
+    const agencyByLocation = {};
+    let agTotal = 0, agAgency = 0, agRoster = 0, agUntagged = 0;
+    for (const rec of allRecords) {
+      const location = rec.facilityLocation || 'Main';
+      if (!analyzableNames.has(location)) continue;
+      const dow = Number.isInteger(rec.dayOfWeek)
+        ? rec.dayOfWeek
+        : (rec.shiftDate ? new Date(rec.shiftDate).getDay() : null);
+      if (dow === 0 || dow === 6) continue;
+      if (!agencyByLocation[location]) {
+        agencyByLocation[location] = { providerDays: 0, roster: 0, agency: 0, untagged: 0 };
+      }
+      const loc = agencyByLocation[location];
+      loc.providerDays++; agTotal++;
+      if (rec.isAgency === true) { loc.agency++; agAgency++; }
+      else if (rec.isAgency === false) { loc.roster++; agRoster++; }
+      else { loc.untagged++; agUntagged++; }
+    }
+    const agencyDependence = {
+      basis: 'provider-day, weekdays, analyzable locations only',
+      providerDays: agTotal,
+      rosterDays: agRoster,
+      agencyDays: agAgency,
+      untaggedDays: agUntagged, // no parseable provider name — reported, never guessed
+      agencyPct: agTotal > 0 ? Math.round((agAgency / agTotal) * 1000) / 10 : null,
+      byLocation: Object.fromEntries(
+        Object.entries(agencyByLocation).map(([name, v]) => [name, {
+          ...v,
+          agencyPct: v.providerDays > 0 ? Math.round((v.agency / v.providerDays) * 1000) / 10 : null,
+        }])
+      ),
+      backfill: tagBackfill, // what this run tagged retroactively
+      premium: null, // dollars pending report-template methodology (metric 3 second half)
+    };
 
     // Build insights array
     const insights = [];
@@ -401,6 +450,8 @@ router.post('/analyze', facilityAuth, async (req, res) => {
       // Sites reimbursed per provider — no staffing cost to this practice, so
       // excluded from every dollar figure and the score (e.g. CAPA's Shattuck).
       excludedLocations,
+      // Benchmark metric 3 (agency dependence) — counting basis; see block above.
+      agencyDependence,
       recordsAnalyzed: allRecords.length,
       // Learning-layer context for the portal.
       learning: {

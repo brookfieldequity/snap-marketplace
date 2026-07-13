@@ -1180,6 +1180,12 @@ model SchedulingRecord {
   // Preferred over re-deriving from shiftDate so Friday detection stays correct
   // even for schedules from another year or spanning a year boundary.
   dayOfWeek        Int?
+  // Roster-vs-agency tagging (benchmark metric 3: agency dependence). Matched
+  // by name fingerprint against InternalRosterEntry at upload; null = not yet
+  // matched (no provider name, or record predates tagging — backfilled on the
+  // next StaffIQ analysis run).
+  isAgency         Boolean?
+  matchedRosterId  String?
   sourceUploadId   String?
   sourceUpload     SchedulingUpload? @relation(fields: [sourceUploadId], references: [id])
   createdAt        DateTime          @default(now())

@@ -4,6 +4,7 @@ const XLSX = require('xlsx');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { dayOfWeekFromLabel } = require('../utils/staffiqScore');
+const { buildRosterKeyMap, tagRecord } = require('../services/rosterTag');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -375,6 +376,10 @@ router.post('/confirm', facilityAuth, async (req, res) => {
         CRNA: 'CRNA',
       };
 
+      // Roster-vs-agency tagging (benchmark metric 3) — match each provider
+      // name against the internal roster by the shared fingerprint rule.
+      const rosterKeys = await buildRosterKeyMap(req.facility.id);
+
       const dbRecords = matrixRecords.map(r => ({
         facilityId:       req.facility.id,
         sourceUploadId:   schedulingUpload.id,
@@ -384,6 +389,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
         durationHours:    r.shiftHours || 10,
         facilityLocation: r.facility,
         dayOfWeek:        Number.isInteger(r.dayOfWeek) ? r.dayOfWeek : null,
+        ...tagRecord(r.providerName, rosterKeys),
       }));
 
       // Batch insert in chunks of 500
@@ -448,6 +454,9 @@ router.post('/confirm', facilityAuth, async (req, res) => {
       },
     });
 
+    // Roster-vs-agency tagging (benchmark metric 3) — shared fingerprint rule.
+    const rosterKeys = await buildRosterKeyMap(req.facility.id);
+
     // Batch insert records in chunks of 500
     const BATCH = 500;
     let inserted = 0;
@@ -455,6 +464,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
       const chunk = records.slice(i, i + BATCH).map((r) => ({
         ...r,
         sourceUploadId: schedulingUpload.id,
+        ...tagRecord(r.providerName, rosterKeys),
       }));
       const result = await prisma.schedulingRecord.createMany({ data: chunk });
       inserted += result.count;
