@@ -29,17 +29,55 @@ async function buildRosterKeyMap(facilityId) {
 }
 
 /**
+ * Compact single-token key for Schedule4-style names ("BFerla", "JEpst",
+ * "McMurray") — first initial fused to a possibly-truncated last name.
+ * Returns lowercase alphanumerics, or null for multi-token / too-short input.
+ */
+function compactKey(rawName) {
+  const t = String(rawName || '').trim();
+  if (!t || /[\s,]/.test(t)) return null; // single tokens only
+  const k = t.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return k.length >= 3 ? k : null;
+}
+
+// A compact token "looks like a name" when it carries at least two capitals
+// (BFerla, McMurray, SWilliander). Tokens without that shape ("None", "off")
+// are markers, not people — they stay untagged rather than counting as agency.
+function looksLikeCompactName(rawName) {
+  return /^[A-Z].*[A-Z]/.test(String(rawName || '').trim());
+}
+
+/**
  * Tag one record-shaped object against the roster key map.
- * Returns { isAgency, matchedRosterId } — both null when the name is
- * unparseable (unknown stays unknown).
+ * Two-token names ("First Last" / "Last, First") match by exact fingerprint.
+ * Compact single tokens match when they are a prefix of exactly ONE roster
+ * fingerprint (one-directional — truncation only shortens; verified against
+ * CAPA data 2026-07-13: 56/60 tokens unique, 0 ambiguous). Ambiguity or an
+ * unparseable name stays untagged — never guessed.
+ * Returns { isAgency, matchedRosterId }.
  */
 function tagRecord(providerName, keyMap) {
   const key = buildNameKey(providerName);
-  if (!key) return { isAgency: null, matchedRosterId: null };
-  const rosterId = keyMap.get(key);
-  return rosterId
-    ? { isAgency: false, matchedRosterId: rosterId }
-    : { isAgency: true, matchedRosterId: null };
+  if (key) {
+    const rosterId = keyMap.get(key);
+    return rosterId
+      ? { isAgency: false, matchedRosterId: rosterId }
+      : { isAgency: true, matchedRosterId: null };
+  }
+
+  const ck = compactKey(providerName);
+  if (!ck) return { isAgency: null, matchedRosterId: null };
+
+  const hits = [];
+  for (const [k, id] of keyMap) {
+    if (k === ck || k.startsWith(ck)) hits.push(id);
+    if (hits.length > 1) break;
+  }
+  if (hits.length === 1) return { isAgency: false, matchedRosterId: hits[0] };
+  if (hits.length > 1) return { isAgency: null, matchedRosterId: null }; // ambiguous — never guess
+  return looksLikeCompactName(providerName)
+    ? { isAgency: true, matchedRosterId: null }
+    : { isAgency: null, matchedRosterId: null };
 }
 
 /**
