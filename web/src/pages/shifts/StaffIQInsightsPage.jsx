@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../../api.js'
+import BenchmarkConsentCard from './BenchmarkConsentCard.jsx'
 
 const PANEL_META = {
   TEAM_MODEL: {
@@ -443,6 +444,8 @@ export default function StaffIQInsightsPage({ onNavigate }) {
           ) : '⚡ Run Analysis'}
         </button>
       </div>
+
+      <BenchmarkConsentCard />
 
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8' }}>Loading insights...</div>}
       {error && !loading && (

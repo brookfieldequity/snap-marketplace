@@ -284,6 +284,70 @@ router.post('/me/subscription/upgrade', facilityAuth, async (req, res) => {
   }
 });
 
+// ── Benchmark cohort consent (in-portal click-wrap, NOT emailed e-signature) ──
+
+// Current consent state: the latest acceptance row, revoked or not.
+router.get('/me/benchmark-consent', facilityAuth, async (req, res) => {
+  try {
+    const latest = await prisma.benchmarkConsent.findFirst({
+      where: { facilityId: req.facility.id },
+      orderBy: { acceptedAt: 'desc' },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    res.json({
+      consented: !!latest && !latest.revokedAt,
+      consent: latest,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load benchmark consent' });
+  }
+});
+
+// Records click-wrap acceptance of benchmark cohort participation.
+router.post('/me/benchmark-consent', facilityAuth, async (req, res) => {
+  try {
+    const { consentAgreed, consentVersion } = req.body;
+    if (!consentAgreed || !consentVersion) {
+      return res.status(400).json({ error: 'Consent acceptance required' });
+    }
+
+    const consent = await prisma.benchmarkConsent.create({
+      data: {
+        facilityId:     req.facility.id,
+        userId:         req.user.userId,
+        consentVersion,
+        ipAddress:      req.ip,
+        userAgent:      req.headers['user-agent'] || null,
+      },
+    });
+
+    res.json({ consented: true, consent });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to record benchmark consent' });
+  }
+});
+
+// Prospective revocation: marks the latest active consent revoked. Prior
+// published aggregates are unaffected (stated in the consent text).
+router.post('/me/benchmark-consent/revoke', facilityAuth, async (req, res) => {
+  try {
+    const latest = await prisma.benchmarkConsent.findFirst({
+      where: { facilityId: req.facility.id, revokedAt: null },
+      orderBy: { acceptedAt: 'desc' },
+    });
+    if (!latest) return res.status(404).json({ error: 'No active consent to revoke' });
+
+    const consent = await prisma.benchmarkConsent.update({
+      where: { id: latest.id },
+      data: { revokedAt: new Date(), revokedById: req.user.userId },
+    });
+
+    res.json({ consented: false, consent });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to revoke benchmark consent' });
+  }
+});
+
 // ── Provider management ───────────────────────────────────────────────────────
 
 router.get('/me/providers', facilityAuth, async (req, res) => {

@@ -230,6 +230,7 @@ model User {
   facilityInvitesClaimed     FacilityInvite[]   @relation("FacilityInviteClaimedBy")
   passwordResets             PasswordReset[]
   agreementAcceptances       AgreementAcceptance[]
+  benchmarkConsents          BenchmarkConsent[]
 }
 
 model PasswordReset {
@@ -377,6 +378,7 @@ model Facility {
   roiSnapshots        FacilityRoiSnapshot[]
   facilityInvites     FacilityInvite[]
   agreementAcceptances AgreementAcceptance[]
+  benchmarkConsents   BenchmarkConsent[]
   scheduleRequests    ScheduleRequest[]
   featureFlags        FacilityFeatureFlag[]
   payrollTemplates    PayrollTemplateConfig[]
@@ -2288,6 +2290,30 @@ model AgreementAcceptance {
   ipAddress        String?
   userAgent        String?
   acceptedAt       DateTime @default(now())
+
+  @@index([facilityId])
+}
+
+// ── Benchmark Cohort Consent ──────────────────────────────────────────────────
+// In-portal click-wrap consent to StaffIQ benchmark participation (anonymized
+// publication, ongoing uploads, reference rights). Deliberately NOT an emailed
+// e-signature flow — captured inside the facility portal like the subscription
+// agreement, one row per acceptance so history is preserved. The latest
+// non-revoked row is the facility's current consent state; revocation is
+// prospective (recorded on the row, prior published aggregates unaffected).
+
+model BenchmarkConsent {
+  id             String    @id @default(cuid())
+  facilityId     String
+  facility       Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id])
+  consentVersion String    // e.g. "v1.0-2026-07-12"
+  ipAddress      String?
+  userAgent      String?
+  acceptedAt     DateTime  @default(now())
+  revokedAt      DateTime?
+  revokedById    String?   // userId of the revoking facility user
 
   @@index([facilityId])
 }

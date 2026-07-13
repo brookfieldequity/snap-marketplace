@@ -123,6 +123,24 @@ export const facilityAPI = {
       body: JSON.stringify({ tier, agreedToTerms: true, agreementVersion }),
     }),
 
+  getBenchmarkConsent: () =>
+    apiFetch(`${BASE}/facilities/me/benchmark-consent`, {
+      headers: facilityHeaders(),
+    }),
+
+  acceptBenchmarkConsent: (consentVersion) =>
+    apiFetch(`${BASE}/facilities/me/benchmark-consent`, {
+      method: 'POST',
+      headers: facilityHeaders(),
+      body: JSON.stringify({ consentAgreed: true, consentVersion }),
+    }),
+
+  revokeBenchmarkConsent: () =>
+    apiFetch(`${BASE}/facilities/me/benchmark-consent/revoke`, {
+      method: 'POST',
+      headers: facilityHeaders(),
+    }),
+
   getShifts: () =>
     apiFetch(`${BASE}/shifts/facility/mine`, {
       headers: facilityHeaders(),
