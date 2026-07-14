@@ -130,6 +130,7 @@ app.use('/api/automation-events', automationEventsRoutes);
 // Provider availability self-submission — public, token-gated (no auth middleware).
 app.use('/api/avail', require('./routes/avail'));
 app.use('/api/roomcount', require('./routes/roomcount'));
+app.use('/api/room-requests', require('./routes/roomRequests'));
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 
