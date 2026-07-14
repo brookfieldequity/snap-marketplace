@@ -49,6 +49,11 @@ function nextInvoiceNumber(last) {
   return `SNAP-${parts[1]}-${String(n).padStart(3, '0')}`
 }
 
+function round2(n) { return Math.round((Number(n) || 0) * 100) / 100 }
+
+// Valid promotional-discount durations (months). Anything else = no promo.
+const VALID_DISCOUNT_MONTHS = new Set([1, 2, 3, 6])
+
 // ── GET /api/admin/invoices — list all ──────────────────────────────────────
 router.get('/', adminAuth, async (req, res) => {
   try {
@@ -214,20 +219,47 @@ router.post('/', adminAuth, async (req, res) => {
       })
     }
 
-    // Extra custom line items
+    // Extra custom line items — coerce/validate numerics so a malformed body
+    // can't corrupt the invoice total (string concatenation, negatives, a
+    // discount exceeding the line price → negative/free invoice).
     if (Array.isArray(extraLineItems)) {
-      lineItems.push(...extraLineItems)
+      for (const item of extraLineItems) {
+        const listPrice = Math.max(0, round2(item?.listPrice))
+        const discount = Math.min(listPrice, Math.max(0, round2(item?.discount)))
+        lineItems.push({
+          description: String(item?.description || 'Additional item').slice(0, 200),
+          detail: item?.detail ? String(item.detail).slice(0, 300) : null,
+          listPrice,
+          discount,
+          discountLabel: item?.discountLabel ? String(item.discountLabel).slice(0, 100) : null,
+          amount: listPrice - discount,
+        })
+      }
     }
 
-    const listTotal = lineItems.reduce((s, i) => s + (i.listPrice || 0), 0)
-    const discountTotal = lineItems.reduce((s, i) => s + (i.discount || 0), 0)
-    const amountDue = listTotal - discountTotal
+    // Monthly billing bills one-twelfth of the annual contract (subscription
+    // agreement §2). Divide each line item so the STORED invoice is internally
+    // consistent and every downstream emitter (initial email, PDF, recurring
+    // cron) shows the correct monthly figure with no per-emitter math.
+    if (billingCycle === 'MONTHLY') {
+      for (const item of lineItems) {
+        item.listPrice = round2(item.listPrice / 12)
+        item.discount = round2((item.discount || 0) / 12)
+        item.amount = round2(item.amount / 12)
+      }
+    }
 
-    // Compute promo expiry
+    const listTotal = round2(lineItems.reduce((s, i) => s + (i.listPrice || 0), 0))
+    const discountTotal = round2(lineItems.reduce((s, i) => s + (i.discount || 0), 0))
+    const amountDue = Math.max(0, round2(listTotal - discountTotal))
+
+    // Compute promo expiry. discountMonths must be one of the allowed durations
+    // — a non-integer would make setMonth() produce an Invalid Date (Prisma 500).
     let promoExpiresAt = null
-    if (discountMonths && promoFeatures) {
+    const promoMonths = VALID_DISCOUNT_MONTHS.has(Number(discountMonths)) ? Number(discountMonths) : null
+    if (promoMonths && promoFeatures) {
       const d = new Date()
-      d.setMonth(d.getMonth() + discountMonths)
+      d.setMonth(d.getMonth() + promoMonths)
       promoExpiresAt = d
     }
 
@@ -460,6 +492,7 @@ async function processMonthlyInvoices() {
 
   const due = await prisma.snapInvoice.findMany({
     where: { billingCycle: 'MONTHLY', nextRecurAt: { lte: new Date() }, status: { not: 'VOID' } },
+    include: { facility: { select: { isDemo: true } } },
   })
   if (!due.length) return
 
@@ -470,6 +503,29 @@ async function processMonthlyInvoices() {
 
   for (const inv of due) {
     try {
+      // Never auto-bill demo/test facilities.
+      if (inv.facility?.isDemo) continue
+
+      // Idempotency: claim this billing period atomically by advancing
+      // nextRecurAt with a compare-and-swap on its current value. If a
+      // concurrent run or a post-crash retry already advanced it, count===0 and
+      // we skip — the customer is never double-billed. Send happens AFTER the
+      // claim, so a send failure skips a month (recoverable) rather than
+      // risking a duplicate bill.
+      const next = new Date(inv.nextRecurAt)
+      next.setMonth(next.getMonth() + 1)
+      const claim = await prisma.snapInvoice.updateMany({
+        where: { id: inv.id, nextRecurAt: inv.nextRecurAt },
+        data: { nextRecurAt: next },
+      })
+      if (claim.count !== 1) continue
+
+      // Founder/promotional pricing reverts to the standard rate once it has
+      // expired for this billing period (subscription agreement §2A). amountDue
+      // is the discounted monthly figure; listTotal is the standard monthly rate.
+      const promoExpired = inv.promoExpiresAt && new Date(inv.nextRecurAt) >= new Date(inv.promoExpiresAt)
+      const charge = promoExpired ? inv.listTotal : inv.amountDue
+
       const period = monthLabel(inv.nextRecurAt)
       const html = `
 <!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;margin:0;padding:20px">
@@ -489,7 +545,7 @@ async function processMonthlyInvoices() {
     </div>
     <div style="background:#2563EB;border-radius:8px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
       <span style="color:#fff;font-size:15px;font-weight:700">AMOUNT DUE — ${esc(period)}</span>
-      <span style="color:#fff;font-size:20px;font-weight:800">${fmt(inv.amountDue)}</span>
+      <span style="color:#fff;font-size:20px;font-weight:800">${fmt(charge)}</span>
     </div>
     ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">
@@ -512,16 +568,13 @@ async function processMonthlyInvoices() {
         html,
       })
 
-      // Advance nextRecurAt by one month
-      const next = new Date(inv.nextRecurAt)
-      next.setMonth(next.getMonth() + 1)
-
+      // Period already claimed above; just record the successful send.
       await prisma.snapInvoice.update({
         where: { id: inv.id },
-        data: { sentAt: new Date(), status: 'SENT', nextRecurAt: next },
+        data: { sentAt: new Date(), status: 'SENT' },
       })
 
-      console.log(`[invoices] Monthly auto-send: ${inv.invoiceNumber} → ${period}`)
+      console.log(`[invoices] Monthly auto-send: ${inv.invoiceNumber} → ${period} (${fmt(charge)})`)
     } catch (e) {
       console.error(`[invoices] Monthly auto-send failed for ${inv.invoiceNumber}:`, e.message)
     }

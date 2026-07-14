@@ -7,7 +7,46 @@ const { dayOfWeekFromLabel } = require('../utils/staffiqScore');
 const { buildRosterKeyMap, tagRecord } = require('../services/rosterTag');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+// File-size + count cap: an uncapped memoryStorage upload lets one large file
+// OOM the shared backend for every tenant (express.json's 2mb limit does NOT
+// apply to multipart). 10 MB comfortably covers real multi-year schedule
+// exports; oversize is rejected as 413 by the handler below.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
+
+// Guardrails against a crafted workbook declaring an enormous dimension range
+// (sheet_to_json materializes a dense grid) — cap parsed rows and date columns.
+const MAX_PARSE_ROWS = 20000;
+const MAX_DATE_COLS = 500;
+
+// Reject an absurd declared sheet range BEFORE sheet_to_json materializes it.
+// A tiny file can declare dimension A1:ZZ100000 and OOM the process; the
+// file-size cap doesn't catch that, but the declared range does.
+function assertSheetSize(ws) {
+  const range = ws && ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : null;
+  if (!range) return;
+  const nRows = range.e.r - range.s.r + 1;
+  const nCols = range.e.c - range.s.c + 1;
+  if (nRows > MAX_PARSE_ROWS || nCols > MAX_DATE_COLS) {
+    const err = new Error(`Spreadsheet too large to process (${nRows} rows × ${nCols} columns; limit ${MAX_PARSE_ROWS} × ${MAX_DATE_COLS}). Please split the export.`);
+    err.code = 'SHEET_TOO_LARGE';
+    throw err;
+  }
+}
+
+// Multer wrapper that turns a file-size overflow into a clean 413 instead of an
+// unhandled MulterError bubbling to the generic handler.
+function uploadSingle(field) {
+  return (req, res, next) => {
+    upload.single(field)(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (maximum 10 MB).' });
+        return res.status(400).json({ error: err.message || 'Upload failed.' });
+      }
+      next();
+    });
+  };
+}
 
 // ── Column mapping aliases ─────────────────────────────────────────────────────
 
@@ -56,6 +95,7 @@ function buildColumnMapping(headers) {
 function parseSchedule4Matrix(workbook) {
   const sheetName = workbook.SheetNames[0];
   const ws = workbook.Sheets[sheetName];
+  assertSheetSize(ws);
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
   if (!rows || rows.length < 2) return null;
@@ -221,6 +261,7 @@ function parseWorkbook(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheetName = wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
+  assertSheetSize(sheet);
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
   return rows;
 }
@@ -276,7 +317,7 @@ router.get('/', facilityAuth, async (req, res) => {
 
 // ── POST / — upload and return mapping preview ────────────────────────────────
 
-router.post('/', facilityAuth, upload.single('file'), async (req, res) => {
+router.post('/', facilityAuth, uploadSingle('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -309,7 +350,9 @@ router.post('/', facilityAuth, upload.single('file'), async (req, res) => {
     }
 
     // Fallback: standard column-mapping approach
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: null });
+    const fallbackSheet = workbook.Sheets[workbook.SheetNames[0]];
+    assertSheetSize(fallbackSheet);
+    const rows = XLSX.utils.sheet_to_json(fallbackSheet, { defval: null });
 
     if (!rows.length) {
       return res.status(400).json({ error: 'The uploaded file contains no data rows.' });
@@ -327,6 +370,7 @@ router.post('/', facilityAuth, upload.single('file'), async (req, res) => {
       fileData: req.file.buffer.toString('base64'),
     });
   } catch (err) {
+    if (err.code === 'SHEET_TOO_LARGE') return res.status(413).json({ error: err.message });
     console.error(err);
     res.status(500).json({ error: 'Failed to parse uploaded file' });
   }
@@ -488,6 +532,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
       dateRangeEnd,
     });
   } catch (err) {
+    if (err.code === 'SHEET_TOO_LARGE') return res.status(413).json({ error: err.message });
     console.error(err);
     res.status(500).json({ error: 'Failed to confirm and import scheduling data' });
   }

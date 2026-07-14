@@ -838,8 +838,16 @@ router.post('/providers/:providerId/request-document', credentialAuth, requireCo
 
 router.post('/providers/:providerId/documents/:type', credentialAuth, requireCoordinator, async (req, res) => {
   const { providerId, type } = req.params
-  const upload = getUpload(req.facilityId, providerId, type)
 
+  // Tenant boundary: only accept an upload for a provider on THIS facility's
+  // roster, checked BEFORE multer runs so another tenant's shared credential
+  // document can't be overwritten (or a stray file written to storage).
+  const entry = await prisma.facilityRosterEntry.findFirst({
+    where: { facilityId: req.facilityId, providerId },
+  })
+  if (!entry) return res.status(404).json({ error: 'Provider not on roster' })
+
+  const upload = getUpload(req.facilityId, providerId, type)
   upload.single('document')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message })
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
@@ -963,6 +971,11 @@ router.post('/roster/:rosterId/documents/:type', credentialAuth, requireCoordina
 router.get('/roster/:rosterId/documents/:type/token', credentialAuth, requireCoordinator, async (req, res) => {
   try {
     const { rosterId, type } = req.params
+    // Tenant boundary: the roster entry must belong to THIS facility before we
+    // mint a document-access token (mirrors /roster/:rosterId/file).
+    const entry = await prisma.facilityRosterEntry.findFirst({ where: { id: rosterId, facilityId: req.facilityId } })
+    if (!entry) return res.status(404).json({ error: 'Roster entry not found' })
+
     const cred = await prisma.providerCredential.findUnique({
       where: { rosterId_credentialType: { rosterId, credentialType: type } },
     })
@@ -1050,6 +1063,14 @@ router.post('/roster/:rosterId/notes', credentialAuth, requireCoordinator, async
 router.get('/providers/:providerId/documents/:type/token', credentialAuth, requireCoordinator, async (req, res) => {
   try {
     const { providerId, type } = req.params
+
+    // Tenant boundary: the provider must be on THIS facility's roster before we
+    // mint a document-access token — otherwise any coordinator with a provider
+    // id could pull another facility's credential document.
+    const entry = await prisma.facilityRosterEntry.findFirst({
+      where: { facilityId: req.facilityId, providerId },
+    })
+    if (!entry) return res.status(404).json({ error: 'Provider not on roster' })
 
     const cred = await prisma.providerCredential.findUnique({
       where: { providerId_credentialType: { providerId, credentialType: type } },
