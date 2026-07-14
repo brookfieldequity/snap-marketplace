@@ -14,6 +14,7 @@ const SHIFTS_NAV = [
     items: [
       { key: 'schedule',          label: 'Schedule Builder',     icon: '📅' },
       { key: 'coverage-templates',label: 'Coverage Templates',   icon: '🧩' },
+      { key: 'room-counts',       label: 'Room-Count Cards',     icon: '🏥' },
       { key: 'windows',           label: 'Availability Windows', icon: '🗓' },
       { key: 'availability',      label: 'Set Availability',     icon: '✅' },
       { key: 'requests',          label: 'Provider Requests',    icon: '✋' },

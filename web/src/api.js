@@ -426,6 +426,20 @@ export const facilityAPI = {
     apiFetch(`${BASE}/schedule/availability-requests?month=${month}&year=${year}`, { headers: facilityHeaders() }),
   remindAvailabilityRequest: (id) =>
     apiFetch(`${BASE}/schedule/availability-requests/${id}/remind`, { method: 'POST', headers: facilityHeaders() }),
+
+  // Facility Room-Count Card — coordinator side
+  getRoomLocations: () =>
+    apiFetch(`${BASE}/room-requests/locations`, { headers: facilityHeaders() }),
+  addRoomContact: (body) =>
+    apiFetch(`${BASE}/room-requests/contacts`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  deleteRoomContact: (id) =>
+    apiFetch(`${BASE}/room-requests/contacts/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
+  sendRoomRequests: (body) =>
+    apiFetch(`${BASE}/room-requests/send`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(body) }),
+  getRoomRequestStatus: (year, month) =>
+    apiFetch(`${BASE}/room-requests?year=${year}&month=${month}`, { headers: facilityHeaders() }),
+  remindRoomRequest: (id) =>
+    apiFetch(`${BASE}/room-requests/${id}/remind`, { method: 'POST', headers: facilityHeaders() }),
 }
 
 // ─── Payroll Builder API (SNAP Shifts) ────────────────────────────────────────

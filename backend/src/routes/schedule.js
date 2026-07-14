@@ -902,6 +902,23 @@ router.post('/generate', facilityAuth, async (req, res) => {
       daysByDow[d.dayOfWeek].push(d);
     }
 
+    // Returned room-count cards for this month are the source of truth: the
+    // site declared exactly how many rooms run each day, so those counts
+    // override the template's default per (date, location). Only SUBMITTED
+    // cards count; an absent/unsubmitted card falls back to the template.
+    // Location strings match exactly — both derive from CoverageTemplateDay.
+    const roomCards = await prisma.roomCountRequest.findMany({
+      where: { facilityId: req.facility.id, year: yr, month: mo, submittedAt: { not: null } },
+      include: { dayCounts: true },
+    });
+    const cardCountByKey = new Map(); // `${iso}::${location}` -> roomsRequired
+    for (const rc of roomCards) {
+      for (const dc of rc.dayCounts) {
+        cardCountByKey.set(`${dc.date.toISOString().slice(0, 10)}::${rc.location}`, dc.roomsRequired);
+      }
+    }
+    let cardOverrides = 0;
+
     // Iterate every date in the requested month.
     const daysInMonth = new Date(yr, mo, 0).getDate(); // day 0 of next month = last day
     let rowsCreated = 0;
@@ -940,9 +957,13 @@ router.post('/generate', facilityAuth, async (req, res) => {
         const dow = date.getUTCDay();
         const entries = daysByDow[dow] || [];
         for (const entry of entries) {
-          if (entry.roomsRequired <= 0) continue; // template explicitly says "no rooms"
-          locationsSeen.add(entry.location);
           const key = `${iso}::${entry.location}`;
+          // Card-declared count wins over the template default when present.
+          const carded = cardCountByKey.has(key);
+          const rooms = carded ? cardCountByKey.get(key) : entry.roomsRequired;
+          if (rooms <= 0) continue; // template or card says "no rooms" this day
+          if (carded) cardOverrides += 1;
+          locationsSeen.add(entry.location);
           const wasExisting = existingSet.has(key);
           // Upsert ScheduleDay on the existing (facilityId, date, location)
           // unique constraint. Assignments live on a separate table and
@@ -960,11 +981,11 @@ router.post('/generate', facilityAuth, async (req, res) => {
               facilityId: req.facility.id,
               date,
               location: entry.location,
-              roomsRequired: entry.roomsRequired,
+              roomsRequired: rooms,
               supervisionRatio: entry.supervisionRatio ?? null,
             },
             update: {
-              roomsRequired: entry.roomsRequired,
+              roomsRequired: rooms,
               supervisionRatio: entry.supervisionRatio ?? null,
             },
           });
@@ -993,6 +1014,7 @@ router.post('/generate', facilityAuth, async (req, res) => {
         rowsCreated,
         rowsUpdated,
         holidaysSkipped,
+        cardOverrides, // day-rows whose count came from a returned room-count card
         locations: Array.from(locationsSeen).sort(),
       },
       template: { id: template.id, name: template.name },

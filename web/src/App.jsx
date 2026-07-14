@@ -47,6 +47,7 @@ const SnapShiftsDashboard      = lazyPage(() => import('./pages/shifts/SnapShift
 const InternalRosterPage       = lazyPage(() => import('./pages/shifts/InternalRosterPage.jsx'))
 const AvailabilityWindowsPage  = lazyPage(() => import('./pages/shifts/AvailabilityWindowsPage.jsx'))
 const FacilityAvailabilityPage = lazyPage(() => import('./pages/shifts/FacilityAvailabilityPage.jsx'))
+const RoomCountRequestsPage    = lazyPage(() => import('./pages/shifts/RoomCountRequestsPage.jsx'))
 const ScheduleBuilderPage      = lazyPage(() => import('./pages/shifts/ScheduleBuilderPage.jsx'))
 const DailyViewPage            = lazyPage(() => import('./pages/shifts/DailyViewPage.jsx'))
 const GapsPage                 = lazyPage(() => import('./pages/shifts/GapsPage.jsx'))
@@ -471,6 +472,9 @@ export default function App() {
             )}
             {isShiftsMode && facilityPage === 'availability' && (
               <FacilityAvailabilityPage onNavigate={setFacilityPage} />
+            )}
+            {isShiftsMode && facilityPage === 'room-counts' && (
+              <RoomCountRequestsPage />
             )}
             {isShiftsMode && facilityPage === 'schedule' && (
               <ScheduleBuilderPage onNavigate={setFacilityPage} />

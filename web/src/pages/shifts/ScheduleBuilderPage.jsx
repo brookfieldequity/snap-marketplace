@@ -442,6 +442,69 @@ function fmt(n) {
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+// Room-Count Cards status for the selected month — shows which sites have
+// returned a card (those counts drive the generated schedule) vs. which fall
+// back to the coverage-template default. Management lives on the dedicated page.
+const RC_META = {
+  RETURNED: { label: 'Returned', bg: '#F0FDF4', fg: '#166534', bd: '#BBF7D0' },
+  SENT: { label: 'Awaiting', bg: '#EFF6FF', fg: '#1D4ED8', bd: '#BFDBFE' },
+  LOCKED_NO_RESPONSE: { label: 'No response', bg: '#FFFBEB', fg: '#92400E', bd: '#FDE68A' },
+  NOT_SENT: { label: 'Template default', bg: '#F1F5F9', fg: '#64748B', bd: '#E2E8F0' },
+}
+function RoomCountPanel({ year, month, onNavigate }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    facilityAPI.getRoomRequestStatus(year, month)
+      .then((r) => { if (alive) setRows(r.locations || []) })
+      .catch(() => { if (alive) setRows([]) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [year, month])
+
+  const returned = rows.filter((r) => r.status === 'RETURNED').length
+
+  return (
+    <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>🏥 Room-Count Cards — {monthName} {year}</div>
+        <button onClick={() => onNavigate && onNavigate('room-counts')} style={{ padding: '7px 14px', background: '#fff', color: '#2563EB', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+          Manage & send →
+        </button>
+      </div>
+      {returned > 0 && (
+        <div style={{ fontSize: 13, color: '#166534', marginTop: 8 }}>
+          ✓ {returned} site{returned === 1 ? '' : 's'} returned — these counts build the schedule (they override the template default).
+        </div>
+      )}
+      {loading ? (
+        <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 10 }}>Loading…</div>
+      ) : rows.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#64748B', marginTop: 10 }}>No sites yet — add coverage templates and site contacts to send room-count cards.</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {rows.map((r) => {
+            const m = RC_META[r.status] || RC_META.NOT_SENT
+            return (
+              <span key={r.location} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 10px' }}>
+                <strong style={{ color: '#0F172A', fontWeight: 700 }}>{r.location}</strong>
+                <span style={{ fontSize: 11, fontWeight: 700, color: m.fg, background: m.bg, border: `1px solid ${m.bd}`, padding: '2px 7px', borderRadius: 999 }}>{m.label}</span>
+                {r.status === 'RETURNED' && r.submittedAt && (
+                  <span style={{ color: '#94A3B8' }}>{r.daysSubmitted}d · {new Date(r.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                )}
+              </span>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getDaysInMonth(year, month) { return new Date(year, month, 0).getDate() }
 function getFirstDayOfWeek(year, month) { const d = new Date(year, month - 1, 1).getDay(); return (d + 6) % 7 }
 
@@ -1238,6 +1301,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       </div>
 
       {/* Provider Availability — request + track self-submission from roster members */}
+      <RoomCountPanel year={year} month={month} onNavigate={onNavigate} />
+
       <ProviderAvailabilityPanel
         year={year}
         month={month}
