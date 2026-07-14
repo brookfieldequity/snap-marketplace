@@ -38,6 +38,7 @@ export default function RoomCountRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [newContact, setNewContact] = useState({}) // location -> {name,email}
+  const [selected, setSelected] = useState(() => new Set()) // Set<location> to send to
 
   async function load() {
     setLoading(true)
@@ -46,7 +47,10 @@ export default function RoomCountRequestsPage() {
         facilityAPI.getRoomLocations(),
         facilityAPI.getRoomRequestStatus(year, month),
       ])
-      setLocations(locRes.locations || [])
+      const locs = locRes.locations || []
+      setLocations(locs)
+      // Default selection = every site that has a contact (all checked).
+      setSelected(new Set(locs.filter((l) => l.contacts.length > 0).map((l) => l.location)))
       const map = {}
       for (const r of statRes.locations || []) map[r.location] = r
       setStatus(map)
@@ -59,6 +63,18 @@ export default function RoomCountRequestsPage() {
   useEffect(() => { load() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const withContacts = useMemo(() => locations.filter((l) => l.contacts.length > 0), [locations])
+  const selectedWithContacts = useMemo(
+    () => withContacts.filter((l) => selected.has(l.location)).map((l) => l.location),
+    [withContacts, selected]
+  )
+  const allSelected = withContacts.length > 0 && selectedWithContacts.length === withContacts.length
+
+  function toggle(location) {
+    setSelected((prev) => { const n = new Set(prev); n.has(location) ? n.delete(location) : n.add(location); return n })
+  }
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(withContacts.map((l) => l.location)))
+  }
 
   async function addContact(location) {
     const c = newContact[location] || {}
@@ -73,12 +89,15 @@ export default function RoomCountRequestsPage() {
     try { await facilityAPI.deleteRoomContact(id); await load() } catch (e) { alert(e.message) }
   }
 
-  async function sendAll() {
-    if (!withContacts.length) return alert('Add at least one site contact first.')
-    if (!window.confirm(`Send room-count requests for ${MONTHS[month]} ${year} to ${withContacts.length} site${withContacts.length === 1 ? '' : 's'}?`)) return
+  // Send to a specific list of locations, or the current selection.
+  async function send(targetLocations) {
+    const targets = targetLocations || selectedWithContacts
+    if (!targets.length) return alert('Select at least one site with a contact.')
+    const label = targets.length === 1 ? targets[0] : `${targets.length} sites`
+    if (!window.confirm(`Send room-count requests for ${MONTHS[month]} ${year} to ${label}?`)) return
     setBusy(true)
     try {
-      const res = await facilityAPI.sendRoomRequests({ year, month, deadline })
+      const res = await facilityAPI.sendRoomRequests({ year, month, deadline, locations: targets })
       const sent = (res.results || []).filter((r) => r.sent).length
       await load()
       alert(`Sent ${sent} request${sent === 1 ? '' : 's'}.`)
@@ -116,8 +135,14 @@ export default function RoomCountRequestsPage() {
         <Field label="Submit by">
           <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={ctrl} />
         </Field>
-        <button onClick={sendAll} disabled={busy || !withContacts.length} style={{ ...primaryBtn, opacity: busy || !withContacts.length ? 0.6 : 1 }}>
-          {busy ? 'Sending…' : `Send to ${withContacts.length} site${withContacts.length === 1 ? '' : 's'} →`}
+        {withContacts.length > 1 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: SLATE, fontWeight: 600, cursor: 'pointer', paddingBottom: 9 }}>
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ width: 16, height: 16 }} />
+            All sites
+          </label>
+        )}
+        <button onClick={() => send()} disabled={busy || !selectedWithContacts.length} style={{ ...primaryBtn, opacity: busy || !selectedWithContacts.length ? 0.6 : 1 }}>
+          {busy ? 'Sending…' : `Send to ${selectedWithContacts.length} site${selectedWithContacts.length === 1 ? '' : 's'} →`}
         </button>
       </div>
 
@@ -134,11 +159,21 @@ export default function RoomCountRequestsPage() {
             return (
               <div key={location} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: '16px 18px', background: '#fff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{location}</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: contacts.length ? 'pointer' : 'default' }}>
+                    <input
+                      type="checkbox" disabled={!contacts.length}
+                      checked={selected.has(location)} onChange={() => toggle(location)}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    <span style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{location}</span>
+                  </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: meta.fg, background: meta.bg, border: `1px solid ${meta.bd}`, padding: '4px 10px', borderRadius: 999 }}>{meta.label}</span>
                     {st.status === 'RETURNED' && (
                       <span style={{ fontSize: 12.5, color: SLATE }}>{st.daysSubmitted} days · {st.submittedAt ? new Date(st.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+                    )}
+                    {contacts.length > 0 && (
+                      <button onClick={() => send([location])} disabled={busy} style={ghostBtn}>Send</button>
                     )}
                     {(st.status === 'SENT' || st.status === 'LOCKED_NO_RESPONSE') && st.requestId && (
                       <button onClick={() => remind(st.requestId)} style={ghostBtn}>Remind</button>

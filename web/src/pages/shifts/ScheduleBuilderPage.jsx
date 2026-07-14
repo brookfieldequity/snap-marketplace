@@ -879,6 +879,10 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [clearing, setClearing] = useState(false)
   const [generateMessage, setGenerateMessage] = useState(null) // success or error
 
+  // Room-count card day-notes for this month, keyed `${dateStr}::${location}`,
+  // rendered as post-its on the matching calendar day (like provider notes).
+  const [roomNotes, setRoomNotes] = useState({})
+
   // Schedule Builder v2 — the build flow modal. selectedRunId persists
   // across navigations so we can offer the "Re-score after edits" button.
   const [showBuildFlow, setShowBuildFlow] = useState(false)
@@ -932,6 +936,22 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   }, [year, month])
 
   useEffect(() => { load() }, [load])
+
+  // Load room-count card notes for the month and index by date+location.
+  useEffect(() => {
+    let alive = true
+    facilityAPI.getRoomRequestStatus(year, month)
+      .then((r) => {
+        if (!alive) return
+        const map = {}
+        for (const loc of r.locations || []) {
+          for (const n of loc.notes || []) map[`${n.date}::${loc.location}`] = n.note
+        }
+        setRoomNotes(map)
+      })
+      .catch(() => { if (alive) setRoomNotes({}) })
+    return () => { alive = false }
+  }, [year, month])
 
   async function handleRescore() {
     if (!selectedRunId) return
@@ -1540,6 +1560,9 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               const dateStr = padDate(day)
               const dayRows = daysByDate[dateStr] || []
               const hasSchedule = dayRows.length > 0
+              const dayNoteEntries = Object.entries(roomNotes)
+                .filter(([k]) => k.startsWith(dateStr + '::'))
+                .map(([k, note]) => ({ location: k.slice(dateStr.length + 2), note }))
               const colorKey = getDayColor(dayRows)
               const sc = colorKey ? STATUS_COLORS[colorKey] : null
               const { totalRooms, filledRooms } = hasSchedule ? getDayStats(dayRows) : { totalRooms: 0, filledRooms: 0 }
@@ -1575,6 +1598,37 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                       style={{ fontSize: 10, padding: '2px 6px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 4, cursor: 'pointer', color: '#1D4ED8', fontWeight: 700 }}
                     >+</button>
                   </div>
+
+                  {/* Room-count sticky notes from the site (post-it style) */}
+                  {dayNoteEntries.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 5 }}>
+                      {dayNoteEntries.slice(0, 2).map((n, ni) => (
+                        <div
+                          key={ni}
+                          title={`${n.location}: ${n.note}`}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            background: 'linear-gradient(160deg,#FEF9C3 0%,#FDE047 100%)',
+                            border: '1px solid #FACC15',
+                            borderRadius: 3,
+                            padding: '3px 5px',
+                            transform: ni % 2 ? 'rotate(0.7deg)' : 'rotate(-0.9deg)',
+                            boxShadow: '0 1px 2px rgba(161,98,7,0.28)',
+                            fontSize: 8.5,
+                            lineHeight: 1.35,
+                            color: '#713F12',
+                            cursor: 'default',
+                          }}
+                        >
+                          <span style={{ fontWeight: 800 }}>✎ {n.location}</span>{' '}
+                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.note}</span>
+                        </div>
+                      ))}
+                      {dayNoteEntries.length > 2 && (
+                        <div style={{ fontSize: 8, color: '#A16207', fontWeight: 700 }}>+{dayNoteEntries.length - 2} more</div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Shift summary */}
                   {hasSchedule ? (
