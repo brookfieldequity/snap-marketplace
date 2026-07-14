@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../../api.js'
+import NumberInput from '../../components/NumberInput.jsx'
 
 function fmt(n) {
   if (n == null || n === 0) return '$0'
@@ -371,23 +372,21 @@ export default function StaffIQInputsPage({ onNavigate }) {
           {/* Row 6: Shift length & operating days */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 4 }}>
             <Field label="Average Shift Length (hours)" optional hint="Default: 10 hours">
-              <input
+              <NumberInput
                 style={inputStyle}
-                type="number"
                 min="1"
                 max="24"
                 value={form.avgShiftHours}
-                onChange={e => setF('avgShiftHours', Number(e.target.value))}
+                onChange={n => setF('avgShiftHours', n)}
               />
             </Field>
             <Field label="Operating Days Per Year" optional hint="Default: 250 days">
-              <input
+              <NumberInput
                 style={inputStyle}
-                type="number"
                 min="1"
                 max="365"
                 value={form.operatingDaysPerYear}
-                onChange={e => setF('operatingDaysPerYear', Number(e.target.value))}
+                onChange={n => setF('operatingDaysPerYear', n)}
               />
             </Field>
           </div>

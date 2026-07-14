@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { adminAPI } from '../../api'
+import NumberInput from '../../components/NumberInput.jsx'
 
 const TIERS = [
   { value: 'CORE', label: 'SNAP Core', desc: 'Scheduling + credentials + Snappy' },
@@ -436,9 +437,9 @@ export default function AdminInvoicesPage() {
                     <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                       <div style={{ flex: 1 }}>
                         <Label>Provider Count</Label>
-                        <input
-                          type="number" min="0" value={form.credProviderCount}
-                          onChange={e => setForm(f => ({ ...f, credProviderCount: parseInt(e.target.value) || 0 }))}
+                        <NumberInput
+                          min="0" value={form.credProviderCount}
+                          onChange={n => setForm(f => ({ ...f, credProviderCount: n || 0 }))}
                           style={inputStyle}
                         />
                       </div>
@@ -462,9 +463,9 @@ export default function AdminInvoicesPage() {
                   {form.includeMarketplace && (
                     <div style={{ marginTop: 12 }}>
                       <Label>Fee Amount ($)</Label>
-                      <input
-                        type="number" min="0" value={form.marketplaceFeeAmount}
-                        onChange={e => setForm(f => ({ ...f, marketplaceFeeAmount: parseFloat(e.target.value) || 0 }))}
+                      <NumberInput
+                        min="0" value={form.marketplaceFeeAmount}
+                        onChange={n => setForm(f => ({ ...f, marketplaceFeeAmount: n || 0 }))}
                         style={inputStyle} placeholder="0"
                       />
                     </div>
@@ -572,9 +573,9 @@ export default function AdminInvoicesPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <Label>Due in (days)</Label>
-                    <input
-                      type="number" min="1" value={form.dueDays}
-                      onChange={e => setForm(f => ({ ...f, dueDays: parseInt(e.target.value) || 30 }))}
+                    <NumberInput
+                      min="1" value={form.dueDays}
+                      onChange={n => setForm(f => ({ ...f, dueDays: n || 30 }))}
                       style={inputStyle}
                     />
                   </div>

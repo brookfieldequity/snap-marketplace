@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { facilityAPI } from '../../api.js'
+import NumberInput from '../../components/NumberInput.jsx'
 
 function fmt(n) {
   if (n == null) return '$0'
@@ -185,22 +186,20 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
           </div>
 
           <Field label="How many anesthetizing locations does your facility have?">
-            <input
+            <NumberInput
               style={inputStyle}
-              type="number"
               min="1"
               value={locations}
-              onChange={e => setLocations(Number(e.target.value) || 0)}
+              onChange={n => setLocations(n)}
             />
           </Field>
 
           <Field label="How many anesthesia providers are currently on your roster?">
-            <input
+            <NumberInput
               style={inputStyle}
-              type="number"
               min="1"
               value={providers}
-              onChange={e => setProviders(Number(e.target.value) || 0)}
+              onChange={n => setProviders(n)}
             />
           </Field>
 
@@ -210,12 +209,11 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
           >
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: 14, fontWeight: 600 }}>$</span>
-              <input
+              <NumberInput
                 style={{ ...inputStyle, paddingLeft: 24 }}
-                type="number"
                 min="0"
                 value={hourlyRate}
-                onChange={e => setHourlyRate(Number(e.target.value) || 0)}
+                onChange={n => setHourlyRate(n)}
               />
             </div>
           </Field>
