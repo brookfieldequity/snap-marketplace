@@ -163,6 +163,21 @@ export default function RoomCountRequestsPage() {
                   )}
                   {contacts.length === 0 && <span style={{ fontSize: 12.5, color: MUTED }}>Add a site contact to send this location a card.</span>}
                 </div>
+
+                {/* Day notes the site left */}
+                {st.notes && st.notes.length > 0 && (
+                  <div style={{ marginTop: 12, borderTop: `1px solid ${LINE}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      ✎ {st.notes.length} day note{st.notes.length === 1 ? '' : 's'} from the site
+                    </div>
+                    {st.notes.map((n) => (
+                      <div key={n.date} style={{ fontSize: 13, color: SLATE, lineHeight: 1.5 }}>
+                        <strong style={{ color: NAVY }}>{new Date(n.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</strong>
+                        {' '}({n.roomsRequired} rm{n.roomsRequired === 1 ? '' : 's'}): {n.note}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

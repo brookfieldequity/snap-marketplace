@@ -496,6 +496,9 @@ function RoomCountPanel({ year, month, onNavigate }) {
                 {r.status === 'RETURNED' && r.submittedAt && (
                   <span style={{ color: '#94A3B8' }}>{r.daysSubmitted}d · {new Date(r.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 )}
+                {r.notes && r.notes.length > 0 && (
+                  <span title={r.notes.map((n) => `${n.date}: ${n.note}`).join('\n')} style={{ color: '#B45309', fontWeight: 700 }}>✎{r.notes.length}</span>
+                )}
               </span>
             )
           })}

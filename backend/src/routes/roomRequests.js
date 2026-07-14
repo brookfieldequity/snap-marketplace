@@ -247,7 +247,15 @@ router.get('/', facilityAuth, async (req, res) => {
       knownLocations(facilityId),
       prisma.roomCountRequest.findMany({
         where: { facilityId, year: yr, month: mo },
-        include: { _count: { select: { dayCounts: true } } },
+        include: {
+          _count: { select: { dayCounts: true } },
+          // Day-level notes the site left for the coordinator.
+          dayCounts: {
+            where: { note: { not: null } },
+            select: { date: true, roomsRequired: true, note: true },
+            orderBy: { date: 'asc' },
+          },
+        },
       }),
     ]);
     const byLoc = new Map(requests.map((r) => [r.location, r]));
@@ -265,6 +273,11 @@ router.get('/', facilityAuth, async (req, res) => {
         submittedAt: r.submittedAt?.toISOString() || null,   // the timestamp shown in the builder
         deadline: r.deadline.toISOString(),
         daysSubmitted: r._count.dayCounts,
+        notes: (r.dayCounts || []).map((d) => ({
+          date: d.date.toISOString().slice(0, 10),
+          roomsRequired: d.roomsRequired,
+          note: d.note,
+        })),
       };
     });
     res.json({ month: mo, year: yr, monthName: MONTH_NAMES[mo] || '', locations: rows });

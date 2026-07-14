@@ -21,6 +21,9 @@ export default function RoomCountPage({ token }) {
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
   const [counts, setCounts] = useState(new Map()) // isoDate -> string
+  const [notes, setNotes] = useState(new Map())   // isoDate -> string
+  const [noteOpen, setNoteOpen] = useState(null)  // isoDate | null (note editor)
+  const [noteDraft, setNoteDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
   const [quickFill, setQuickFill] = useState('')
@@ -43,8 +46,13 @@ export default function RoomCountPage({ token }) {
         if (!alive) return
         setData(res)
         const m = new Map()
-        for (const c of res.counts || []) m.set(c.date, String(c.roomsRequired))
+        const nm = new Map()
+        for (const c of res.counts || []) {
+          m.set(c.date, String(c.roomsRequired))
+          if (c.note) nm.set(c.date, c.note)
+        }
         setCounts(m)
+        setNotes(nm)
         setSavedAt(res.submittedAt || null)
       })
       .catch((e) => { if (alive) setError(e?.code === 'NOT_FOUND' ? 'NOT_FOUND' : (e.message || 'Failed to load')) })
@@ -103,10 +111,15 @@ export default function RoomCountPage({ token }) {
     if (token === 'demo') { setSavedAt(new Date().toISOString()); return }
     setSaving(true)
     try {
+      // Send any day that has a count or a note. A note-only day stores as 0
+      // rooms (closed but with context) so the note isn't lost.
+      const dates = new Set([...counts.keys(), ...notes.keys()])
       const days = []
-      for (const [date, v] of counts.entries()) {
-        const n = Number(v)
-        if (Number.isFinite(n) && n >= 0) days.push({ date, roomsRequired: n })
+      for (const date of dates) {
+        const n = Number(counts.get(date))
+        const rooms = Number.isFinite(n) && n >= 0 ? n : 0
+        const note = notes.get(date) || undefined
+        if (counts.has(date) || note) days.push({ date, roomsRequired: rooms, note })
       }
       await roomCountAPI.submit(token, days)
       setSavedAt(new Date().toISOString())
@@ -173,12 +186,13 @@ export default function RoomCountPage({ token }) {
             if (!cell) return <div key={`b${i}`} />
             const val = counts.get(cell.date) ?? ''
             const filled = val !== '' && Number(val) > 0
+            const hasNote = notes.has(cell.date) && notes.get(cell.date).trim() !== ''
             return (
               <div key={cell.date} style={{
                 border: `1px solid ${filled ? ROYAL : LINE}`,
                 background: cell.isWeekend ? '#F8FAFC' : '#fff',
-                borderRadius: 10, padding: '6px 4px 8px', minHeight: 66,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                borderRadius: 10, padding: '6px 4px 6px', minHeight: 74,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: cell.isWeekend ? MUTED : SLATE, alignSelf: 'flex-end', paddingRight: 4 }}>{cell.d}</div>
                 <input
@@ -192,6 +206,18 @@ export default function RoomCountPage({ token }) {
                   }}
                   placeholder={cell.isWeekend ? '' : '–'}
                 />
+                <button
+                  onClick={() => { setNoteOpen(cell.date); setNoteDraft(notes.get(cell.date) || '') }}
+                  disabled={locked}
+                  title={hasNote ? notes.get(cell.date) : 'Add a note for this day'}
+                  aria-label={`Note for ${cell.date}`}
+                  style={{
+                    border: 'none', background: 'transparent', cursor: locked ? 'default' : 'pointer',
+                    fontSize: 11, lineHeight: 1, padding: '1px 4px', borderRadius: 4,
+                    color: hasNote ? '#B45309' : (cell.isWeekend ? '#CBD5E1' : '#94A3B8'),
+                    fontWeight: hasNote ? 800 : 400,
+                  }}
+                >✎{hasNote ? ' note' : ''}</button>
               </div>
             )
           })}
@@ -208,6 +234,38 @@ export default function RoomCountPage({ token }) {
           <div style={{ width: '100%', maxWidth: 720, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontSize: 13.5, color: SLATE }}>{counts.size} day{counts.size === 1 ? '' : 's'} entered</span>
             <button onClick={submit} disabled={saving} style={btn(true)}>{saving ? 'Submitting…' : (savedAt ? 'Update submission' : 'Submit room counts')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Note editor */}
+      {noteOpen && (
+        <div
+          onClick={() => setNoteOpen(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, padding: 22, boxShadow: '0 25px 60px rgba(15,23,42,0.25)' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: ROYAL, marginBottom: 4 }}>Note for your coordinator</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 12 }}>
+              {new Date(noteOpen + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </div>
+            <textarea
+              value={noteDraft} onChange={(e) => setNoteDraft(e.target.value.slice(0, 500))} autoFocus
+              placeholder="e.g. one all-day spine case · half day, closing at noon · possible add-on room"
+              style={{ width: '100%', minHeight: 96, resize: 'vertical', fontSize: 14, color: NAVY, border: `1px solid ${LINE}`, borderRadius: 10, padding: '10px 12px', fontFamily: 'inherit', lineHeight: 1.5, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+              {notes.has(noteOpen)
+                ? <button onClick={() => { setNotes((p) => { const n = new Map(p); n.delete(noteOpen); return n }); setSavedAt(null); setNoteOpen(null) }} style={{ ...btn(false), color: '#DC2626', borderColor: '#FECACA' }}>Remove</button>
+                : <span />}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setNoteOpen(null)} style={btn(false)}>Cancel</button>
+                <button
+                  onClick={() => { const t = noteDraft.trim(); setNotes((p) => { const n = new Map(p); if (t) n.set(noteOpen, t); else n.delete(noteOpen); return n }); setSavedAt(null); setNoteOpen(null) }}
+                  style={btn(true)}
+                >Save note</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
