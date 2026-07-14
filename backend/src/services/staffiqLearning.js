@@ -54,7 +54,10 @@ const SEED_PRIORS = {
 
 // Below this many participating facilities, the computed distribution is too thin
 // to be trustworthy, so seed priors remain the displayed benchmark.
-const MIN_FACILITIES_FOR_COMPUTED = 3;
+// Raised from 3 to 5: at n=3 a facility that knows its own metrics can back out
+// its two competitors' exact numbers from the median/quartiles. 5 is the same
+// floor the published-finding cohort targets.
+const MIN_FACILITIES_FOR_COMPUTED = 5;
 
 // ── Aggregation helpers ────────────────────────────────────────────────────────
 
@@ -226,8 +229,12 @@ async function updateNetworkBenchmark() {
     // Demo/test facilities must never shape the network benchmark — with a thin
     // network even one fake profile would poison the percentiles every real
     // facility is graded against.
+    // Only facilities that have actively consented to benchmark participation
+    // shape the network percentiles (and any published finding derived from
+    // them) — a facility that declined or revoked is excluded, matching the
+    // benchmark-cohort consent posture. isDemo already excluded above.
     const profiles = await prisma.facilityStaffingProfile.findMany({
-      where: { facility: { isDemo: false } },
+      where: { facility: { isDemo: false, benchmarkConsents: { some: { revokedAt: null } } } },
     });
 
     const series = {

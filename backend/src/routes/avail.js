@@ -76,11 +76,18 @@ router.post('/:token/submit', async (req, res) => {
     if (!Array.isArray(dates)) {
       return res.status(400).json({ error: 'dates array is required' });
     }
+    // A month has at most 31 days; cap well below that so a malformed/hostile
+    // body (this route is unauthenticated) can't drive a huge delete+insert.
+    if (dates.length > 40) {
+      return res.status(400).json({ error: 'Too many days submitted.' });
+    }
 
     const request = await prisma.availabilityRequest.findUnique({
       where: { token },
       select: {
         id: true,
+        year: true,
+        month: true,
         deadline: true,
         submittedAt: true,
         rosterEntry: { select: { providerName: true } },
@@ -100,20 +107,37 @@ router.post('/:token/submit', async (req, res) => {
       });
     }
 
+    // Validate each element: a well-formed YYYY-MM-DD inside the request's own
+    // target month/year, note coerced to a bounded string. Invalid rows are
+    // dropped (not 500'd), and duplicates are collapsed by date so the
+    // delete+recreate can't hit a unique collision.
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const byDate = new Map();
+    for (const d of dates) {
+      if (!d || typeof d !== 'object') continue;
+      const ds = typeof d.date === 'string' ? d.date.trim() : '';
+      if (!dateRe.test(ds)) continue;
+      const dt = new Date(ds + 'T00:00:00Z');
+      if (isNaN(dt.getTime())) continue;
+      if (dt.getUTCFullYear() !== request.year || (dt.getUTCMonth() + 1) !== request.month) continue;
+      byDate.set(ds, {
+        requestId: request.id,
+        date: dt,
+        available: Boolean(d.available),
+        note: typeof d.note === 'string' ? d.note.slice(0, 500) : null,
+      });
+    }
+    const cleanDates = [...byDate.values()];
+
     // Full replace: delete all existing day submissions, then bulk-create new ones.
     await prisma.$transaction(async (tx) => {
       await tx.availDaySubmission.deleteMany({
         where: { requestId: request.id },
       });
 
-      if (dates.length > 0) {
+      if (cleanDates.length > 0) {
         await tx.availDaySubmission.createMany({
-          data: dates.map((d) => ({
-            requestId: request.id,
-            date: new Date(d.date + 'T00:00:00Z'),
-            available: Boolean(d.available),
-            note: d.note || null,
-          })),
+          data: cleanDates,
         });
       }
 

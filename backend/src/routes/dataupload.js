@@ -245,16 +245,30 @@ function parseShiftDate(val) {
 }
 
 function parseDurationHours(val) {
-  if (val === null || val === undefined) return null;
-  if (typeof val === 'number') return val;
-  const str = String(val).trim();
-  // Handle "8:00" → 8.0, "8:30" → 8.5
-  if (/^\d+:\d{2}$/.test(str)) {
-    const [h, m] = str.split(':').map(Number);
-    return h + m / 60;
+  let n = null;
+  if (typeof val === 'number') n = val;
+  else if (val !== null && val !== undefined) {
+    const str = String(val).trim();
+    // Handle "8:00" → 8.0, "8:30" → 8.5
+    if (/^\d+:\d{2}$/.test(str)) {
+      const [h, m] = str.split(':').map(Number);
+      n = h + m / 60;
+    } else {
+      const p = parseFloat(str);
+      n = isNaN(p) ? null : p;
+    }
   }
-  const n = parseFloat(str);
-  return isNaN(n) ? null : n;
+  // Reject non-positive or implausibly long shifts — bad data would silently
+  // skew StaffIQ cost/savings rather than error.
+  return (n === null || n <= 0 || n > 24) ? null : n;
+}
+
+// A loaded provider rate must be positive; negative/zero/NaN is invalid data
+// (parseFloat("-500") passes a naive `|| null` check and corrupts cost math).
+function saneRate(val) {
+  if (val === null || val === undefined || val === '') return null;
+  const n = parseFloat(val);
+  return (isNaN(n) || n <= 0) ? null : n;
 }
 
 function parseWorkbook(buffer) {
@@ -430,7 +444,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
         providerName:     r.providerName,
         providerType:     providerTypeMap[r.providerType] || r.providerType,
         shiftDate:        new Date(r.date + 'T12:00:00'),
-        durationHours:    r.shiftHours || 10,
+        durationHours:    parseDurationHours(r.shiftHours) || 10,
         facilityLocation: r.facility,
         dayOfWeek:        Number.isInteger(r.dayOfWeek) ? r.dayOfWeek : null,
         ...tagRecord(r.providerName, rosterKeys),
@@ -478,7 +492,7 @@ router.post('/confirm', facilityAuth, async (req, res) => {
       durationHours:    parseDurationHours(r.durationHours),
       facilityLocation: r.facilityLocation ? String(r.facilityLocation) : null,
       caseType:         r.caseType    ? String(r.caseType)    : null,
-      rate:             r.rate !== null && r.rate !== undefined ? parseFloat(r.rate) || null : null,
+      rate:             saneRate(r.rate),
       dayOfWeek:        (() => { const d = parseShiftDate(r.shiftDate); return d && !isNaN(d.getTime()) ? d.getDay() : null; })(),
     }));
 

@@ -422,13 +422,16 @@ section('8. Network benchmark — demo exclusion + thin-network guard');
   check('benchmark query EXCLUDES demo facilities', JSON.stringify(fm[1]).includes('"isDemo":false'), fm[1]);
 
   state.benchmarks = {}; calls.length = 0;
+  // Threshold is 5 facilities (anti-de-anonymization) — 5 profiles, median 3000.
   state.profiles = [
+    { avgCostPerRoom: 1000, avgCareTeamRatio: 3.5, avgWeekdayWastePerRoom: 50,  avgFridayWastePerRoom: 0 },
     { avgCostPerRoom: 2000, avgCareTeamRatio: 3, avgWeekdayWastePerRoom: 100, avgFridayWastePerRoom: 0 },
     { avgCostPerRoom: 3000, avgCareTeamRatio: 2.5, avgWeekdayWastePerRoom: 200, avgFridayWastePerRoom: 100 },
     { avgCostPerRoom: 4000, avgCareTeamRatio: 2, avgWeekdayWastePerRoom: 300, avgFridayWastePerRoom: 200 },
+    { avgCostPerRoom: 5000, avgCareTeamRatio: 1.5, avgWeekdayWastePerRoom: 400, avgFridayWastePerRoom: 300 },
   ];
   res = await learning.updateNetworkBenchmark();
-  check('3 facilities → computed distribution', res.computed === true && res.facilityCount === 3);
+  check('5 facilities → computed distribution', res.computed === true && res.facilityCount === 5);
   check('median costPerRoom = 3000', state.benchmarks.costPerRoom.median === 3000, state.benchmarks.costPerRoom);
   check('benchmark rows marked source=computed', state.benchmarks.costPerRoom.source === 'computed');
 

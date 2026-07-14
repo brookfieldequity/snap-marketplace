@@ -403,14 +403,18 @@ router.post('/:id/respond', auth, async (req, res) => {
       },
     });
 
-    // If accepted and shift is OPEN, mark it FILLED
-    let updatedShift = shift;
-    if (accepted && shift.status === 'OPEN') {
-      updatedShift = await prisma.internalIncentiveShift.update({
-        where: { id: shift.id },
-        data: { status: 'FILLED' },
-      });
+    // Atomic claim: only the response that actually flips OPEN→FILLED records
+    // the fill and its avoided-agency savings. Reading shift.status then updating
+    // let two providers both pass the "is OPEN?" check and each record the same
+    // savings — double-counting a core StaffIQ metric and both "winning".
+    const claim = accepted
+      ? await prisma.internalIncentiveShift.updateMany({
+          where: { id: shift.id, status: 'OPEN' },
+          data: { status: 'FILLED' },
+        })
+      : { count: 0 };
 
+    if (claim.count === 1) {
       // Close the loop: an internal fill avoided an agency placement. Record the
       // realized agency savings so StaffIQ can calibrate its estimates over time.
       const agencyRate = AGENCY_RATES[shift.providerTypeRequired] || 300;
@@ -426,11 +430,13 @@ router.post('/:id/respond', auth, async (req, res) => {
           hours,
         },
       });
-    } else {
-      updatedShift = await prisma.internalIncentiveShift.findUnique({
-        where: { id: shift.id },
-      });
     }
+
+    // Reflect current state to the caller (winner sees FILLED; a late accepter
+    // sees it already FILLED and knows they didn't claim it).
+    const updatedShift = await prisma.internalIncentiveShift.findUnique({
+      where: { id: shift.id },
+    });
 
     // Facility push notifications are not yet implemented (no facility push tokens)
 
