@@ -902,3 +902,19 @@ export const availAPI = {
       body: JSON.stringify({ dates }),
     }),
 }
+
+// ─── Public Room-Count Submission API ─────────────────────────────────────────
+// No auth — the URL token is the credential. Site scheduler declares how many
+// rooms run each day for the month.
+export const roomCountAPI = {
+  getRequest: (token) =>
+    apiFetch(`${BASE}/roomcount/${token}`, {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  submit: (token, days) =>
+    apiFetch(`${BASE}/roomcount/${token}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ days }),
+    }),
+}

@@ -6,6 +6,7 @@ import useIsNarrow from './lib/useIsNarrow.js'
 // Public token pages (no login; the SMS/email link IS the first impression) and
 // the login/landing screens stay in the entry bundle so they render instantly.
 import AvailabilityPage from './pages/public/AvailabilityPage.jsx'
+import RoomCountPage from './pages/public/RoomCountPage.jsx'
 import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
 import PtoRankPage from './pages/PtoRankPage.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
@@ -107,6 +108,14 @@ export default function App() {
     window.location.pathname.match(/^\/avail\/([^/?#]+)/)
   if (availMatch) {
     return <AvailabilityPage token={decodeURIComponent(availMatch[1])} />
+  }
+
+  // Public facility room-count self-submission — /rooms/:token
+  // No login required; the token in the URL is the credential.
+  const roomsMatch = typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/rooms\/([^/?#]+)/)
+  if (roomsMatch) {
+    return <RoomCountPage token={decodeURIComponent(roomsMatch[1])} />
   }
 
   const claimMatch = typeof window !== 'undefined' &&
