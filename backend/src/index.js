@@ -129,6 +129,7 @@ app.use('/api/facilities', holidayRoutes); // mounts /:id/holidays/* under /api/
 app.use('/api/automation-events', automationEventsRoutes);
 // Provider availability self-submission — public, token-gated (no auth middleware).
 app.use('/api/avail', require('./routes/avail'));
+app.use('/api/roomcount', require('./routes/roomcount'));
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
 

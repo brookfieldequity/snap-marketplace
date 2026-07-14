@@ -379,6 +379,8 @@ model Facility {
   facilityInvites     FacilityInvite[]
   agreementAcceptances AgreementAcceptance[]
   benchmarkConsents   BenchmarkConsent[]
+  locationContacts    FacilityLocationContact[]
+  roomCountRequests   RoomCountRequest[]
   scheduleRequests    ScheduleRequest[]
   featureFlags        FacilityFeatureFlag[]
   payrollTemplates    PayrollTemplateConfig[]
@@ -2368,6 +2370,67 @@ model AvailDaySubmission {
   updatedAt DateTime @updatedAt
 
   request AvailabilityRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, date])
+  @@index([requestId])
+}
+
+// ── Facility Room-Count Card ──────────────────────────────────────────────────
+// The customer (an anesthesia group like CAPA/Melrose) sends a tokenized,
+// no-login link to each LOCATION it covers (BOSS, Kenmore, the endoscopy unit,
+// …). The site's own scheduler declares how many anesthetizing rooms run each
+// day next month — the authoritative demand input the schedule builder staffs
+// against. Mirrors AvailabilityRequest / AvailDaySubmission (one link per
+// recipient), but the recipient is a SITE, not a roster member.
+
+// One or two contact emails stored per (facility, location) so that after the
+// first setup, sending each month's requests is one click.
+model FacilityLocationContact {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  location   String // matches CoverageTemplateDay.location / ScheduleDay.location semantics
+  name       String?
+  email      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([facilityId, location])
+}
+
+model RoomCountRequest {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  facilityId    String
+  location      String
+  year          Int
+  month         Int
+  deadline      DateTime
+  sentAt        DateTime?
+  sentVia       String?   // "EMAIL"
+  submittedAt   DateTime? // when the site first submitted (the timestamp shown in the builder)
+  lastUpdatedAt DateTime? // updated on every subsequent submit
+  createdAt     DateTime  @default(now())
+
+  facility  Facility        @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  dayCounts RoomCountDay[]
+
+  @@unique([facilityId, location, year, month])
+  @@index([facilityId])
+}
+
+// One row per (request, date). Full-replace on each submit, mirroring
+// AvailDaySubmission.
+model RoomCountDay {
+  id            String   @id @default(cuid())
+  requestId     String
+  date          DateTime @db.Date
+  roomsRequired Int
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  request RoomCountRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, date])
   @@index([requestId])
