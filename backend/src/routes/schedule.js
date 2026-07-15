@@ -4,7 +4,7 @@ const { Expo } = require('expo-server-sdk');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const auth = require('../middleware/auth');
-const { sendSMS } = require('../services/notifications');
+const { sendSMS, sendEmail } = require('../services/notifications');
 const { logAutomationEvent } = require('../services/automationEvents');
 const { resolveDayAvailability } = require('../services/availability');
 const outListRules = require('../services/outListRules');
@@ -37,6 +37,20 @@ async function sendPushNotifications(tokens, message) {
       console.error('Expo push error:', err);
     });
   }
+}
+
+// Simple transactional-email body for provider schedule notifications. Kept
+// link-free on purpose: providers view shifts in the SNAP app, and there's no
+// provider web-schedule URL to point at that wouldn't 404.
+function scheduleEmailHtml(title, bodyText, facilityName) {
+  return `<div style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0F172A">
+    <div style="font-weight:800;font-size:18px;color:#2563EB;margin-bottom:14px">SNAP Medical</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">${title}</div>
+    <div style="font-size:14px;line-height:1.55;color:#334155">${bodyText}</div>
+    <div style="margin-top:20px;padding-top:14px;border-top:1px solid #E2E8F0;font-size:12px;color:#94A3B8">
+      You're receiving this because you're on ${facilityName}'s schedule. Open the SNAP app to view your shifts.
+    </div>
+  </div>`;
 }
 
 /**
@@ -359,7 +373,7 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
 
           const entries = await prisma.internalRosterEntry.findMany({
             where: { id: { in: affected.map((a) => a.rosterId) } },
-            select: { id: true, phoneNumber: true, linkedProviderId: true },
+            select: { id: true, phoneNumber: true, linkedProviderId: true, snapAccountEmail: true },
           });
           const entryById = Object.fromEntries(entries.map((e) => [e.id, e]));
 
@@ -382,6 +396,14 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
             }
             // SMS (no-op until Twilio is configured; truthful-send guarded).
             if (entry.phoneNumber) await sendSMS(entry.phoneNumber, msg);
+            // Email — works today via SendGrid, independent of Twilio/app link.
+            if (entry.snapAccountEmail) {
+              await sendEmail(
+                entry.snapAccountEmail,
+                `Schedule change — ${day.location} on ${dateLabel}`,
+                scheduleEmailHtml('Your schedule changed', msg, req.facility.name)
+              );
+            }
           }
         } catch (err) {
           console.error('Post-publish change alert error:', err);
@@ -428,7 +450,7 @@ router.post('/publish', facilityAuth, async (req, res) => {
             assignments: {
               where: { rosterId: { not: null } },
               include: {
-                rosterEntry: { select: { linkedProviderId: true, phoneNumber: true } },
+                rosterEntry: { select: { linkedProviderId: true, phoneNumber: true, snapAccountEmail: true } },
               },
             },
           },
@@ -466,8 +488,22 @@ router.post('/publish', facilityAuth, async (req, res) => {
           ),
         ];
         await Promise.all(phones.map((phone) => sendSMS(phone, msg)));
+
+        // Email to all assigned roster members with an email (unique by address).
+        // Works today via SendGrid regardless of Twilio/app-link status, so every
+        // provider with an email on file gets the posting.
+        const emails = [
+          ...new Set(
+            days.flatMap((d) =>
+              d.assignments.map((a) => a.rosterEntry?.snapAccountEmail).filter(Boolean)
+            )
+          ),
+        ];
+        const emailSubject = `Your ${monthLabel} schedule is posted — ${req.facility.name}`;
+        const emailHtml = scheduleEmailHtml('Your schedule is posted', msg, req.facility.name);
+        await Promise.all(emails.map((email) => sendEmail(email, emailSubject, emailHtml)));
       } catch (err) {
-        console.error('Publish push/SMS error:', err);
+        console.error('Publish push/SMS/email error:', err);
       }
     })();
   } catch (err) {
