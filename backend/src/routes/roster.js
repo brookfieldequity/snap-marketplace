@@ -249,7 +249,7 @@ router.post('/', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
-      employer, is1099, isFullTime,
+      employer, is1099, isFullTime, placementTier,
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
     } = req.body;
@@ -288,6 +288,7 @@ router.post('/', facilityAuth, async (req, res) => {
         employerId: req.body.employerId || null, // employer-of-record (EOR firewall)
         is1099: typeof is1099 === 'boolean' ? is1099 : null,
         isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null,
+        placementTier: placementTier != null && placementTier !== '' ? parseInt(placementTier) : null,
         businessName: businessName || null,
         useBusinessNameForPayroll: useBusinessNameForPayroll === true,
         payeeType: payeeType || null,
@@ -328,7 +329,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
-      employer, is1099, isFullTime,
+      employer, is1099, isFullTime, placementTier,
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
       scheduleAccessRevoked,
@@ -377,6 +378,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(req.body.employerId !== undefined && { employerId: req.body.employerId || null }),
         ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
+        ...(placementTier !== undefined && { placementTier: placementTier != null && placementTier !== '' ? parseInt(placementTier) : null }),
         ...(businessName !== undefined && { businessName: businessName || null }),
         ...(useBusinessNameForPayroll !== undefined && { useBusinessNameForPayroll: useBusinessNameForPayroll === true }),
         ...(payeeType !== undefined && { payeeType: payeeType || null }),

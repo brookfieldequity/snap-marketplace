@@ -16,6 +16,19 @@ const EMPLOY_BADGE = {
   LOCUMS: { bg: '#FFF7ED', color: '#C2410C', label: 'Locums' },
 }
 
+// Placement priority ladder — the order the Schedule Builder fills rooms.
+// Lower value = filled first: committed W-2 core (full/part-time, who have set
+// schedules and sit in the PTO calendar) before per-diems, before locums.
+// Stored on the roster card as `placementTier` (Int); drives the auto-builder.
+const PLACEMENT_TIERS = [
+  { value: 1, label: 'Full-time (W-2)', short: 'Full-time', badge: { bg: '#EFF6FF', color: '#1D4ED8' } },
+  { value: 2, label: 'Part-time',       short: 'Part-time', badge: { bg: '#F0F9FF', color: '#0369A1' } },
+  { value: 3, label: 'Per Diem 1',      short: 'Per Diem 1', badge: { bg: '#F7FEE7', color: '#4D7C0F' } },
+  { value: 4, label: 'Per Diem 2',      short: 'Per Diem 2', badge: { bg: '#FEFCE8', color: '#A16207' } },
+  { value: 5, label: 'Locum',           short: 'Locum',      badge: { bg: '#FFF7ED', color: '#C2410C' } },
+]
+const PLACEMENT_TIER_BY_VALUE = Object.fromEntries(PLACEMENT_TIERS.map((t) => [t.value, t]))
+
 const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 const SHIFT_LENGTHS = [
   { value: '8hr', label: '8 hours' },
@@ -38,6 +51,9 @@ const BLANK_FORM = {
   // Employer / tax status / hours status. Empty string here means "unknown"
   // — submitted to the backend as null, which is the correct tri-state.
   employer: '', taxStatus: '', hoursStatus: '',
+  // Placement priority (Schedule Builder fill order). '' = auto (derive from
+  // employment category). Otherwise 1–5 per PLACEMENT_TIERS.
+  placementTier: '',
   // Business name (1099s paid as an LLC/business). useBusinessNameForPayroll
   // makes payroll export the business name instead of the personal name —
   // payroll only; the person is addressed by their name everywhere else.
@@ -343,6 +359,7 @@ export default function InternalRosterPage({ onNavigate }) {
       employer: p.employer || '',
       taxStatus: p.is1099 == null ? '' : (p.is1099 ? '1099' : 'W2'),
       hoursStatus: p.isFullTime == null ? '' : (p.isFullTime ? 'FT' : 'PT'),
+      placementTier: p.placementTier ?? '',
       businessName: p.businessName || '',
       useBusinessNameForPayroll: !!p.useBusinessNameForPayroll,
       payeeType: p.payeeType || '',
@@ -404,6 +421,7 @@ export default function InternalRosterPage({ onNavigate }) {
         // booleans for the API. Empty string → null (unknown).
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
         isFullTime: form.hoursStatus === '' ? null : form.hoursStatus === 'FT',
+        placementTier: form.placementTier !== '' ? parseInt(form.placementTier) : null,
         ptoDaysAnnual: form.ptoDaysAnnual !== '' ? parseInt(form.ptoDaysAnnual) : null,
         ptoEligible: form.ptoEligible === '' ? null : form.ptoEligible === 'YES',
         seniorityRank: form.seniorityRank !== '' ? parseInt(form.seniorityRank) : null,
@@ -980,6 +998,13 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <Badge bg={typeBadge.bg} color={typeBadge.color} label={typeBadge.label} />
                     <Badge bg={empBadge.bg} color={empBadge.color} label={empBadge.label} />
+                    {p.placementTier != null && PLACEMENT_TIER_BY_VALUE[p.placementTier] && (
+                      <Badge
+                        bg={PLACEMENT_TIER_BY_VALUE[p.placementTier].badge.bg}
+                        color={PLACEMENT_TIER_BY_VALUE[p.placementTier].badge.color}
+                        label={`🎯 Fill #${p.placementTier} · ${PLACEMENT_TIER_BY_VALUE[p.placementTier].short}`}
+                      />
+                    )}
                     {(() => {
                       // Compact "1099 · FT" / "W-2 · PT" chip — only render
                       // when we know at least one of the two axes.
@@ -1135,6 +1160,17 @@ export default function InternalRosterPage({ onNavigate }) {
                 <option value="PER_DIEM">Per Diem</option>
                 <option value="LOCUMS">Locums</option>
               </select>
+            </Field>
+            <Field label="Placement Priority (Schedule Builder fill order)">
+              <select style={inputStyle} value={form.placementTier} onChange={(e) => setF('placementTier', e.target.value)}>
+                <option value="">Auto (from employment category)</option>
+                {PLACEMENT_TIERS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.value}. {t.label}</option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
+                Who the builder fills rooms with first. Full-time & part-time (set schedules) are placed first around their PTO, then Per Diem 1, Per Diem 2, then Locums.
+              </div>
             </Field>
             <Field label="Employer">
               <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="Staffing group or practice" />

@@ -60,6 +60,32 @@ const DEFAULT_WORK_TIER = 2;
 // the seniority/first-come seed behind it) breaks ties deterministically.
 const ORDER_EPSILON = 0.001;
 
+// ── Placement priority ladder (roster card `placementTier`) ──────────────────
+// Standing fill order: committed W-2 core (full-time, then part-time — both have
+// set schedules and sit in the PTO calendar) are placed first around their PTO,
+// then per-diems (1 before 2), then locums last. This is a DOMINANT sort key:
+// the weight is large enough that one tier gap (1000) dwarfs the entire combined
+// swing of every other score term (cost/quality ≤ 1, site-share ≤ 0.6, a
+// locked WORK request 100, a soft DAY_OFF penalty 50 → ~152 max). So across
+// tiers the ladder wins; WITHIN a tier all the usual signals still decide.
+const PLACEMENT_TIER_WEIGHT = 1000;
+const MAX_PLACEMENT_TIER = 5;
+// Fallback when a card has no explicit tier set — derive from the coarse
+// employmentCategory so legacy rosters still order core staff ahead of fill-ins.
+const PLACEMENT_TIER_FROM_CATEGORY = { FULL_TIME: 1, PER_DIEM: 3, LOCUMS: 5 };
+const DEFAULT_PLACEMENT_TIER = 3;
+function placementTierOf(r) {
+  if (r.placementTier != null && r.placementTier >= 1 && r.placementTier <= MAX_PLACEMENT_TIER) {
+    return r.placementTier;
+  }
+  return PLACEMENT_TIER_FROM_CATEGORY[r.employmentCategory] ?? DEFAULT_PLACEMENT_TIER;
+}
+// Positive, monotonically-decreasing score contribution: tier 1 → +5000 … tier
+// 5 → +1000, so lower tier = higher score = placed first.
+function placementTierScore(r) {
+  return PLACEMENT_TIER_WEIGHT * (MAX_PLACEMENT_TIER + 1 - placementTierOf(r));
+}
+
 // Supervising-MD assignments use room numbers in a reserved high range so
 // they never collide with real OR rooms (which are 1..roomsRequired, always
 // well below this). The role tag (SUPERVISING_MD) is the source of truth;
@@ -321,7 +347,7 @@ async function runMode({ mode, scheduleDays, roster, staffiqWeights, unavailable
         .filter((r) => !assigned.has(`${r.id}::${dateISO}`))
         .filter((r) => !offKeys.has(`${r.id}::${dateISO}`)) // PTO / unavailable
         .filter((r) => isEligibleForLocation(r.id, day.location, locationData))
-        .map((r) => ({ entry: r, score: MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) + workRequestBonus(r.id, dateISO, day.location) - dayOffPenalty(r.id, dateISO) }))
+        .map((r) => ({ entry: r, score: placementTierScore(r) + MODE_SCORERS[mode](r, ctx) + SITE_SHARE_WEIGHT * siteShareBonus(r.id, day.location) + workRequestBonus(r.id, dateISO, day.location) - dayOffPenalty(r.id, dateISO) }))
         .sort((a, b) => b.score - a.score);
       return ranked[0] || null;
     };

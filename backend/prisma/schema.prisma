@@ -875,6 +875,15 @@ model InternalRosterEntry {
   // false = part-time, null = unknown. The scheduler still keys off
   // employmentCategory (FULL_TIME/PER_DIEM/LOCUMS); this is descriptive only.
   isFullTime                Boolean?
+  // Placement priority ladder for the Schedule Builder. Lower number = filled
+  // first. 1=Full-time (W-2), 2=Part-time, 3=Per Diem 1, 4=Per Diem 2, 5=Locum.
+  // Committed core (full/part-time) have set schedules and sit in the PTO
+  // calendar, so they're placed first around their PTO; per-diems then locums
+  // fill the remaining rooms in tier order. This is a DOMINANT sort key in the
+  // auto-builder (scheduleBuilder.js) — it overrides cost/quality across tiers,
+  // while cost/quality/requests still break ties WITHIN a tier. null = derive a
+  // sensible tier from employmentCategory (FULL_TIME→1, PER_DIEM→3, LOCUMS→5).
+  placementTier             Int?
   // NPPES lookup state. Set when the import couldn't auto-attach an NPI
   // (multiple matches or zero matches in NPPES). The disambiguation UI
   // surfaces these for coordinator resolution. Cleared once npi is set.
