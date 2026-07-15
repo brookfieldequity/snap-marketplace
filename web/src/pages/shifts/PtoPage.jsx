@@ -121,20 +121,29 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
             <button onClick={() => openAdd()} style={{ ...primaryBtn, marginLeft: 'auto' }}>+ Add PTO</button>
           </div>
 
-          {/* Add panel */}
+          {/* Add PTO — centered overlay so it's visible no matter where you scrolled */}
           {addOpen && (
-            <div style={{ border: `1px solid ${ROYAL}`, background: '#F5F9FF', borderRadius: 12, padding: 16, marginBottom: 18, display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <Field label="Person">
-                <select value={form.rosterId} onChange={e => setForm(f => ({ ...f, rosterId: e.target.value }))} style={ctrl}>
-                  <option value="">Select…</option>
-                  {roster.map(p => <option key={p.id} value={p.id}>{p.providerName}</option>)}
-                </select>
-              </Field>
-              <Field label="First day"><input type="date" value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value, end: f.end && f.end >= e.target.value ? f.end : e.target.value }))} style={ctrl} /></Field>
-              <Field label="Last day"><input type="date" value={form.end} min={form.start} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} style={ctrl} /></Field>
-              <Field label="Reason (optional)"><input value={form.reason} placeholder="Vacation, CME…" onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} style={{ ...ctrl, width: 160 }} /></Field>
-              <button onClick={submitAdd} disabled={saving} style={primaryBtn}>{saving ? 'Adding…' : 'Add'}</button>
-              <button onClick={() => setAddOpen(false)} style={ghostBtn}>Cancel</button>
+            <div onClick={() => setAddOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(15,23,42,0.28)' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 16 }}>Add PTO</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <Field label="Person">
+                    <select value={form.rosterId} onChange={e => setForm(f => ({ ...f, rosterId: e.target.value }))} style={{ ...ctrl, width: '100%' }}>
+                      <option value="">Select…</option>
+                      {roster.map(p => <option key={p.id} value={p.id}>{p.providerName}</option>)}
+                    </select>
+                  </Field>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <Field label="First day"><input type="date" value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value, end: f.end && f.end >= e.target.value ? f.end : e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
+                    <Field label="Last day"><input type="date" value={form.end} min={form.start} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
+                  </div>
+                  <Field label="Reason (optional)"><input value={form.reason} placeholder="Vacation, CME…" onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 22 }}>
+                  <button onClick={() => setAddOpen(false)} style={ghostBtn}>Cancel</button>
+                  <button onClick={submitAdd} disabled={saving} style={primaryBtn}>{saving ? 'Adding…' : 'Add PTO'}</button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -157,14 +166,14 @@ function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, on
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const dowOf = (d) => new Date(Date.UTC(year, month - 1, d)).getUTCDay()
   return (
-    <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, overflow: 'auto', background: '#fff' }}>
+    <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, overflow: 'auto', background: '#fff', maxHeight: 'calc(100vh - 250px)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: `180px repeat(${daysInMonth}, 30px)`, minWidth: 180 + daysInMonth * 30 }}>
-        {/* Header */}
-        <div style={{ ...cellBase, position: 'sticky', left: 0, zIndex: 2, background: '#F8FAFC', fontWeight: 800, color: SLATE, justifyContent: 'flex-start', paddingLeft: 14, borderBottom: `1px solid ${LINE}` }}>Provider</div>
+        {/* Header — frozen at top so day numbers stay visible while scrolling providers */}
+        <div style={{ ...cellBase, position: 'sticky', top: 0, left: 0, zIndex: 3, background: '#F8FAFC', fontWeight: 800, color: SLATE, justifyContent: 'flex-start', paddingLeft: 14, borderBottom: `1px solid ${LINE}` }}>Provider</div>
         {days.map(d => {
           const wknd = dowOf(d) === 0 || dowOf(d) === 6
           return (
-            <div key={d} style={{ ...cellBase, flexDirection: 'column', gap: 0, background: wknd ? '#F1F5F9' : '#F8FAFC', color: wknd ? MUTED : SLATE, borderBottom: `1px solid ${LINE}`, fontSize: 10 }}>
+            <div key={d} style={{ ...cellBase, position: 'sticky', top: 0, zIndex: 2, flexDirection: 'column', gap: 0, background: wknd ? '#F1F5F9' : '#F8FAFC', color: wknd ? MUTED : SLATE, borderBottom: `1px solid ${LINE}`, fontSize: 10 }}>
               <span style={{ fontWeight: 700 }}>{d}</span>
               <span style={{ fontSize: 8, color: MUTED }}>{DOW[dowOf(d)]}</span>
             </div>
