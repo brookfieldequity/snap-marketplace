@@ -395,7 +395,7 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
               }
             }
             // SMS (no-op until Twilio is configured; truthful-send guarded).
-            if (entry.phoneNumber) await sendSMS(entry.phoneNumber, msg);
+            if (entry.phoneNumber) await sendSMS(entry.phoneNumber, `${msg} Reply STOP to opt out.`);
             // Email — works today via SendGrid, independent of Twilio/app link.
             if (entry.snapAccountEmail) {
               await sendEmail(
@@ -487,7 +487,8 @@ router.post('/publish', facilityAuth, async (req, res) => {
             )
           ),
         ];
-        await Promise.all(phones.map((phone) => sendSMS(phone, msg)));
+        const smsMsg = `${msg} Reply STOP to opt out.`;
+        await Promise.all(phones.map((phone) => sendSMS(phone, smsMsg)));
 
         // Email to all assigned roster members with an email (unique by address).
         // Works today via SendGrid regardless of Twilio/app-link status, so every
@@ -2127,7 +2128,7 @@ router.post('/availability-requests/send', facilityAuth, async (req, res) => {
           if (!entry.phoneNumber) {
             sendError = 'No phone number on file';
           } else {
-            const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link}`;
+            const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link} Reply STOP to opt out.`;
             const r = await sendSMS_(entry.phoneNumber, smsBody);
             sent = r.sent;
             if (!r.sent) sendError = r.reason;
@@ -2242,7 +2243,7 @@ router.post('/availability-requests/:id/remind', facilityAuth, async (req, res) 
       month: 'long', day: 'numeric', year: 'numeric',
     });
     const link = `${availPublicBaseUrl()}/avail/${record.token}`;
-    const smsBody = `${facilityName}: Reminder — submit your ${monthName} availability by ${deadlineStr}. ${link}`;
+    const smsBody = `${facilityName}: Reminder — submit your ${monthName} availability by ${deadlineStr}. ${link} Reply STOP to opt out.`;
 
     let sent = false;
     let error = null;
