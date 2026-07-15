@@ -44,6 +44,7 @@ router.get('/:token', async (req, res) => {
     const submissions = request.daySubmissions.map((s) => ({
       date: s.date.toISOString().slice(0, 10),
       available: s.available,
+      maybe: s.maybe || false,
       note: s.note || null,
     }));
 
@@ -120,10 +121,14 @@ router.post('/:token/submit', async (req, res) => {
       const dt = new Date(ds + 'T00:00:00Z');
       if (isNaN(dt.getTime())) continue;
       if (dt.getUTCFullYear() !== request.year || (dt.getUTCMonth() + 1) !== request.month) continue;
+      // A "maybe" day is stored with available=false so the builder never
+      // hard-places it; the flag + note carry the soft signal to the coordinator.
+      const isMaybe = Boolean(d.maybe);
       byDate.set(ds, {
         requestId: request.id,
         date: dt,
-        available: Boolean(d.available),
+        available: isMaybe ? false : Boolean(d.available),
+        maybe: isMaybe,
         note: typeof d.note === 'string' ? d.note.slice(0, 500) : null,
       });
     }

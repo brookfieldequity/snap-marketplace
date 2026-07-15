@@ -82,6 +82,7 @@ function buildDemoRequest() {
       { date: pick(10), available: true, note: '' },
       { date: pick(16), available: false, note: 'Out of town — please no calls' },
       { date: pick(17), available: true, note: '' },
+      { date: pick(19), available: false, maybe: true, note: 'Could do a half day if you really need me' },
       { date: pick(24), available: true, note: 'Happy to take a late add if needed' },
     ],
   }
@@ -107,7 +108,7 @@ export default function AvailabilityPage({ token }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null) // string | null
   const [data, setData] = useState(null) // server response
-  const [dayStates, setDayStates] = useState(new Map()) // isoDate -> 'available'|'unavailable'|'unset'
+  const [dayStates, setDayStates] = useState(new Map()) // isoDate -> 'available'|'unavailable'|'maybe'|'unset'
   const [notesByDate, setNotesByDate] = useState(new Map()) // isoDate -> string
   const [noteOpen, setNoteOpen] = useState(null) // isoDate | null
   const [noteText, setNoteText] = useState('')
@@ -115,6 +116,18 @@ export default function AvailabilityPage({ token }) {
   const [saved, setSaved] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const longPressTimer = useRef(null)
+  // Desktop = a fine pointer (mouse). Drives the pencil affordance on unset days
+  // so a provider can drop a "maybe" sticky note without right-click/long-press.
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)')?.matches
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(pointer: fine)')
+    const onChange = () => setIsDesktop(mq.matches)
+    mq.addEventListener?.('change', onChange)
+    return () => mq.removeEventListener?.('change', onChange)
+  }, [])
 
   useEffect(() => {
     if (!token) {
@@ -129,7 +142,7 @@ export default function AvailabilityPage({ token }) {
       setData(res)
       const states = new Map(); const notes = new Map()
       for (const sub of res.submissions) {
-        states.set(sub.date, sub.available ? 'available' : 'unavailable')
+        states.set(sub.date, sub.maybe ? 'maybe' : (sub.available ? 'available' : 'unavailable'))
         if (sub.note) notes.set(sub.date, sub.note)
       }
       setDayStates(states); setNotesByDate(notes); setLoading(false)
@@ -142,7 +155,7 @@ export default function AvailabilityPage({ token }) {
         const states = new Map()
         const notes = new Map()
         for (const sub of res.submissions || []) {
-          states.set(sub.date, sub.available ? 'available' : 'unavailable')
+          states.set(sub.date, sub.maybe ? 'maybe' : (sub.available ? 'available' : 'unavailable'))
           if (sub.note) notes.set(sub.date, sub.note)
         }
         setDayStates(states)
@@ -204,6 +217,8 @@ export default function AvailabilityPage({ token }) {
       const cur = prev.get(isoDate) || 'unset'
       let newState
       if (cur === 'unset') newState = 'available'
+      // A tap on a "maybe" promotes it to a firm yes (its note is kept).
+      else if (cur === 'maybe') newState = 'available'
       else if (cur === 'available') newState = 'unavailable'
       else {
         newState = 'unset'
@@ -242,13 +257,17 @@ export default function AvailabilityPage({ token }) {
         }
         return next
       })
-      // Adding a note implies the provider cares about this day — default it to available
-      setDayStates((prev) => {
-        if (prev.get(noteOpen)) return prev
-        const next = new Map(prev)
-        next.set(noteOpen, 'available')
-        return next
-      })
+      // A note on an otherwise-unset day is a "maybe" — a soft signal for the
+      // coordinator, NOT a firm yes. Days already marked keep their state.
+      if (noteText.trim()) {
+        setDayStates((prev) => {
+          const cur = prev.get(noteOpen)
+          if (cur && cur !== 'unset') return prev
+          const next = new Map(prev)
+          next.set(noteOpen, 'maybe')
+          return next
+        })
+      }
       setHasChanges(true)
     }
     closeNote()
@@ -259,6 +278,13 @@ export default function AvailabilityPage({ token }) {
       setNotesByDate((prev) => {
         const next = new Map(prev)
         next.delete(noteOpen)
+        return next
+      })
+      // A "maybe" is only meaningful with its note — clearing it reverts to unset.
+      setDayStates((prev) => {
+        if (prev.get(noteOpen) !== 'maybe') return prev
+        const next = new Map(prev)
+        next.set(noteOpen, 'unset')
         return next
       })
       setHasChanges(true)
@@ -282,14 +308,9 @@ export default function AvailabilityPage({ token }) {
           dates.push({
             date,
             available: state === 'available',
+            maybe: state === 'maybe',
             note: notesByDate.get(date) || null,
           })
-        }
-      }
-      // Include notes on unset days too (a note is a request to the coordinator)
-      for (const [date, note] of notesByDate.entries()) {
-        if ((dayStates.get(date) || 'unset') === 'unset' && note) {
-          dates.push({ date, available: true, note })
         }
       }
       await availAPI.submit(token, dates)
@@ -305,6 +326,7 @@ export default function AvailabilityPage({ token }) {
   // Count stats
   const availableCount = [...dayStates.values()].filter((s) => s === 'available').length
   const unavailableCount = [...dayStates.values()].filter((s) => s === 'unavailable').length
+  const maybeCount = [...dayStates.values()].filter((s) => s === 'maybe').length
   const noteCount = notesByDate.size
 
   const pageBg = 'linear-gradient(180deg, #EFF6FF 0%, #F8FAFC 220px, #F1F5F9 100%)'
@@ -381,6 +403,7 @@ export default function AvailabilityPage({ token }) {
         <div style={{ display: 'flex', gap: 18, margin: '16px 0 28px', animation: 'floatUp 0.4s ease 0.35s both' }}>
           <Stat n={availableCount} label="available" color="#2563EB" />
           {unavailableCount > 0 && <Stat n={unavailableCount} label="off" color="#DC2626" />}
+          {maybeCount > 0 && <Stat n={maybeCount} label="maybe" color="#D97706" />}
           {noteCount > 0 && <Stat n={noteCount} label="notes" color="#CA8A04" />}
         </div>
         {!data.isLocked ? (
@@ -480,6 +503,7 @@ export default function AvailabilityPage({ token }) {
             {[
               { color: 'linear-gradient(135deg,#2563EB,#3B82F6)', label: 'Available' },
               { color: 'linear-gradient(135deg,#DC2626,#EF4444)', label: 'Unavailable' },
+              { color: 'linear-gradient(135deg,#D97706,#F59E0B)', label: 'Maybe' },
               { color: '#F1F5F9', label: 'Not set', border: '#E2E8F0' },
               { color: POSTIT_YELLOW, label: 'Has note', border: '#EAB308', pin: true },
             ].map(({ color, label, border, pin }) => (
@@ -520,6 +544,11 @@ export default function AvailabilityPage({ token }) {
                 textColor = '#fff'
                 border = 'none'
                 shadow = '0 4px 10px rgba(220,38,38,0.25)'
+              } else if (state === 'maybe') {
+                bg = 'linear-gradient(135deg,#D97706,#F59E0B)'
+                textColor = '#fff'
+                border = 'none'
+                shadow = '0 4px 10px rgba(217,119,6,0.28)'
               } else {
                 bg = isWeekend ? '#F8FAFC' : '#F1F5F9'
                 textColor = isWeekend ? '#CBD5E1' : '#94A3B8'
@@ -527,7 +556,7 @@ export default function AvailabilityPage({ token }) {
                 shadow = 'none'
               }
 
-              const isSet = state === 'available' || state === 'unavailable'
+              const isSet = state === 'available' || state === 'unavailable' || state === 'maybe'
 
               return (
                 <div
@@ -620,6 +649,26 @@ export default function AvailabilityPage({ token }) {
                       ✎
                     </button>
                   )}
+
+                  {/* Desktop pencil on "not set" days — drop a sticky note to
+                      flag a soft "maybe" without committing to available/off. */}
+                  {state === 'unset' && !hasNote && !isLocked && isDesktop && (
+                    <button
+                      className="snap-maybe-pencil"
+                      onClick={(e) => { e.stopPropagation(); openNote(iso) }}
+                      title="Maybe? Leave a note for your coordinator"
+                      style={{
+                        position: 'absolute', bottom: 2, right: 3,
+                        background: POSTIT_YELLOW, border: '1px solid #EAB308',
+                        borderRadius: 4, cursor: 'pointer',
+                        fontSize: 10, lineHeight: 1, padding: '2px 3px',
+                        color: '#854D0E',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+                      }}
+                    >
+                      ✎
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -629,7 +678,7 @@ export default function AvailabilityPage({ token }) {
           {!isLocked && (
             <div style={{ marginTop: 12, padding: '10px 12px', background: '#F8FAFC', borderRadius: 12, fontSize: 12, color: '#64748B', textAlign: 'center', lineHeight: 1.5 }}>
               Tap a day: once for <strong style={{ color: '#2563EB' }}>available</strong>, again for <strong style={{ color: '#DC2626' }}>unavailable</strong>, again to clear.
-              <br />Tap <span style={{ display: 'inline-block', transform: 'rotate(-6deg)', background: POSTIT_YELLOW, borderRadius: 3, padding: '0 4px', border: '1px solid #EAB308' }}>✎</span> to leave a note for your coordinator.
+              <br />On a not-set day, the <span style={{ display: 'inline-block', transform: 'rotate(-6deg)', background: POSTIT_YELLOW, borderRadius: 3, padding: '0 4px', border: '1px solid #EAB308' }}>✎</span> pencil leaves a note to flag a <strong style={{ color: '#D97706' }}>maybe</strong> day for your coordinator.
             </div>
           )}
         </div>
@@ -649,6 +698,7 @@ export default function AvailabilityPage({ token }) {
         <div style={{ display: 'flex', gap: 14, fontSize: 13, color: '#64748B' }}>
           <span><strong style={{ color: '#2563EB', fontSize: 16 }}>{availableCount}</strong> avail</span>
           <span><strong style={{ color: '#DC2626', fontSize: 16 }}>{unavailableCount}</strong> off</span>
+          {maybeCount > 0 && <span><strong style={{ color: '#D97706', fontSize: 16 }}>{maybeCount}</strong> maybe</span>}
           {noteCount > 0 && <span><strong style={{ color: '#CA8A04', fontSize: 16 }}>{noteCount}</strong> notes</span>}
         </div>
         {isLocked ? (

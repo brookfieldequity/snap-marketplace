@@ -2374,6 +2374,12 @@ model AvailDaySubmission {
   requestId String
   date      DateTime @db.Date
   available Boolean
+  // A "maybe" day: the provider left a sticky note on an otherwise-unset day
+  // (via the desktop pencil) signalling soft/conditional availability. Stored
+  // with available=false so the auto-builder never hard-places a maybe, but the
+  // note surfaces to the coordinator in the schedule-builder day modal so they
+  // can decide. When true, `note` is expected to carry the provider's message.
+  maybe     Boolean  @default(false)
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -173,7 +173,25 @@ router.get('/month', facilityAuth, async (req, res) => {
       select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
     });
 
-    res.json({ days, availabilities: availabilitiesWithRoster, timeOff });
+    // "Maybe" days from the tokenized availability link — a provider left a
+    // sticky note on an otherwise-unset day (soft/conditional). Surfaced in the
+    // day-modal cockpit so the coordinator can decide; never auto-scheduled.
+    const maybeSubs = await prisma.availDaySubmission.findMany({
+      where: {
+        maybe: true,
+        request: { facilityId: req.facility.id, year, month },
+        date: { gte: start, lt: end },
+      },
+      include: { request: { select: { rosterEntryId: true, rosterEntry: { select: { providerName: true } } } } },
+    });
+    const maybeNotes = maybeSubs.map((s) => ({
+      date: s.date,
+      rosterId: s.request.rosterEntryId,
+      providerName: s.request.rosterEntry?.providerName || 'Provider',
+      note: s.note || null,
+    }));
+
+    res.json({ days, availabilities: availabilitiesWithRoster, timeOff, maybeNotes });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -292,6 +310,15 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
       return res.status(404).json({ error: 'Not found' });
     }
 
+    // Capture who held this room BEFORE the edit, so that — if the day is
+    // already published — we can alert whoever was added and/or bumped.
+    const prior = await prisma.scheduleAssignment.findUnique({
+      where: { scheduleDayId_roomNumber: { scheduleDayId: dayId, roomNumber } },
+      select: { rosterId: true },
+    });
+    const oldRosterId = prior?.rosterId || null;
+    const newRosterId = rosterId || null;
+
     // Only touch `role` when the caller sends it (manual room edits omit it, so
     // an existing room keeps its CRNA/Solo-MD tag; supervisor slots send
     // role='SUPERVISING_MD').
@@ -313,6 +340,54 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
     });
 
     res.json(assignment);
+
+    // ── Post-publish change alerts ──────────────────────────────────────────
+    // Once a schedule day is published, providers are relying on it. If a
+    // coordinator revises a room afterward, text + app-notify whoever gained or
+    // lost the assignment. Fire-and-forget so the edit response never blocks.
+    if (day.publishedAt && oldRosterId !== newRosterId) {
+      (async () => {
+        try {
+          const dateLabel = new Date(day.date).toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric',
+          });
+          // affected: [{ rosterId, kind }] — 'added' gained the room, 'removed' lost it.
+          const affected = [];
+          if (newRosterId) affected.push({ rosterId: newRosterId, kind: 'added' });
+          if (oldRosterId) affected.push({ rosterId: oldRosterId, kind: 'removed' });
+          if (affected.length === 0) return;
+
+          const entries = await prisma.internalRosterEntry.findMany({
+            where: { id: { in: affected.map((a) => a.rosterId) } },
+            select: { id: true, phoneNumber: true, linkedProviderId: true },
+          });
+          const entryById = Object.fromEntries(entries.map((e) => [e.id, e]));
+
+          for (const { rosterId: rid, kind } of affected) {
+            const entry = entryById[rid];
+            if (!entry) continue;
+            const msg = kind === 'added'
+              ? `Schedule change: ${req.facility.name} has assigned you to ${day.location} on ${dateLabel}. Tap to view your shifts.`
+              : `Schedule change: ${req.facility.name} has removed you from ${day.location} on ${dateLabel}. Tap to view your shifts.`;
+
+            // App push (if the provider linked the app and has a push token).
+            if (entry.linkedProviderId) {
+              const profile = await prisma.providerProfile.findUnique({
+                where: { id: entry.linkedProviderId },
+                select: { expoPushToken: true },
+              });
+              if (profile?.expoPushToken) {
+                await sendPushNotifications([profile.expoPushToken], msg);
+              }
+            }
+            // SMS (no-op until Twilio is configured; truthful-send guarded).
+            if (entry.phoneNumber) await sendSMS(entry.phoneNumber, msg);
+          }
+        } catch (err) {
+          console.error('Post-publish change alert error:', err);
+        }
+      })();
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });

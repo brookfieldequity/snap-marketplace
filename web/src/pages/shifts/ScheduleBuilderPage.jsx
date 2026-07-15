@@ -869,6 +869,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [intelligence, setIntelligence] = useState(null)
   const [availabilities, setAvailabilities] = useState([]) // from schedule month response
   const [timeOff, setTimeOff] = useState([]) // PTO ranges from schedule month response
+  const [maybeNotes, setMaybeNotes] = useState([]) // "maybe" sticky notes from the tokenized availability link
 
   // Coverage Templates for the "Generate from template" banner shown when
   // the current month is empty. Loaded once on mount; generation pulls the
@@ -920,6 +921,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       const av = sched?.availabilities || []
       setAvailabilities(av)
       setTimeOff(sched?.timeOff || [])
+      setMaybeNotes(sched?.maybeNotes || [])
       const templates = tmplRes?.templates || []
       setCoverageTemplates(templates)
       // Default the dropdown selection to the practice's default template, or
@@ -1277,6 +1279,15 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       }
     }
     return out
+  }
+
+  // "Maybe" days a provider flagged via the tokenized availability link →
+  // [{ name, note }]. Soft/conditional — never auto-scheduled; shown so the
+  // coordinator can reach out and pull them in if they need the coverage.
+  function maybeThatDay(dateStr) {
+    return maybeNotes
+      .filter((m) => (typeof m.date === 'string' ? m.date : new Date(m.date).toISOString()).substring(0, 10) === dateStr)
+      .map((m) => ({ name: m.providerName || 'A provider', note: m.note || null }))
   }
 
   // Room-count card notes the site left for this day → [{ location, note }].
@@ -1724,9 +1735,24 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             const roomNotes_ = roomNotesThatDay(dayDetailModal)
             const idle = availableUnusedThatDay(dayDetailModal)
             const pto = ptoThatDay(dayDetailModal)
+            const maybe = maybeThatDay(dayDetailModal)
 
             return (
               <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* "Maybe" — soft/conditional availability from the provider link */}
+                {maybe.length > 0 && (
+                  <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#C2410C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                      🟠 Maybe — could work if you ask ({maybe.length})
+                    </div>
+                    {maybe.map((m, i) => (
+                      <div key={`m${i}`} style={{ fontSize: 13, color: '#7C2D12', marginTop: 4 }}>
+                        <strong>{m.name}</strong>{m.note ? <>: {m.note}</> : ' — flagged this day as a maybe'}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Notes & requests */}
                 {(notes.length > 0 || roomNotes_.length > 0) && (
                   <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px' }}>
