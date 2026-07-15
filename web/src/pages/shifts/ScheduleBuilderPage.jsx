@@ -1246,6 +1246,46 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     return out
   }
 
+  const rosterNameById = () => Object.fromEntries(roster.map(p => [p.id, p.providerName]))
+  const hourlyOf = (p) => p.hourlyRate || (p.annualRate ? Math.round(p.annualRate / 2080) : null)
+
+  // Providers who marked themselves AVAILABLE this day but were NOT scheduled
+  // anywhere — the pool a coordinator can pull from on final revision. Sorted
+  // cheapest-first with each provider's hourly rate.
+  function availableUnusedThatDay(dateStr) {
+    const assigned = assignedThatDay(dateStr)
+    const availableIds = new Set()
+    for (const a of availabilities) {
+      const avDate = typeof a.date === 'string' ? a.date.substring(0, 10) : new Date(a.date).toISOString().substring(0, 10)
+      if (avDate === dateStr && a.available && a.rosterId) availableIds.add(a.rosterId)
+    }
+    return roster
+      .filter(p => availableIds.has(p.id) && !assigned[p.id])
+      .map(p => ({ id: p.id, name: p.providerName, type: p.providerType, category: p.employmentCategory, rate: hourlyOf(p) }))
+      .sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity))
+  }
+
+  // Who is on PTO / time off this day → [{ name, type }].
+  function ptoThatDay(dateStr) {
+    const nameById = rosterNameById()
+    const out = []
+    for (const t of timeOff) {
+      const s = (typeof t.startDate === 'string' ? t.startDate : new Date(t.startDate).toISOString()).substring(0, 10)
+      const e = (typeof t.endDate === 'string' ? t.endDate : new Date(t.endDate).toISOString()).substring(0, 10)
+      if (dateStr >= s && dateStr <= e && t.rosterEntryId) {
+        out.push({ name: nameById[t.rosterEntryId] || t.rosterEntry?.providerName || 'A provider', type: t.type || 'Time off' })
+      }
+    }
+    return out
+  }
+
+  // Room-count card notes the site left for this day → [{ location, note }].
+  function roomNotesThatDay(dateStr) {
+    return Object.entries(roomNotes)
+      .filter(([k]) => k.startsWith(dateStr + '::'))
+      .map(([k, note]) => ({ location: k.slice(dateStr.length + 2), note }))
+  }
+
   const daysInMonth = getDaysInMonth(year, month)
   const firstDow = getFirstDayOfWeek(year, month)
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
@@ -1677,20 +1717,79 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             </span>
           )
         })()} onClose={() => setDayDetailModal(null)} wide>
-          {/* Task #20: provider availability notes for this date */}
+          {/* Final-revision cockpit: notes & requests, who's available and idle
+              (with rate), and who's on PTO for this day. */}
           {(() => {
             const notes = notesThatDay(dayDetailModal)
-            if (notes.length === 0) return null
+            const roomNotes_ = roomNotesThatDay(dayDetailModal)
+            const idle = availableUnusedThatDay(dayDetailModal)
+            const pto = ptoThatDay(dayDetailModal)
+
             return (
-              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  📝 Provider notes for this day
-                </div>
-                {notes.map((n, i) => (
-                  <div key={i} style={{ fontSize: 13, color: '#78350F', marginTop: i === 0 ? 0 : 4 }}>
-                    <strong>{n.name}:</strong> {n.note}
+              <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Notes & requests */}
+                {(notes.length > 0 || roomNotes_.length > 0) && (
+                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                      📝 Notes &amp; requests for this day
+                    </div>
+                    {roomNotes_.map((n, i) => (
+                      <div key={`r${i}`} style={{ fontSize: 13, color: '#78350F', marginTop: 4 }}>
+                        <strong>{n.location} (site):</strong> {n.note}
+                      </div>
+                    ))}
+                    {notes.map((n, i) => (
+                      <div key={`p${i}`} style={{ fontSize: 13, color: '#78350F', marginTop: 4 }}>
+                        <strong>{n.name}:</strong> {n.note}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {/* Available-but-idle + PTO, side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {/* Available & unused */}
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                      ✅ Available &amp; unused ({idle.length}) · cheapest first
+                    </div>
+                    {idle.length === 0 ? (
+                      <div style={{ fontSize: 12.5, color: '#64748B' }}>No one marked available and unscheduled this day.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {idle.map((p) => (
+                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                            <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                              {p.name}
+                              <span style={{ color: '#64748B', fontWeight: 500 }}> · {p.type === 'ANESTHESIOLOGIST' ? 'MD' : p.type === 'CRNA' ? 'CRNA' : (p.type || '')}{p.category ? ` · ${p.category === 'FULL_TIME' ? 'FT' : p.category === 'PER_DIEM' ? 'PD' : p.category === 'LOCUMS' ? 'Locums' : p.category}` : ''}</span>
+                            </span>
+                            <span style={{ color: p.rate != null ? '#166534' : '#94A3B8', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                              {p.rate != null ? `$${p.rate}/hr` : 'no rate'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* On PTO */}
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                      🌴 On PTO / time off ({pto.length})
+                    </div>
+                    {pto.length === 0 ? (
+                      <div style={{ fontSize: 12.5, color: '#64748B' }}>No one on PTO this day.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {pto.map((p, i) => (
+                          <div key={i} style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+                            {p.name}<span style={{ color: '#94A3B8', fontWeight: 500 }}> · {p.type}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )
           })()}
