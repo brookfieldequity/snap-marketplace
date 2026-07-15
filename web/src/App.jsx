@@ -57,7 +57,7 @@ const StaffIQCalculatorPage    = lazyPage(() => import('./pages/shifts/StaffIQCa
 const StaffIQInputsPage        = lazyPage(() => import('./pages/shifts/StaffIQInputsPage.jsx'))
 const DataUploadPage           = lazyPage(() => import('./pages/shifts/DataUploadPage.jsx'))
 const CoverageTemplatesPage    = lazyPage(() => import('./pages/shifts/CoverageTemplatesPage.jsx'))
-const PtoBuilderPage           = lazyPage(() => import('./pages/shifts/PtoBuilderPage.jsx'))
+const PtoPage                  = lazyPage(() => import('./pages/shifts/PtoPage.jsx'))
 
 // SNAP Ops pages
 const PayrollBuilderPage  = lazyPage(() => import('./pages/shifts/PayrollBuilderPage.jsx'))
@@ -488,8 +488,8 @@ export default function App() {
             {isShiftsMode && facilityPage === 'requests' && (
               <RequestsPage />
             )}
-            {isShiftsMode && featureFlags.pto_builder && facilityPage === 'pto-builder' && (
-              <PtoBuilderPage />
+            {isShiftsMode && (facilityPage === 'pto' || facilityPage === 'pto-builder') && (
+              <PtoPage onNavigate={setFacilityPage} featureFlags={featureFlags} />
             )}
             {isShiftsMode && facilityPage === 'gaps' && (
               <GapsPage onNavigate={setFacilityPage} />
