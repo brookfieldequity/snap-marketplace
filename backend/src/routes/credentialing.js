@@ -16,8 +16,13 @@ const passportClient = require('../services/passportClient')
 const router = express.Router()
 
 // ── Document storage ──────────────────────────────────────────────────────────
-// TODO: migrate to AWS S3 with encryption before production deployment.
-// Set AWS_S3_BUCKET env var to automatically switch from local to S3 storage.
+// ONE SOURCE OF TRUTH / Phase 1 (2026-07-15): new credential documents are
+// S3-only, encrypted at rest (SSE-KMS when AWS_KMS_KEY_ID is set, else
+// SSE-S3/AES256). The local-disk WRITE path is removed — unencrypted
+// PHI-class documents on an ephemeral container disk were both a security
+// hole and silent data loss on redeploy. Upload endpoints return 503 when
+// AWS_S3_BUCKET is unset. Disk READS remain only to serve any legacy file
+// until this store is retired for the passport backend (Phase 3).
 const STORAGE_BASE = process.env.CREDENTIAL_STORAGE_PATH || path.join(__dirname, '../../credential_storage')
 
 // Credential documents are PDFs or scanned images only.
@@ -42,35 +47,35 @@ function safeStorageName(file) {
   return `${Date.now()}_${crypto.randomUUID()}${suffix}`
 }
 
+// Returns a multer instance writing to encrypted S3, or null when document
+// storage isn't configured — callers must 503 rather than accept the upload.
+// There is deliberately NO disk fallback (see Document storage note above).
 function getUpload(facilityId, providerId, credType) {
-  if (process.env.AWS_S3_BUCKET) {
-    // S3 storage — multer-s3 wired up when AWS_S3_BUCKET is set
-    const multerS3 = require('multer-s3')
-    const { S3Client } = require('@aws-sdk/client-s3')
-    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
-    return multer({
-      storage: multerS3({
-        s3,
-        bucket: process.env.AWS_S3_BUCKET,
-        key: (req, file, cb) =>
-          cb(null, `credentials/${facilityId}/${providerId}/${credType}/${safeStorageName(file)}`),
-      }),
-      limits: { fileSize: DOC_SIZE_LIMIT },
-      fileFilter: docFileFilter,
-    })
-  }
+  if (!process.env.AWS_S3_BUCKET) return null
 
-  const dir = path.join(STORAGE_BASE, facilityId, providerId, credType)
-  fs.mkdirSync(dir, { recursive: true })
+  const multerS3 = require('multer-s3')
+  const { S3Client } = require('@aws-sdk/client-s3')
+  const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
+  // Encryption at rest on every object: customer-managed KMS key when
+  // configured (rotation + CloudTrail decrypt audit), AES256 floor otherwise.
+  const sse = process.env.AWS_KMS_KEY_ID
+    ? { serverSideEncryption: 'aws:kms', sseKmsKeyId: process.env.AWS_KMS_KEY_ID }
+    : { serverSideEncryption: 'AES256' }
   return multer({
-    storage: multer.diskStorage({
-      destination: dir,
-      filename: (req, file, cb) => cb(null, safeStorageName(file)),
+    storage: multerS3({
+      s3,
+      bucket: process.env.AWS_S3_BUCKET,
+      ...sse,
+      key: (req, file, cb) =>
+        cb(null, `credentials/${facilityId}/${providerId}/${credType}/${safeStorageName(file)}`),
     }),
     limits: { fileSize: DOC_SIZE_LIMIT },
     fileFilter: docFileFilter,
   })
 }
+
+const STORAGE_UNCONFIGURED_MSG =
+  'Document storage is not configured (encrypted S3 required). Uploads are disabled until AWS_S3_BUCKET is set — documents are never written to server disk.'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -848,12 +853,13 @@ router.post('/providers/:providerId/documents/:type', credentialAuth, requireCoo
   if (!entry) return res.status(404).json({ error: 'Provider not on roster' })
 
   const upload = getUpload(req.facilityId, providerId, type)
+  if (!upload) return res.status(503).json({ error: STORAGE_UNCONFIGURED_MSG })
   upload.single('document')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message })
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
     try {
-      const filePath = process.env.AWS_S3_BUCKET ? req.file.key : req.file.path
+      const filePath = req.file.key
       const updated = await prisma.providerCredential.upsert({
         where: { providerId_credentialType: { providerId, credentialType: type } },
         update: {
@@ -929,6 +935,7 @@ router.get('/roster/:rosterId/file', credentialAuth, async (req, res) => {
 router.post('/roster/:rosterId/documents/:type', credentialAuth, requireCoordinator, async (req, res) => {
   const { rosterId, type } = req.params
   const upload = getUpload(req.facilityId, `roster_${rosterId}`, type)
+  if (!upload) return res.status(503).json({ error: STORAGE_UNCONFIGURED_MSG })
 
   upload.single('document')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message })
@@ -938,7 +945,7 @@ router.post('/roster/:rosterId/documents/:type', credentialAuth, requireCoordina
       const entry = await prisma.facilityRosterEntry.findFirst({ where: { id: rosterId, facilityId: req.facilityId } })
       if (!entry) return res.status(404).json({ error: 'Roster entry not found' })
 
-      const filePath = process.env.AWS_S3_BUCKET ? req.file.key : req.file.path
+      const filePath = req.file.key
       const updated = await prisma.providerCredential.upsert({
         where: { rosterId_credentialType: { rosterId, credentialType: type } },
         update: {
@@ -1285,11 +1292,23 @@ router.get('/npi-search', credentialAuth, async (req, res) => {
 // GET /provider/:providerId/cme — CME history for a provider (proxied from passport)
 router.get('/provider/:providerId/cme', credentialAuth, async (req, res) => {
   try {
+    // Tenant-scoped: the credential must belong to this facility via its
+    // roster entry or provider profile. (Was unscoped + selected a
+    // nonexistent `npi` field — FacilityRosterEntry's field is `npiNumber`.)
     const provider = await prisma.providerCredential.findFirst({
-      where: { id: req.params.providerId },
-      include: { rosterEntry: { select: { npi: true } } },
+      where: {
+        id: req.params.providerId,
+        OR: [
+          { rosterEntry: { facilityId: req.facilityId } },
+          { provider: { rosterEntries: { some: { facilityId: req.facilityId } } } },
+        ],
+      },
+      include: {
+        rosterEntry: { select: { npiNumber: true } },
+        provider: { select: { npiNumber: true } },
+      },
     })
-    const npi = provider?.npi || provider?.rosterEntry?.npiNumber
+    const npi = provider?.rosterEntry?.npiNumber || provider?.provider?.npiNumber
     if (!npi) return res.json({ entries: [], totalHours: 0, found: false })
     if (!passportClient.isConfigured()) return res.json({ entries: [], totalHours: 0, found: false, bridgeUnconfigured: true })
     const data = await passportClient.getCmeHistory(npi)
@@ -1303,8 +1322,9 @@ router.get('/provider/:providerId/cme', credentialAuth, async (req, res) => {
 // GET /roster/:rosterId/cme — CME history looked up via roster entry NPI
 router.get('/roster/:rosterId/cme', credentialAuth, async (req, res) => {
   try {
-    const entry = await prisma.facilityRosterEntry.findUnique({
-      where: { id: req.params.rosterId },
+    // findFirst + facilityId so one facility can never read another's roster.
+    const entry = await prisma.facilityRosterEntry.findFirst({
+      where: { id: req.params.rosterId, facilityId: req.facilityId },
       select: { npiNumber: true },
     })
     const npi = entry?.npiNumber
@@ -1315,6 +1335,64 @@ router.get('/roster/:rosterId/cme', credentialAuth, async (req, res) => {
   } catch (err) {
     console.error('[credentialing/cme] error:', err)
     res.status(500).json({ error: 'Failed to fetch CME history' })
+  }
+})
+
+// ── Passport bridge (ONE SOURCE OF TRUTH, Phase 1) ───────────────────────────
+// The coordinator portal reads credential data LIVE from the snap-credentialing
+// passport backend — documents stream via short-lived URLs presigned by the
+// passport service (which audits every issuance). Nothing is copied or stored
+// locally. These three endpoints are the portal's pipe into the passport and
+// the seed of the Phase 3 zero-storage viewer.
+
+// GET /passport/:npi/status — does a passport exist, and do we have a grant?
+// Returns grant-absence as data (not an error) so the UI can render
+// "Request access" instead of an error state.
+router.get('/passport/:npi/status', credentialAuth, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.json({ bridgeUnconfigured: true })
+    const status = await passportClient.getGrantStatus(req.params.npi, req.facilityId)
+    res.json(status)
+  } catch (err) {
+    console.error('[credentialing/passport-status] error:', err)
+    res.status(err.status || 500).json({ error: err.message || 'Passport status lookup failed' })
+  }
+})
+
+// GET /passport/:npi — the provider's passport, scope-filtered by our grant.
+// Credentials + verifications + presigned document URLs, straight from the
+// source of truth.
+router.get('/passport/:npi', credentialAuth, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    const passport = await passportClient.getPassport(req.params.npi, req.facilityId)
+    res.json(passport)
+  } catch (err) {
+    if (err.status === 403 || err.status === 404) {
+      // No grant / no passport — structured so the UI can offer "Request access".
+      return res.status(err.status).json({ error: err.message, hint: err.hint || null })
+    }
+    console.error('[credentialing/passport] error:', err)
+    res.status(500).json({ error: 'Failed to load passport' })
+  }
+})
+
+// POST /passport/:npi/request-access — ask the provider to grant this
+// facility access (push notification → provider approves in the app).
+router.post('/passport/:npi/request-access', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facilityId },
+      select: { name: true },
+    })
+    const result = await passportClient.requestGrant(req.params.npi, req.facilityId, {
+      facilityName: facility?.name || 'A SNAP facility',
+    })
+    res.json(result)
+  } catch (err) {
+    console.error('[credentialing/passport-request] error:', err)
+    res.status(err.status || 500).json({ error: err.message || 'Grant request failed' })
   }
 })
 

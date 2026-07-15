@@ -706,6 +706,11 @@ export const credentialAPI = {
   getSavings: () => apiFetch(`${BASE}/credentialing/savings`, { headers: credHeaders() }),
   getProviderCme: (providerId) => apiFetch(`${BASE}/credentialing/provider/${providerId}/cme`, { headers: credHeaders() }),
   getRosterCme: (rosterId) => apiFetch(`${BASE}/credentialing/roster/${rosterId}/cme`, { headers: credHeaders() }),
+  // Passport bridge (one source of truth) — live reads from the
+  // snap-credentialing passport backend; nothing stored locally.
+  getPassportStatus: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}/status`, { headers: credHeaders() }),
+  getPassport: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}`, { headers: credHeaders() }),
+  requestPassportAccess: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}/request-access`, { method: 'POST', headers: credHeaders() }),
 }
 
 // ─── Admin API ────────────────────────────────────────────────────────────────
