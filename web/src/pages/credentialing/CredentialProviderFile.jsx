@@ -1,485 +1,246 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { credentialAPI } from '../../api.js'
 
-const CRED_SECTIONS = [
-  { type: 'STATE_LICENSE', label: 'State Medical License', fields: ['licenseNumber', 'state', 'expirationDate'] },
-  { type: 'DEA_CERTIFICATE', label: 'DEA Certificate', fields: ['deaNumber', 'expirationDate'] },
-  { type: 'MA_CS_LICENSE', label: 'MA Controlled Substance License', fields: ['licenseNumber', 'expirationDate'] },
-  { type: 'BOARD_CERTIFICATION', label: 'Board Certification', fields: ['boardName', 'certificationStatus', 'initialDate', 'expirationDate'] },
-  { type: 'MALPRACTICE_INSURANCE', label: 'Malpractice Insurance', fields: ['carrierName', 'coverageStart', 'coverageEnd'] },
-  { type: 'MALPRACTICE_HISTORY', label: 'Malpractice History', fields: ['hasClaims', 'details'] },
-  { type: 'ACLS_CERTIFICATION', label: 'ACLS Certification', fields: ['expirationDate'] },
-  { type: 'BLS_CERTIFICATION', label: 'BLS Certification', fields: ['expirationDate'] },
-  { type: 'EDUCATION_HISTORY', label: 'Education History', fields: [] },
-  { type: 'HOSPITAL_PRIVILEGES', label: 'Hospital Privilege History', fields: [] },
-  { type: 'WORK_HISTORY', label: 'Work History', fields: [] },
-  { type: 'NPDB_AUTHORIZATION', label: 'NPDB Authorization', fields: ['authorizationStatus', 'authorizedDate'] },
-  { type: 'CV', label: 'Curriculum Vitae', fields: [] },
-]
+// Phase 3 (one source of truth): this file page is a ZERO-STORAGE viewer over
+// the provider's credentialing passport. Reads come from the passport backend
+// (grant-scoped, documents via short-lived signed URLs, every access audited
+// there). Coordinator edits (expiry dates, document uploads) WRITE THROUGH to
+// the passport — nothing credential-shaped is stored marketplace-side.
 
-const STATUS_COLORS = { ACTIVE: '#10B981', EXPIRING_SOON: '#F59E0B', EXPIRED: '#EF4444', MISSING: '#94A3B8', PENDING: '#2563EB' }
-const STATUS_LABELS = { ACTIVE: 'Active', EXPIRING_SOON: 'Expiring Soon', EXPIRED: 'Expired', MISSING: 'Missing', PENDING: 'Pending' }
+const CRED_META = {
+  STATE_LICENSE: { label: 'State Medical License', docType: 'LICENSE' },
+  STATE_CS_LICENSE: { label: 'State Controlled-Substance License', docType: 'OTHER' },
+  DEA: { label: 'DEA Registration', docType: 'DEA' },
+  BOARD_CERTIFICATION: { label: 'Board Certification', docType: 'OTHER' },
+  MALPRACTICE_INSURANCE: { label: 'Malpractice Insurance', docType: 'MALPRACTICE_FACE_SHEET' },
+  ACLS: { label: 'ACLS Certification', docType: 'OTHER' },
+  BLS: { label: 'BLS Certification', docType: 'OTHER' },
+}
+const REQUIRED_TYPES = ['STATE_LICENSE', 'DEA', 'BOARD_CERTIFICATION', 'MALPRACTICE_INSURANCE', 'ACLS', 'BLS']
 
-function CredStatusBadge({ status }) {
-  const color = STATUS_COLORS[status] || '#94A3B8'
-  return (
-    <span style={{ padding: '3px 10px', borderRadius: 999, background: `${color}18`, color, fontSize: 11, fontWeight: 700 }}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  )
+const STATUS_STYLE = {
+  ACTIVE: { color: '#10B981', label: 'Active' },
+  EXPIRED: { color: '#EF4444', label: 'Expired' },
+  LAPSED: { color: '#EF4444', label: 'Lapsed' },
+  REVOKED: { color: '#7F1D1D', label: 'Revoked' },
+  PENDING: { color: '#F59E0B', label: 'Pending' },
 }
 
-function CredentialSection({ section, credential, entityApi, permission, onRefresh }) {
-  const [showNote, setShowNote] = useState(false)
-  const [noteText, setNoteText] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [actionMsg, setActionMsg] = useState('')
+function fmtDate(d) {
+  return d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+}
+function isoDay(d) {
+  return d ? new Date(d).toISOString().slice(0, 10) : ''
+}
 
-  const cred = credential
-  const status = cred ? cred.status : 'MISSING'
-  const verification = cred?.verifications?.[0]
-  const flags = cred?.flags?.filter(f => !f.resolvedAt) || []
-  const notes = cred?.notes || []
+export default function CredentialProviderFile({ rosterId, npi, permission, onBack }) {
+  const [passport, setPassport] = useState(null)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null) // credential type being edited
+  const [editDate, setEditDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [uploadingType, setUploadingType] = useState(null)
+  const [cme, setCme] = useState(null)
+  const fileInputRef = useRef(null)
+  const pendingUploadRef = useRef(null) // { credentialType, docType }
 
-  async function handleVerify() {
-    try { await entityApi.verify(section.type); onRefresh() }
-    catch (err) { setActionMsg(err.message) }
-  }
+  const isCoordinator = permission === 'COORDINATOR'
 
-  async function handleUnverify() {
-    try { await entityApi.unverify(section.type); onRefresh() }
-    catch (err) { setActionMsg(err.message) }
-  }
+  const load = useCallback(() => {
+    setLoading(true)
+    credentialAPI.getPassport(npi)
+      .then((p) => { setPassport(p); setError(null) })
+      .catch((err) => setError(err.message || 'Failed to load passport'))
+      .finally(() => setLoading(false))
+  }, [npi])
+  useEffect(() => { load() }, [load])
 
-  async function handleFlag() {
-    const reason = window.prompt('Flag reason (optional):')
-    if (reason === null) return
-    try { await entityApi.flag(section.type, reason); onRefresh() }
-    catch (err) { setActionMsg(err.message) }
-  }
+  useEffect(() => {
+    if (!rosterId) return
+    credentialAPI.getRosterCme(rosterId).then(setCme).catch(() => setCme(null))
+  }, [rosterId])
 
-  async function handleAddNote(e) {
-    e.preventDefault()
-    if (!noteText.trim()) return
+  async function saveExpiry(type) {
+    setSaving(true)
     try {
-      await entityApi.addNote(noteText, cred?.id)
-      setNoteText(''); setShowNote(false); onRefresh()
-    } catch (err) { setActionMsg(err.message) }
+      await credentialAPI.updatePassportCredential(npi, type, { expirationDate: editDate || null })
+      setEditing(null)
+      load()
+    } catch (err) {
+      alert(err.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function handleViewDoc() {
+  function startUpload(credentialType) {
+    pendingUploadRef.current = { credentialType, docType: CRED_META[credentialType]?.docType || 'OTHER' }
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileChosen(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    const pending = pendingUploadRef.current
+    if (!file || !pending) return
+    setUploadingType(pending.credentialType)
     try {
-      const { url } = await entityApi.getDocToken(section.type)
-      window.open(url, '_blank', 'noopener')
-    } catch (err) { setActionMsg('Failed to load document: ' + err.message) }
+      await credentialAPI.uploadPassportDocument(npi, file, { type: pending.docType, credentialType: pending.credentialType })
+      load()
+    } catch (err) {
+      alert(err.message || 'Upload failed')
+    } finally {
+      setUploadingType(null)
+    }
   }
 
-  async function handleUpload(file) {
-    setUploading(true)
-    try { await entityApi.uploadDocument(section.type, file); onRefresh() }
-    catch (err) { setActionMsg(err.message) }
-    setUploading(false)
+  if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8' }}>Loading passport…</div>
+
+  if (error) {
+    return (
+      <div style={{ padding: '32px 40px', maxWidth: 900, margin: '0 auto' }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>← Back to providers</button>
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20, color: '#B91C1C', fontSize: 14 }}>{error}</div>
+      </div>
+    )
   }
+
+  const creds = passport?.credentials || []
+  const credByType = Object.fromEntries(creds.map((c) => [c.type, c]))
+  const missing = passport?.completeness?.missingRequired || []
+  // One row per required type (present or missing) + any extras present.
+  const rowTypes = [...REQUIRED_TYPES, ...creds.map((c) => c.type).filter((t) => !REQUIRED_TYPES.includes(t))]
 
   return (
-    <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${flags.length > 0 ? '#FCA5A5' : '#E2E8F0'}`, padding: '20px 24px', marginBottom: 12 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: cred ? 14 : 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {flags.length > 0 && <span style={{ fontSize: 16 }}>🚩</span>}
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{section.label}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <CredStatusBadge status={status} />
-          {cred?.expirationDate && (
-            <span style={{ fontSize: 12, color: '#64748B' }}>
-              Exp: {new Date(cred.expirationDate).toLocaleDateString('en-US')}
-            </span>
-          )}
-        </div>
+    <div style={{ padding: '32px 40px', maxWidth: 1000, margin: '0 auto' }}>
+      <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={handleFileChosen} />
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>← Back to providers</button>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+          {passport.provider.firstName} {passport.provider.lastName}
+        </h1>
+        <span style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'monospace' }}>NPI {passport.provider.npi}</span>
+      </div>
+      <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>
+        Live from the provider's credentialing passport · shared with you by the provider
+      </p>
+
+      {/* Completeness banner */}
+      <div style={{ background: missing.length ? '#FFFBEB' : '#F0FDF4', border: `1px solid ${missing.length ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 20, fontSize: 13.5, color: missing.length ? '#92400E' : '#166534' }}>
+        {missing.length
+          ? <><strong>{missing.length} required item{missing.length > 1 ? 's' : ''} missing:</strong> {missing.map((t) => CRED_META[t]?.label || t).join(', ')}</>
+          : <strong>All required credentials present.</strong>}
+        {passport.completeness?.expiringSoon?.length > 0 && (
+          <span> · {passport.completeness.expiringSoon.length} expiring within 90 days</span>
+        )}
       </div>
 
-      {/* Credential data fields */}
-      {cred?.data && Object.keys(cred.data).length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', marginBottom: 14 }}>
-          {Object.entries(cred.data).map(([k, v]) => v && (
-            <div key={k}>
-              <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'capitalize' }}>{k.replace(/([A-Z])/g, ' $1')}: </span>
-              <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{String(v)}</span>
+      {/* Credentials table */}
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: 24 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+            <tr>
+              {['Credential', 'Identifier', 'Expiration', 'Status', 'Documents', ''].map((h) => (
+                <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rowTypes.map((type, i) => {
+              const c = credByType[type]
+              const meta = CRED_META[type] || { label: type }
+              const st = c ? (STATUS_STYLE[c.status] || STATUS_STYLE.PENDING) : null
+              const isEditing = editing === type
+              return (
+                <tr key={type} style={{ borderTop: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                  <td style={{ padding: '13px 16px', fontSize: 13.5, fontWeight: 700, color: c ? '#0F172A' : '#94A3B8' }}>{meta.label}</td>
+                  <td style={{ padding: '13px 16px', fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>{c?.identifier || '—'}</td>
+                  <td style={{ padding: '13px 16px', fontSize: 13 }}>
+                    {isEditing ? (
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ padding: '5px 8px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12.5 }} />
+                        <button onClick={() => saveExpiry(type)} disabled={saving} style={{ padding: '5px 10px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{saving ? '…' : 'Save'}</button>
+                        <button onClick={() => setEditing(null)} style={{ padding: '5px 8px', background: 'none', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                      </span>
+                    ) : (
+                      <span style={{ color: c?.expirationDate ? '#374151' : '#CBD5E1' }}>
+                        {fmtDate(c?.expirationDate)}
+                        {isCoordinator && (
+                          <button
+                            onClick={() => { setEditing(type); setEditDate(isoDay(c?.expirationDate)) }}
+                            title={c ? 'Correct the expiration date' : 'Record this credential (e.g. expiry from a face sheet)'}
+                            style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#2563EB' }}
+                          >✎</button>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '13px 16px' }}>
+                    {c ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, background: `${st.color}18`, color: st.color, fontSize: 12, fontWeight: 700 }}>{st.label}</span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>Missing</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '13px 16px', fontSize: 13 }}>
+                    {(c?.documents || []).length === 0 ? (
+                      <span style={{ color: '#CBD5E1' }}>—</span>
+                    ) : (
+                      c.documents.map((d) => (
+                        <a key={d.id} href={d.downloadUrl || '#'} target="_blank" rel="noreferrer" style={{ display: 'block', color: d.downloadUrl ? '#2563EB' : '#94A3B8', fontSize: 12.5, textDecoration: 'none', marginBottom: 2 }}>
+                          📄 {d.filename}
+                        </a>
+                      ))
+                    )}
+                  </td>
+                  <td style={{ padding: '13px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {isCoordinator && (
+                      <button
+                        onClick={() => startUpload(type)}
+                        disabled={uploadingType === type}
+                        style={{ padding: '6px 12px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
+                      >
+                        {uploadingType === type ? 'Uploading…' : '⬆ Upload doc'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Signed documents (e-sign) */}
+      {passport.signatures?.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>✍️ Signed documents</div>
+          {passport.signatures.map((s) => (
+            <div key={s.id} style={{ fontSize: 13, color: '#374151', padding: '6px 0', borderTop: '1px solid #F1F5F9' }}>
+              {s.documentName} <span style={{ color: '#94A3B8', fontSize: 12 }}>· signed {fmtDate(s.signedAt)}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Actions row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-        {/* Document actions */}
-        {cred?.documentName && (
+      {/* CME */}
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>🎓 CME credits</div>
+        {!cme || !cme.found || (cme.entries || []).length === 0 ? (
+          <div style={{ fontSize: 13, color: '#94A3B8' }}>No CME records yet — the provider logs credits in the SNAP app.</div>
+        ) : (
           <>
-            <button onClick={handleViewDoc} style={actionBtn('#2563EB')}>View Document</button>
-            <a href="#" onClick={e => { e.preventDefault(); handleViewDoc() }} style={{ ...actionBtn('#374151'), textDecoration: 'none', display: 'inline-block' }}>Download</a>
+            <div style={{ fontSize: 13, color: '#374151', marginBottom: 8 }}><strong>{cme.totalHours}</strong> total hours</div>
+            {(cme.entries || []).slice(0, 10).map((e2, i) => (
+              <div key={i} style={{ fontSize: 12.5, color: '#64748B', padding: '4px 0', borderTop: '1px solid #F1F5F9' }}>
+                {e2.title || e2.activity || 'CME activity'} — {e2.hours} hr{e2.hours === 1 ? '' : 's'} {e2.date ? `· ${fmtDate(e2.date)}` : ''}
+              </div>
+            ))}
           </>
         )}
-
-        {/* Upload */}
-        {permission === 'COORDINATOR' && (
-          <label style={{ ...actionBtn('#0F172A'), cursor: 'pointer' }}>
-            {uploading ? 'Uploading…' : cred?.documentName ? 'Replace Doc' : 'Upload Document'}
-            <input type="file" style={{ display: 'none' }} onChange={e => e.target.files[0] && handleUpload(e.target.files[0])} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
-          </label>
-        )}
-
-        {/* Verify */}
-        {permission === 'COORDINATOR' && cred && (
-          verification ? (
-            <button onClick={handleUnverify} style={actionBtn('#10B981')}>
-              ✓ Verified by {verification.verifiedBy?.name} · {new Date(verification.verifiedAt).toLocaleDateString()}
-            </button>
-          ) : (
-            <button onClick={handleVerify} style={actionBtn('#64748B')}>Mark Verified</button>
-          )
-        )}
-
-        {/* Flag */}
-        {permission === 'COORDINATOR' && cred && (
-          flags.length > 0 ? (
-            <button onClick={() => entityApi.resolveFlag(section.type, flags[0].id).then(onRefresh)} style={actionBtn('#EF4444')}>
-              🚩 Flagged — Click to Resolve
-            </button>
-          ) : (
-            <button onClick={handleFlag} style={actionBtn('#94A3B8')}>Flag for Follow-up</button>
-          )
-        )}
-
-        {/* Add note */}
-        {permission === 'COORDINATOR' && (
-          <button onClick={() => setShowNote(v => !v)} style={actionBtn('#2563EB')}>
-            {showNote ? 'Cancel' : '+ Note'}
-          </button>
-        )}
       </div>
-
-      {/* Note form */}
-      {showNote && (
-        <form onSubmit={handleAddNote} style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <input
-            style={{ flex: 1, padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }}
-            placeholder="Internal note (not visible to provider)…"
-            value={noteText}
-            onChange={e => setNoteText(e.target.value)}
-            autoFocus
-          />
-          <button type="submit" style={{ padding: '8px 16px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
-        </form>
-      )}
-
-      {/* Existing notes */}
-      {notes.length > 0 && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F1F5F9' }}>
-          {notes.map(n => (
-            <div key={n.id} style={{ fontSize: 12, color: '#374151', background: '#FFFBEB', padding: '6px 10px', borderRadius: 6, marginBottom: 4 }}>
-              <span style={{ fontWeight: 600, color: '#92400E' }}>{n.createdBy?.name}: </span>
-              {n.noteText}
-              <span style={{ color: '#D97706', marginLeft: 6 }}>{new Date(n.createdAt).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {actionMsg && <div style={{ marginTop: 8, fontSize: 12, color: '#EF4444' }}>{actionMsg}</div>}
-    </div>
-  )
-}
-
-function actionBtn(color) {
-  return {
-    padding: '6px 12px',
-    background: `${color}12`,
-    border: `1px solid ${color}30`,
-    borderRadius: 7,
-    color,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-  }
-}
-
-function CmeSection({ providerId, rosterId }) {
-  const [cme, setCme] = useState(null)
-  useEffect(() => {
-    const fetch = providerId
-      ? credentialAPI.getProviderCme(providerId)
-      : rosterId ? credentialAPI.getRosterCme(rosterId) : Promise.resolve(null)
-    fetch.then(d => { if (d) setCme(d) }).catch(() => {})
-  }, [providerId, rosterId])
-
-  if (!cme) return null
-  if (!cme.found && cme.entries?.length === 0) return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20 }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>CME History</div>
-      <div style={{ fontSize: 13, color: '#94A3B8' }}>No CME records yet — provider logs credits via the SNAP app.</div>
-    </div>
-  )
-
-  return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>CME History</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB' }}>{cme.totalHours?.toFixed(1)} total hours</div>
-      </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
-            {['Date', 'Activity', 'Hours', 'Accreditation', 'Certificate'].map(h => (
-              <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {(cme.entries || []).map(e => (
-            <tr key={e.id} style={{ borderBottom: '1px solid #F8FAFC' }}>
-              <td style={{ padding: '8px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{new Date(e.date).toLocaleDateString('en-US')}</td>
-              <td style={{ padding: '8px 10px', color: '#0F172A', fontWeight: 600 }}>
-                {e.title}
-                {e.topic && <div style={{ fontSize: 11, color: '#64748B', fontWeight: 400 }}>{e.topic}</div>}
-              </td>
-              <td style={{ padding: '8px 10px', color: '#374151' }}>{e.hours}</td>
-              <td style={{ padding: '8px 10px', color: '#64748B' }}>{e.accreditationBody || '—'}</td>
-              <td style={{ padding: '8px 10px' }}>
-                {e.certificateUrl
-                  ? <button onClick={() => window.open(e.certificateUrl, '_blank', 'noopener')} style={{ background: '#EFF6FF', border: 'none', borderRadius: 6, color: '#2563EB', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>View</button>
-                  : <span style={{ color: '#CBD5E1' }}>—</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function ActivityLog({ providerId }) {
-  const [log, setLog] = useState([])
-
-  useEffect(() => {
-    credentialAPI.getProviderActivity(providerId).then(setLog).catch(() => {})
-  }, [providerId])
-
-  const icons = { VIEW_DOCUMENT: '👁', DOWNLOAD: '⬇️', UPLOAD_DOCUMENT: '⬆️', VIEW_PROFILE: '👤', note: '📝', verification: '✅', access: '🔍' }
-
-  return (
-    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px', marginTop: 24 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginTop: 0, marginBottom: 20 }}>Activity Log</h3>
-      {log.length === 0 ? (
-        <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No activity recorded yet.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {log.slice(0, 30).map((item, i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 13, color: '#374151' }}>
-              <span style={{ fontSize: 14 }}>{icons[item.type] || icons[item.action] || '📌'}</span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 600 }}>{item.by}</span>: {item.action}
-                {item.credentialType && <span style={{ color: '#2563EB', marginLeft: 6 }}>[{item.credentialType.replace(/_/g, ' ')}]</span>}
-                {item.note && <div style={{ color: '#64748B', fontSize: 12, marginTop: 2, fontStyle: 'italic' }}>{item.note}</div>}
-              </div>
-              <span style={{ color: '#94A3B8', fontSize: 11, flexShrink: 0 }}>{new Date(item.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default function CredentialProviderFile({ providerId, rosterId, permission, onBack }) {
-  const [provider, setProvider] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [showReminderModal, setShowReminderModal] = useState(false)
-  const [reminderType, setReminderType] = useState('')
-  const [reminderMsg, setReminderMsg] = useState('')
-
-  const isRoster = !providerId && !!rosterId
-
-  // Unified API adapter — same interface regardless of linked/unlinked
-  const entityApi = {
-    upload: isRoster
-      ? (type, file) => credentialAPI.uploadRosterDocument(rosterId, type, file)
-      : (type, file) => credentialAPI.uploadDocument(providerId, type, file),
-    uploadDocument: isRoster
-      ? (type, file) => credentialAPI.uploadRosterDocument(rosterId, type, file)
-      : (type, file) => credentialAPI.uploadDocument(providerId, type, file),
-    getDocToken: isRoster
-      ? (type) => credentialAPI.getRosterDocToken(rosterId, type)
-      : (type) => credentialAPI.getDocToken(providerId, type),
-    verify: isRoster
-      ? (type, notes) => credentialAPI.verifyRosterCredential(rosterId, type, notes)
-      : (type, notes) => credentialAPI.verifyCredential(providerId, type, notes),
-    unverify: isRoster
-      ? (type) => credentialAPI.unverifyRosterCredential(rosterId, type)
-      : (type) => credentialAPI.unverifyCredential(providerId, type),
-    flag: isRoster
-      ? (type, notes) => credentialAPI.flagRosterCredential(rosterId, type, notes)
-      : (type, notes) => credentialAPI.flagCredential(providerId, type, notes),
-    resolveFlag: isRoster
-      ? (type, flagId) => credentialAPI.resolveRosterFlag(rosterId, type, flagId)
-      : (type, flagId) => credentialAPI.resolveFlag(providerId, type, flagId),
-    addNote: isRoster
-      ? (noteText, credentialId) => credentialAPI.addRosterNote(rosterId, noteText, credentialId)
-      : (noteText, credentialId) => credentialAPI.addNote(providerId, noteText, credentialId),
-  }
-
-  const load = () => {
-    setLoading(true)
-    const fetch = isRoster
-      ? credentialAPI.getRosterFile(rosterId)
-      : credentialAPI.getProvider(providerId)
-    fetch
-      .then(setProvider)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(load, [providerId, rosterId])
-
-  async function handleSendReminder(e) {
-    e.preventDefault()
-    if (isRoster) {
-      alert('This provider has no linked SNAP account. Add their email in the roster to send reminders.')
-      return
-    }
-    try {
-      await credentialAPI.sendReminder(providerId, reminderType, reminderMsg)
-      setShowReminderModal(false)
-      alert('Reminder sent successfully.')
-    } catch (err) {
-      alert('Failed to send reminder: ' + err.message)
-    }
-  }
-
-  if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8' }}>Loading provider file…</div>
-  if (error) return <div style={{ padding: 48, color: '#EF4444' }}>{error}</div>
-  if (!provider) return null
-
-  const credMap = {}
-  for (const c of (provider.credentials || [])) credMap[c.credentialType] = c
-
-  const statusColor = { GREEN: '#10B981', YELLOW: '#F59E0B', RED: '#EF4444' }[provider.status] || '#94A3B8'
-
-  return (
-    <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        ← Back to providers
-      </button>
-
-      {/* Provider header */}
-      <div style={{ background: '#fff', borderRadius: 16, border: `2px solid ${statusColor}30`, padding: '28px 32px', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24 }}>
-          {provider.photoUrl && (
-            <img src={provider.photoUrl} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-          )}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
-                {provider.firstName} {provider.lastName}
-              </h2>
-              {provider.specialty && (
-                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#EFF6FF', color: '#2563EB', fontSize: 12, fontWeight: 700 }}>{provider.specialty}</span>
-              )}
-              <span style={{ padding: '3px 10px', borderRadius: 999, background: `${statusColor}18`, color: statusColor, fontSize: 12, fontWeight: 700 }}>
-                {provider.status || 'No Credentials'}
-              </span>
-              {isRoster && (
-                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#FEF3C7', color: '#D97706', fontSize: 11, fontWeight: 700 }}>
-                  No SNAP Account
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 24, marginTop: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: '#64748B' }}>NPI: <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{provider.npiNumber || '—'}</strong></span>
-              {provider.email && <span style={{ fontSize: 13, color: '#64748B' }}>Email: <strong style={{ color: '#0F172A' }}>{provider.email}</strong></span>}
-              {provider.memberSince && <span style={{ fontSize: 13, color: '#64748B' }}>Member since: <strong style={{ color: '#0F172A' }}>{new Date(provider.memberSince).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</strong></span>}
-            </div>
-            <div style={{ marginTop: 12, maxWidth: 200 }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>CREDENTIAL COMPLETION</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ width: `${provider.passportCompletion || 0}%`, height: '100%', background: provider.passportCompletion === 100 ? '#10B981' : '#2563EB', borderRadius: 4 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{provider.passportCompletion || 0}%</span>
-              </div>
-            </div>
-          </div>
-
-          {permission === 'COORDINATOR' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-              {!isRoster && (
-                <button onClick={() => setShowReminderModal(true)} style={{ padding: '8px 14px', background: '#EFF6FF', border: '1px solid #C7D2FE', borderRadius: 8, color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  Send Reminder
-                </button>
-              )}
-              <a
-                href={credentialAPI.exportProviders()}
-                style={{ padding: '8px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center', textDecoration: 'none' }}
-              >
-                Export File
-              </a>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Credential sections */}
-      <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>Credentials</h3>
-      {CRED_SECTIONS.map(section => (
-        <CredentialSection
-          key={section.type}
-          section={section}
-          credential={credMap[section.type] || null}
-          entityApi={entityApi}
-          permission={permission}
-          onRefresh={load}
-        />
-      ))}
-
-      <CmeSection providerId={providerId} rosterId={rosterId} />
-
-      {permission === 'COORDINATOR' && !isRoster && <ActivityLog providerId={providerId} />}
-
-      {showReminderModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '32px', width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#0F172A' }}>Send Reminder</h3>
-            <form onSubmit={handleSendReminder}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Credential</label>
-                <select
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
-                  value={reminderType}
-                  onChange={e => setReminderType(e.target.value)}
-                  required
-                >
-                  <option value="">Select credential…</option>
-                  {CRED_SECTIONS.map(s => <option key={s.type} value={s.type}>{s.label}</option>)}
-                </select>
-              </div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Message (optional)</label>
-                <textarea
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, minHeight: 80, boxSizing: 'border-box', resize: 'vertical' }}
-                  placeholder="Additional context for the provider…"
-                  value={reminderMsg}
-                  onChange={e => setReminderMsg(e.target.value)}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button type="submit" style={{ flex: 1, padding: '11px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Send Reminder</button>
-                <button type="button" onClick={() => setShowReminderModal(false)} style={{ padding: '11px 20px', background: '#F1F5F9', border: 'none', borderRadius: 10, color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -2175,3 +2175,6 @@ router.get('/upload/template', facilityAuth, (req, res) => {
 module.exports = router;
 // Exposed for unit tests (pure helpers; no side effects).
 module.exports.__qgenda = { isQgendaWorkbook, parseQgendaDailyWorksheet, parseQgendaName };
+// Shared with the credentialing portal (Phase 3): one invite pipeline for
+// both surfaces, keyed on the ONE roster (InternalRosterEntry).
+module.exports.sendCredentialingInvite = sendCredentialingInvite;

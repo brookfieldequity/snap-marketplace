@@ -711,6 +711,18 @@ export const credentialAPI = {
   getPassportStatus: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}/status`, { headers: credHeaders() }),
   getPassport: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}`, { headers: credHeaders() }),
   requestPassportAccess: (npi) => apiFetch(`${BASE}/credentialing/passport/${npi}/request-access`, { method: 'POST', headers: credHeaders() }),
+  // Phase 3 zero-storage portal: roster = the ONE marketplace roster,
+  // credential data live from the passport in one batch call.
+  getPortalRoster: () => apiFetch(`${BASE}/credentialing/portal/roster`, { headers: credHeaders() }),
+  invitePortalRoster: (rosterId) => apiFetch(`${BASE}/credentialing/portal/roster/${rosterId}/invite`, { method: 'POST', headers: credHeaders() }),
+  updatePassportCredential: (npi, type, fields) => apiFetch(`${BASE}/credentialing/passport/${npi}/credentials/${type}`, { method: 'PUT', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
+  uploadPassportDocument: (npi, file, { type, credentialType } = {}) => {
+    const form = new FormData()
+    form.append('document', file)
+    if (type) form.append('type', type)
+    if (credentialType) form.append('credentialType', credentialType)
+    return apiFetch(`${BASE}/credentialing/passport/${npi}/documents`, { method: 'POST', headers: credHeaders(), body: form })
+  },
 }
 
 // ─── Admin API ────────────────────────────────────────────────────────────────

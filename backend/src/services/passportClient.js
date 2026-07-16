@@ -177,6 +177,76 @@ async function getCmeHistory(npi) {
   throw err;
 }
 
+/**
+ * POST /api/service/passport/batch-summary
+ *
+ * One round-trip roster summary for the portal list + expiry dashboard.
+ * Returns { summaries: [{ npi, exists, hasGrant, completeness?, credentials? }] }.
+ */
+async function batchSummary(facilityId, npis) {
+  const { status, body, ok } = await callPassportApi('/api/service/passport/batch-summary', {
+    method: 'POST',
+    body: JSON.stringify({ granteeRef: facilityId, npis }),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `batch summary failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+/**
+ * PUT /api/service/passport/:npi/credentials/:type
+ *
+ * Coordinator write path — record/correct credential facts (expiry dates,
+ * identifiers) on the passport. Facility-entered provenance, not verification.
+ */
+async function updateCredential(npi, facilityId, type, fields) {
+  const path = `/api/service/passport/${encodeURIComponent(npi)}/credentials/${encodeURIComponent(type)}?granteeRef=${encodeURIComponent(facilityId)}`;
+  const { status, body, ok } = await callPassportApi(path, {
+    method: 'PUT',
+    body: JSON.stringify(fields),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `credential update failed (HTTP ${status})`);
+  err.status = status;
+  err.hint = body?.hint;
+  throw err;
+}
+
+/**
+ * POST /api/service/passport/:npi/documents
+ *
+ * Coordinator document upload on behalf of a granted provider. `file` is
+ * { buffer, originalname, mimetype } (multer memory-storage shape).
+ * Stored encrypted on the passport backend; nothing kept marketplace-side.
+ */
+async function uploadDocument(npi, facilityId, file, { type, credentialType } = {}) {
+  const key = getServiceKey();
+  if (!key) {
+    const err = new Error('CREDENTIALING_API_KEY is not set; passport bridge unavailable.');
+    err.code = 'BRIDGE_NOT_CONFIGURED';
+    throw err;
+  }
+  const form = new FormData();
+  form.append('document', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
+  if (type) form.append('type', type);
+  if (credentialType) form.append('credentialType', credentialType);
+
+  const url = `${CRED_BACKEND_URL}/api/service/passport/${encodeURIComponent(npi)}/documents?granteeRef=${encodeURIComponent(facilityId)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-Service-Key': key, Accept: 'application/json' },
+    body: form,
+  });
+  let body = null;
+  const text = await res.text();
+  if (text) { try { body = JSON.parse(text); } catch { body = { raw: text }; } }
+  if (res.ok) return body;
+  const err = new Error(body?.error || `document upload failed (HTTP ${res.status})`);
+  err.status = res.status;
+  throw err;
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
@@ -184,4 +254,7 @@ module.exports = {
   requestGrant,
   invite,
   getCmeHistory,
+  batchSummary,
+  updateCredential,
+  uploadDocument,
 };

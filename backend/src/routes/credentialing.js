@@ -93,6 +93,34 @@ function requireNotBilling(req, res, next) {
   next()
 }
 
+// ── Phase 3 freeze (ONE SOURCE OF TRUTH, 2026-07-16) ─────────────────────────
+// The local credential store (FacilityRosterEntry / ProviderCredential /
+// CredentialVerification / CredentialFlag / FacilityCredentialNote) is FROZEN:
+// reads still work so historical data stays visible, but every write returns
+// 410 Gone. New credential data lives on the passport backend — see the
+// /portal/* and /passport/* endpoints. Tables are retired once CAPA validates
+// the passport-backed portal.
+const FROZEN_MESSAGE =
+  'This action now lives on the credentialing passport (one source of truth). The local credential store is frozen — use the passport-backed portal actions instead.'
+const FROZEN_ROUTES = [
+  ['POST', /^\/roster$/],
+  ['POST', /^\/roster\/bulk$/],
+  ['DELETE', /^\/roster\/[^/]+$/],
+  ['POST', /^\/roster\/[^/]+\/invite$/],
+  ['POST', /^\/(providers|roster)\/[^/]+\/documents\/[^/]+$/],
+  ['POST', /^\/(providers|roster)\/[^/]+\/credentials\/[^/]+\/(verify|flag)$/],
+  ['DELETE', /^\/(providers|roster)\/[^/]+\/credentials\/[^/]+\/(verify|flag)(\/[^/]+)?$/],
+  ['POST', /^\/(providers|roster)\/[^/]+\/notes$/],
+]
+router.use((req, res, next) => {
+  for (const [method, re] of FROZEN_ROUTES) {
+    if (req.method === method && re.test(req.path)) {
+      return res.status(410).json({ error: FROZEN_MESSAGE, frozen: true })
+    }
+  }
+  next()
+})
+
 async function logAccess(facilityId, userId, providerId, action, credentialType = null, documentName = null, req) {
   await prisma.credentialAccessLog.create({
     data: {
@@ -1393,6 +1421,108 @@ router.post('/passport/:npi/request-access', credentialAuth, requireCoordinator,
   } catch (err) {
     console.error('[credentialing/passport-request] error:', err)
     res.status(err.status || 500).json({ error: err.message || 'Grant request failed' })
+  }
+})
+
+// ── Phase 3: the zero-storage portal surface ─────────────────────────────────
+// The portal's roster is the marketplace's ONE roster (InternalRosterEntry —
+// the same one Shifts uses); credential data comes live from the passport in
+// a single batch round-trip. Nothing credential-shaped is stored locally.
+
+// GET /portal/roster — clinical roster + passport summary merged by NPI.
+router.get('/portal/roster', credentialAuth, async (req, res) => {
+  try {
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facilityId, isNonClinical: false, providerType: { not: null } },
+      select: {
+        id: true, providerName: true, providerType: true, npi: true,
+        employmentCategory: true, credentialingStatus: true, inviteSentAt: true,
+        externallyCredentialed: true, snapAccountEmail: true, phoneNumber: true,
+      },
+      orderBy: { providerName: 'asc' },
+    })
+
+    let summariesByNpi = new Map()
+    let bridgeUnconfigured = false
+    const npis = entries.map((e) => e.npi).filter(Boolean)
+    if (!passportClient.isConfigured()) {
+      bridgeUnconfigured = true
+    } else if (npis.length > 0) {
+      try {
+        const { summaries } = await passportClient.batchSummary(req.facilityId, npis)
+        summariesByNpi = new Map(summaries.map((s) => [s.npi, s]))
+      } catch (err) {
+        console.error('[credentialing/portal-roster] batch summary failed:', err.message)
+        // Roster still renders; passport columns show as unavailable.
+      }
+    }
+
+    res.json({
+      bridgeUnconfigured,
+      roster: entries.map((e) => ({
+        ...e,
+        passport: e.npi ? summariesByNpi.get(e.npi) || null : null,
+      })),
+    })
+  } catch (err) {
+    console.error('[credentialing/portal-roster] error:', err)
+    res.status(500).json({ error: 'Failed to load roster' })
+  }
+})
+
+// POST /portal/roster/:rosterId/invite — invite a roster provider to claim
+// their passport. Same pipeline the facility portal uses (one invite flow),
+// keyed on the shared InternalRosterEntry roster.
+router.post('/portal/roster/:rosterId/invite', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    const entry = await prisma.internalRosterEntry.findFirst({
+      where: { id: req.params.rosterId, facilityId: req.facilityId },
+    })
+    if (!entry) return res.status(404).json({ error: 'Roster entry not found' })
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facilityId },
+      select: { id: true, name: true },
+    })
+    const { sendCredentialingInvite } = require('./roster')
+    const result = await sendCredentialingInvite(entry, facility)
+    res.status(result.ok ? 200 : 400).json(result)
+  } catch (err) {
+    console.error('[credentialing/portal-invite] error:', err)
+    res.status(500).json({ error: 'Invite failed' })
+  }
+})
+
+// PUT /passport/:npi/credentials/:type — coordinator records credential facts
+// (e.g. malpractice expiry off the face sheet) straight onto the passport.
+router.put('/passport/:npi/credentials/:type', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    const result = await passportClient.updateCredential(req.params.npi, req.facilityId, req.params.type, req.body || {})
+    res.json(result)
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message, hint: err.hint || null })
+    console.error('[credentialing/passport-credential] error:', err)
+    res.status(500).json({ error: 'Failed to save credential' })
+  }
+})
+
+// POST /passport/:npi/documents — coordinator uploads a document for a
+// granted provider; streamed through to the passport's encrypted store.
+const portalDocUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
+router.post('/passport/:npi/documents', credentialAuth, requireCoordinator, portalDocUpload.single('document'), async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+    const result = await passportClient.uploadDocument(req.params.npi, req.facilityId, req.file, {
+      type: req.body.type,
+      credentialType: req.body.credentialType,
+    })
+    res.status(201).json(result)
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/passport-doc] error:', err)
+    res.status(500).json({ error: 'Upload failed' })
   }
 })
 

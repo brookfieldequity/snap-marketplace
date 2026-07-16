@@ -108,13 +108,11 @@ export default function CredentialApp({ onBack }) {
   }
 
   function handleNavigate(dest) {
-    if (dest.startsWith('provider:')) {
-      setProviderDetailId(dest.replace('provider:', ''))
-      setRosterDetailId(null)
-      setPage('provider')
-    } else if (dest.startsWith('roster:')) {
-      setRosterDetailId(dest.replace('roster:', ''))
-      setProviderDetailId(null)
+    // Phase 3: file pages are passport-backed — `pfile:<rosterId>:<npi>`.
+    if (dest.startsWith('pfile:')) {
+      const [, rosterId, npi] = dest.split(':')
+      setRosterDetailId(rosterId)
+      setProviderDetailId(npi) // holds the NPI for the passport read
       setPage('provider')
     } else {
       setPage(dest)
@@ -184,7 +182,7 @@ export default function CredentialApp({ onBack }) {
         }
         return (
           <CredentialProviderFile
-            providerId={providerDetailId}
+            npi={providerDetailId}
             rosterId={rosterDetailId}
             permission={permission}
             onBack={() => { setPage('providers'); setProviderDetailId(null); setRosterDetailId(null) }}
