@@ -1610,11 +1610,14 @@ router.post('/sso-exchange', facilityAuth, async (req, res) => {
     if (req.facilityRole !== 'ADMIN') {
       return res.status(403).json({ error: 'Facility admin access required for the credentialing portal' })
     }
+    // User has no `name` column — display name falls back to the email's
+    // local part (the coordinator can rename in portal Settings later).
     const marketplaceUser = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { email: true, name: true },
+      select: { email: true },
     })
     if (!marketplaceUser?.email) return res.status(400).json({ error: 'No email on account' })
+    const displayName = marketplaceUser.email.split('@')[0]
 
     let credUser = await prisma.credentialUser.findFirst({
       where: { facilityId: req.facility.id, email: marketplaceUser.email },
@@ -1624,7 +1627,7 @@ router.post('/sso-exchange', facilityAuth, async (req, res) => {
         data: {
           facilityId: req.facility.id,
           email: marketplaceUser.email,
-          name: marketplaceUser.name || marketplaceUser.email,
+          name: displayName,
           permission: 'COORDINATOR',
           // Random unusable hash — this account authenticates via SSO only
           // (they can still set a password via forgot-password if ever needed).
