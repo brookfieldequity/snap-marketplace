@@ -1526,6 +1526,78 @@ router.post('/passport/:npi/documents', credentialAuth, requireCoordinator, port
   }
 })
 
+// ── Smart Document Intake (ease of switch) ───────────────────────────────────
+// Coordinator uploads their existing credentialing files (PDFs/images/ZIPs);
+// everything streams through to the passport backend's encrypted intake
+// pipeline. Roster hints (name+NPI from the ONE roster) ride along so the
+// classifier can match documents to providers who don't have passports yet.
+
+const intakeUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024, files: 40 } })
+
+router.post('/portal/intake', credentialAuth, requireCoordinator, intakeUpload.array('files', 40), async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    if (!req.files?.length) return res.status(400).json({ error: 'No files uploaded' })
+    const [facility, roster] = await Promise.all([
+      prisma.facility.findUnique({ where: { id: req.facilityId }, select: { name: true } }),
+      prisma.internalRosterEntry.findMany({
+        where: { facilityId: req.facilityId, isNonClinical: false, npi: { not: null } },
+        select: { npi: true, providerName: true },
+      }),
+    ])
+    const hints = roster.map((r) => ({ npi: r.npi, name: r.providerName }))
+    const result = await passportClient.createIntakeBatch(req.facilityId, facility?.name, req.files, hints)
+    res.status(201).json(result)
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/intake] upload error:', err)
+    res.status(500).json({ error: 'Upload failed' })
+  }
+})
+
+router.get('/portal/intake', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.json({ batches: [], bridgeUnconfigured: true })
+    res.json(await passportClient.listIntakeBatches(req.facilityId))
+  } catch (err) {
+    console.error('[credentialing/intake] list error:', err)
+    res.status(500).json({ error: 'Failed to list imports' })
+  }
+})
+
+router.get('/portal/intake/:batchId', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    res.json(await passportClient.getIntakeBatch(req.facilityId, req.params.batchId))
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/intake] read error:', err)
+    res.status(500).json({ error: 'Failed to load import' })
+  }
+})
+
+router.patch('/portal/intake/items/:itemId', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    res.json(await passportClient.updateIntakeItem(req.params.itemId, req.body || {}))
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/intake] item error:', err)
+    res.status(500).json({ error: 'Failed to update item' })
+  }
+})
+
+router.post('/portal/intake/:batchId/commit', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    res.json(await passportClient.commitIntakeBatch(req.facilityId, req.params.batchId))
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/intake] commit error:', err)
+    res.status(500).json({ error: 'Commit failed' })
+  }
+})
+
 // ── Phase 4: unified login (SSO from the facility portal) ────────────────────
 // A facility ADMIN clicks the "Credentialing" toggle → their facility session
 // is exchanged for a credentialing-portal session. Find-or-create keeps a

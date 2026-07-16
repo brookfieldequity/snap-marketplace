@@ -59,6 +59,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
   )
 }
 import CredentialSidebar from '../../components/CredentialSidebar.jsx'
+import CredentialImportPage from './CredentialImportPage.jsx'
 import useIsNarrow from '../../lib/useIsNarrow.js'
 import CredentialLoginPage from './CredentialLoginPage.jsx'
 import CredentialDashboard from './CredentialDashboard.jsx'
@@ -188,6 +189,10 @@ export default function CredentialApp({ onBack }) {
             onBack={() => { setPage('providers'); setProviderDetailId(null); setRosterDetailId(null) }}
           />
         )
+
+      case 'import':
+        if (permission !== 'COORDINATOR') return null
+        return <CredentialImportPage />
 
       case 'roster':
         if (permission !== 'COORDINATOR') return null

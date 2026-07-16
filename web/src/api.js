@@ -717,6 +717,17 @@ export const credentialAPI = {
   // Phase 4 unified login: exchange a facility-ADMIN session for a
   // credentialing-portal session (find-or-create CredentialUser).
   ssoExchange: () => apiFetch(`${BASE}/credentialing/sso-exchange`, { method: 'POST', headers: facilityHeaders() }),
+  // Smart Document Intake — upload existing credentialing files; AI classifies,
+  // admin verifies, confirmed items commit to the passport.
+  createIntake: (files) => {
+    const form = new FormData()
+    for (const f of files) form.append('files', f)
+    return apiFetch(`${BASE}/credentialing/portal/intake`, { method: 'POST', headers: credHeaders(), body: form })
+  },
+  listIntake: () => apiFetch(`${BASE}/credentialing/portal/intake`, { headers: credHeaders() }),
+  getIntake: (batchId) => apiFetch(`${BASE}/credentialing/portal/intake/${batchId}`, { headers: credHeaders() }),
+  updateIntakeItem: (itemId, fields) => apiFetch(`${BASE}/credentialing/portal/intake/items/${itemId}`, { method: 'PATCH', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
+  commitIntake: (batchId) => apiFetch(`${BASE}/credentialing/portal/intake/${batchId}/commit`, { method: 'POST', headers: credHeaders() }),
   invitePortalRoster: (rosterId) => apiFetch(`${BASE}/credentialing/portal/roster/${rosterId}/invite`, { method: 'POST', headers: credHeaders() }),
   updatePassportCredential: (npi, type, fields) => apiFetch(`${BASE}/credentialing/passport/${npi}/credentials/${type}`, { method: 'PUT', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
   uploadPassportDocument: (npi, file, { type, credentialType } = {}) => {

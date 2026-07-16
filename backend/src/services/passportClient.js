@@ -247,6 +247,75 @@ async function uploadDocument(npi, facilityId, file, { type, credentialType } = 
   throw err;
 }
 
+// ── Smart Document Intake (ease of switch) ───────────────────────────────────
+
+/** Forward a multi-file upload (multer memory files) to the intake pipeline. */
+async function createIntakeBatch(facilityId, facilityName, files, rosterHints) {
+  const key = getServiceKey();
+  if (!key) {
+    const err = new Error('CREDENTIALING_API_KEY is not set; passport bridge unavailable.');
+    err.code = 'BRIDGE_NOT_CONFIGURED';
+    throw err;
+  }
+  const form = new FormData();
+  form.append('granteeRef', facilityId);
+  form.append('granteeLabel', facilityName || facilityId);
+  if (rosterHints) form.append('rosterHints', JSON.stringify(rosterHints));
+  for (const f of files) {
+    form.append('files', new Blob([f.buffer], { type: f.mimetype }), f.originalname);
+  }
+  const res = await fetch(`${CRED_BACKEND_URL}/api/service/intake/batches`, {
+    method: 'POST',
+    headers: { 'X-Service-Key': key, Accept: 'application/json' },
+    body: form,
+  });
+  let body = null;
+  const text = await res.text();
+  if (text) { try { body = JSON.parse(text); } catch { body = { raw: text }; } }
+  if (res.ok) return body;
+  const err = new Error(body?.error || `intake upload failed (HTTP ${res.status})`);
+  err.status = res.status;
+  throw err;
+}
+
+async function listIntakeBatches(facilityId) {
+  const { status, body, ok } = await callPassportApi(`/api/service/intake/batches?granteeRef=${encodeURIComponent(facilityId)}`);
+  if (ok) return body;
+  const err = new Error(body?.error || `intake list failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+async function getIntakeBatch(facilityId, batchId) {
+  const { status, body, ok } = await callPassportApi(`/api/service/intake/batches/${encodeURIComponent(batchId)}?granteeRef=${encodeURIComponent(facilityId)}`);
+  if (ok) return body;
+  const err = new Error(body?.error || `intake read failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+async function updateIntakeItem(itemId, fields) {
+  const { status, body, ok } = await callPassportApi(`/api/service/intake/items/${encodeURIComponent(itemId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `intake item update failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+async function commitIntakeBatch(facilityId, batchId) {
+  const { status, body, ok } = await callPassportApi(`/api/service/intake/batches/${encodeURIComponent(batchId)}/commit`, {
+    method: 'POST',
+    body: JSON.stringify({ granteeRef: facilityId }),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `intake commit failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
@@ -257,4 +326,9 @@ module.exports = {
   batchSummary,
   updateCredential,
   uploadDocument,
+  createIntakeBatch,
+  listIntakeBatches,
+  getIntakeBatch,
+  updateIntakeItem,
+  commitIntakeBatch,
 };
