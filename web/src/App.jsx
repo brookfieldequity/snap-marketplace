@@ -328,6 +328,18 @@ export default function App() {
   }, [])
 
   // ── Facility portal ─────────────────────────────────────────────────────────
+  // Unified login: the credentialing portal renders ON TOP of an active
+  // facility session (the header's Credentialing tab does the SSO exchange
+  // then sets portalChoice). Must be checked BEFORE the facility branch or
+  // the tab appears to do nothing. Back returns to the facility portal.
+  if (portalChoice === 'credential') {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <CredentialApp onBack={() => setPortalChoice(null)} />
+      </Suspense>
+    )
+  }
+
   if (facilityToken) {
     const isShiftsMode = snapMode === 'SHIFTS' || snapMode === 'BOTH'
     const isMarketplaceMode = snapMode === 'MARKETPLACE' || snapMode === 'BOTH'
