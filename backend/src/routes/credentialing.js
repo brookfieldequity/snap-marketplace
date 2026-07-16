@@ -1526,4 +1526,50 @@ router.post('/passport/:npi/documents', credentialAuth, requireCoordinator, port
   }
 })
 
+// ── Phase 4: unified login (SSO from the facility portal) ────────────────────
+// A facility ADMIN clicks the "Credentialing" toggle → their facility session
+// is exchanged for a credentialing-portal session. Find-or-create keeps a
+// CredentialUser row per facility admin (portal roles/audit still work).
+// DIRECTION RULE: this is the ONLY bridge, facility → credentialing. Portal-
+// only credentialers have no facility account and can never cross back.
+const facilityAuth = require('../middleware/facilityAuth')
+router.post('/sso-exchange', facilityAuth, async (req, res) => {
+  try {
+    if (req.facilityRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Facility admin access required for the credentialing portal' })
+    }
+    const marketplaceUser = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { email: true, name: true },
+    })
+    if (!marketplaceUser?.email) return res.status(400).json({ error: 'No email on account' })
+
+    let credUser = await prisma.credentialUser.findFirst({
+      where: { facilityId: req.facility.id, email: marketplaceUser.email },
+    })
+    if (!credUser) {
+      credUser = await prisma.credentialUser.create({
+        data: {
+          facilityId: req.facility.id,
+          email: marketplaceUser.email,
+          name: marketplaceUser.name || marketplaceUser.email,
+          permission: 'COORDINATOR',
+          // Random unusable hash — this account authenticates via SSO only
+          // (they can still set a password via forgot-password if ever needed).
+          passwordHash: await bcrypt.hash(crypto.randomUUID() + crypto.randomUUID(), 10),
+          forcePasswordChange: false,
+        },
+      })
+    }
+    const token = await sign(credUser.id, req)
+    res.json({
+      token,
+      user: { id: credUser.id, email: credUser.email, name: credUser.name, permission: credUser.permission, forcePasswordChange: false },
+    })
+  } catch (err) {
+    console.error('[credentialing/sso-exchange] error:', err)
+    res.status(500).json({ error: 'SSO exchange failed' })
+  }
+})
+
 module.exports = router

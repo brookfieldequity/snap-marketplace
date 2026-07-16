@@ -714,6 +714,9 @@ export const credentialAPI = {
   // Phase 3 zero-storage portal: roster = the ONE marketplace roster,
   // credential data live from the passport in one batch call.
   getPortalRoster: () => apiFetch(`${BASE}/credentialing/portal/roster`, { headers: credHeaders() }),
+  // Phase 4 unified login: exchange a facility-ADMIN session for a
+  // credentialing-portal session (find-or-create CredentialUser).
+  ssoExchange: () => apiFetch(`${BASE}/credentialing/sso-exchange`, { method: 'POST', headers: facilityHeaders() }),
   invitePortalRoster: (rosterId) => apiFetch(`${BASE}/credentialing/portal/roster/${rosterId}/invite`, { method: 'POST', headers: credHeaders() }),
   updatePassportCredential: (npi, type, fields) => apiFetch(`${BASE}/credentialing/passport/${npi}/credentials/${type}`, { method: 'PUT', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
   uploadPassportDocument: (npi, file, { type, credentialType } = {}) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react'
-import { facilityAPI, authAPI } from './api.js'
+import { facilityAPI, authAPI, credentialAPI } from './api.js'
 import useIsNarrow from './lib/useIsNarrow.js'
 
 // ── Eager imports — everything a first paint can need ─────────────────────────
@@ -223,11 +223,13 @@ export default function App() {
     shifts:      { label: 'SNAP Shifts',      page: 'shifts-dashboard' },
     marketplace: { label: 'SNAP Marketplace', page: 'dashboard' },
     ops:         { label: 'SNAP Ops',         page: 'hour-entry' },
+    credentialing: { label: 'Credentialing',  page: null }, // SSO into the portal, not a facility page
   }
   const availableTabs = [
     (snapMode === 'SHIFTS' || snapMode === 'BOTH') && 'shifts',
     (snapMode === 'MARKETPLACE' || snapMode === 'BOTH') && 'marketplace',
     featureFlags.payroll_builder && 'ops',
+    'credentialing', // backend enforces facility-ADMIN on exchange
   ].filter(Boolean)
 
   // Once capabilities load, pick the landing tab: SNAP Shifts first when the
@@ -246,6 +248,21 @@ export default function App() {
 
   // Switch the header tab: change the visible capability and jump to its home page.
   function navigateTab(tab) {
+    // Phase 4 unified login: "Credentialing" isn't a facility page — it SSO-
+    // exchanges the facility session for a portal session and opens the portal.
+    if (tab === 'credentialing') {
+      credentialAPI.ssoExchange()
+        .then(({ token }) => {
+          localStorage.setItem('snapCredToken', token)
+          setPortalChoice('credential')
+        })
+        .catch((err) => {
+          alert(err.status === 403
+            ? 'The credentialing portal requires facility-admin access.'
+            : `Could not open the credentialing portal: ${err.message}`)
+        })
+      return
+    }
     setActiveTab(tab)
     setFacilityPage(TAB_META[tab].page)
   }
