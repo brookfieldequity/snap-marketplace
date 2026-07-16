@@ -601,6 +601,14 @@ function credHeaders(extra = {}) {
   }
 }
 
+// Auth-only headers for multipart uploads: Content-Type must be ABSENT so the
+// browser sets multipart/form-data with its boundary. Sending application/json
+// with a FormData body makes the server's JSON parser eat the upload and 413.
+function credAuthHeaders() {
+  const token = getCredToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export const credentialAPI = {
   login: (email, password) =>
     apiFetch(`${BASE}/credentialing/auth/login`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ email, password }) }),
@@ -722,7 +730,7 @@ export const credentialAPI = {
   createIntake: (files) => {
     const form = new FormData()
     for (const f of files) form.append('files', f)
-    return apiFetch(`${BASE}/credentialing/portal/intake`, { method: 'POST', headers: credHeaders(), body: form })
+    return apiFetch(`${BASE}/credentialing/portal/intake`, { method: 'POST', headers: credAuthHeaders(), body: form })
   },
   listIntake: () => apiFetch(`${BASE}/credentialing/portal/intake`, { headers: credHeaders() }),
   getIntake: (batchId) => apiFetch(`${BASE}/credentialing/portal/intake/${batchId}`, { headers: credHeaders() }),
@@ -735,7 +743,7 @@ export const credentialAPI = {
     form.append('document', file)
     if (type) form.append('type', type)
     if (credentialType) form.append('credentialType', credentialType)
-    return apiFetch(`${BASE}/credentialing/passport/${npi}/documents`, { method: 'POST', headers: credHeaders(), body: form })
+    return apiFetch(`${BASE}/credentialing/passport/${npi}/documents`, { method: 'POST', headers: credAuthHeaders(), body: form })
   },
 }
 
