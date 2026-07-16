@@ -240,6 +240,7 @@ export default function CredentialApp({ onBack }) {
         onNavigate={handleNavigate}
         user={user}
         onLogout={handleLogout}
+        onBack={onBack}
         narrow={narrow}
         open={navOpen}
         onClose={() => setNavOpen(false)}

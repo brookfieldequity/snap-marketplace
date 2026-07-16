@@ -19,7 +19,7 @@ const NAV = {
   ],
 }
 
-export default function CredentialSidebar({ activePage, onNavigate, user, onLogout, narrow = false, open = false, onClose, topOffset = 52 }) {
+export default function CredentialSidebar({ activePage, onNavigate, user, onLogout, onBack, narrow = false, open = false, onClose, topOffset = 52 }) {
   const permission = user?.permission || 'BILLING'
   const items = NAV[permission] || NAV.BILLING
 
@@ -65,6 +65,25 @@ export default function CredentialSidebar({ activePage, onNavigate, user, onLogo
           {user?.facilityName || ''}
         </div>
       </div>
+
+      {/* Back to the facility portal (unified-login SSO context). Rendered
+          only when the host app provides onBack — direct portal logins
+          without a facility session don't get a dead-end button. */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            width: '100%', padding: '12px 20px',
+            background: 'rgba(37,99,235,0.12)', border: 'none',
+            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            color: '#60A5FA', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          ← Back to SNAP Shifts
+        </button>
+      )}
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
