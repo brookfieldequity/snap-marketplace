@@ -1898,25 +1898,51 @@ router.get('/demo/status', adminAuth, async (req, res) => {
 router.post('/demo/seed', adminAuth, async (req, res) => {
   try {
     // ── Teardown ──────────────────────────────────────────────────────────────
-    const existing = await prisma.facility.findFirst({ where: { isDemo: true } });
-    if (existing) {
-      const fid = existing.id;
+    // Generic dependency-safe wipe. The previous hand-maintained delete list
+    // drifted behind the schema (CoverageTemplate etc. FK-blocked the
+    // facility delete): instead, sweep EVERY model with a facilityId column
+    // in a retry loop until FK order resolves, after clearing the known
+    // through-parent children.
+    const existing = await prisma.facility.findMany({ where: { isDemo: true }, select: { id: true } });
+    for (const { id: fid } of existing) {
       const shifts = await prisma.shift.findMany({ where: { facilityId: fid }, select: { id: true } });
       const shiftIds = shifts.map((s) => s.id);
-      const bookings = await prisma.shiftBooking.findMany({ where: { shiftId: { in: shiftIds } }, select: { id: true } });
-      const bookingIds = bookings.map((b) => b.id);
-      await prisma.providerRating.deleteMany({ where: { OR: [{ facilityId: fid }, { bookingId: { in: bookingIds } }] } });
-      await prisma.shiftBooking.deleteMany({ where: { shiftId: { in: shiftIds } } });
-      await prisma.shift.deleteMany({ where: { facilityId: fid } });
-      await prisma.internalIncentiveShift.deleteMany({ where: { facilityId: fid } });
-      await prisma.schedulingRecord.deleteMany({ where: { facilityId: fid } });
-      await prisma.staffIQInput.deleteMany({ where: { facilityId: fid } });
-      await prisma.scheduleAssignment.deleteMany({ where: { facilityId: fid } });
-      await prisma.scheduleDay.deleteMany({ where: { facilityId: fid } });
-      await prisma.internalRosterEntry.deleteMany({ where: { facilityId: fid } });
-      await prisma.facilitySiteRate.deleteMany({ where: { facilityId: fid } });
-      await prisma.facilityUser.deleteMany({ where: { facilityId: fid } });
-      await prisma.credentialUser.deleteMany({ where: { facilityId: fid } });
+      if (shiftIds.length) {
+        const bookings = await prisma.shiftBooking.findMany({ where: { shiftId: { in: shiftIds } }, select: { id: true } });
+        await prisma.providerRating.deleteMany({ where: { bookingId: { in: bookings.map((b) => b.id) } } }).catch(() => {});
+        await prisma.shiftCompletion.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+        await prisma.shiftBooking.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+        await prisma.shiftApplication.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+      }
+      const assignments = await prisma.scheduleAssignment.findMany({ where: { facilityId: fid }, select: { id: true } });
+      if (assignments.length) {
+        await prisma.assignmentCostComponent.deleteMany({ where: { assignmentId: { in: assignments.map((a) => a.id) } } }).catch(() => {});
+      }
+      const incentives = await prisma.internalIncentiveShift.findMany({ where: { facilityId: fid }, select: { id: true } });
+      if (incentives.length) {
+        await prisma.internalIncentiveShiftResponse.deleteMany({ where: { incentiveShiftId: { in: incentives.map((i) => i.id) } } }).catch(() => {});
+      }
+      const credRoster = await prisma.facilityRosterEntry.findMany({ where: { facilityId: fid }, select: { id: true } });
+      if (credRoster.length) {
+        await prisma.providerCredential.deleteMany({ where: { rosterId: { in: credRoster.map((c) => c.id) } } }).catch(() => {});
+      }
+
+      // Every facilityId-bearing model, FK order resolved by retrying.
+      const facilityModels = Object.keys(prisma).filter((k) => !k.startsWith('$') && !k.startsWith('_'));
+      const pending = new Set(facilityModels);
+      for (let pass = 1; pass <= 6 && pending.size; pass++) {
+        for (const model of [...pending]) {
+          if (model === 'facility' || typeof prisma[model]?.deleteMany !== 'function') { pending.delete(model); continue; }
+          try {
+            await prisma[model].deleteMany({ where: { facilityId: fid } });
+            pending.delete(model);
+          } catch (e) {
+            // Validation error = model has no facilityId column → not ours.
+            if (e.name === 'PrismaClientValidationError') pending.delete(model);
+            // P2003 (FK) → children not gone yet; retry next pass.
+          }
+        }
+      }
       await prisma.facility.delete({ where: { id: fid } });
     }
     for (const email of DEMO_EMAILS) {
