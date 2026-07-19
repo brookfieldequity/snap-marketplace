@@ -316,6 +316,23 @@ async function commitIntakeBatch(facilityId, batchId) {
   throw err;
 }
 
+/**
+ * POST /api/service/demo/seed — (re)create the demo passport cohort on the
+ * credentialing side, granted to the demo facility. Idempotent over there;
+ * called from the marketplace demo seed so the credentialing portal demos
+ * on fake data too.
+ */
+async function demoSeedPassports(facilityId, facilityName) {
+  const { status, body, ok } = await callPassportApi('/api/service/demo/seed', {
+    method: 'POST',
+    body: JSON.stringify({ granteeRef: facilityId, granteeLabel: facilityName }),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `demo passport seed failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
@@ -331,4 +348,5 @@ module.exports = {
   getIntakeBatch,
   updateIntakeItem,
   commitIntakeBatch,
+  demoSeedPassports,
 };

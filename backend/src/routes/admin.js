@@ -1916,6 +1916,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       await prisma.internalRosterEntry.deleteMany({ where: { facilityId: fid } });
       await prisma.facilitySiteRate.deleteMany({ where: { facilityId: fid } });
       await prisma.facilityUser.deleteMany({ where: { facilityId: fid } });
+      await prisma.credentialUser.deleteMany({ where: { facilityId: fid } });
       await prisma.facility.delete({ where: { id: fid } });
     }
     for (const email of DEMO_EMAILS) {
@@ -1946,6 +1947,21 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
     });
     await prisma.facilityUser.create({
       data: { userId: coordUser.id, facilityId: facility.id, facilityRole: 'COORDINATOR' },
+    });
+    // Credentialing-portal login for the demo (same email + demo1234). A
+    // stale row can survive from a prior demo facility whose teardown never
+    // ran — email is unique, so clear it first.
+    await prisma.credentialUser.deleteMany({ where: { email: 'demo.coordinator@snapmedical.app' } });
+    await prisma.credentialUser.create({
+      data: {
+        facilityId: facility.id,
+        name: 'Demo Coordinator',
+        email: 'demo.coordinator@snapmedical.app',
+        passwordHash: pwHash,
+        permission: 'COORDINATOR',
+        isActive: true,
+        forcePasswordChange: false,
+      },
     });
 
     // ── StaffIQ inputs ────────────────────────────────────────────────────────
@@ -2093,19 +2109,23 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
     });
 
     // ── Internal roster ───────────────────────────────────────────────────────
+    // Six providers carry reserved 9999… demo NPIs — the join key to the demo
+    // passport cohort seeded on the credentialing side (see demoSeedPassports
+    // below). Their credentialingStatus reflects the demo story: CLAIMED for
+    // granted passports, INVITED for the request-access flow (Lee).
     const rosterDefs = [
-      { providerName: 'Chen, Sarah',      providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
-      { providerName: 'Torres, Michael',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
-      { providerName: 'Williams, Karen',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Chen, Sarah',      providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000101', credentialingStatus: 'CLAIMED', snapAccountEmail: 'demo.passport.chen@snapmedical.app' },
+      { providerName: 'Torres, Michael',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000102', credentialingStatus: 'CLAIMED', snapAccountEmail: 'demo.passport.torres@snapmedical.app' },
+      { providerName: 'Williams, Karen',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000104', credentialingStatus: 'CLAIMED', snapAccountEmail: 'demo.passport.williams@snapmedical.app' },
       { providerName: 'Johnson, Lisa',    providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 255, allInCostPerHour: 305, employer: 'APNE', preferredShiftLength: '10hr' },
       { providerName: 'Brown, Amanda',    providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 255, allInCostPerHour: 305, employer: 'APNE', preferredShiftLength: '10hr' },
       { providerName: 'Davis, Patricia',  providerType: 'CRNA',             employmentCategory: 'PER_DIEM',  hourlyRate: 270, allInCostPerHour: 270, employer: 'APNE', preferredShiftLength: '10hr' },
       { providerName: 'Martinez, Carlos', providerType: 'CRNA',             employmentCategory: 'PER_DIEM',  hourlyRate: 270, allInCostPerHour: 270, employer: 'APNE', preferredShiftLength: '10hr' },
       { providerName: 'Thompson, David',  providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 258, allInCostPerHour: 308, employer: 'APNE', preferredShiftLength: '10hr' },
       { providerName: 'Anderson, Rachel', providerType: 'CRNA',             employmentCategory: 'LOCUMS',    hourlyRate: 285, allInCostPerHour: 420, employer: 'Agency', contractStart: demoDay(-60), contractEnd: demoDay(90) },
-      { providerName: 'Park, James',      providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr' },
-      { providerName: 'Smith, Robert',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr' },
-      { providerName: 'Lee, Jennifer',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'PER_DIEM',  hourlyRate: 400, allInCostPerHour: 400, employer: 'APNE', preferredShiftLength: '10hr' },
+      { providerName: 'Park, James',      providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000103', credentialingStatus: 'CLAIMED', snapAccountEmail: 'demo.passport.park@snapmedical.app' },
+      { providerName: 'Smith, Robert',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000105', credentialingStatus: 'CLAIMED', snapAccountEmail: 'demo.passport.smith@snapmedical.app' },
+      { providerName: 'Lee, Jennifer',    providerType: 'ANESTHESIOLOGIST', employmentCategory: 'PER_DIEM',  hourlyRate: 400, allInCostPerHour: 400, employer: 'APNE', preferredShiftLength: '10hr', npi: '9999000106', credentialingStatus: 'INVITED', inviteSentAt: demoDay(-3), snapAccountEmail: 'demo.passport.lee@snapmedical.app' },
     ];
     const rosterEntries = [];
     for (const def of rosterDefs) {
@@ -2181,6 +2201,25 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       });
     }
 
+    // ── Credentialing demo cohort (passport side, via the bridge) ────────────
+    // Seeds fake passports on the credentialing service granted to this demo
+    // facility, so the credentialing portal demos populated (roster passports,
+    // expiry watchlist, request-access flow). Non-fatal: an unconfigured or
+    // down bridge still yields a working shifts/StaffIQ demo.
+    let credentialing = { seeded: false };
+    const passportClient = require('../services/passportClient');
+    if (passportClient.isConfigured()) {
+      try {
+        const seedResult = await passportClient.demoSeedPassports(facility.id, facility.name);
+        credentialing = { seeded: true, providers: seedResult.providers?.length ?? 0 };
+      } catch (err) {
+        console.error('[admin] demo passport seed failed (demo still usable):', err.message);
+        credentialing = { seeded: false, error: err.message };
+      }
+    } else {
+      credentialing = { seeded: false, error: 'passport bridge not configured' };
+    }
+
     res.json({
       ok: true,
       facilityId: facility.id,
@@ -2189,6 +2228,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       schedulingRecords: records.length,
       rosterEntries: rosterEntries.length,
       scheduleDays: weekdayOffsets.length * 2,
+      credentialing,
     });
   } catch (err) {
     console.error('[admin] demo/seed failed:', err);
