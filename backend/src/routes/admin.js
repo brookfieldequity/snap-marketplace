@@ -1920,8 +1920,25 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
       await prisma.facility.delete({ where: { id: fid } });
     }
     for (const email of DEMO_EMAILS) {
-      const u = await prisma.user.findUnique({ where: { email } });
+      const u = await prisma.user.findUnique({ where: { email }, include: { providerProfile: { select: { id: true } } } });
       if (u) {
+        // Clear user/profile dependents first — sessions from prior demo
+        // launches (AuthSession) and provider-side rows otherwise FK-block
+        // the delete and 500 the whole seed. Each guarded: schema drift in
+        // one optional dependent must not break the teardown.
+        const pid = u.providerProfile?.id;
+        const guarded = async (fn) => { try { await fn(); } catch {} };
+        if (pid) {
+          await guarded(() => prisma.notification.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.providerRating.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.shiftApplication.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.providerAvailability.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.preferredProvider.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.vIPPointsLog.deleteMany({ where: { providerId: pid } }));
+          await guarded(() => prisma.providerLocation.deleteMany({ where: { providerId: pid } }));
+        }
+        await guarded(() => prisma.authSession.deleteMany({ where: { userId: u.id } }));
+        await guarded(() => prisma.passwordReset.deleteMany({ where: { userId: u.id } }));
         await prisma.providerProfile.deleteMany({ where: { userId: u.id } });
         await prisma.user.delete({ where: { id: u.id } });
       }
