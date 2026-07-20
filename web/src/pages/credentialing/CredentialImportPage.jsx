@@ -71,7 +71,7 @@ export default function CredentialImportPage() {
     setCommitting(true)
     try {
       const r = await credentialAPI.commitIntake(batch.id)
-      setNotice(`Done: ${r.committed} filed to passports, ${r.staged} held for providers who haven't joined yet (they'll attach automatically).`)
+      setNotice(`Done: ${r.committed} filed to passports, ${r.archived || 0} filed to archive, ${r.staged} held for providers who haven't joined yet (they'll attach automatically).`)
       openBatch(batch.id)
       loadList()
     } catch (e) {
@@ -81,7 +81,9 @@ export default function CredentialImportPage() {
     }
   }
 
-  const confirmed = batch?.items?.filter((i) => i.status === 'CONFIRMED').length || 0
+  // Confirmed items file to passports; archive-marked items file to the
+  // retained (facility-invisible) archive — both go in one commit.
+  const confirmed = batch?.items?.filter((i) => ['CONFIRMED', 'ARCHIVE'].includes(i.status)).length || 0
   const pending = batch?.items?.filter((i) => ['PENDING'].includes(i.status)).length || 0
 
   return (
@@ -141,7 +143,7 @@ export default function CredentialImportPage() {
                 disabled={committing || confirmed === 0}
                 style={{ padding: '9px 18px', background: confirmed ? '#2563EB' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: confirmed ? 'pointer' : 'default' }}
               >
-                {committing ? 'Filing…' : `File ${confirmed} confirmed item${confirmed === 1 ? '' : 's'}`}
+                {committing ? 'Filing…' : `File ${confirmed} item${confirmed === 1 ? '' : 's'}`}
               </button>
             </div>
           </div>
@@ -158,7 +160,10 @@ export default function CredentialImportPage() {
 function IntakeCard({ item, onSave }) {
   const [edit, setEdit] = useState(false)
   const [f, setF] = useState({})
-  const done = ['COMMITTED', 'STAGED', 'REJECTED'].includes(item.status)
+  // Filed states are read-only; REJECTED is read-only but restorable (a
+  // mis-click must not be a dead end).
+  const done = ['COMMITTED', 'STAGED', 'ARCHIVED', 'REJECTED'].includes(item.status)
+  const restorable = item.status === 'REJECTED'
   const conf = CONF_COLOR[item.confidence] || '#94A3B8'
 
   const field = (k, fallback = '') => (f[k] !== undefined ? f[k] : item[k] ?? fallback)
@@ -169,6 +174,7 @@ function IntakeCard({ item, onSave }) {
     FAILED: ['#EF4444', 'Could not read'], CONFIRMED: ['#2563EB', 'Confirmed — ready to file'],
     COMMITTED: ['#10B981', 'Filed to passport'], STAGED: ['#8B5CF6', 'Held — attaches when provider joins'],
     REJECTED: ['#64748B', 'Rejected'],
+    ARCHIVE: ['#0EA5E9', 'Marked for archive'], ARCHIVED: ['#0EA5E9', 'Filed to archive'],
   }[item.status] || ['#94A3B8', item.status]
 
   return (
@@ -212,10 +218,21 @@ function IntakeCard({ item, onSave }) {
                 style={{ padding: '8px 14px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}
               >✓ Confirm</button>
               <button
+                title="Keep on file as a historical record — retained and auditable, never shown to facilities and never affects expiry tracking. For old expired licenses and superseded documents."
+                onClick={() => onSave(item, { ...f, status: 'ARCHIVE' })}
+                style={{ padding: '8px 12px', background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+              >🗄 Archive</button>
+              <button
                 onClick={() => onSave(item, { status: 'REJECTED' })}
                 style={{ padding: '8px 12px', background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
               >Reject</button>
             </div>
+          )}
+          {restorable && (
+            <button
+              onClick={() => onSave(item, { status: 'ANALYZED' })}
+              style={{ padding: '8px 12px', background: '#fff', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+            >↩ Restore</button>
           )}
         </div>
       )}

@@ -369,6 +369,45 @@ export default function ProfileScreen({ navigation }) {
     setProvider((prev) => ({ ...prev, ...updates }));
   };
 
+  // Permanent account deletion — App Store 5.1.1(v).
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently erases your profile, applications, availability, and history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.prompt(
+              'Confirm deletion',
+              'Enter your password to permanently delete your account. (Leave blank if you sign in with Apple or Google.)',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async (password) => {
+                    try {
+                      await providerAPI.deleteAccount(password);
+                      await AsyncStorage.removeItem('snapToken');
+                      Alert.alert('Account deleted', 'Your account and data have been permanently erased.');
+                      navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                    } catch (err) {
+                      Alert.alert('Could not delete account', err.response?.data?.error || 'Please try again or contact support@snapmedical.app.');
+                    }
+                  },
+                },
+              ],
+              'secure-text'
+            );
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerLoader}>
@@ -533,6 +572,11 @@ export default function ProfileScreen({ navigation }) {
           )}
 
           <Text style={styles.vipTapHint}>Tap to see how to earn more →</Text>
+        </TouchableOpacity>
+
+        {/* Permanent account deletion — App Store 5.1.1(v). */}
+        <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 14, marginTop: 8 }} onPress={handleDeleteAccount}>
+          <Text style={{ color: '#E53E3E', fontSize: 13, fontWeight: '500' }}>Delete Account</Text>
         </TouchableOpacity>
 
         <View style={{ height: 32 }} />

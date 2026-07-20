@@ -1,0 +1,32 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "info": {
+      "en-US": {
+        "title": "SNAP Medical Shifts",
+        "subtitle": "Anesthesia shifts & schedules",
+        "description": "SNAP connects anesthesia providers — CRNAs, anesthesiologists, and anesthesia assistants — with surgical facilities that need them.\n\nFIND WORK THAT FITS\nBrowse open shifts near you, see transparent rates up front, and apply in seconds. Map and list views, filtered to your specialty.\n\nYOUR SCHEDULE, ONE PLACE\nSee everything you're booked for — marketplace shifts and your practice schedule — in one clean calendar. Get notified the moment a schedule changes.\n\nSHARE YOUR AVAILABILITY\nTell facilities when you can work with a few taps. Per-diem and locums providers can opt into schedule requests from practices they work with.\n\nGET PAID TRANSPARENTLY\nEvery shift shows its rate before you apply. Track your earnings in the app.\n\nBUILT FOR ANESTHESIA\nSNAP is purpose-built for the anesthesia workforce — not a generic gig platform. Facilities on SNAP staff ORs, endoscopy suites, and surgery centers.\n\nProviders are verified. Facilities are real. No spam, no middlemen markups.",
+        "keywords": [
+          "anesthesia",
+          "CRNA",
+          "anesthesiologist",
+          "shifts",
+          "per diem",
+          "locums",
+          "medical jobs",
+          "healthcare staffing",
+          "schedule",
+          "nurse anesthetist"
+        ],
+        "marketingUrl": "https://snapmedical.app",
+        "privacyPolicyUrl": "https://api.snapmedical.app/privacy",
+        "supportUrl": "https://snapmedical.app"
+      }
+    },
+    "categories": ["MEDICAL", "BUSINESS"],
+    "copyright": "2026 SNAP Medical Technologies, LLC",
+    "release": {
+      "automaticRelease": true
+    }
+  }
+}

@@ -78,6 +78,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Privacy policy (App Store listing URL for the SNAP app).
+const privacyPage = require('./privacyPage');
+app.get('/privacy', (req, res) => res.type('html').send(privacyPage));
+
 // Strict throttling on credential-bearing endpoints (login/register/reset).
 app.use('/api/auth', authLimiter);
 app.use([

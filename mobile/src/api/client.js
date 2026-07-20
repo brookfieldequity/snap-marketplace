@@ -184,6 +184,13 @@ export const providerAPI = {
   getMe: () => api.get('/providers/me'),
 
   /**
+   * Permanently delete the authenticated provider's account and data
+   * (App Store 5.1.1(v)). Password may be empty for Apple/Google accounts.
+   */
+  deleteAccount: (password) =>
+    api.delete('/providers/me', { data: { confirmation: 'DELETE', password: password || undefined } }),
+
+  /**
    * Update the authenticated provider's profile.
    * @param {object} data - partial provider fields to update
    */

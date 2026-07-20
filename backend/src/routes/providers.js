@@ -2,6 +2,8 @@ const express = require('express');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const { aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
+const { deleteProviderAccount } = require('../services/accountDeletion');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
 
@@ -275,5 +277,31 @@ async function checkVipStatus(profileId) {
     });
   }
 }
+
+/**
+ * DELETE /me — permanent provider account deletion (App Store 5.1.1(v)).
+ * Requires the literal confirmation string; password re-verified when the
+ * account has one (Apple/Google-only accounts don't).
+ */
+router.delete('/me', auth, async (req, res) => {
+  try {
+    const { confirmation, password } = req.body || {};
+    if (confirmation !== 'DELETE') {
+      return res.status(400).json({ error: 'Type DELETE to confirm account deletion.' });
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+    if (user.password) {
+      const ok = password ? await bcrypt.compare(password, user.password) : false;
+      if (!ok) return res.status(401).json({ error: 'Password is incorrect.' });
+    }
+    const result = await deleteProviderAccount(user.id);
+    if (!result.deleted) return res.status(400).json({ error: 'This account type cannot be deleted from the app.' });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[providers] account deletion failed:', err);
+    res.status(500).json({ error: 'Account deletion failed. Please contact support@snapmedical.app.' });
+  }
+});
 
 module.exports = router;
