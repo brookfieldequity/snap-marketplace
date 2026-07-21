@@ -195,6 +195,8 @@ export const providerAPI = {
    * @param {object} data - partial provider fields to update
    */
   updateMe: (data) => api.patch('/providers/me', data),
+  // Public NPPES search (works pre-auth, used by the Register wizard too).
+  npiLookup: (params) => api.get('/providers/npi-lookup', { params }),
 
   /**
    * Upload a provider profile photo to S3.

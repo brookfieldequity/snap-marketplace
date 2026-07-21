@@ -3,6 +3,8 @@ const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const { aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 const { deleteProviderAccount } = require('../services/accountDeletion');
+const { searchByName: nppesSearchByName } = require('../services/nppesLookup');
+const { reverseLinkForProvider } = require('../services/rosterLink');
 const bcrypt = require('bcryptjs');
 
 const router = express.Router();
@@ -62,10 +64,26 @@ router.patch('/me', auth, async (req, res) => {
       'yearsExperience', 'city', 'lat', 'lng', 'photoUrl',
       'personalStatement', 'equipmentPreferences', 'caseMixExperience',
       'maLicenseNumber', 'maLicenseExpiry', 'notifPreference', 'notifSurge',
-      'expoPushToken',
+      'expoPushToken', 'npiNumber',
     ];
     const updates = {};
     allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+
+    // NPI is the canonical cross-product identity key — validate and check
+    // it isn't already claimed by another account before writing.
+    if (updates.npiNumber !== undefined && updates.npiNumber !== null && updates.npiNumber !== '') {
+      const npi = String(updates.npiNumber).replace(/\D/g, '');
+      if (!/^\d{10}$/.test(npi)) {
+        return res.status(400).json({ error: 'NPI must be a 10-digit number.' });
+      }
+      const taken = await prisma.providerProfile.findUnique({ where: { npiNumber: npi }, select: { userId: true } });
+      if (taken && taken.userId !== req.user.userId) {
+        return res.status(409).json({ error: 'This NPI is already on another SNAP account. Contact support if this is yours.' });
+      }
+      updates.npiNumber = npi;
+    } else if (updates.npiNumber === '') {
+      updates.npiNumber = null;
+    }
 
     const profile = await prisma.providerProfile.update({
       where: { userId: req.user.userId },
@@ -82,10 +100,46 @@ router.patch('/me', auth, async (req, res) => {
       data: { profileCompletePct: pct },
     });
 
+    // A newly-added NPI may match roster rows imported before this account
+    // existed — stitch immediately rather than waiting for the next login.
+    if (updates.npiNumber) {
+      reverseLinkForProvider({
+        id: updated.id,
+        userEmail: req.user.email,
+        npiNumber: updated.npiNumber,
+      }).catch((e) => console.error('[providers] reverse-link after NPI update failed:', e.message));
+    }
+
     res.json(updated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// ── NPI self-lookup (NPPES) ───────────────────────────────────────────────────
+//
+// Providers rarely know their NPI by heart. Search the public NPPES registry
+// by name so registration/profile completion can autofill it — the same
+// service the roster importer uses, provider-facing. Unauthenticated on
+// purpose: the Register wizard needs it before a token exists, NPPES data is
+// public, and the service applies its own global throttle upstream.
+router.get('/npi-lookup', async (req, res) => {
+  try {
+    const { firstName, lastName, state } = req.query;
+    if (!firstName || !lastName) {
+      return res.status(400).json({ error: 'First and last name are required.' });
+    }
+    const matches = await nppesSearchByName({
+      firstName: String(firstName).trim(),
+      lastName: String(lastName).trim(),
+      state: state ? String(state).trim().toUpperCase() : 'MA',
+      limit: 8,
+    });
+    res.json({ matches });
+  } catch (err) {
+    console.error('[providers] npi-lookup failed:', err.message);
+    res.status(500).json({ error: 'NPI lookup failed. You can enter your NPI manually.' });
   }
 });
 

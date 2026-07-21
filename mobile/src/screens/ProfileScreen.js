@@ -150,6 +150,7 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
   const [lastName, setLastName] = useState(provider?.lastName || '');
   const [city, setCity] = useState(provider?.city || '');
   const [personalStatement, setPersonalStatement] = useState(provider?.personalStatement || '');
+  const [npiNumber, setNpiNumber] = useState(provider?.npiNumber || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -158,18 +159,19 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
       setLastName(provider.lastName || '');
       setCity(provider.city || '');
       setPersonalStatement(provider.personalStatement || '');
+      setNpiNumber(provider.npiNumber || '');
     }
   }, [visible, provider]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await providerAPI.updateMe({ firstName, lastName, city, personalStatement });
+      const res = await providerAPI.updateMe({ firstName, lastName, city, personalStatement, npiNumber });
       // Merge the fresh server response (includes profileCompletePct) with the local edits as fallback.
-      onSave({ firstName, lastName, city, personalStatement, ...(res?.data || {}) });
+      onSave({ firstName, lastName, city, personalStatement, npiNumber, ...(res?.data || {}) });
       onClose();
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message || 'Could not save changes.');
+      Alert.alert('Error', err.response?.data?.error || err.response?.data?.message || 'Could not save changes.');
     } finally {
       setSaving(false);
     }
@@ -221,6 +223,19 @@ function EditProfileModal({ visible, provider, onClose, onSave }) {
                 onChangeText={setCity}
                 placeholder="Boston"
                 placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>NPI number</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={npiNumber}
+                onChangeText={(v) => setNpiNumber(v.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit NPI — links schedules & credentials"
+                placeholderTextColor="#94A3B8"
+                keyboardType="number-pad"
+                maxLength={10}
               />
             </View>
 

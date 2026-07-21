@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI } from '../api/client';
+import { authAPI, providerAPI } from '../api/client';
 
 const COLORS = {
   primary: '#2563EB',
@@ -127,6 +127,29 @@ export default function RegisterScreen({ navigation }) {
   const [maLicenseNumber, setMaLicenseNumber] = useState('');
   const [maLicenseExpiry, setMaLicenseExpiry] = useState('');
   const [maLicenseAcknowledged, setMaLicenseAcknowledged] = useState(false);
+  const [npiNumber, setNpiNumber] = useState('');
+  const [npiMatches, setNpiMatches] = useState(null);
+  const [npiLoading, setNpiLoading] = useState(false);
+
+  // NPI is the key that links this account to practice rosters and the
+  // credentialing passport — look it up in the public NPPES registry using
+  // the name entered on the previous step.
+  const findMyNpi = async () => {
+    setNpiLoading(true);
+    setNpiMatches(null);
+    try {
+      const res = await providerAPI.npiLookup({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        state: 'MA',
+      });
+      setNpiMatches(res.data?.matches || []);
+    } catch {
+      setNpiMatches([]);
+    } finally {
+      setNpiLoading(false);
+    }
+  };
 
   // Step 3 — PIN
   const [pin, setPin] = useState('');
@@ -208,6 +231,7 @@ export default function RegisterScreen({ navigation }) {
         maLicenseExpiry,
         maLicenseAcknowledged,
         pin,
+        npiNumber: npiNumber.trim() || undefined,
       };
       const response = await authAPI.providerRegister(payload);
       const { token } = response.data;
@@ -393,6 +417,50 @@ export default function RegisterScreen({ navigation }) {
         {errors.maLicenseExpiry && (
           <Text style={styles.errorText}>{errors.maLicenseExpiry}</Text>
         )}
+      </View>
+
+      <View style={styles.fieldGroup}>
+        <Text style={styles.label}>NPI number (optional)</Text>
+        <Text style={styles.npiHint}>
+          Your NPI links your account to practice schedules and your credentialing passport automatically.
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={npiNumber}
+          onChangeText={(v) => setNpiNumber(v.replace(/\D/g, '').slice(0, 10))}
+          placeholder="10-digit NPI"
+          placeholderTextColor="#94A3B8"
+          keyboardType="number-pad"
+          maxLength={10}
+        />
+        <TouchableOpacity
+          style={styles.npiFindButton}
+          onPress={findMyNpi}
+          disabled={npiLoading || !firstName.trim() || !lastName.trim()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.npiFindButtonText}>
+            {npiLoading ? 'Searching the NPI registry…' : '🔎 Find my NPI'}
+          </Text>
+        </TouchableOpacity>
+        {npiMatches !== null && npiMatches.length === 0 && (
+          <Text style={styles.npiHint}>No matches found — you can enter your NPI manually or skip this.</Text>
+        )}
+        {npiMatches?.map((m) => (
+          <TouchableOpacity
+            key={m.npi}
+            style={[styles.npiMatchRow, npiNumber === m.npi && styles.npiMatchRowSelected]}
+            onPress={() => { setNpiNumber(m.npi); setNpiMatches(null); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.npiMatchName}>
+              {m.firstName} {m.lastName}{m.credential ? `, ${m.credential}` : ''}
+            </Text>
+            <Text style={styles.npiMatchMeta}>
+              {m.npi}{m.primaryTaxonomy ? ` · ${m.primaryTaxonomy}` : ''}{m.primaryAddress ? ` · ${m.primaryAddress.city}, ${m.primaryAddress.state}` : ''}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <TouchableOpacity
@@ -640,6 +708,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.error,
     marginTop: 6,
+  },
+  npiHint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 8,
+    lineHeight: 17,
+  },
+  npiFindButton: {
+    marginTop: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  npiFindButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  npiMatchRow: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  npiMatchRowSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  npiMatchName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  npiMatchMeta: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   pickerContainer: {
     flexDirection: 'column',

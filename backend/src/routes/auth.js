@@ -50,12 +50,25 @@ router.post('/provider/register', async (req, res) => {
     const {
       email, password, firstName, lastName, specialty,
       yearsExperience, city, zipCode, maLicenseNumber, maLicenseExpiry,
-      maLicenseAcknowledged, pin,
+      maLicenseAcknowledged, pin, npiNumber,
     } = req.body;
 
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     if (!maLicenseAcknowledged) return res.status(400).json({ error: 'Massachusetts license acknowledgment required' });
     if (!pin || !/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'A 4-digit PIN is required' });
+
+    // NPI is optional at registration but is the canonical identity key —
+    // accept it when valid and unclaimed, silently drop it otherwise
+    // (registration must never fail over an identity-assist field).
+    let npi;
+    if (npiNumber) {
+      const digits = String(npiNumber).replace(/\D/g, '');
+      if (/^\d{10}$/.test(digits)) {
+        const taken = await prisma.providerProfile.findUnique({ where: { npiNumber: digits }, select: { id: true } });
+        if (!taken) npi = digits;
+        else console.warn(`[auth] registration NPI ${digits} already claimed — dropped`);
+      }
+    }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
@@ -79,6 +92,7 @@ router.post('/provider/register', async (req, res) => {
             maLicenseExpiry: maLicenseExpiry ? parseLicenseExpiry(maLicenseExpiry) : undefined,
             maLicenseAcknowledged: !!maLicenseAcknowledged,
             pin: hashedPin,
+            npiNumber: npi,
             profileCompletePct: 20,
           },
         },
