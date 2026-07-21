@@ -263,7 +263,9 @@ export default function ShiftDetailScreen({ route, navigation }) {
         [{ text: 'Great!', onPress: () => navigation.goBack() }]
       );
     } catch (err) {
-      const msg = err.response?.data?.message || 'Booking failed. Please try again.';
+      // Backend sends { error } (e.g. the double-booking guard's "You're
+      // already scheduled at <facility> on <date>") — surface it verbatim.
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Booking failed. Please try again.';
       Alert.alert('Booking Failed', msg);
     } finally {
       setPinLoading(false);

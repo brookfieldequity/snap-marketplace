@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { providerAPI } from '../api/client';
+import ClaimRosterModal from '../components/ClaimRosterModal';
 
 const COLORS = {
   primary: '#2563EB',
@@ -286,6 +287,7 @@ export default function ProfileScreen({ navigation }) {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [vipModalVisible, setVipModalVisible] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [claimModalVisible, setClaimModalVisible] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -526,6 +528,24 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Link your practice — invite-code roster claiming */}
+        <TouchableOpacity
+          style={styles.sectionCard}
+          onPress={() => setClaimModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.linkPracticeRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Link Your Practice</Text>
+              <Text style={styles.linkPracticeSub}>
+                Got an invite code from your coordinator? Enter it to connect your
+                practice schedule and availability windows.
+              </Text>
+            </View>
+            <Text style={styles.linkPracticeChevron}>›</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Personal statement */}
         {provider?.personalStatement ? (
           <View style={styles.sectionCard}>
@@ -596,6 +616,11 @@ export default function ProfileScreen({ navigation }) {
         isVip={isVip}
         log={displayVip?.vipLog || []}
         onClose={() => setVipModalVisible(false)}
+      />
+
+      <ClaimRosterModal
+        visible={claimModalVisible}
+        onClose={() => setClaimModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -893,6 +918,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textDark,
     lineHeight: 21,
+  },
+  linkPracticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  linkPracticeSub: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    lineHeight: 17,
+  },
+  linkPracticeChevron: {
+    fontSize: 26,
+    color: COLORS.textMuted,
+    fontWeight: '600',
   },
   vipCard: {
     borderColor: COLORS.vip + '30',

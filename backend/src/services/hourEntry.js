@@ -168,7 +168,7 @@ async function getEntries({ facilityId, periodStart, periodEnd }) {
     g.rows.push({
       id: e.id, date: ymd(e.date), location: e.location,
       startTime: e.startTime, endTime: e.endTime, hours: e.hours,
-      status: e.status, source: e.source,
+      status: e.status, source: e.source, enteredBy: e.enteredBy,
     });
     g.totalHours = Math.round((g.totalHours + e.hours) * 100) / 100;
     if (e.status === 'SUBMITTED') g.submittedHours = Math.round((g.submittedHours + e.hours) * 100) / 100;

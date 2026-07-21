@@ -242,6 +242,13 @@ export const providerAPI = {
   getActiveWindows: () => api.get('/providers/me/active-windows'),
 
   /**
+   * Link this account to a facility roster using a coordinator invite code.
+   * Returns { ok, facility: { id, name }, entry: { id, providerName } }.
+   * @param {string} code - 8-character claim code from the coordinator
+   */
+  claimRoster: (code) => api.post('/providers/me/claim-roster', { code }),
+
+  /**
    * Get active incentive shifts targeted at this provider.
    */
   getActiveIncentiveShifts: () => api.get('/incentive/provider/active'),
@@ -298,6 +305,28 @@ export const scheduleRequestAPI = {
   mine: () => api.get('/schedule-requests/mine'),
   /** Cancel my own pending request. */
   cancel: (id) => api.delete(`/schedule-requests/${id}`),
+};
+
+// ---------------------------------------------------------------------------
+// Provider one-tap hours entry (Phase 3)
+// ---------------------------------------------------------------------------
+
+export const hoursAPI = {
+  /**
+   * Confirmable days for the provider (default: last 14 days through today).
+   * Returns { facilities: [{id, name}], days: [{ date, facilityId,
+   * facilityName, rosterEntryId, location, status ('unconfirmed'|'submitted'),
+   * defaultStartTime, defaultEndTime, startTime, endTime, hours, entryId }] }.
+   * @param {object} params - optional { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
+   */
+  get: (params = {}) => api.get('/provider-hours', { params }),
+
+  /**
+   * One-tap confirm worked days. Hours are recomputed server-side.
+   * @param {Array} entries - [{ date, rosterEntryId, location, startTime, endTime }]
+   * Returns { updated: [...], rejected: [...] }.
+   */
+  confirm: (entries) => api.post('/provider-hours/confirm', { entries }),
 };
 
 // ---------------------------------------------------------------------------

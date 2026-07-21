@@ -59,6 +59,84 @@ router.post('/import-payroll-sheet', payrollUpload.single('file'), async (req, r
   }
 });
 
+// ── Site default hours ─────────────────────────────────────────────────────────
+// Per-location default shift window used to pre-fill provider one-tap hours
+// entry (and available to the coordinator surface). No DB unique on
+// (facilityId, location) — deduped here via findFirst (Railway db-push gotcha).
+
+const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+// GET /site-defaults — the facility's defaults + discoverable location names
+// (coverage templates ∪ recent ScheduleDay rows ∪ locations already defaulted).
+router.get('/site-defaults', async (req, res) => {
+  try {
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const [defaults, tmplDays, schedDays] = await Promise.all([
+      prisma.siteHourDefault.findMany({ where: { facilityId: req.facility.id }, orderBy: { location: 'asc' } }),
+      prisma.coverageTemplateDay.findMany({
+        where: { template: { facilityId: req.facility.id } },
+        select: { location: true },
+        distinct: ['location'],
+      }),
+      prisma.scheduleDay.findMany({
+        where: { facilityId: req.facility.id, date: { gte: since } },
+        select: { location: true },
+        distinct: ['location'],
+      }),
+    ]);
+    const set = new Set();
+    tmplDays.forEach((r) => r.location && set.add(r.location.trim()));
+    schedDays.forEach((r) => r.location && set.add(r.location.trim()));
+    defaults.forEach((d) => set.add(d.location));
+    res.json({
+      defaults: defaults.map((d) => ({ id: d.id, location: d.location, startTime: d.startTime, endTime: d.endTime })),
+      locations: [...set].sort((a, b) => a.localeCompare(b)),
+    });
+  } catch (err) {
+    console.error('[hour-entry/site-defaults]', err.message);
+    res.status(500).json({ error: 'Failed to load site defaults' });
+  }
+});
+
+// PUT /site-defaults { location, startTime, endTime } — upsert by (facility, location).
+router.put('/site-defaults', async (req, res) => {
+  const { location, startTime, endTime } = req.body || {};
+  const loc = String(location || '').trim();
+  if (!loc) return res.status(400).json({ error: 'location is required' });
+  if (!HHMM.test(startTime || '') || !HHMM.test(endTime || '')) {
+    return res.status(400).json({ error: 'startTime and endTime must be "HH:MM" 24h' });
+  }
+  try {
+    const existing = await prisma.siteHourDefault.findFirst({
+      where: { facilityId: req.facility.id, location: loc },
+      select: { id: true },
+    });
+    const row = existing
+      ? await prisma.siteHourDefault.update({ where: { id: existing.id }, data: { startTime, endTime } })
+      : await prisma.siteHourDefault.create({ data: { facilityId: req.facility.id, location: loc, startTime, endTime } });
+    res.json({ id: row.id, location: row.location, startTime: row.startTime, endTime: row.endTime });
+  } catch (err) {
+    console.error('[hour-entry/site-defaults/put]', err.message);
+    res.status(500).json({ error: 'Failed to save site default' });
+  }
+});
+
+// DELETE /site-defaults/:id
+router.delete('/site-defaults/:id', async (req, res) => {
+  try {
+    const existing = await prisma.siteHourDefault.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    if (!existing) return res.status(404).json({ error: 'Site default not found' });
+    await prisma.siteHourDefault.delete({ where: { id: existing.id } });
+    res.status(204).end();
+  } catch (err) {
+    console.error('[hour-entry/site-defaults/delete]', err.message);
+    res.status(500).json({ error: 'Failed to delete site default' });
+  }
+});
+
 // GET /?periodStart&periodEnd — entries for the period, grouped by 1099 provider.
 router.get('/', async (req, res) => {
   const { periodStart, periodEnd } = req.query;

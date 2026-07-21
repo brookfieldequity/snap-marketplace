@@ -910,6 +910,78 @@ router.post('/:id/invite-to-app', facilityAuth, async (req, res) => {
   }
 });
 
+// ── App-claim invite codes (invite → claim roster linking) ───────────────────
+//
+// A coordinator mints a short code for one roster row; the provider types it
+// into the SNAP app (Profile → "Link your practice") to self-link their
+// account to this row without waiting for an email/NPI reverse-match.
+
+// Unambiguous uppercase alphabet — no 0/O/1/I. Exactly 32 chars, so a
+// byte % 32 draw is unbiased.
+const CLAIM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CLAIM_CODE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+
+function generateClaimCode() {
+  const bytes = require('crypto').randomBytes(8);
+  let code = '';
+  for (let i = 0; i < 8; i++) code += CLAIM_CODE_ALPHABET[bytes[i] % CLAIM_CODE_ALPHABET.length];
+  return code;
+}
+
+// POST /:id/generate-claim-code — mint (or reuse a still-valid) claim code for
+// one roster entry. Body: { send?: true } — also text the code to the entry's
+// phone (truthful-send guarded; no-op message when Twilio isn't configured).
+// Returns { code, expiresAt, smsText, sent, sendError }.
+router.post('/:id/generate-claim-code', facilityAuth, async (req, res) => {
+  try {
+    const entry = await prisma.internalRosterEntry.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!entry || entry.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (entry.snapAccountLinked) {
+      return res.status(409).json({ error: 'Already linked to a SNAP account' });
+    }
+
+    // Reuse an unexpired code so "copy" then "text it" hand out the SAME code.
+    let code = entry.claimCode;
+    let expiresAt = entry.claimCodeExpiresAt;
+    if (!code || !expiresAt || new Date(expiresAt) <= new Date()) {
+      code = generateClaimCode();
+      expiresAt = new Date(Date.now() + CLAIM_CODE_TTL_MS);
+      await prisma.internalRosterEntry.update({
+        where: { id: entry.id },
+        data: { claimCode: code, claimCodeExpiresAt: expiresAt, inviteSentAt: new Date() },
+      });
+    }
+
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.facility.id },
+      select: { name: true },
+    });
+    const facilityName = facility?.name || 'Your facility';
+    const smsText = `${facilityName} uses SNAP to share your schedule. Download the app: ${APP_INVITE_URL} then enter invite code ${code} under Profile → Link your practice. Code expires in 14 days.`;
+
+    let sent = false;
+    let sendError = null;
+    if (req.body?.send) {
+      if (!entry.phoneNumber) {
+        sendError = 'No phone number on file';
+      } else {
+        const r = await sendSMS(entry.phoneNumber, `${smsText} Reply STOP to opt out.`);
+        sent = r.sent;
+        if (!r.sent) sendError = r.reason;
+      }
+    }
+
+    res.json({ code, expiresAt, smsText, sent, sendError });
+  } catch (err) {
+    console.error('[roster] generate-claim-code failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /bulk-invite-to-app — invite N selected providers in one click.
 // Body: { ids: ["...", "..."] } — scoped to the calling facility.
 router.post('/bulk-invite-to-app', facilityAuth, async (req, res) => {

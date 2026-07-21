@@ -32,6 +32,7 @@ const staffiqInputsRoutes = require('./routes/staffiqInputs');
 const credentialingRoutes = require('./routes/credentialing');
 const payrollRoutes = require('./routes/payroll');
 const hourEntryRoutes = require('./routes/hourEntry');
+const providerHoursRoutes = require('./routes/providerHours');
 const featureFlagRoutes = require('./routes/featureFlags');
 const ptoBuilderRoutes = require('./routes/ptoBuilder');
 const coverageTemplatesRoutes = require('./routes/coverageTemplates');
@@ -82,6 +83,10 @@ app.get('/health', async (req, res) => {
 const privacyPage = require('./privacyPage');
 app.get('/privacy', (req, res) => res.type('html').send(privacyPage));
 
+// Terms of Service (linked from the app's welcome screen).
+const termsPage = require('./termsPage');
+app.get('/terms', (req, res) => res.type('html').send(termsPage));
+
 // Strict throttling on credential-bearing endpoints (login/register/reset).
 app.use('/api/auth', authLimiter);
 app.use([
@@ -113,6 +118,8 @@ app.use('/api/staffiq-inputs', staffiqInputsRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/admin/invoices', invoiceRoutes);
 app.use('/api/hour-entry', hourEntryRoutes);
+// Provider self-service one-tap hours entry (Stage 2 of hour entry).
+app.use('/api/provider-hours', providerHoursRoutes);
 app.use('/api/feature-flags', featureFlagRoutes);
 app.use('/api/pto-builder', ptoBuilderRoutes);
 app.use('/api/credentialing', credentialingRoutes);

@@ -126,6 +126,35 @@ export default function HourEntryPage({ onNavigate }) {
 
   const providers = data?.providers || []
 
+  // ── Site default hours (pre-fill window for provider one-tap entry) ──────────
+  const [siteDefaults, setSiteDefaults] = useState([]) // [{id, location, startTime, endTime}]
+  const [siteLocations, setSiteLocations] = useState([])
+  const [defaultsBusy, setDefaultsBusy] = useState('')
+
+  const loadDefaults = useCallback(async () => {
+    try {
+      const res = await payrollAPI.getSiteHourDefaults()
+      setSiteDefaults(res.defaults || [])
+      setSiteLocations(res.locations || [])
+    } catch { /* non-blocking — editor just shows empty */ }
+  }, [])
+  useEffect(() => { loadDefaults() }, [loadDefaults])
+
+  async function saveDefault(location, startTime, endTime) {
+    if (!location || !startTime || !endTime) { setError('Pick a location and both times.'); return }
+    setDefaultsBusy(location); setError('')
+    try { await payrollAPI.saveSiteHourDefault({ location, startTime, endTime }); await loadDefaults() }
+    catch (err) { setError(err.message || 'Failed to save site default') }
+    finally { setDefaultsBusy('') }
+  }
+
+  async function removeDefault(id) {
+    setDefaultsBusy(id); setError('')
+    try { await payrollAPI.deleteSiteHourDefault(id); await loadDefaults() }
+    catch (err) { setError(err.message || 'Failed to delete site default') }
+    finally { setDefaultsBusy('') }
+  }
+
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '8px 4px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>⏱ Provider Hours</h1>
@@ -183,6 +212,16 @@ export default function HourEntryPage({ onNavigate }) {
         </div>
       </div>
 
+      {/* Site default hours — the pre-filled window providers see when they
+          one-tap confirm a day from the app. */}
+      <SiteDefaultsEditor
+        defaults={siteDefaults}
+        locations={siteLocations}
+        busy={defaultsBusy}
+        onSave={saveDefault}
+        onDelete={removeDefault}
+      />
+
       {loading && <div style={{ color: '#64748B', fontSize: 14 }}>Loading…</div>}
 
       {!loading && providers.length === 0 && (
@@ -237,12 +276,17 @@ export default function HourEntryPage({ onNavigate }) {
                     <input style={{ ...inputStyle, width: 64, textAlign: 'right' }} type="number" step="0.25" min="0" defaultValue={r.hours}
                       onBlur={(e) => Number(e.target.value) !== r.hours && editRow(r.id, { hours: Number(e.target.value) })} />
                   </td>
-                  <td style={{ ...td, textAlign: 'center' }}>
+                  <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
                       background: r.status === 'SUBMITTED' ? '#DCFCE7' : '#FEF9C3',
                       color: r.status === 'SUBMITTED' ? '#166534' : '#854D0E' }}>
                       {r.status === 'SUBMITTED' ? 'Submitted' : 'Draft'}
                     </span>
+                    {r.enteredBy === 'provider' && (
+                      <span title="Confirmed by the provider from the app" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                        provider ✓
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     <button
@@ -264,6 +308,73 @@ export default function HourEntryPage({ onNavigate }) {
           <button style={primaryBtn} onClick={submitAll} disabled={!!busy}>
             {busy === 'submit' ? 'Submitting…' : '✓ Submit all'}
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Site default hours editor ──────────────────────────────────────────────────
+// Compact per-location default shift window (start/end). These pre-fill the
+// provider's one-tap "Confirm hours" cards in the app. Locations come from the
+// coverage templates + recent schedule days; sites without a default fall back
+// to provider history → coverage-template window → 07:00–15:00.
+function SiteDefaultsEditor({ defaults, locations, busy, onSave, onDelete }) {
+  const [draft, setDraft] = useState({}) // location → { startTime, endTime }
+  const [addLoc, setAddLoc] = useState('')
+
+  const defaultByLoc = Object.fromEntries(defaults.map((d) => [d.location, d]))
+  const undefaulted = locations.filter((l) => !defaultByLoc[l])
+  const valOf = (loc, field) => draft[loc]?.[field] ?? defaultByLoc[loc]?.[field] ?? ''
+  const setVal = (loc, field, v) => setDraft((d) => ({ ...d, [loc]: { ...d[loc], [field]: v } }))
+  const dirty = (loc) => {
+    const d = draft[loc]
+    if (!d) return false
+    const cur = defaultByLoc[loc]
+    return (d.startTime !== undefined && d.startTime !== (cur?.startTime || '')) ||
+      (d.endTime !== undefined && d.endTime !== (cur?.endTime || ''))
+  }
+
+  const rows = [...defaults.map((d) => d.location), ...(addLoc && !defaultByLoc[addLoc] ? [addLoc] : [])]
+
+  return (
+    <div style={{ ...card, marginBottom: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 4 }}>Site default hours</div>
+      <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 10 }}>
+        The pre-filled shift window providers see when they confirm a day from the app. One tap submits these times.
+      </div>
+      {rows.length === 0 && (
+        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>No site defaults yet — pick a location below to add one.</div>
+      )}
+      {rows.map((loc) => (
+        <div key={loc} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #F1F5F9' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', minWidth: 160 }}>{loc}</span>
+          <input style={{ ...inputStyle, width: 100 }} type="time" value={valOf(loc, 'startTime')}
+            onChange={(e) => setVal(loc, 'startTime', e.target.value)} />
+          <span style={{ fontSize: 12, color: '#94A3B8' }}>–</span>
+          <input style={{ ...inputStyle, width: 100 }} type="time" value={valOf(loc, 'endTime')}
+            onChange={(e) => setVal(loc, 'endTime', e.target.value)} />
+          {(dirty(loc) || !defaultByLoc[loc]) && (
+            <button style={{ ...ghostBtn, padding: '6px 12px', fontSize: 12 }} disabled={!!busy}
+              onClick={() => { onSave(loc, valOf(loc, 'startTime'), valOf(loc, 'endTime')); setDraft((d) => { const n = { ...d }; delete n[loc]; return n }); if (addLoc === loc) setAddLoc('') }}>
+              {busy === loc ? 'Saving…' : 'Save'}
+            </button>
+          )}
+          {defaultByLoc[loc] && (
+            <button
+              onClick={() => onDelete(defaultByLoc[loc].id)}
+              title="Remove this site default"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 14, lineHeight: 1, padding: 4 }}
+            >🗑</button>
+          )}
+        </div>
+      ))}
+      {undefaulted.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <select style={{ ...inputStyle, minWidth: 200 }} value={addLoc} onChange={(e) => setAddLoc(e.target.value)}>
+            <option value="">+ Add default for a site…</option>
+            {undefaulted.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
         </div>
       )}
     </div>

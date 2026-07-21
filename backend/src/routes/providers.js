@@ -35,10 +35,18 @@ router.get('/me', auth, async (req, res) => {
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
     const ratingMap = await aggregateProviderRatings([profile.id]);
+    // hasRosterLink — whether any facility roster entry is linked to this
+    // provider. The app uses it to pick the landing tab (roster-linked
+    // providers land on My Schedule; marketplace-only providers on the feed).
+    const rosterLink = await prisma.internalRosterEntry.findFirst({
+      where: { linkedProviderId: profile.id },
+      select: { id: true },
+    });
     res.json({
       ...profile,
       rating: ratingMap.get(profile.id) || { avg: null, count: 0 },
       badges: deriveProviderBadges(profile, { completedShifts: profile._count?.bookings }),
+      hasRosterLink: !!rosterLink,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load profile' });
@@ -81,6 +89,91 @@ router.patch('/me', auth, async (req, res) => {
   }
 });
 
+// ── Claim a roster spot with an invite code ───────────────────────────────────
+//
+// POST /me/claim-roster { code } — self-service half of the identity bridge.
+// The coordinator mints the code (roster routes POST /:id/generate-claim-code)
+// and hands/texts it to the provider; entering it here links this account's
+// ProviderProfile to that InternalRosterEntry.
+
+router.post('/me/claim-roster', auth, async (req, res) => {
+  try {
+    const raw = typeof req.body?.code === 'string' ? req.body.code : '';
+    const code = raw.replace(/[\s-]/g, '').toUpperCase();
+    if (!code) return res.status(400).json({ error: 'Enter your invite code.' });
+
+    const profile = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+    if (!profile) {
+      return res.status(400).json({ error: 'No provider profile found — complete your profile before linking a practice.' });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { email: true },
+    });
+
+    // No unique constraint on claimCode (Railway db-push safety) — findFirst
+    // on code + unexpired expiry is the lookup.
+    const entry = await prisma.internalRosterEntry.findFirst({
+      where: { claimCode: code, claimCodeExpiresAt: { gt: new Date() } },
+      include: { facility: { select: { id: true, name: true } } },
+    });
+    if (!entry) {
+      return res.status(404).json({ error: 'That code is invalid or has expired. Ask your coordinator for a new one.' });
+    }
+
+    if (entry.linkedProviderId && entry.linkedProviderId === profile.id) {
+      // Idempotent: already linked to this account — just retire the code.
+      await prisma.internalRosterEntry.update({
+        where: { id: entry.id },
+        data: { snapAccountLinked: true, claimCode: null, claimCodeExpiresAt: null },
+      });
+      return res.json({
+        ok: true,
+        alreadyLinked: true,
+        facility: entry.facility,
+        entry: { id: entry.id, providerName: entry.providerName },
+      });
+    }
+    if (entry.linkedProviderId && entry.linkedProviderId !== profile.id) {
+      return res.status(409).json({ error: 'This roster spot is already linked to a different SNAP account. Contact your coordinator.' });
+    }
+
+    // Sanity check: code possession alone is enough only when the roster row
+    // carries no identity fields (the coordinator handed the code out
+    // directly). Otherwise the row's NPI or email must match this account.
+    const rosterNpi = (entry.npi || '').trim();
+    const rosterEmail = (entry.snapAccountEmail || '').trim().toLowerCase();
+    const npiMatch = !!(rosterNpi && profile.npiNumber && rosterNpi === profile.npiNumber.trim());
+    const emailMatch = !!(rosterEmail && user?.email && rosterEmail === user.email.trim().toLowerCase());
+    const neitherSet = !rosterNpi && !rosterEmail;
+    if (!npiMatch && !emailMatch && !neitherSet) {
+      return res.status(403).json({
+        error: "This code doesn't match your account. Ask your coordinator to check the email or NPI on your roster entry.",
+      });
+    }
+
+    const updated = await prisma.internalRosterEntry.update({
+      where: { id: entry.id },
+      data: {
+        linkedProviderId: profile.id,
+        snapAccountLinked: true,
+        snapAccountEmail: user?.email || entry.snapAccountEmail,
+        claimCode: null,
+        claimCodeExpiresAt: null,
+      },
+    });
+
+    res.json({
+      ok: true,
+      facility: entry.facility,
+      entry: { id: updated.id, providerName: updated.providerName },
+    });
+  } catch (err) {
+    console.error('[claim-roster] failed:', err);
+    res.status(500).json({ error: 'Could not link your account. Try again.' });
+  }
+});
+
 // ── Get availability ──────────────────────────────────────────────────────────
 
 router.get('/me/availability', auth, async (req, res) => {
@@ -94,7 +187,48 @@ router.get('/me/availability', auth, async (req, res) => {
     const availability = await prisma.providerAvailability.findMany({
       where: { providerId: profile.id, date: { gte: start, lte: end } },
     });
-    res.json(availability);
+
+    // Availability-request window status for the provider's linked roster
+    // entries (the coordinator's monthly submission windows, normally reached
+    // via the SMS token link). Lets the app show "Submitted ✓ — editable until
+    // <deadline>" vs "Closes <date>" per facility. Non-critical — never fail
+    // the availability load over it.
+    let requestWindows = [];
+    try {
+      const rosterEntries = await prisma.internalRosterEntry.findMany({
+        where: { linkedProviderId: profile.id },
+        select: { id: true },
+      });
+      if (rosterEntries.length > 0) {
+        // Every (year, month) pair the loaded date span touches.
+        const months = [];
+        const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+        while (cursor <= end) {
+          months.push({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 });
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+        const requests = await prisma.availabilityRequest.findMany({
+          where: { rosterEntryId: { in: rosterEntries.map((r) => r.id) }, OR: months },
+          include: { facility: { select: { id: true, name: true } } },
+          orderBy: { deadline: 'asc' },
+        });
+        requestWindows = requests.map((r) => ({
+          id: r.id,
+          facility: r.facility,
+          year: r.year,
+          month: r.month,
+          deadline: r.deadline,
+          submittedAt: r.submittedAt,
+          lastUpdatedAt: r.lastUpdatedAt,
+        }));
+      }
+    } catch (winErr) {
+      console.error('[availability] window status load failed:', winErr.message);
+    }
+
+    // NOTE: response used to be the bare array; the app already tolerates
+    // { availability } (see mobile AvailabilityScreen loadAvailability).
+    res.json({ availability, requestWindows });
   } catch (err) {
     console.error('[availability] load failed:', err);
     res.status(500).json({ error: 'Failed to load availability' });
@@ -150,6 +284,16 @@ router.post('/me/availability', auth, async (req, res) => {
       await checkVipStatus(profile.id);
     } catch (vipErr) {
       console.error('[availability] VIP side-effect failed (availability still saved):', vipErr.message);
+    }
+
+    // Availability unification dual-write: mirror this app submission into any
+    // open AvailabilityRequest (the SMS-link staging store) for the provider's
+    // linked roster entries, so the coordinator's window tracking counts an
+    // app save as "responded". Non-critical — never fail the save over it.
+    try {
+      await mirrorAvailabilityToRequests(profile.id, dates, clearDates);
+    } catch (mirrorErr) {
+      console.error('[availability] request mirror failed (availability still saved):', mirrorErr.message);
     }
 
     res.json(results);
@@ -264,6 +408,95 @@ router.get('/me/active-windows', auth, async (req, res) => {
     res.status(500).json({ error: 'Failed to load windows' });
   }
 });
+
+/**
+ * Availability unification (app → SMS-link staging store).
+ *
+ * For each InternalRosterEntry linked to this provider, find the
+ * AvailabilityRequest rows (unique per facility+rosterEntry+year+month) that
+ * cover the months the posted dates touch, and mirror the day-level values
+ * into AvailDaySubmission. First mirror stamps submittedAt; every mirror
+ * bumps lastUpdatedAt — so an app save counts as "responded" in the
+ * coordinator's window tracking. Requests past their deadline are skipped
+ * (matches the token link's own 410-after-deadline behavior).
+ *
+ * The app has no "maybe" concept: `maybe` is left untouched on rows we
+ * update and set false on rows we create.
+ */
+async function mirrorAvailabilityToRequests(providerId, dates = [], clearDates = []) {
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  const cleanDates = dates
+    .filter((d) => d && typeof d.date === 'string' && typeof d.available === 'boolean')
+    .map((d) => ({ date: d.date.slice(0, 10), available: d.available, note: d.note }))
+    .filter((d) => dateRe.test(d.date));
+  const cleanClears = clearDates
+    .filter((d) => typeof d === 'string')
+    .map((d) => d.slice(0, 10))
+    .filter((d) => dateRe.test(d));
+  if (cleanDates.length === 0 && cleanClears.length === 0) return;
+
+  const rosterEntries = await prisma.internalRosterEntry.findMany({
+    where: { linkedProviderId: providerId },
+    select: { id: true },
+  });
+  if (rosterEntries.length === 0) return;
+
+  // Every (year, month) pair the posted dates touch.
+  const monthKeys = new Set(
+    [...cleanDates.map((d) => d.date), ...cleanClears].map((d) => d.slice(0, 7))
+  );
+  const monthPairs = [...monthKeys].map((k) => ({
+    year: Number(k.slice(0, 4)),
+    month: Number(k.slice(5, 7)),
+  }));
+
+  const requests = await prisma.availabilityRequest.findMany({
+    where: { rosterEntryId: { in: rosterEntries.map((r) => r.id) }, OR: monthPairs },
+  });
+  if (requests.length === 0) return;
+
+  const now = new Date();
+  for (const request of requests) {
+    if (new Date(request.deadline) < now) continue; // window closed — link would 410 too
+    const inMonth = (ds) =>
+      Number(ds.slice(0, 4)) === request.year && Number(ds.slice(5, 7)) === request.month;
+    const upserts = cleanDates.filter((d) => inMonth(d.date));
+    const clears = cleanClears.filter(inMonth);
+    if (upserts.length === 0 && clears.length === 0) continue;
+
+    const ops = upserts.map(({ date, available, note }) =>
+      prisma.availDaySubmission.upsert({
+        where: { requestId_date: { requestId: request.id, date: new Date(date + 'T00:00:00.000Z') } },
+        create: {
+          requestId: request.id,
+          date: new Date(date + 'T00:00:00.000Z'),
+          available,
+          maybe: false,
+          note: note ?? null,
+        },
+        update: { available, ...(note !== undefined ? { note: note || null } : {}) },
+      })
+    );
+    if (clears.length > 0) {
+      ops.push(
+        prisma.availDaySubmission.deleteMany({
+          where: {
+            requestId: request.id,
+            date: { in: clears.map((d) => new Date(d + 'T00:00:00.000Z')) },
+          },
+        })
+      );
+    }
+    ops.push(
+      prisma.availabilityRequest.update({
+        where: { id: request.id },
+        data: { submittedAt: request.submittedAt ?? now, lastUpdatedAt: now },
+      })
+    );
+    // eslint-disable-next-line no-await-in-loop
+    await prisma.$transaction(ops);
+  }
+}
 
 async function checkVipStatus(profileId) {
   const profile = await prisma.providerProfile.findUnique({

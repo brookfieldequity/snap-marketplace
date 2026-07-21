@@ -148,7 +148,7 @@ const PLACEHOLDER_EARNINGS = {
   ],
 };
 
-export default function EarningsScreen() {
+export default function EarningsScreen({ navigation }) {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -271,9 +271,17 @@ export default function EarningsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* Header — back chevron appears when pushed onto the root stack
+          (e.g. from the Hours tab; the app hides native headers). */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Earnings</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {navigation?.canGoBack?.() && (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+              <Text style={styles.backBtnText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.headerTitle}>My Earnings</Text>
+        </View>
         <Text style={styles.headerSub}>Massachusetts · Anesthesia</Text>
       </View>
 
@@ -325,6 +333,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  backBtn: {
+    marginRight: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  backBtnText: {
+    fontSize: 28,
+    lineHeight: 30,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   headerTitle: {
     fontSize: 20,

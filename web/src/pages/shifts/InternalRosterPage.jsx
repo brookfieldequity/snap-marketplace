@@ -537,6 +537,36 @@ export default function InternalRosterPage({ onNavigate }) {
   // ─── Marketplace app invites (separate from credentialing invites) ──────
   const [invitingToApp, setInvitingToApp] = useState({})
 
+  // ─── App-claim invite codes (invite → claim roster linking) ─────────────
+  // The coordinator mints a short code; the provider types it into the SNAP
+  // app (Profile → "Link your practice") to self-link to this roster row.
+  const [claimCodeModal, setClaimCodeModal] = useState(null) // { entry, code, expiresAt, smsText, sent, sendError }
+  const [generatingCode, setGeneratingCode] = useState({})
+  const [claimCodeCopied, setClaimCodeCopied] = useState(false)
+
+  async function handleGenerateClaimCode(p, send = false) {
+    setGeneratingCode((s) => ({ ...s, [p.id]: true }))
+    try {
+      const res = await facilityAPI.generateRosterClaimCode(p.id, send)
+      setClaimCodeCopied(false)
+      setClaimCodeModal({ entry: p, ...res })
+      if (send) await load() // inviteSentAt stamp
+    } catch (e) {
+      alert('Could not generate invite code: ' + (e.message || 'Unknown error'))
+    } finally {
+      setGeneratingCode((s) => ({ ...s, [p.id]: false }))
+    }
+  }
+
+  async function copyClaimCode(code) {
+    try {
+      await navigator.clipboard.writeText(code)
+      setClaimCodeCopied(true)
+    } catch {
+      window.prompt('Copy the code:', code)
+    }
+  }
+
   async function handleInviteToApp(id) {
     setInvitingToApp((p) => ({ ...p, [id]: true }))
     try {
@@ -1117,6 +1147,16 @@ export default function InternalRosterPage({ onNavigate }) {
                       {invitingToApp[p.id] ? '…' : (p.inviteSentAt ? '↻ Re-invite to SNAP' : '📱 Invite to SNAP')}
                     </button>
                   )}
+                  {!p.snapAccountLinked && (
+                    <button
+                      onClick={() => handleGenerateClaimCode(p)}
+                      disabled={generatingCode[p.id]}
+                      title="Generate an invite code the provider types into the SNAP app to link this roster spot"
+                      style={{ padding: '6px 14px', background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1D4ED8' }}
+                    >
+                      {generatingCode[p.id] ? '…' : '🔑 App invite'}
+                    </button>
+                  )}
                   {canCredential(p) && p.credentialingStatus !== 'CLAIMED' && p.credentialingStatus !== 'COMPLETED' && (
                     <button
                       onClick={() => handleInvite(p.id)}
@@ -1583,6 +1623,50 @@ export default function InternalRosterPage({ onNavigate }) {
 
       {timeOffMember && (
         <TimeOffModal member={timeOffMember} onClose={() => setTimeOffMember(null)} />
+      )}
+
+      {claimCodeModal && (
+        <Modal title={`App invite — ${claimCodeModal.entry.providerName}`} onClose={() => setClaimCodeModal(null)}>
+          <div style={{ fontSize: 14, color: '#475569', lineHeight: 1.6, marginBottom: 18 }}>
+            Have {claimCodeModal.entry.providerName} download the SNAP app, then enter this code under
+            {' '}<strong>Profile → Link your practice</strong>. It links their app account to this roster spot.
+          </div>
+          <div style={{ textAlign: 'center', background: '#F8FAFC', border: '1px dashed #93C5FD', borderRadius: 12, padding: '22px 16px', marginBottom: 16 }}>
+            <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 6, color: '#1D4ED8', fontFamily: 'ui-monospace, monospace' }}>
+              {claimCodeModal.code}
+            </div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>
+              Expires {new Date(claimCodeModal.expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            </div>
+          </div>
+          {claimCodeModal.sent && (
+            <div style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#047857', marginBottom: 14 }}>
+              ✓ Texted to {claimCodeModal.entry.phoneNumber}
+            </div>
+          )}
+          {claimCodeModal.sendError && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', marginBottom: 14 }}>
+              Text failed: {claimCodeModal.sendError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => copyClaimCode(claimCodeModal.code)}
+              style={{ flex: 1, padding: '11px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {claimCodeCopied ? '✓ Copied' : '📋 Copy code'}
+            </button>
+            {claimCodeModal.entry.phoneNumber && (
+              <button
+                onClick={() => handleGenerateClaimCode(claimCodeModal.entry, true)}
+                disabled={generatingCode[claimCodeModal.entry.id]}
+                style={{ flex: 1, padding: '11px 16px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #93C5FD', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                {generatingCode[claimCodeModal.entry.id] ? '…' : `💬 Text it to ${claimCodeModal.entry.phoneNumber}`}
+              </button>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   )

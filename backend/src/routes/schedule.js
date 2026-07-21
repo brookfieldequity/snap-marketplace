@@ -353,7 +353,47 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
       },
     });
 
-    res.json(assignment);
+    // Cross-facility double-booking check — NON-BLOCKING. If the assigned
+    // provider is linked to a SNAP account that's already assigned at another
+    // facility on this date, include a warning in the response so the portal
+    // can surface it. Coordinators may intentionally override, so we never
+    // reject the edit.
+    let warning = null;
+    if (newRosterId) {
+      try {
+        const entry = await prisma.internalRosterEntry.findUnique({
+          where: { id: newRosterId },
+          select: { linkedProviderId: true, providerName: true },
+        });
+        if (entry?.linkedProviderId) {
+          const dayISO = new Date(day.date).toISOString().slice(0, 10);
+          const dayStart = new Date(dayISO + 'T00:00:00.000Z');
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          const conflict = await prisma.scheduleAssignment.findFirst({
+            where: {
+              facilityId: { not: req.facility.id },
+              scheduleDay: { date: { gte: dayStart, lt: dayEnd } },
+              rosterEntry: { linkedProviderId: entry.linkedProviderId },
+            },
+            include: {
+              rosterEntry: { select: { facility: { select: { name: true } } } },
+            },
+          });
+          if (conflict) {
+            const otherName = conflict.rosterEntry?.facility?.name || 'another facility';
+            const dateLabel = dayStart.toLocaleDateString('en-US', {
+              weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+            });
+            warning = `${entry.providerName} is already scheduled at ${otherName} on ${dateLabel}.`;
+          }
+        }
+      } catch (warnErr) {
+        // Warning is best-effort — never fail the assignment edit over it.
+        console.error('[schedule] cross-facility check failed:', warnErr.message);
+      }
+    }
+
+    res.json({ ...assignment, warning });
 
     // ── Post-publish change alerts ──────────────────────────────────────────
     // Once a schedule day is published, providers are relying on it. If a
@@ -1289,6 +1329,17 @@ router.post('/build', facilityAuth, async (req, res) => {
         if (!available) unavailableKeys.add(key);
       }
     }
+
+    // Cross-facility double-booking guard: a linked provider who's already
+    // assigned at ANOTHER facility on a date is hard-unavailable here (one
+    // provider, one master schedule). Single batched query for the month.
+    const conflictKeys = await scheduleBuilder.crossFacilityConflictKeys({
+      facilityId: req.facility.id,
+      roster,
+      monthStart,
+      monthEnd,
+    });
+    for (const k of conflictKeys) unavailableKeys.add(k);
 
     // Tiered provider requests for the build month (admin-triaged). WORK biases
     // the provider INTO the schedule; soft DAY_OFF (tiers 2–4) biases them OUT.

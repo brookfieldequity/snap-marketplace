@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleAPI, scheduleRequestAPI } from '../api/client';
 import NotificationsInbox from '../components/NotificationsInbox';
 import RequestModal from '../components/RequestModal';
+import MyRequestsModal from '../components/MyRequestsModal';
+import ClaimRosterModal from '../components/ClaimRosterModal';
 import SnappyChat from '../components/SnappyChat';
 
 // "My Schedule" — read-only monthly calendar of the provider's own SNAP
@@ -87,6 +89,9 @@ export default function MyScheduleScreen() {
   // Request modal (Task #21) + inbox refresh trigger (Task #16)
   const [showRequest, setShowRequest] = useState(false);
   const [inboxKey, setInboxKey] = useState(0);
+  // "My requests" status list + roster claim-code modal
+  const [showRequests, setShowRequests] = useState(false);
+  const [showClaim, setShowClaim] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -220,6 +225,9 @@ export default function MyScheduleScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>My Schedule</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={() => setShowRequests(true)} style={styles.requestBtn} activeOpacity={0.8}>
+              <Text style={styles.requestBtnText}>Requests</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowRequest(true)} style={styles.requestBtn} activeOpacity={0.8}>
               <Text style={styles.requestBtnText}>＋ Request</Text>
             </TouchableOpacity>
@@ -231,6 +239,21 @@ export default function MyScheduleScreen() {
 
         {/* Notification inbox (Task #16) — front and center on app open */}
         <NotificationsInbox refreshKey={inboxKey} />
+
+        {/* Invite → claim: no roster memberships yet. Friendly nudge to enter
+            the coordinator's invite code instead of a dead-end empty state. */}
+        {!loading && memberships.length === 0 && (
+          <View style={styles.claimBanner}>
+            <Text style={styles.claimBannerTitle}>On a practice roster?</Text>
+            <Text style={styles.claimBannerSub}>
+              If your practice uses SNAP, your coordinator can give you an invite code that
+              connects your schedule to this app.
+            </Text>
+            <TouchableOpacity onPress={() => setShowClaim(true)} style={styles.claimBannerBtn} activeOpacity={0.85}>
+              <Text style={styles.claimBannerBtnText}>Enter your invite code</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {memberships.length === 1 && (
           <Text style={styles.sub}>
@@ -403,7 +426,22 @@ export default function MyScheduleScreen() {
         visible={showRequest}
         onClose={() => setShowRequest(false)}
         memberships={memberships}
-        onSubmitted={() => setInboxKey((k) => k + 1)}
+        onSubmitted={() => {
+          setInboxKey((k) => k + 1);
+          // Land the provider on their request list so they can see the new
+          // request sitting in Pending.
+          setShowRequests(true);
+        }}
+      />
+
+      {/* "My requests" status list */}
+      <MyRequestsModal visible={showRequests} onClose={() => setShowRequests(false)} />
+
+      {/* Invite-code claim (roster linking) */}
+      <ClaimRosterModal
+        visible={showClaim}
+        onClose={() => setShowClaim(false)}
+        onLinked={() => load()}
       />
 
       {/* Snappy assistant — floating launcher + chat */}
@@ -457,6 +495,11 @@ const styles = StyleSheet.create({
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textDark, marginBottom: 6 },
   emptySub: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', lineHeight: 18 },
+  claimBanner: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#A5B4FC', borderRadius: 12, marginHorizontal: 16, marginBottom: 12, padding: 14 },
+  claimBannerTitle: { fontSize: 14, fontWeight: '800', color: '#1E3A8A', marginBottom: 4 },
+  claimBannerSub: { fontSize: 12, color: '#3730A3', lineHeight: 17, marginBottom: 10 },
+  claimBannerBtn: { backgroundColor: COLORS.primary, borderRadius: 9, paddingVertical: 10, alignItems: 'center' },
+  claimBannerBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22, paddingBottom: 36, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

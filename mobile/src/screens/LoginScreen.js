@@ -10,8 +10,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -31,6 +33,7 @@ WebBrowser.maybeCompleteAuthSession();
 const COLORS = {
   primary: '#2563EB',
   primaryDark: '#1D4ED8',
+  navy: '#12325B',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
@@ -39,6 +42,9 @@ const COLORS = {
   border: '#E2E8F0',
   error: '#EF4444',
 };
+
+// Dawn gradient stops shared with WelcomeScreen ("Morning Light").
+const DAWN_COLORS = ['#123B6B', '#2E6DA8', '#7FB4D8', '#F4E4C8'];
 
 // Google sign-in button. ISOLATED in its own component so the
 // expo-auth-session hook (which throws on an empty client ID) only ever runs
@@ -197,6 +203,13 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Thin dawn-gradient accent strip for continuity with the Welcome screen */}
+      <LinearGradient
+        colors={DAWN_COLORS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.dawnStrip}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -212,9 +225,10 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={styles.logoMini}>
-              <Text style={styles.logoMiniText}>S</Text>
-            </View>
+            <Image
+              source={require('../../assets/snappy-mascot.png')}
+              style={styles.logoMini}
+            />
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Sign in to your SNAP account</Text>
           </View>
@@ -343,6 +357,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  dawnStrip: {
+    height: 4,
+    width: '100%',
+  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingBottom: 40,
@@ -363,27 +381,14 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   logoMini: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 48,
+    height: 54,
+    resizeMode: 'contain',
     marginBottom: 14,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  logoMiniText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.white,
   },
   title: {
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold',
     color: COLORS.textDark,
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -517,13 +522,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.navy,
     borderRadius: 14,
     paddingVertical: 17,
     alignItems: 'center',
     marginTop: 24,
     marginBottom: 20,
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.navy,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

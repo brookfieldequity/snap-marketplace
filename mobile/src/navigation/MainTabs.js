@@ -1,26 +1,56 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import FeedScreen from '../screens/FeedScreen';
+import HoursScreen from '../screens/HoursScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MyScheduleScreen from '../screens/MyScheduleScreen';
 import TodayScreen from '../screens/TodayScreen';
+import { providerAPI } from '../api/client';
 
 // Tab order is deliberate: the two read-only Shifts views come first
 // because they're the daily-driver views for staff on a SNAP-Shifts roster
-// (CAPA pilot). Availability and Marketplace stay in the middle as they're
-// less frequently used. Profile anchors the right edge.
+// (CAPA pilot). Availability, Hours, and Marketplace stay in the middle as
+// they're less frequently used. Profile anchors the right edge.
+// The Hours tab always renders — HoursScreen shows a friendly "not enabled
+// for your practice yet" state when the provider has no hours-entry
+// facilities (simpler than hiding/showing the tab from a fetch here).
 const TABS = [
   { key: 'mySchedule', label: 'My Schedule', icon: '🗓️' },
   { key: 'today', label: 'Daily', icon: '🏥' },
   { key: 'calendar', label: 'Availability', icon: '✅' },
+  { key: 'hours', label: 'Hours', icon: '⏱️' },
   { key: 'marketplace', label: 'Marketplace', icon: '🧭' },
   { key: 'profile', label: 'Profile', icon: '👤' },
 ];
 
 export default function MainTabs({ navigation }) {
-  const [activeTab, setActiveTab] = useState('mySchedule');
+  // Mode-aware landing: roster-linked providers land on My Schedule (CAPA
+  // pilot daily driver); marketplace-only providers land on the shift feed.
+  // activeTab stays null (brief spinner, no wrong-tab flash) until
+  // /providers/me resolves; any error falls back to My Schedule.
+  const [activeTab, setActiveTab] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    providerAPI.getMe()
+      .then((res) => {
+        if (!cancelled) setActiveTab(res.data?.hasRosterLink === false ? 'marketplace' : 'mySchedule');
+      })
+      .catch(() => {
+        if (!cancelled) setActiveTab('mySchedule');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (activeTab === null) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#FAFAFA', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
@@ -28,6 +58,7 @@ export default function MainTabs({ navigation }) {
         {activeTab === 'mySchedule' && <MyScheduleScreen navigation={navigation} />}
         {activeTab === 'today' && <TodayScreen navigation={navigation} />}
         {activeTab === 'calendar' && <AvailabilityScreen navigation={navigation} />}
+        {activeTab === 'hours' && <HoursScreen navigation={navigation} />}
         {activeTab === 'marketplace' && <FeedScreen navigation={navigation} />}
         {activeTab === 'profile' && <ProfileScreen navigation={navigation} />}
       </View>

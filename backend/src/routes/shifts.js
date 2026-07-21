@@ -258,6 +258,35 @@ router.post('/:id/book', auth, async (req, res) => {
     if (!provider) return res.status(400).json({ error: 'Provider profile not found' });
     if (!provider.credentialed) return res.status(403).json({ error: 'Credentialing required to book shifts' });
 
+    // Double-booking guard (one provider, one master schedule): a provider on
+    // an internal roster can't book a marketplace shift on a date they're
+    // already assigned at ANY linked facility's internal schedule.
+    const rosterEntries = await prisma.internalRosterEntry.findMany({
+      where: { linkedProviderId: provider.id },
+      select: { id: true },
+    });
+    if (rosterEntries.length > 0) {
+      const dayISO = new Date(shift.date).toISOString().slice(0, 10);
+      const dayStart = new Date(dayISO + 'T00:00:00.000Z');
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const conflict = await prisma.scheduleAssignment.findFirst({
+        where: {
+          rosterId: { in: rosterEntries.map((r) => r.id) },
+          scheduleDay: { date: { gte: dayStart, lt: dayEnd } },
+        },
+        include: {
+          rosterEntry: { select: { facility: { select: { name: true } } } },
+        },
+      });
+      if (conflict) {
+        const facilityName = conflict.rosterEntry?.facility?.name || 'another facility';
+        const dateLabel = dayStart.toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+        });
+        return res.status(409).json({ error: `You're already scheduled at ${facilityName} on ${dateLabel}` });
+      }
+    }
+
     const totalValue = shift.currentRate * shift.durationHours;
     const platformFee = totalValue * (shift.platformFeePercent / 100);
 

@@ -393,6 +393,7 @@ model Facility {
   employerLinks       EmployerFacilityLink[]
   hourEntries         ProviderHourEntry[]
   locations           FacilityLocation[]
+  siteHourDefaults    SiteHourDefault[]
   availabilityRequests AvailabilityRequest[]
 
   createdAt DateTime @default(now())
@@ -902,6 +903,14 @@ model InternalRosterEntry {
   scheduleAccessRevoked     Boolean             @default(false)
   scheduleAccessRequested   Boolean             @default(false)
   inviteSentAt              DateTime?
+  // App-claim invite code (invite → claim roster linking). The coordinator
+  // mints an 8-char unambiguous code (no 0/O/1/I) and hands/texts it to the
+  // provider; the provider enters it in the app (POST /providers/me/claim-roster)
+  // to self-link their account to this row. Looked up with findFirst on
+  // code + expiry — deliberately NO unique constraint (Railway boot runs
+  // `prisma db push`, which silently fails on new uniques). Cleared on claim.
+  claimCode                 String?
+  claimCodeExpiresAt        DateTime?
   // Credentialing-invite lifecycle, distinct from snapAccountLinked (which is
   // a *marketplace* account). Flips NOT_INVITED → INVITED when a coordinator
   // sends a credentialing invite; CLAIMED/COMPLETED are synced back from the
@@ -2056,6 +2065,26 @@ model FacilityLocation {
   updatedAt  DateTime @updatedAt
 
   @@unique([facilityId, siteName])
+}
+
+// Per-site default shift window for provider one-tap hours entry. When a
+// provider confirms a worked day from the app, the pre-filled times come from
+// here (coordinator-set per location) before falling back to their own history
+// or the coverage-template window. Deliberately NO unique on (facilityId,
+// location) — Railway's boot-time `prisma db push` silently fails on new
+// unique constraints (see railway-dbpush-accept-data-loss gotcha); dedupe is
+// enforced in code via findFirst before create.
+model SiteHourDefault {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  location   String // free text — matches ScheduleDay.location string semantics
+  startTime  String // "HH:MM" 24h
+  endTime    String // "HH:MM" 24h
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([facilityId])
 }
 
 // Provider worked-hours entry. The per-day actual hours a 1099/per-diem provider

@@ -1117,7 +1117,10 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     const key = `${dayId}-${roomNumber}`
     setAssignLoading(p => ({ ...p, [key]: true }))
     try {
-      await facilityAPI.assignProvider(dayId, roomNumber, rosterId === '' ? null : rosterId, role)
+      const res = await facilityAPI.assignProvider(dayId, roomNumber, rosterId === '' ? null : rosterId, role)
+      // Cross-facility double-booking warning (non-blocking — the assignment
+      // saved; coordinators may intentionally override).
+      if (res?.warning) alert('⚠️ ' + res.warning)
       await load()
     } catch (e) {
       alert('Assignment failed: ' + e.message)

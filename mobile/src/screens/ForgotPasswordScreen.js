@@ -17,6 +17,7 @@ import { authAPI } from '../api/client';
 const COLORS = {
   primary: '#2563EB',
   primaryDark: '#1D4ED8',
+  navy: '#12325B',
   background: '#FAFAFA',
   textDark: '#0F172A',
   textMuted: '#64748B',
@@ -215,13 +216,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   submitButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.navy,
     borderRadius: 14,
     paddingVertical: 17,
     alignItems: 'center',
     marginTop: 24,
     marginBottom: 20,
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.navy,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

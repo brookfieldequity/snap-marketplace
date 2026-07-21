@@ -752,11 +752,50 @@ function computeRequestOutcomes({ assignments, scheduleDays, requests }) {
   });
 }
 
+/**
+ * Cross-facility double-booking guard (one provider, one master schedule).
+ *
+ * For roster entries linked to a SNAP provider account, find dates in
+ * [monthStart, monthEnd) where the SAME provider already holds a
+ * ScheduleAssignment at a DIFFERENT facility — via a sibling
+ * InternalRosterEntry sharing linkedProviderId. Returns a Set of
+ * `${rosterId}::${YYYY-MM-DD}` keys the caller merges into unavailableKeys
+ * (hard exclude). One batched query for the whole build range — never
+ * per-day queries.
+ */
+async function crossFacilityConflictKeys({ facilityId, roster, monthStart, monthEnd }) {
+  const keys = new Set();
+  const rosterIdByProviderId = new Map();
+  for (const r of roster) {
+    if (r.linkedProviderId) rosterIdByProviderId.set(r.linkedProviderId, r.id);
+  }
+  if (rosterIdByProviderId.size === 0) return keys;
+
+  const external = await prisma.scheduleAssignment.findMany({
+    where: {
+      facilityId: { not: facilityId },
+      scheduleDay: { date: { gte: monthStart, lt: monthEnd } },
+      rosterEntry: { linkedProviderId: { in: [...rosterIdByProviderId.keys()] } },
+    },
+    select: {
+      scheduleDay: { select: { date: true } },
+      rosterEntry: { select: { linkedProviderId: true } },
+    },
+  });
+  for (const a of external) {
+    const rid = rosterIdByProviderId.get(a.rosterEntry?.linkedProviderId);
+    if (!rid || !a.scheduleDay?.date) continue;
+    keys.add(`${rid}::${new Date(a.scheduleDay.date).toISOString().slice(0, 10)}`);
+  }
+  return keys;
+}
+
 module.exports = {
   MODES,
   runMode,
   resolveStaffIQWeights,
   computeRequestOutcomes,
+  crossFacilityConflictKeys,
   // exposed for testing / re-scoring after edits
   computeInsights,
   computeStaffIQScore,

@@ -5,6 +5,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import {
+  useFonts,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+} from '@expo-google-fonts/nunito';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,6 +25,7 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import ShiftDetailScreen from './src/screens/ShiftDetailScreen';
+import EarningsScreen from './src/screens/EarningsScreen';
 import MainTabs from './src/navigation/MainTabs';
 
 const COLORS = {
@@ -32,6 +38,10 @@ const RootStack = createNativeStackNavigator();
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [initialRoute, setInitialRoute] = useState('Welcome');
+  const [fontsLoaded] = useFonts({
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+  });
 
   useEffect(() => {
     AsyncStorage.getItem('snapToken').then((token) => {
@@ -40,7 +50,7 @@ export default function App() {
     });
   }, []);
 
-  if (isLoading) {
+  if (isLoading || !fontsLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -62,6 +72,7 @@ export default function App() {
           <RootStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
           <RootStack.Screen name="Main" component={MainTabs} />
           <RootStack.Screen name="ShiftDetail" component={ShiftDetailScreen} />
+          <RootStack.Screen name="Earnings" component={EarningsScreen} />
         </RootStack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

@@ -23,7 +23,7 @@ router.get('/:token', async (req, res) => {
       where: { token },
       include: {
         facility: { select: { name: true } },
-        rosterEntry: { select: { providerName: true } },
+        rosterEntry: { select: { providerName: true, linkedProviderId: true } },
         daySubmissions: {
           orderBy: { date: 'asc' },
         },
@@ -41,12 +41,42 @@ router.get('/:token', async (req, res) => {
     const fullName = request.rosterEntry?.providerName || '';
     const providerFirstName = fullName.split(/\s+/)[0] || fullName;
 
-    const submissions = request.daySubmissions.map((s) => ({
+    let submissions = request.daySubmissions.map((s) => ({
       date: s.date.toISOString().slice(0, 10),
       available: s.available,
       maybe: s.maybe || false,
       note: s.note || null,
     }));
+
+    // Availability unification: if this roster row is linked to a SNAP app
+    // account, prefill from the provider's app calendar too, so both surfaces
+    // show the same month. The link's own staged submissions win where both
+    // exist for a date.
+    if (request.rosterEntry?.linkedProviderId) {
+      const monthStart = new Date(Date.UTC(request.year, request.month - 1, 1));
+      const monthEnd = new Date(Date.UTC(request.year, request.month, 1));
+      const appRows = await prisma.providerAvailability.findMany({
+        where: {
+          providerId: request.rosterEntry.linkedProviderId,
+          date: { gte: monthStart, lt: monthEnd },
+        },
+      });
+      if (appRows.length > 0) {
+        const byDate = new Map(
+          appRows.map((r) => [
+            r.date.toISOString().slice(0, 10),
+            {
+              date: r.date.toISOString().slice(0, 10),
+              available: r.available,
+              maybe: false,
+              note: r.note || null,
+            },
+          ])
+        );
+        for (const s of submissions) byDate.set(s.date, s); // link submissions win
+        submissions = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+      }
+    }
 
     res.json({
       providerName: fullName,
@@ -91,7 +121,7 @@ router.post('/:token/submit', async (req, res) => {
         month: true,
         deadline: true,
         submittedAt: true,
-        rosterEntry: { select: { providerName: true } },
+        rosterEntry: { select: { providerName: true, linkedProviderId: true } },
         facility: { select: { name: true } },
       },
     });
@@ -155,6 +185,27 @@ router.post('/:token/submit', async (req, res) => {
         },
       });
     });
+
+    // Availability unification: mirror the submitted days into the provider's
+    // app calendar (ProviderAvailability) when this roster row is linked to a
+    // SNAP account, so the app instantly reflects the link submission.
+    // Non-critical — the staging write above is the canonical link-side store.
+    if (request.rosterEntry?.linkedProviderId && cleanDates.length > 0) {
+      const providerId = request.rosterEntry.linkedProviderId;
+      try {
+        await prisma.$transaction(
+          cleanDates.map((d) =>
+            prisma.providerAvailability.upsert({
+              where: { providerId_date: { providerId, date: d.date } },
+              create: { providerId, date: d.date, available: d.available, note: d.note },
+              update: { available: d.available, note: d.note },
+            })
+          )
+        );
+      } catch (mirrorErr) {
+        console.error('[avail] provider mirror failed (submission still saved):', mirrorErr.message);
+      }
+    }
 
     res.json({ ok: true, count: dates.length });
   } catch (err) {

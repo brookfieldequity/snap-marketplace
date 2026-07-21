@@ -83,6 +83,10 @@ export default function AvailabilityScreen() {
   // Availability window banner
   const [activeWindows, setActiveWindows] = useState([]);
   const [windowDismissed, setWindowDismissed] = useState(false);
+  // Per-facility availability-request windows (the coordinator's monthly
+  // submission windows for linked roster entries) — returned alongside the
+  // availability rows. Shows "Submitted ✓" vs "Closes <date>" per facility.
+  const [requestWindows, setRequestWindows] = useState([]);
 
   // Incentive shifts
   const [incentiveShifts, setIncentiveShifts] = useState([]);
@@ -102,6 +106,7 @@ export default function AvailabilityScreen() {
       const res = await providerAPI.getAvailability({ month: month + 1, year });
       // Backend returns the array directly; tolerate either shape.
       const rows = Array.isArray(res.data) ? res.data : (res.data?.availability || []);
+      setRequestWindows(Array.isArray(res.data?.requestWindows) ? res.data.requestWindows : []);
       const map = {};
       const noteMap = {};
       rows.forEach((a) => {
@@ -116,6 +121,7 @@ export default function AvailabilityScreen() {
     } catch {
       // Use empty availability if API unavailable
       setAvailability({});
+      setRequestWindows([]);
       setClearedDates(new Set());
       setDirty(false);
     } finally {
@@ -333,6 +339,36 @@ export default function AvailabilityScreen() {
           <Text style={styles.headerTitle}>Availability</Text>
           <Text style={styles.headerSub}>Tap days to mark availability</Text>
         </View>
+
+        {/* Per-facility availability-request window status (linked rosters).
+            Shows whether this month's window is submitted (still editable
+            until the deadline) or waiting on the provider. */}
+        {requestWindows
+          .filter((rw) => rw.year === year && rw.month === month + 1)
+          .map((rw) => {
+            const closed = new Date(rw.deadline) < new Date();
+            const submitted = !!rw.submittedAt;
+            return (
+              <View key={rw.id} style={[styles.windowBanner, submitted && styles.windowBannerSubmitted]}>
+                <View style={styles.windowBannerContent}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.windowBannerTitle, submitted && styles.windowBannerTitleSubmitted]}>
+                      {rw.facility?.name || 'Your facility'} — {MONTHS[month]} availability
+                    </Text>
+                    <Text style={[styles.windowBannerSub, submitted && styles.windowBannerSubSubmitted]}>
+                      {submitted
+                        ? closed
+                          ? `Submitted ✓ — window closed ${fmtWindowDate(rw.deadline)}`
+                          : `Submitted ✓ — you can still edit until ${fmtWindowDate(rw.deadline)}`
+                        : closed
+                          ? `Closed ${fmtWindowDate(rw.deadline)}`
+                          : `Closes ${fmtWindowDate(rw.deadline)} · save this calendar to submit`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
 
         {/* Availability Window Banner */}
         {urgentWindow && !windowDismissed && (
@@ -865,6 +901,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2563EB',
     fontWeight: '500',
+  },
+  windowBannerSubmitted: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+  },
+  windowBannerTitleSubmitted: {
+    color: '#065F46',
+  },
+  windowBannerSubSubmitted: {
+    color: '#047857',
   },
   windowDismiss: {
     width: 24,

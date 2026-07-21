@@ -254,6 +254,9 @@ export const facilityAPI = {
   reclassifyRosterTypes: () => apiFetch(`${BASE}/roster/reclassify-from-nppes`, { method: 'POST', headers: facilityHeaders() }),
   resolveRosterFromRegistry: () => apiFetch(`${BASE}/roster/resolve-from-registry`, { method: 'POST', headers: facilityHeaders() }),
   inviteRosterToApp: (id) => apiFetch(`${BASE}/roster/${id}/invite-to-app`, { method: 'POST', headers: facilityHeaders() }),
+  // App-claim invite code (invite → claim roster linking). send=true also
+  // texts the code to the entry's phone via Twilio.
+  generateRosterClaimCode: (id, send) => apiFetch(`${BASE}/roster/${id}/generate-claim-code`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(send ? { send: true } : {}) }),
   bulkInviteRosterToApp: (ids) => apiFetch(`${BASE}/roster/bulk-invite-to-app`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ ids }) }),
   relinkRoster: () => apiFetch(`${BASE}/roster/relink`, { method: 'POST', headers: facilityHeaders() }),
   importAllInRates: async (file) => {
@@ -521,6 +524,13 @@ export const payrollAPI = {
     apiFetch(`${BASE}/hour-entry/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
   clearHourEntries: ({ periodStart, periodEnd }) =>
     apiFetch(`${BASE}/hour-entry/clear-period`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ periodStart, periodEnd }) }),
+  // Per-site default hours — pre-fill window for provider one-tap hours entry.
+  getSiteHourDefaults: () =>
+    apiFetch(`${BASE}/hour-entry/site-defaults`, { headers: facilityHeaders() }),
+  saveSiteHourDefault: ({ location, startTime, endTime }) =>
+    apiFetch(`${BASE}/hour-entry/site-defaults`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify({ location, startTime, endTime }) }),
+  deleteSiteHourDefault: (id) =>
+    apiFetch(`${BASE}/hour-entry/site-defaults/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
   // Agency invoice — the "CAPA All in" deliverable. JSON for the on-screen view.
   getAgencyInvoice: ({ periodStart, periodEnd }) =>
     apiFetch(`${BASE}/payroll/agency-invoice?periodStart=${periodStart}&periodEnd=${periodEnd}`, {
