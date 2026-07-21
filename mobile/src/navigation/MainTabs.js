@@ -17,7 +17,7 @@ import { providerAPI } from '../api/client';
 // for your practice yet" state when the provider has no hours-entry
 // facilities (simpler than hiding/showing the tab from a fetch here).
 const TABS = [
-  { key: 'mySchedule', label: 'My Schedule', icon: '🗓️' },
+  { key: 'mySchedule', label: 'Schedule', icon: '🗓️' },
   { key: 'today', label: 'Daily', icon: '🏥' },
   { key: 'calendar', label: 'Availability', icon: '✅' },
   { key: 'hours', label: 'Hours', icon: '⏱️' },
@@ -73,7 +73,12 @@ export default function MainTabs({ navigation }) {
               activeOpacity={0.7}
             >
               <Text style={styles.tabIcon}>{tab.icon}</Text>
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+              <Text
+                style={[styles.tabLabel, isActive && styles.tabLabelActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
                 {tab.label}
               </Text>
               {isActive && <View style={styles.tabIndicator} />}
