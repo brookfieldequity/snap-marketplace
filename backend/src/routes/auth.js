@@ -10,6 +10,7 @@ const { checkAdminLockout, recordAdminFailure, clearAdminFailures } = require('.
 const { reverseLinkForProvider } = require('../services/rosterLink');
 const { sendEmail } = require('../services/notifications');
 const { issueSession, revokeByJti, revokeAllForUser, TTL_JWT } = require('../services/authSessions');
+const { federatedProviderLogin } = require('../services/authBridge');
 
 const router = express.Router();
 
@@ -114,15 +115,21 @@ router.post('/provider/register', async (req, res) => {
 router.post('/provider/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email },
       include: { providerProfile: true },
     });
-    if (!user || user.role !== 'PROVIDER') {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    let valid = false;
+    if (user && user.role === 'PROVIDER' && user.password) {
+      valid = await bcrypt.compare(password, user.password);
     }
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!valid) {
+      // Cross-app fallback: the same person may have registered in SNAP
+      // Credentialing. If that backend vouches for these credentials, the
+      // account is provisioned/synced locally and login proceeds normally.
+      user = await federatedProviderLogin(email, password);
+      if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
     // Award daily login VIP point
     if (user.providerProfile) {
@@ -159,6 +166,52 @@ router.post('/provider/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── Cross-app login bridge (inbound) ─────────────────────────────────────────
+//
+// The credentialing backend calls this to ask "are these credentials valid
+// for a provider here?" so one login works across both SNAP apps. Guarded by
+// the same X-Service-Key trust pair as the passport bridge (the peer sends
+// the shared CREDENTIALING_API_KEY value). Never returns hashes or tokens.
+router.post('/service/verify-credentials', async (req, res) => {
+  try {
+    const expected = process.env.CREDENTIALING_API_KEY;
+    if (!expected) return res.status(503).json({ error: 'Service auth not configured.' });
+    const provided = req.headers['x-service-key'];
+    if (!provided || typeof provided !== 'string') {
+      return res.status(401).json({ error: 'Missing service credentials.' });
+    }
+    const a = Buffer.from(expected, 'utf8');
+    const b = Buffer.from(provided, 'utf8');
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(403).json({ error: 'Invalid service credentials.' });
+    }
+
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.json({ valid: false });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { providerProfile: true },
+    });
+    if (!user || user.role !== 'PROVIDER' || !user.password) {
+      return res.json({ valid: false });
+    }
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.json({ valid: false });
+    res.json({
+      valid: true,
+      user: {
+        email: user.email,
+        firstName: user.providerProfile?.firstName || null,
+        lastName: user.providerProfile?.lastName || null,
+        npi: user.providerProfile?.npiNumber || null,
+      },
+    });
+  } catch (err) {
+    console.error('[auth] service verify-credentials failed:', err);
+    res.json({ valid: false });
   }
 });
 
