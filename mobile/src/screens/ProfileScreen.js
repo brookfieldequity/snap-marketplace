@@ -58,6 +58,40 @@ function formatLicenseExpiry(value) {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+// Credential type → display label. Keep in sync with the credentialing
+// backend's CredentialType enum (snap-credentialing prisma schema).
+const CREDENTIAL_TYPE_LABELS = {
+  STATE_LICENSE: 'State License',
+  STATE_CS_LICENSE: 'State Controlled Substance',
+  DEA: 'DEA Registration',
+  BOARD_CERTIFICATION: 'Board Certification',
+  MALPRACTICE_INSURANCE: 'Malpractice Insurance',
+  ACLS: 'ACLS',
+  BLS: 'BLS',
+};
+
+const CRED_EXPIRING_SOON_DAYS = 60;
+
+// Urgency tone for a passport credential: 'expired' (red), 'expiring'
+// (amber, within 60 days), or 'ok'.
+function credentialExpiryTone(cred) {
+  if (['EXPIRED', 'LAPSED', 'REVOKED'].includes(cred.status)) return 'expired';
+  if (!cred.expirationDate) return 'ok';
+  const exp = new Date(cred.expirationDate);
+  if (isNaN(exp.getTime())) return 'ok';
+  const now = new Date();
+  if (exp < now) return 'expired';
+  if (exp <= new Date(now.getTime() + CRED_EXPIRING_SOON_DAYS * 86400000)) return 'expiring';
+  return 'ok';
+}
+
+function formatCredExpiry(value) {
+  if (!value) return 'No expiry';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // Map a badge tone (from the backend trust service) to box + text styles.
 function badgeToneStyle(tone) {
   switch (tone) {
@@ -303,9 +337,11 @@ export default function ProfileScreen({ navigation }) {
   const [vipModalVisible, setVipModalVisible] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [claimModalVisible, setClaimModalVisible] = useState(false);
+  const [credSummary, setCredSummary] = useState(null);
 
   useEffect(() => {
     loadProfile();
+    loadCredentials();
     registerPushToken();
   }, []);
 
@@ -326,6 +362,17 @@ export default function ProfileScreen({ navigation }) {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Read-only passport summary for the My Credentials card. Informational
+  // only — on any failure the card simply doesn't render.
+  const loadCredentials = async () => {
+    try {
+      const res = await providerAPI.getMyCredentials();
+      setCredSummary(res.data);
+    } catch {
+      setCredSummary(null);
     }
   };
 
@@ -384,6 +431,8 @@ export default function ProfileScreen({ navigation }) {
 
   const handleProfileSaved = (updates) => {
     setProvider((prev) => ({ ...prev, ...updates }));
+    // NPI may have just been added/changed — the credentials card keys off it.
+    loadCredentials();
   };
 
   // Permanent account deletion — App Store 5.1.1(v).
@@ -542,6 +591,70 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.verifiedText}>MA License Acknowledged</Text>
           </View>
         </View>
+
+        {/* My Credentials — read-only passport summary via the credentialing
+            bridge. Renders nothing when the bridge is unconfigured/unavailable
+            or the provider has no passport yet; prompts for NPI when missing. */}
+        {credSummary?.available ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>My Credentials</Text>
+            {(credSummary.credentials || []).length === 0 ? (
+              <Text style={styles.credEmptyText}>
+                No credentials on your passport yet. Add them in the SNAP Credentialing app.
+              </Text>
+            ) : (
+              (credSummary.credentials || []).map((cred) => {
+                const tone = credentialExpiryTone(cred);
+                return (
+                  <View key={cred.id} style={styles.credRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.credName}>
+                        {CREDENTIAL_TYPE_LABELS[cred.type] || cred.type}
+                        {cred.jurisdiction ? ` · ${cred.jurisdiction}` : ''}
+                      </Text>
+                      {cred.issuingAuthority ? (
+                        <Text style={styles.credAuthority}>{cred.issuingAuthority}</Text>
+                      ) : null}
+                    </View>
+                    <View
+                      style={[
+                        styles.credExpiryPill,
+                        tone === 'expiring' && styles.credExpiryPillExpiring,
+                        tone === 'expired' && styles.credExpiryPillExpired,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.credExpiryText,
+                          tone === 'expiring' && styles.credExpiryTextExpiring,
+                          tone === 'expired' && styles.credExpiryTextExpired,
+                        ]}
+                      >
+                        {tone === 'expired' ? 'Expired · ' : ''}
+                        {formatCredExpiry(cred.expirationDate)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+            <Text style={styles.credFootnote}>From your SNAP credentialing passport</Text>
+          </View>
+        ) : credSummary?.reason === 'no-npi' ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>My Credentials</Text>
+            <Text style={styles.credEmptyText}>
+              Add your NPI number to see your credentialing passport — licenses,
+              certifications, and expiry dates — right here.
+            </Text>
+            <TouchableOpacity
+              style={styles.credAddNpiButton}
+              onPress={() => setEditModalVisible(true)}
+            >
+              <Text style={styles.credAddNpiButtonText}>Add NPI in Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Link your practice — invite-code roster claiming */}
         <TouchableOpacity
@@ -933,6 +1046,76 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textDark,
     lineHeight: 21,
+  },
+  // My Credentials card
+  credRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    gap: 10,
+  },
+  credName: {
+    fontSize: 13,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  credAuthority: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  credExpiryPill: {
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderWidth: 1,
+    backgroundColor: COLORS.success + '15',
+    borderColor: COLORS.success + '40',
+  },
+  credExpiryPillExpiring: {
+    backgroundColor: '#F59E0B18',
+    borderColor: '#F59E0B50',
+  },
+  credExpiryPillExpired: {
+    backgroundColor: COLORS.error + '12',
+    borderColor: COLORS.error + '40',
+  },
+  credExpiryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  credExpiryTextExpiring: {
+    color: '#B45309',
+  },
+  credExpiryTextExpired: {
+    color: '#B91C1C',
+  },
+  credEmptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 19,
+  },
+  credFootnote: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  credAddNpiButton: {
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  credAddNpiButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   linkPracticeRow: {
     flexDirection: 'row',

@@ -238,6 +238,13 @@ export const providerAPI = {
   getVip: () => api.get('/providers/me/vip'),
 
   /**
+   * Read-only credentialing passport summary for the My Credentials card.
+   * Always 200: { available: true, credentials, completeness } or
+   * { available: false, reason: 'no-npi' | 'no-passport' | ... }.
+   */
+  getMyCredentials: () => api.get('/providers/me/credentials'),
+
+  /**
    * Get active availability windows for the authenticated provider.
    * Returns windows from facilities where this provider is on the roster.
    */

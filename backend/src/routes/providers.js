@@ -5,6 +5,7 @@ const { aggregateProviderRatings, deriveProviderBadges } = require('../services/
 const { deleteProviderAccount } = require('../services/accountDeletion');
 const { searchByName: nppesSearchByName } = require('../services/nppesLookup');
 const { reverseLinkForProvider } = require('../services/rosterLink');
+const passportClient = require('../services/passportClient');
 const bcrypt = require('bcryptjs');
 
 const router = express.Router();
@@ -431,6 +432,44 @@ router.get('/me/vip', auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load VIP status' });
+  }
+});
+
+// ── My credentials (passport bridge) ─────────────────────────────────────────
+// Read-only credential/expiry summary from the snap-credentialing passport for
+// the mobile "My Credentials" card. Informational only — every "can't show it"
+// case is a 200 with { available: false, reason } so the card degrades quietly
+// instead of erroring the Profile screen:
+//   no-npi               → provider hasn't added their NPI yet (card prompts)
+//   no-passport          → NPI has no passport on the credentialing platform
+//   bridge-unconfigured  → CREDENTIALING_API_KEY unset (local dev) — no-op
+//   bridge-error         → cred backend unreachable / returned an error
+
+router.get('/me/credentials', auth, async (req, res) => {
+  try {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId: req.user.userId },
+      select: { npiNumber: true },
+    });
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    if (!profile.npiNumber) return res.json({ available: false, reason: 'no-npi' });
+    if (!passportClient.isConfigured()) {
+      return res.json({ available: false, reason: 'bridge-unconfigured' });
+    }
+
+    const summary = await passportClient.getProviderCredentialSummary(profile.npiNumber);
+    if (!summary?.found) return res.json({ available: false, reason: 'no-passport' });
+
+    res.json({
+      available: true,
+      provider: summary.provider,
+      credentials: summary.credentials || [],
+      completeness: summary.completeness || null,
+      generatedAt: summary.generatedAt,
+    });
+  } catch (err) {
+    console.error('[providers/me/credentials] bridge error:', err.message);
+    res.json({ available: false, reason: 'bridge-error' });
   }
 });
 

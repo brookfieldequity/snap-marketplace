@@ -178,6 +178,25 @@ async function getCmeHistory(npi) {
 }
 
 /**
+ * GET /api/service/passport/:npi/provider-summary
+ *
+ * Provider-scoped self-read for the mobile "My Credentials" card. The
+ * marketplace has authenticated the provider and passes THEIR OWN NPI —
+ * no facility / grant involved. Returns { found, provider?, credentials?,
+ * completeness? }; found=false means the provider has no passport yet
+ * (expected, not an error).
+ */
+async function getProviderCredentialSummary(npi) {
+  const { status, body, ok } = await callPassportApi(
+    `/api/service/passport/${encodeURIComponent(npi)}/provider-summary`
+  );
+  if (ok) return body;
+  const err = new Error(body?.error || `provider summary failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+/**
  * POST /api/service/passport/batch-summary
  *
  * One round-trip roster summary for the portal list + expiry dashboard.
@@ -340,6 +359,7 @@ module.exports = {
   requestGrant,
   invite,
   getCmeHistory,
+  getProviderCredentialSummary,
   batchSummary,
   updateCredential,
   uploadDocument,
