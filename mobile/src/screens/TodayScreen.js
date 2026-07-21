@@ -279,8 +279,11 @@ export default function TodayScreen() {
       </ScrollView>
 
       <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPicker(false)}>
-          <View style={styles.pickerCard} onStartShouldSetResponder={() => true}>
+        <View style={styles.modalRoot}>
+          {/* Backdrop is a SIBLING of the card (not its parent) so taps inside
+              the calendar can never fall through and dismiss the modal. */}
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPicker(false)} />
+          <View style={styles.pickerCard}>
             <View style={styles.pickerHeader}>
               <TouchableOpacity onPress={() => setPickerMonth((p) => { const d = new Date(p.y, p.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })} style={styles.pickerNavBtn}><Text style={styles.pickerNavText}>‹</Text></TouchableOpacity>
               <Text style={styles.pickerMonthLabel}>{monthLabel(pickerMonth.y, pickerMonth.m)}</Text>
@@ -293,17 +296,26 @@ export default function TodayScreen() {
               {monthGrid(pickerMonth.y, pickerMonth.m).map((day, i) => {
                 const cellYmd = day ? ymd(new Date(pickerMonth.y, pickerMonth.m, day)) : null;
                 const selected = cellYmd === date;
+                const isCellToday = cellYmd === ymd(new Date());
                 return (
                   <TouchableOpacity key={i} disabled={!day} onPress={() => pickDate(day)} style={styles.pickerCell}>
-                    <View style={[styles.pickerCellInner, selected && styles.pickerCellSelected]}>
+                    <View style={[styles.pickerCellInner, isCellToday && styles.pickerCellToday, selected && styles.pickerCellSelected]}>
                       <Text style={[styles.pickerCellText, selected && styles.pickerCellTextSelected]}>{day || ''}</Text>
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
+            <View style={styles.pickerFooter}>
+              <TouchableOpacity
+                style={styles.pickerTodayBtn}
+                onPress={() => { setDate(ymd(new Date())); setShowPicker(false); }}
+              >
+                <Text style={styles.pickerTodayText}>Jump to today</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -343,4 +355,28 @@ const styles = StyleSheet.create({
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textDark, marginBottom: 6 },
   emptySub: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', lineHeight: 18 },
+
+  // Month date-picker modal (opened by tapping the date label)
+  modalRoot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
+  pickerCard: {
+    width: '88%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 18, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 10,
+  },
+  pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  pickerNavBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
+  pickerNavText: { fontSize: 20, color: COLORS.textDark, fontWeight: '600' },
+  pickerMonthLabel: { fontSize: 16, fontWeight: '800', color: COLORS.textDark },
+  pickerDow: { flexDirection: 'row', marginBottom: 4 },
+  pickerDowText: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.textMuted },
+  pickerGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  pickerCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  pickerCellInner: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  pickerCellToday: { borderWidth: 1.5, borderColor: COLORS.primary },
+  pickerCellSelected: { backgroundColor: COLORS.primary },
+  pickerCellText: { fontSize: 14, color: COLORS.textDark, fontWeight: '600' },
+  pickerCellTextSelected: { color: '#fff', fontWeight: '800' },
+  pickerFooter: { marginTop: 12, alignItems: 'center' },
+  pickerTodayBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#EFF6FF' },
+  pickerTodayText: { color: COLORS.primary, fontWeight: '700', fontSize: 14 },
 });
