@@ -135,6 +135,69 @@ async function resolveLinkFields(emailOrFields) {
   return { snapAccountLinked: false, linkedProviderId: null };
 }
 
+// ── Credential summary (chip on the scheduling roster card) ────────────────────
+// Joins the scheduling roster to the credentialing plane through
+// linkedProviderId → FacilityRosterEntry → ProviderCredential (same facility)
+// and reduces each provider's credentials to one chip-sized status:
+//   FLAGGED  — a credential has an unresolved flag for this facility
+//   EXPIRED  — a credential is expired (status or past expirationDate)
+//   EXPIRING — soonest expiration falls within the window (soonest item included)
+//   CURRENT  — credentials exist and nothing is due inside the window
+//   NONE     — no credentialing data for this provider at this facility
+const CRED_EXPIRING_WINDOW_DAYS = 60;
+
+async function buildCredSummaries(facilityId, providerIds) {
+  const summaries = {};
+  if (!providerIds.length) return summaries;
+  // One batched query for the whole roster — never per-row.
+  const rosterEntries = await prisma.facilityRosterEntry.findMany({
+    where: { facilityId, providerId: { in: providerIds } },
+    select: {
+      providerId: true,
+      credentials: {
+        select: {
+          credentialType: true,
+          status: true,
+          expirationDate: true,
+          flags: { where: { facilityId, resolvedAt: null }, select: { id: true } },
+        },
+      },
+    },
+  });
+  // A provider can appear on two roster rows (distinct NPIs) — merge their creds.
+  const credsByProvider = new Map();
+  for (const entry of rosterEntries) {
+    const prev = credsByProvider.get(entry.providerId) || [];
+    credsByProvider.set(entry.providerId, prev.concat(entry.credentials || []));
+  }
+  const now = new Date();
+  const horizon = new Date(now.getTime() + CRED_EXPIRING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  for (const [providerId, creds] of credsByProvider) {
+    if (!creds.length) continue; // NONE — same as no roster entry at all
+    let flagged = false;
+    let expired = false;
+    let soonest = null;
+    for (const c of creds) {
+      if (c.flags.length) flagged = true;
+      if (c.status === 'EXPIRED' || (c.expirationDate && c.expirationDate < now)) expired = true;
+      if (c.expirationDate && c.expirationDate >= now && (!soonest || c.expirationDate < soonest.expirationDate)) {
+        soonest = c;
+      }
+    }
+    const status = flagged ? 'FLAGGED'
+      : expired ? 'EXPIRED'
+      : soonest && soonest.expirationDate <= horizon ? 'EXPIRING'
+      : 'CURRENT';
+    summaries[providerId] = {
+      status,
+      soonestExpiry: soonest
+        ? { credentialType: soonest.credentialType, date: soonest.expirationDate.toISOString() }
+        : null,
+    };
+  }
+  return summaries;
+}
+
 // Normalize a { facilityName, shiftSharePct } from the client into a
 // ProviderLocation create row (rosterEntryId comes from the nested write).
 function toProviderLocation(l) {
@@ -158,8 +221,15 @@ router.get('/', facilityAuth, async (req, res) => {
       },
       orderBy: { providerName: 'asc' },
     });
+    // Credential-status chip data, batched across the whole roster.
+    const linkedIds = [...new Set(entries.map((e) => e.linkedProviderId).filter(Boolean))];
+    const credSummaries = await buildCredSummaries(req.facility.id, linkedIds);
+    const withCreds = entries.map((e) => ({
+      ...e,
+      credSummary: (e.linkedProviderId && credSummaries[e.linkedProviderId]) || { status: 'NONE', soonestExpiry: null },
+    }));
     // Strip agency payroll rates the viewing facility isn't entitled to see.
-    res.json(applyRosterRateLens(entries, req.facility.id));
+    res.json(applyRosterRateLens(withCreds, req.facility.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });

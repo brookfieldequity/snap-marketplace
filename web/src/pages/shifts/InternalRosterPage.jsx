@@ -87,6 +87,25 @@ const CRED_STATUS = {
   COMPLETED: { label: 'Credentialed', bg: '#ECFDF5', color: '#047857' },
 }
 
+// Credential-expiry chip, fed by `credSummary` on each roster entry (derived
+// server-side from the facility credentialing plane). Distinct from the
+// passport invite-lifecycle pill above — this one says whether the provider's
+// credentials on file are actually in date.
+const CRED_CHIP = {
+  CURRENT:  { label: 'Creds current',  bg: '#ECFDF5', color: '#047857' },
+  EXPIRING: { label: 'Creds expiring', bg: '#FFFBEB', color: '#B45309' },
+  EXPIRED:  { label: 'Creds expired',  bg: '#FEE2E2', color: '#B91C1C' },
+  FLAGGED:  { label: 'Creds flagged',  bg: '#FEE2E2', color: '#B91C1C' },
+  NONE:     { label: 'No cred data',   bg: '#F1F5F9', color: '#94A3B8' },
+}
+
+// "STATE_LICENSE" → "State License" (acronyms kept upper-case) for the tooltip.
+function credTypeLabel(t) {
+  if (!t) return 'Credential'
+  const KEEP = new Set(['CV', 'DEA', 'MA', 'CS', 'NPDB', 'ACLS', 'BLS'])
+  return t.split('_').map((w) => (KEEP.has(w) ? w : w[0] + w.slice(1).toLowerCase())).join(' ')
+}
+
 // Back-office / NPI-exempt staff are never credentialed. A provider is
 // invitable once they're clinical AND have an NPI to key the passport on.
 function isClinical(p) {
@@ -106,9 +125,9 @@ function needsRate(p) {
   return p.employmentCategory === 'FULL_TIME' ? !p.annualRate : !p.hourlyRate
 }
 
-function Badge({ bg, color, label }) {
+function Badge({ bg, color, label, title }) {
   return (
-    <span style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: `1px solid ${color}33` }}>
+    <span title={title} style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: `1px solid ${color}33`, cursor: title ? 'help' : undefined }}>
       {label}
     </span>
   )
@@ -1068,7 +1087,24 @@ export default function InternalRosterPage({ onNavigate }) {
 
                 {isClinical(p) && (() => {
                   const cs = CRED_STATUS[p.credentialingStatus] || CRED_STATUS.NOT_INVITED
-                  return <Badge bg={cs.bg} color={cs.color} label={`Passport: ${cs.label}`} />
+                  const summary = p.credSummary || { status: 'NONE', soonestExpiry: null }
+                  const chip = CRED_CHIP[summary.status] || CRED_CHIP.NONE
+                  const soonest = summary.soonestExpiry
+                  const soonestDate = soonest ? new Date(soonest.date).toLocaleDateString() : null
+                  const label = summary.status === 'EXPIRING' && soonestDate
+                    ? `${chip.label} ${soonestDate}`
+                    : chip.label
+                  const tooltip = soonest
+                    ? `Soonest expiring: ${credTypeLabel(soonest.credentialType)} — ${soonestDate}`
+                    : summary.status === 'NONE'
+                      ? 'No credentialing data on file for this facility'
+                      : 'No upcoming expirations on file'
+                  return (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge bg={cs.bg} color={cs.color} label={`Passport: ${cs.label}`} />
+                      <Badge bg={chip.bg} color={chip.color} label={label} title={tooltip} />
+                    </div>
+                  )
                 })()}
 
                 {p.npi ? (
