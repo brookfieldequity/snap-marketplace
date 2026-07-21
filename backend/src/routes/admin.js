@@ -1864,6 +1864,11 @@ const DEMO_EMAILS = [
   'demo.anes1@snapmedical.app',
 ];
 
+// App Review demo facility (see "App Review demo" section below). Also isDemo,
+// so the sales-demo queries in THIS block explicitly exclude it by name —
+// otherwise a sales-demo reseed would wipe Apple's review data mid-review.
+const REVIEW_DEMO_FACILITY_NAME = 'Beacon Harbor Surgical Center';
+
 function demoDay(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -1873,7 +1878,7 @@ function demoDay(offsetDays) {
 
 router.get('/demo/status', adminAuth, async (req, res) => {
   try {
-    const facility = await prisma.facility.findFirst({ where: { isDemo: true } });
+    const facility = await prisma.facility.findFirst({ where: { isDemo: true, name: { not: REVIEW_DEMO_FACILITY_NAME } } });
     if (!facility) return res.json({ seeded: false });
     const [shiftCount, recordCount, input] = await Promise.all([
       prisma.shift.count({ where: { facilityId: facility.id } }),
@@ -1903,7 +1908,10 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
     // facility delete): instead, sweep EVERY model with a facilityId column
     // in a retry loop until FK order resolves, after clearing the known
     // through-parent children.
-    const existing = await prisma.facility.findMany({ where: { isDemo: true }, select: { id: true } });
+    const existing = await prisma.facility.findMany({
+      where: { isDemo: true, name: { not: REVIEW_DEMO_FACILITY_NAME } },
+      select: { id: true },
+    });
     for (const { id: fid } of existing) {
       const shifts = await prisma.shift.findMany({ where: { facilityId: fid }, select: { id: true } });
       const shiftIds = shifts.map((s) => s.id);
@@ -2281,7 +2289,7 @@ router.post('/demo/seed', adminAuth, async (req, res) => {
 
 router.post('/demo/launch', adminAuth, async (req, res) => {
   try {
-    const facility = await prisma.facility.findFirst({ where: { isDemo: true } });
+    const facility = await prisma.facility.findFirst({ where: { isDemo: true, name: { not: REVIEW_DEMO_FACILITY_NAME } } });
     if (!facility) return res.status(404).json({ error: 'Demo not seeded — run POST /admin/demo/seed first' });
     const coordUser = await prisma.user.findUnique({ where: { email: 'demo.coordinator@snapmedical.app' } });
     if (!coordUser) return res.status(404).json({ error: 'Demo coordinator account not found' });
@@ -2296,6 +2304,390 @@ router.post('/demo/launch', adminAuth, async (req, res) => {
     const baseUrl = process.env.FACILITY_CLAIM_BASE || 'https://sublime-flexibility-production-4f52.up.railway.app';
     res.json({ token, url: `${baseUrl}/?demoToken=${token}` });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── App Review demo ───────────────────────────────────────────────────────────
+// Seed a fictional "Beacon Harbor Surgical Center" so Apple's reviewer can log
+// into the provider mobile app as applereview@snapmedical.app and see a fully
+// working product: My Schedule populated, a staffed Daily board, an open
+// availability window, live Feed shifts, and past days to confirm in the Hours
+// tab. Entirely separate from the sales demo above — reseeding one never
+// touches the other.
+// POST /review-demo/seed     — idempotent: wipes + recreates all review data
+// GET  /review-demo/status   — is it seeded, and what's in it
+// POST /review-demo/teardown — remove everything (keeps the reviewer account)
+
+const REVIEW_PROVIDER_EMAIL = 'applereview@snapmedical.app';
+
+// Shared teardown, keyed STRICTLY by the fictional facility (exact name +
+// isDemo) so it can never match a real customer. Mirrors the sales-demo wipe:
+// clear known through-parent children first, then sweep every facilityId-
+// bearing model in a retry loop until FK order resolves, then drop the
+// facility. The applereview User/ProviderProfile is NEVER deleted — the
+// credentialing-app review signs in with that same email — only its roster row
+// and other rows under the demo facility go (swept by facilityId).
+async function tearDownReviewDemo() {
+  const existing = await prisma.facility.findMany({
+    where: { name: REVIEW_DEMO_FACILITY_NAME, isDemo: true },
+    select: { id: true },
+  });
+  for (const { id: fid } of existing) {
+    const shifts = await prisma.shift.findMany({ where: { facilityId: fid }, select: { id: true } });
+    const shiftIds = shifts.map((s) => s.id);
+    if (shiftIds.length) {
+      const bookings = await prisma.shiftBooking.findMany({ where: { shiftId: { in: shiftIds } }, select: { id: true } });
+      await prisma.providerRating.deleteMany({ where: { bookingId: { in: bookings.map((b) => b.id) } } }).catch(() => {});
+      await prisma.shiftCompletion.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+      await prisma.shiftBooking.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+      await prisma.shiftApplication.deleteMany({ where: { shiftId: { in: shiftIds } } }).catch(() => {});
+    }
+    const assignments = await prisma.scheduleAssignment.findMany({ where: { facilityId: fid }, select: { id: true } });
+    if (assignments.length) {
+      await prisma.assignmentCostComponent.deleteMany({ where: { assignmentId: { in: assignments.map((a) => a.id) } } }).catch(() => {});
+    }
+    const incentives = await prisma.internalIncentiveShift.findMany({ where: { facilityId: fid }, select: { id: true } });
+    if (incentives.length) {
+      await prisma.internalIncentiveShiftResponse.deleteMany({ where: { incentiveShiftId: { in: incentives.map((i) => i.id) } } }).catch(() => {});
+    }
+    const credRoster = await prisma.facilityRosterEntry.findMany({ where: { facilityId: fid }, select: { id: true } });
+    if (credRoster.length) {
+      await prisma.providerCredential.deleteMany({ where: { rosterId: { in: credRoster.map((c) => c.id) } } }).catch(() => {});
+    }
+
+    // Every facilityId-bearing model, FK order resolved by retrying.
+    const facilityModels = Object.keys(prisma).filter((k) => !k.startsWith('$') && !k.startsWith('_'));
+    const pending = new Set(facilityModels);
+    for (let pass = 1; pass <= 6 && pending.size; pass++) {
+      for (const model of [...pending]) {
+        if (model === 'facility' || typeof prisma[model]?.deleteMany !== 'function') { pending.delete(model); continue; }
+        try {
+          await prisma[model].deleteMany({ where: { facilityId: fid } });
+          pending.delete(model);
+        } catch (e) {
+          // Validation error = model has no facilityId column → not ours.
+          if (e.name === 'PrismaClientValidationError') pending.delete(model);
+          // P2003 (FK) → children not gone yet; retry next pass.
+        }
+      }
+    }
+    await prisma.facility.delete({ where: { id: fid } });
+  }
+  return existing.length;
+}
+
+router.get('/review-demo/status', adminAuth, async (req, res) => {
+  try {
+    const facility = await prisma.facility.findFirst({
+      where: { name: REVIEW_DEMO_FACILITY_NAME, isDemo: true },
+    });
+    if (!facility) return res.json({ seeded: false });
+    const [rosterEntries, scheduleDays, scheduleAssignments, liveShifts, availabilityRequests, siteHourDefaults, submittedHours] = await Promise.all([
+      prisma.internalRosterEntry.count({ where: { facilityId: facility.id } }),
+      prisma.scheduleDay.count({ where: { facilityId: facility.id } }),
+      prisma.scheduleAssignment.count({ where: { facilityId: facility.id } }),
+      prisma.shift.count({ where: { facilityId: facility.id, status: 'LIVE' } }),
+      prisma.availabilityRequest.count({ where: { facilityId: facility.id } }),
+      prisma.siteHourDefault.count({ where: { facilityId: facility.id } }),
+      prisma.providerHourEntry.count({ where: { facilityId: facility.id, status: 'SUBMITTED' } }),
+    ]);
+    const reviewUser = await prisma.user.findUnique({
+      where: { email: REVIEW_PROVIDER_EMAIL },
+      include: { providerProfile: { select: { id: true } } },
+    });
+    const reviewerLinked = reviewUser?.providerProfile
+      ? !!(await prisma.internalRosterEntry.findFirst({
+          where: { facilityId: facility.id, linkedProviderId: reviewUser.providerProfile.id },
+          select: { id: true },
+        }))
+      : false;
+    res.json({
+      seeded: true,
+      facilityId: facility.id,
+      facilityName: facility.name,
+      reviewerAccountExists: !!reviewUser,
+      reviewerLinked,
+      counts: { rosterEntries, scheduleDays, scheduleAssignments, liveShifts, availabilityRequests, siteHourDefaults, submittedHours },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/review-demo/seed', adminAuth, async (req, res) => {
+  try {
+    const { password, npi } = req.body || {};
+    await tearDownReviewDemo();
+
+    // ── Facility ──────────────────────────────────────────────────────────────
+    const facility = await prisma.facility.create({
+      data: {
+        name: REVIEW_DEMO_FACILITY_NAME,
+        facilityType: 'SURGERY_CENTER',
+        address: '42 Harborview Way, Boston',
+        zipCode: '02110',
+        state: 'MA',
+        snapMode: 'BOTH',
+        isDemo: true,
+        description: 'Fictional facility for Apple App Review — seeded data only, never a real customer.',
+      },
+    });
+    // The Hours tab (provider one-tap hours) is gated per facility on the
+    // payroll_builder flag (config/featureFlags.js). No subscription row means
+    // the BASIC tier default (off), so an explicit OVERRIDE row turns it on.
+    await prisma.facilityFeatureFlag.create({
+      data: { facilityId: facility.id, flagName: 'payroll_builder', enabled: true, source: 'OVERRIDE', notes: 'App Review demo' },
+    });
+
+    // ── Reviewer account ──────────────────────────────────────────────────────
+    // The applereview email is shared with the credentialing-app review. An
+    // existing password is NEVER overwritten; when the user is missing (or
+    // passwordless), password stays null unless one is passed — the cross-app
+    // bridge in routes/auth.js then accepts the reviewer's credentialing-app
+    // password and syncs it local on first login.
+    let reviewUser = await prisma.user.findUnique({
+      where: { email: REVIEW_PROVIDER_EMAIL },
+      include: { providerProfile: true },
+    });
+    let passwordState;
+    if (!reviewUser) {
+      reviewUser = await prisma.user.create({
+        data: {
+          email: REVIEW_PROVIDER_EMAIL,
+          password: password ? await bcrypt.hash(password, 10) : null,
+          role: 'PROVIDER',
+        },
+        include: { providerProfile: true },
+      });
+      passwordState = password
+        ? 'created with the provided password'
+        : 'created passwordless — the credentialing-app password works via the cross-app bridge on first login';
+    } else if (reviewUser.role !== 'PROVIDER') {
+      return res.status(409).json({ error: `${REVIEW_PROVIDER_EMAIL} exists with role ${reviewUser.role} — refusing to touch it` });
+    } else if (!reviewUser.password && password) {
+      reviewUser = await prisma.user.update({
+        where: { id: reviewUser.id },
+        data: { password: await bcrypt.hash(password, 10) },
+        include: { providerProfile: true },
+      });
+      passwordState = 'was empty — set to the provided password';
+    } else {
+      passwordState = 'existing password kept (never overwritten)';
+    }
+
+    // npiNumber is globally unique — only lands on the profile when it isn't
+    // already someone else's.
+    let npiToSet = null;
+    if (npi) {
+      const taken = await prisma.providerProfile.findUnique({
+        where: { npiNumber: String(npi) },
+        select: { userId: true },
+      });
+      if (!taken || taken.userId === reviewUser.id) npiToSet = String(npi);
+    }
+
+    let profile = reviewUser.providerProfile;
+    if (!profile) {
+      profile = await prisma.providerProfile.create({
+        data: {
+          userId: reviewUser.id,
+          firstName: 'Alex', lastName: 'Review', specialty: 'CRNA',
+          city: 'Boston', state: 'MA', credentialed: true,
+          ...(npiToSet ? { npiNumber: npiToSet } : {}),
+          personalStatement: 'Apple App Review demo account.',
+        },
+      });
+    } else {
+      // Fill blanks only — never clobber what the reviewer (or the bridge)
+      // already set. credentialed goes true so instant-book works in the Feed.
+      profile = await prisma.providerProfile.update({
+        where: { id: profile.id },
+        data: {
+          firstName: profile.firstName || 'Alex',
+          lastName: profile.lastName || 'Review',
+          specialty: profile.specialty || 'CRNA',
+          city: profile.city || 'Boston',
+          credentialed: true,
+          ...(npiToSet && !profile.npiNumber ? { npiNumber: npiToSet } : {}),
+        },
+      });
+    }
+
+    // ── Roster ────────────────────────────────────────────────────────────────
+    const reviewEntry = await prisma.internalRosterEntry.create({
+      data: {
+        facilityId: facility.id,
+        providerName: `${profile.lastName || 'Review'}, ${profile.firstName || 'Alex'}`,
+        providerType: 'CRNA',
+        employmentCategory: 'PER_DIEM',
+        employer: 'Beacon Harbor',
+        hourlyRate: 265,
+        allInCostPerHour: 265,
+        is1099: true,
+        preferredShiftLength: '10hr',
+        npi: profile.npiNumber || undefined,
+        snapAccountEmail: REVIEW_PROVIDER_EMAIL,
+        snapAccountLinked: true,
+        linkedProviderId: profile.id,
+      },
+    });
+    // Unlinked fictional extras so the Daily board reads like a real staffed site.
+    const extraDefs = [
+      { providerName: 'Vale, Jordan',   providerType: 'CRNA',             employmentCategory: 'FULL_TIME', hourlyRate: 260, allInCostPerHour: 310, employer: 'Beacon Harbor', preferredShiftLength: '10hr' },
+      { providerName: 'Whitfield, Sam', providerType: 'ANESTHESIOLOGIST', employmentCategory: 'FULL_TIME', hourlyRate: 390, allInCostPerHour: 460, employer: 'Beacon Harbor', preferredShiftLength: '10hr' },
+      { providerName: 'Chen, Riley',    providerType: 'CRNA',             employmentCategory: 'PER_DIEM',  hourlyRate: 270, allInCostPerHour: 270, employer: 'Beacon Harbor', preferredShiftLength: '10hr' },
+    ];
+    const extras = [];
+    for (const def of extraDefs) {
+      extras.push(await prisma.internalRosterEntry.create({ data: { facilityId: facility.id, ...def } }));
+    }
+    const [jordan, sam, riley] = extras;
+
+    // ── Schedule: past 5 weekdays + today + next 10 weekdays ──────────────────
+    // Past weekdays feed the Hours tab (routes/providerHours.js derives the
+    // unconfirmed days from ScheduleAssignments over the last 14 days — no
+    // ProviderHourEntry rows are pre-created, so the reviewer gets the real
+    // one-tap confirm). Today is seeded unconditionally (even on a weekend) so
+    // the Daily board is staffed whenever the reviewer opens it; future
+    // weekdays fill My Schedule.
+    const pastOffsets = [];
+    for (let d = -1; pastOffsets.length < 5; d--) {
+      const dow = demoDay(d).getDay();
+      if (dow !== 0 && dow !== 6) pastOffsets.push(d);
+    }
+    const futureOffsets = [];
+    for (let d = 1; futureOffsets.length < 10; d++) {
+      const dow = demoDay(d).getDay();
+      if (dow !== 0 && dow !== 6) futureOffsets.push(d);
+    }
+    const dayOffsets = [...pastOffsets.reverse(), 0, ...futureOffsets];
+
+    let assignmentCount = 0;
+    for (const offset of dayOffsets) {
+      const date = demoDay(offset);
+
+      // Main OR — reviewer in Room 1 every day, 1:2 supervision.
+      const mainDay = await prisma.scheduleDay.create({
+        data: {
+          facilityId: facility.id,
+          date,
+          location: 'Main OR',
+          roomsRequired: 2,
+          supervisionRatio: 2,
+          publishedAt: new Date(),
+        },
+      });
+      await prisma.scheduleAssignment.createMany({
+        data: [
+          { scheduleDayId: mainDay.id, facilityId: facility.id, roomNumber: 1,   rosterId: reviewEntry.id, role: 'CRNA_ROOM' },
+          { scheduleDayId: mainDay.id, facilityId: facility.id, roomNumber: 2,   rosterId: jordan.id,      role: 'CRNA_ROOM' },
+          { scheduleDayId: mainDay.id, facilityId: facility.id, roomNumber: 901, rosterId: sam.id,         role: 'SUPERVISING_MD' },
+        ],
+      });
+
+      // Endoscopy — 1 CRNA room.
+      const endoDay = await prisma.scheduleDay.create({
+        data: {
+          facilityId: facility.id,
+          date,
+          location: 'Endoscopy',
+          roomsRequired: 1,
+          supervisionRatio: null,
+          publishedAt: new Date(),
+        },
+      });
+      await prisma.scheduleAssignment.createMany({
+        data: [
+          { scheduleDayId: endoDay.id, facilityId: facility.id, roomNumber: 1, rosterId: riley.id, role: 'CRNA_ROOM' },
+        ],
+      });
+      assignmentCount += 4;
+    }
+
+    // ── Site hour defaults (no unique constraint — findFirst dedupe) ──────────
+    for (const def of [
+      { location: 'Main OR',   startTime: '07:00', endTime: '15:00' },
+      { location: 'Endoscopy', startTime: '07:00', endTime: '16:00' },
+    ]) {
+      const existingDefault = await prisma.siteHourDefault.findFirst({
+        where: { facilityId: facility.id, location: def.location },
+      });
+      if (!existingDefault) {
+        await prisma.siteHourDefault.create({ data: { facilityId: facility.id, ...def } });
+      }
+    }
+
+    // ── Availability window (next month, closes end of this month) ────────────
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const availYear = nextMonth.getFullYear();
+    const availMonth = nextMonth.getMonth() + 1;
+    const deadline = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    await prisma.availabilityRequest.create({
+      data: {
+        token: crypto.randomBytes(16).toString('hex'),
+        facilityId: facility.id,
+        rosterEntryId: reviewEntry.id,
+        year: availYear,
+        month: availMonth,
+        deadline,
+        sentAt: new Date(),
+        sentVia: 'EMAIL',
+      },
+    });
+
+    // ── Marketplace feed (status LIVE is all the feed query filters on) ───────
+    const mkShift = (specialty, offsetDays, startTime, hours, rate) =>
+      prisma.shift.create({
+        data: {
+          facilityId: facility.id, specialty, status: 'LIVE',
+          date: demoDay(offsetDays), startTime, durationHours: hours,
+          baseRate: rate, currentRate: rate, estimatedTotal: rate * hours,
+        },
+      });
+    const feedShifts = [
+      await mkShift('CRNA', 3, '07:00', 10, 275),
+      await mkShift('CRNA', 6, '07:00', 8, 265),
+      await mkShift('CRNA', 9, '10:00', 10, 285),
+      await mkShift('ANESTHESIOLOGIST', 7, '07:30', 9, 390),
+    ];
+
+    res.json({
+      ok: true,
+      facilityId: facility.id,
+      facilityName: facility.name,
+      counts: {
+        rosterEntries: 1 + extras.length,
+        scheduleDays: dayOffsets.length * 2,
+        scheduleAssignments: assignmentCount,
+        siteHourDefaults: 2,
+        availabilityRequests: 1,
+        marketplaceShifts: feedShifts.length,
+      },
+      availabilityWindow: { year: availYear, month: availMonth, deadline },
+      reviewerLogin: {
+        email: REVIEW_PROVIDER_EMAIL,
+        password: passwordState,
+        instructions: `Sign in to the SNAP provider mobile app as ${REVIEW_PROVIDER_EMAIL}. Everything is under ${REVIEW_DEMO_FACILITY_NAME}: My Schedule (Room 1, Main OR each weekday), the staffed Daily board, an open ${availYear}-${String(availMonth).padStart(2, '0')} availability window, ${feedShifts.length} open shifts in the Feed, and past days to confirm in the Hours tab.`,
+      },
+    });
+  } catch (err) {
+    console.error('[admin] review-demo/seed failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/review-demo/teardown', adminAuth, async (req, res) => {
+  try {
+    const facilitiesRemoved = await tearDownReviewDemo();
+    res.json({
+      ok: true,
+      facilitiesRemoved,
+      note: `${REVIEW_PROVIDER_EMAIL} account/profile kept — only its demo-facility roster row and data were removed`,
+    });
+  } catch (err) {
+    console.error('[admin] review-demo/teardown failed:', err);
     res.status(500).json({ error: err.message });
   }
 });

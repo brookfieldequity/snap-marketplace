@@ -896,6 +896,11 @@ export const adminAPI = {
   seedDemo: () => apiFetch(`${BASE}/admin/demo/seed`, { method: 'POST', headers: adminHeaders() }),
   launchDemo: () => apiFetch(`${BASE}/admin/demo/launch`, { method: 'POST', headers: adminHeaders() }),
 
+  // App Review demo (Apple reviewer sandbox facility)
+  getReviewDemoStatus: () => apiFetch(`${BASE}/admin/review-demo/status`, { headers: adminHeaders() }),
+  seedReviewDemo: (body) => apiFetch(`${BASE}/admin/review-demo/seed`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(body || {}) }),
+  teardownReviewDemo: () => apiFetch(`${BASE}/admin/review-demo/teardown`, { method: 'POST', headers: adminHeaders() }),
+
   // Credential user management
   getCredentialUsers: () => apiFetch(`${BASE}/admin/credential-users`, { headers: adminHeaders() }),
   createCredentialUser: (data) => apiFetch(`${BASE}/admin/credential-users`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(data) }),

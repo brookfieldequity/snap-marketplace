@@ -6,8 +6,11 @@ export default function AdminDemoPage() {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
   const [demoUrl, setDemoUrl] = useState(null)
+  const [reviewStatus, setReviewStatus] = useState(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewMsg, setReviewMsg] = useState(null)
 
-  useEffect(() => { loadStatus() }, [])
+  useEffect(() => { loadStatus(); loadReviewStatus() }, [])
 
   async function loadStatus() {
     try {
@@ -15,6 +18,43 @@ export default function AdminDemoPage() {
       setStatus(data)
     } catch {
       setStatus({ seeded: false })
+    }
+  }
+
+  async function loadReviewStatus() {
+    try {
+      const data = await adminAPI.getReviewDemoStatus()
+      setReviewStatus(data)
+    } catch {
+      setReviewStatus({ seeded: false })
+    }
+  }
+
+  async function seedReview() {
+    setReviewLoading(true)
+    setReviewMsg(null)
+    try {
+      const data = await adminAPI.seedReviewDemo()
+      setReviewMsg({ type: 'ok', text: `Seeded ${data.facilityName}. ${data.counts.scheduleDays} schedule days, ${data.counts.marketplaceShifts} live shifts. Reviewer password: ${data.reviewerLogin.password}.` })
+      await loadReviewStatus()
+    } catch (err) {
+      setReviewMsg({ type: 'err', text: err.message || 'Seed failed' })
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  async function teardownReview() {
+    setReviewLoading(true)
+    setReviewMsg(null)
+    try {
+      const data = await adminAPI.teardownReviewDemo()
+      setReviewMsg({ type: 'ok', text: `Torn down (${data.facilitiesRemoved} facility). ${data.note}` })
+      await loadReviewStatus()
+    } catch (err) {
+      setReviewMsg({ type: 'err', text: err.message || 'Teardown failed' })
+    } finally {
+      setReviewLoading(false)
     }
   }
 
@@ -148,6 +188,50 @@ export default function AdminDemoPage() {
         {demoUrl && (
           <div style={{ marginTop: 12, background: '#F8FAFC', borderRadius: 8, padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: '#475569', wordBreak: 'break-all' }}>
             {demoUrl}
+          </div>
+        )}
+      </div>
+
+      {/* App Review demo */}
+      <div style={card}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          App Review Demo
+        </div>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
+          Beacon Harbor Surgical Center — the Apple reviewer's sandbox for the provider app
+          (applereview@snapmedical.app). Separate from the sales demo above; reseeding one never touches the other.
+        </p>
+        {reviewStatus === null ? (
+          <div style={{ color: '#94A3B8', fontSize: 14, marginBottom: 16 }}>Loading...</div>
+        ) : reviewStatus.seeded ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <span style={{ background: '#D1FAE5', color: '#065F46', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99 }}>SEEDED</span>
+            <span style={{ fontSize: 13, color: '#475569' }}>
+              {reviewStatus.counts?.scheduleDays ?? '—'} schedule days · {reviewStatus.counts?.liveShifts ?? '—'} live shifts ·{' '}
+              {reviewStatus.counts?.rosterEntries ?? '—'} roster · reviewer {reviewStatus.reviewerLinked ? 'linked' : 'NOT linked'}
+            </span>
+          </div>
+        ) : (
+          <div style={{ color: '#94A3B8', fontSize: 14, marginBottom: 16 }}>Not seeded yet.</div>
+        )}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button style={btnPrimary} onClick={seedReview} disabled={reviewLoading}>
+            {reviewLoading ? 'Working...' : reviewStatus?.seeded ? 'Reseed App Review Demo' : 'Seed App Review Demo'}
+          </button>
+          {reviewStatus?.seeded && (
+            <button style={btnDanger} onClick={teardownReview} disabled={reviewLoading}>
+              Teardown
+            </button>
+          )}
+        </div>
+        {reviewMsg && (
+          <div style={{
+            marginTop: 16, padding: '10px 14px', borderRadius: 8, fontSize: 13,
+            background: reviewMsg.type === 'ok' ? '#F0FDF4' : '#FEF2F2',
+            color: reviewMsg.type === 'ok' ? '#166534' : '#DC2626',
+            border: `1px solid ${reviewMsg.type === 'ok' ? '#BBF7D0' : '#FCA5A5'}`,
+          }}>
+            {reviewMsg.text}
           </div>
         )}
       </div>
