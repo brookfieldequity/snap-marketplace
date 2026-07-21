@@ -88,14 +88,13 @@ const CRED_STATUS = {
 }
 
 // Credential-expiry chip, fed by `credSummary` on each roster entry (derived
-// server-side from the facility credentialing plane). Distinct from the
-// passport invite-lifecycle pill above — this one says whether the provider's
-// credentials on file are actually in date.
+// server-side from the passport plane via the credentialing bridge). Distinct
+// from the passport invite-lifecycle pill above — this one says whether the
+// provider's credentials on file are actually in date.
 const CRED_CHIP = {
   CURRENT:  { label: 'Creds current',  bg: '#ECFDF5', color: '#047857' },
   EXPIRING: { label: 'Creds expiring', bg: '#FFFBEB', color: '#B45309' },
   EXPIRED:  { label: 'Creds expired',  bg: '#FEE2E2', color: '#B91C1C' },
-  FLAGGED:  { label: 'Creds flagged',  bg: '#FEE2E2', color: '#B91C1C' },
   NONE:     { label: 'No cred data',   bg: '#F1F5F9', color: '#94A3B8' },
 }
 

@@ -136,62 +136,57 @@ async function resolveLinkFields(emailOrFields) {
 }
 
 // ── Credential summary (chip on the scheduling roster card) ────────────────────
-// Joins the scheduling roster to the credentialing plane through
-// linkedProviderId → FacilityRosterEntry → ProviderCredential (same facility)
-// and reduces each provider's credentials to one chip-sized status:
-//   FLAGGED  — a credential has an unresolved flag for this facility
+// Reads the passport plane (the ONE credential source of truth) via the
+// cross-app bridge — one batchSummary round-trip for the whole roster, keyed
+// by each entry's NPI. Previously this read the marketplace's own shadow
+// tables (FacilityRosterEntry → ProviderCredential), but those were frozen
+// when the portal went zero-storage, so they only get staler. The former
+// FLAGGED state is gone with them: flag writes are among the frozen (410)
+// endpoints, so a shadow flag could never be raised or cleared again — if
+// flagging returns, it returns on the passport plane.
 //   EXPIRED  — a credential is expired (status or past expirationDate)
 //   EXPIRING — soonest expiration falls within the window (soonest item included)
 //   CURRENT  — credentials exist and nothing is due inside the window
-//   NONE     — no credentialing data for this provider at this facility
+//   NONE     — no passport, no grant for this facility, or no credentials yet
+// Informational only: if the bridge is unconfigured or down, every row
+// degrades to NONE rather than failing the roster load.
 const CRED_EXPIRING_WINDOW_DAYS = 60;
+const EXPIRED_CRED_STATUSES = new Set(['EXPIRED', 'LAPSED', 'REVOKED']);
 
-async function buildCredSummaries(facilityId, providerIds) {
+async function buildCredSummaries(facilityId, npis) {
   const summaries = {};
-  if (!providerIds.length) return summaries;
-  // One batched query for the whole roster — never per-row.
-  const rosterEntries = await prisma.facilityRosterEntry.findMany({
-    where: { facilityId, providerId: { in: providerIds } },
-    select: {
-      providerId: true,
-      credentials: {
-        select: {
-          credentialType: true,
-          status: true,
-          expirationDate: true,
-          flags: { where: { facilityId, resolvedAt: null }, select: { id: true } },
-        },
-      },
-    },
-  });
-  // A provider can appear on two roster rows (distinct NPIs) — merge their creds.
-  const credsByProvider = new Map();
-  for (const entry of rosterEntries) {
-    const prev = credsByProvider.get(entry.providerId) || [];
-    credsByProvider.set(entry.providerId, prev.concat(entry.credentials || []));
+  if (!npis.length || !passportClient.isConfigured()) return summaries;
+  let batch;
+  try {
+    batch = await passportClient.batchSummary(facilityId, npis);
+  } catch (err) {
+    console.error('[roster credSummary] passport bridge unavailable:', err.message);
+    return summaries;
   }
   const now = new Date();
   const horizon = new Date(now.getTime() + CRED_EXPIRING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  for (const [providerId, creds] of credsByProvider) {
-    if (!creds.length) continue; // NONE — same as no roster entry at all
-    let flagged = false;
+  for (const s of batch?.summaries || []) {
+    // No passport / no grant → NONE (a facility the provider hasn't granted
+    // has no business seeing credential status here).
+    if (!s.exists || !s.hasGrant) continue;
+    const creds = s.credentials || [];
+    if (!creds.length) continue;
     let expired = false;
     let soonest = null;
     for (const c of creds) {
-      if (c.flags.length) flagged = true;
-      if (c.status === 'EXPIRED' || (c.expirationDate && c.expirationDate < now)) expired = true;
-      if (c.expirationDate && c.expirationDate >= now && (!soonest || c.expirationDate < soonest.expirationDate)) {
+      const exp = c.expirationDate ? new Date(c.expirationDate) : null;
+      if (EXPIRED_CRED_STATUSES.has(c.status) || (exp && exp < now)) expired = true;
+      if (exp && exp >= now && (!soonest || exp < new Date(soonest.expirationDate))) {
         soonest = c;
       }
     }
-    const status = flagged ? 'FLAGGED'
-      : expired ? 'EXPIRED'
-      : soonest && soonest.expirationDate <= horizon ? 'EXPIRING'
+    const status = expired ? 'EXPIRED'
+      : soonest && new Date(soonest.expirationDate) <= horizon ? 'EXPIRING'
       : 'CURRENT';
-    summaries[providerId] = {
+    summaries[s.npi] = {
       status,
       soonestExpiry: soonest
-        ? { credentialType: soonest.credentialType, date: soonest.expirationDate.toISOString() }
+        ? { credentialType: soonest.type, date: new Date(soonest.expirationDate).toISOString() }
         : null,
     };
   }
@@ -221,12 +216,14 @@ router.get('/', facilityAuth, async (req, res) => {
       },
       orderBy: { providerName: 'asc' },
     });
-    // Credential-status chip data, batched across the whole roster.
-    const linkedIds = [...new Set(entries.map((e) => e.linkedProviderId).filter(Boolean))];
-    const credSummaries = await buildCredSummaries(req.facility.id, linkedIds);
+    // Credential-status chip data — one passport-bridge round-trip for the
+    // whole roster, keyed by NPI (works even before the provider links a
+    // SNAP account; the passport is NPI-keyed).
+    const npis = [...new Set(entries.map((e) => e.npi).filter(Boolean))];
+    const credSummaries = await buildCredSummaries(req.facility.id, npis);
     const withCreds = entries.map((e) => ({
       ...e,
-      credSummary: (e.linkedProviderId && credSummaries[e.linkedProviderId]) || { status: 'NONE', soonestExpiry: null },
+      credSummary: (e.npi && credSummaries[e.npi]) || { status: 'NONE', soonestExpiry: null },
     }));
     // Strip agency payroll rates the viewing facility isn't entitled to see.
     res.json(applyRosterRateLens(withCreds, req.facility.id));
