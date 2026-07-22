@@ -129,7 +129,10 @@ app.use('/api/hour-entry', hourEntryRoutes);
 app.use('/api/provider-hours', providerHoursRoutes);
 app.use('/api/feature-flags', featureFlagRoutes);
 app.use('/api/pto-builder', ptoBuilderRoutes);
-app.use('/api/credentialing', credentialingRoutes);
+app.use('/api/credentialing', credentialingRoutes)
+// Cred Maps — per-facility credentialing programs mapped once, packets
+// auto-populated from the passport. See routes/credmap.js.
+app.use('/api/credmap', require('./routes/credmap'));
 // Facility-coordinator invite + claim. Replaces /auth/facility/register
 // per snap-applications/capa-pilot/facility-invite-spec.md (2026-06-09).
 app.use('/api/facility-claim', require('./routes/facilityClaim'));

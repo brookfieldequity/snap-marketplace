@@ -986,3 +986,41 @@ export const roomCountAPI = {
       body: JSON.stringify({ days }),
     }),
 }
+
+// ─── Cred Map API ─────────────────────────────────────────────────────────────
+// Facility credentialing programs mapped once; packets auto-populate from the
+// passport. Coordinator-only (credentialing portal token).
+export const credMapAPI = {
+  getTaxonomy: () => apiFetch(`${BASE}/credmap/taxonomy`, { headers: credHeaders() }),
+  getMaps: () => apiFetch(`${BASE}/credmap`, { headers: credHeaders() }),
+  getMap: (id) => apiFetch(`${BASE}/credmap/${id}`, { headers: credHeaders() }),
+  createMap: (name, useStarter) =>
+    apiFetch(`${BASE}/credmap`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ name, useStarter }) }),
+  // AI analysis of a blank facility packet (PDF/images). FormData — no
+  // Content-Type header so the browser sets the multipart boundary.
+  analyzePacket: async (files, name) => {
+    const form = new FormData()
+    for (const f of files) form.append('packet', f)
+    if (name) form.append('name', name)
+    const res = await fetch(`${BASE}/credmap/analyze`, { method: 'POST', headers: credAuthHeaders(), body: form })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const err = new Error(data.error || `HTTP ${res.status}`)
+      err.status = res.status
+      err.data = data
+      throw err
+    }
+    return data
+  },
+  updateMap: (id, data) => apiFetch(`${BASE}/credmap/${id}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  deleteMap: (id) => apiFetch(`${BASE}/credmap/${id}`, { method: 'DELETE', headers: credHeaders() }),
+  addItem: (mapId, data) => apiFetch(`${BASE}/credmap/${mapId}/items`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
+  updateItem: (mapId, itemId, data) => apiFetch(`${BASE}/credmap/${mapId}/items/${itemId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  deleteItem: (mapId, itemId) => apiFetch(`${BASE}/credmap/${mapId}/items/${itemId}`, { method: 'DELETE', headers: credHeaders() }),
+  reorderItems: (mapId, itemIds) => apiFetch(`${BASE}/credmap/${mapId}/items/order`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ itemIds }) }),
+  // Sticky notes
+  getNotes: (includeDone = false) => apiFetch(`${BASE}/credmap/notes/all${includeDone ? '?includeDone=true' : ''}`, { headers: credHeaders() }),
+  addNote: (data) => apiFetch(`${BASE}/credmap/notes`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
+  updateNote: (noteId, data) => apiFetch(`${BASE}/credmap/notes/${noteId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  deleteNote: (noteId) => apiFetch(`${BASE}/credmap/notes/${noteId}`, { method: 'DELETE', headers: credHeaders() }),
+}

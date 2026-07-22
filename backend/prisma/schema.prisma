@@ -371,6 +371,7 @@ model Facility {
   staffiqOutcomes     StaffIQOutcome[]
   credentialUsers     CredentialUser[]
   credRosterEntries   FacilityRosterEntry[]
+  credMaps            CredProgramMap[]
   coverageTemplates   CoverageTemplate[]
   holidays            FacilityHoliday[]
   scheduleBuildRuns   ScheduleBuildRun[]
@@ -1471,6 +1472,8 @@ model CredentialUser {
   flags         CredentialFlag[]
   notes         FacilityCredentialNote[]
   accessLogs    CredentialAccessLog[]
+  credMaps      CredProgramMap[]
+  stickyNotes   CredStickyNote[]
 }
 
 model FacilityRosterEntry {
@@ -1580,6 +1583,172 @@ model CredentialReminder {
   reminderType   String
   sentAt         DateTime           @default(now())
   expirationDate DateTime?
+}
+
+// ── SNAP Cred Map — a facility's credentialing program, mapped once ──────────
+//
+// One CredProgramMap captures everything a target facility/organization asks
+// for when credentialing a provider (its packet/checklist), expressed as
+// requirement items. Map once → every provider's packet populates from the
+// passport, and renewals ride the same map. Items carry a canonical taxonomy
+// key (see services/credMapTaxonomy) so cross-facility requirement overlap is
+// measurable later, plus the passport CredentialType they auto-fill from.
+// Data flow honors the Phase-3 freeze: maps/packets/tasks are facility-side
+// WORKFLOW state only — credential facts stay on the passport backend and are
+// read live at packet-generation time via passportClient.
+
+enum CredMapStatus {
+  DRAFT
+  CONFIRMED
+  ARCHIVED
+}
+
+enum CredMapOutputMode {
+  PDF_PACKET // fillable application packet (Anvil-filled)
+  DOC_BUNDLE // email/checklist facilities — assembled document bundle
+  PORTAL_EXPORT // facility runs credentialing software — upload-ready export
+}
+
+enum CredMapFulfillment {
+  AUTO_PASSPORT // populates from passport data/documents
+  DOCUMENT // needs a document the passport may not hold (TB, immunizations…)
+  SIGNATURE // needs the provider's signature
+  MANUAL // coordinator action outside SNAP (references, facility forms)
+}
+
+enum CredPacketCycle {
+  INITIAL
+  RENEWAL
+}
+
+enum CredPacketStatus {
+  IN_PROGRESS
+  READY
+  SENT
+}
+
+enum CredTaskStatus {
+  AUTO_FILLED
+  NEEDS_DOCUMENT
+  NEEDS_SIGNATURE
+  NEEDS_ACTION
+  WAIVED
+  DONE
+}
+
+enum CredTaskAssignee {
+  COORDINATOR
+  PROVIDER
+}
+
+model CredProgramMap {
+  id                String            @id @default(cuid())
+  facilityId        String // portal tenant (the credentialing org, e.g. CAPA)
+  facility          Facility          @relation(fields: [facilityId], references: [id])
+  name              String // e.g. "Beacon Harbor ASC — Medical Staff Application"
+  outputMode        CredMapOutputMode @default(PDF_PACKET)
+  recredCycleMonths Int? // e.g. 24 — drives nextDueAt on appointments
+  status            CredMapStatus     @default(DRAFT)
+  sourceDocPath     String? // uploaded blank packet (S3 key)
+  sourceDocName     String?
+  aiNotes           String? // analyzer's summary for the review pass
+  createdById       String
+  createdBy         CredentialUser    @relation(fields: [createdById], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  items        CredMapItem[]
+  packets      CredPacket[]
+  appointments CredAppointment[]
+}
+
+model CredMapItem {
+  id             String             @id @default(cuid())
+  mapId          String
+  map            CredProgramMap     @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  position       Int                @default(0)
+  section        String? // packet section heading, as printed
+  label          String // the requirement as the facility words it
+  canonicalType  String? // canonical taxonomy key (services/credMapTaxonomy)
+  credentialType CredentialType? // passport credential this auto-fills from
+  fulfillment    CredMapFulfillment @default(MANUAL)
+  required       Boolean            @default(true)
+  esignOk        Boolean            @default(true) // false = wet ink / notarization required
+  notes          String?
+  aiConfidence   String? // HIGH | MEDIUM | LOW (null = added by hand)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  tasks CredPacketTask[]
+}
+
+model CredPacket {
+  id               String           @id @default(cuid())
+  mapId            String
+  map              CredProgramMap   @relation(fields: [mapId], references: [id])
+  facilityId       String
+  npi              String
+  providerName     String?
+  cycle            CredPacketCycle  @default(INITIAL)
+  status           CredPacketStatus @default(IN_PROGRESS)
+  completeness     Int              @default(0) // 0–100, derived from task states
+  generatedDocPath String? // rendered packet (S3 key)
+  generatedDocName String?
+  createdById      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  tasks CredPacketTask[]
+
+  @@index([facilityId, npi])
+}
+
+model CredPacketTask {
+  id          String           @id @default(cuid())
+  packetId    String
+  packet      CredPacket       @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        CredMapItem      @relation(fields: [itemId], references: [id])
+  status      CredTaskStatus   @default(NEEDS_ACTION)
+  assignee    CredTaskAssignee @default(COORDINATOR)
+  note        String?
+  completedAt DateTime?
+  updatedAt   DateTime         @updatedAt
+}
+
+model CredAppointment {
+  id           String         @id @default(cuid())
+  facilityId   String
+  mapId        String
+  map          CredProgramMap @relation(fields: [mapId], references: [id])
+  npi          String
+  providerName String?
+  appointedAt  DateTime? // last (re)appointment date at this facility
+  nextDueAt    DateTime? // appointedAt + map.recredCycleMonths
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([mapId, npi])
+  @@index([facilityId, nextDueAt])
+}
+
+// Post-it reminders for the coordinator dashboard — same sticky-note design
+// language as the Shifts request board (Kalam font, paper-yellow default).
+model CredStickyNote {
+  id          String         @id @default(cuid())
+  facilityId  String
+  mapId       String?
+  npi         String?
+  text        String
+  color       String         @default("#FEF08A")
+  position    Int            @default(0)
+  done        Boolean        @default(false)
+  createdById String
+  createdBy   CredentialUser @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([facilityId, done])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
