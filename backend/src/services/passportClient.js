@@ -49,6 +49,8 @@ async function callPassportApi(path, opts = {}) {
       ...(opts.headers || {}),
     },
     body: opts.body || undefined,
+    // A hung credentialing backend must fail the request, not hang it forever.
+    signal: AbortSignal.timeout(15_000),
   });
 
   let body = null;
@@ -256,6 +258,7 @@ async function uploadDocument(npi, facilityId, file, { type, credentialType } = 
     method: 'POST',
     headers: { 'X-Service-Key': key, Accept: 'application/json' },
     body: form,
+    signal: AbortSignal.timeout(60_000), // document upload — allow transfer time
   });
   let body = null;
   const text = await res.text();
@@ -287,6 +290,7 @@ async function createIntakeBatch(facilityId, facilityName, files, rosterHints) {
     method: 'POST',
     headers: { 'X-Service-Key': key, Accept: 'application/json' },
     body: form,
+    signal: AbortSignal.timeout(120_000), // multi-file intake batch — allow transfer time
   });
   let body = null;
   const text = await res.text();

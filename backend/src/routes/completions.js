@@ -97,6 +97,9 @@ async function checkAndFinalizeCompletion(completionId) {
     include: { booking: { include: { shift: true } } },
   });
   if (!completion.providerConfirmed || !completion.facilityConfirmed) return;
+  // Re-entrancy guard: both sides can re-confirm — never finalize (and re-award
+  // VIP points) twice.
+  if (completion.booking.completedAt || completion.booking.shift.status === 'COMPLETED') return;
 
   const hoursDiff = Math.abs((completion.providerHours || 0) - (completion.facilityHours || 0));
   if (hoursDiff > 0.5) {
@@ -113,7 +116,7 @@ async function checkAndFinalizeCompletion(completionId) {
   const finalHours = completion.facilityHours || completion.providerHours;
   const rate = completion.booking.shift.currentRate;
   const total = rate * finalHours;
-  const fee = total * ((completion.booking.platformFeePercent || 10) / 100);
+  const fee = total * ((completion.booking.platformFeePercent || 5) / 100);
 
   await prisma.$transaction([
     prisma.shiftBooking.update({

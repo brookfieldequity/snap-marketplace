@@ -39,7 +39,7 @@ async function nppesGet(params, tries = 3) {
     await throttle();
     try {
       // eslint-disable-next-line no-await-in-loop
-      const res = await fetch(`${NPPES_API_URL}?${params}`);
+      const res = await fetch(`${NPPES_API_URL}?${params}`, { signal: AbortSignal.timeout(10_000) });
       if (res.ok) return await res.json();
       // 429 / 5xx are transient → back off and retry; other 4xx → give up.
       if (res.status === 429 || res.status >= 500) {

@@ -151,31 +151,35 @@ app.use('/api/roomcount', require('./routes/roomcount'));
 app.use('/api/room-requests', require('./routes/roomRequests'));
 
 // ── Scheduled jobs ────────────────────────────────────────────────────────────
+// Every cron body is wrapped: node-cron does NOT catch async throws, so an
+// unguarded rejection here would take down the whole API process.
 
-cron.schedule('*/30 * * * *', async () => {
+function scheduleSafe(expr, name, fn) {
+  cron.schedule(expr, async () => {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[cron] ${name} failed:`, err.message);
+    }
+  });
+}
+
+scheduleSafe('*/30 * * * *', 'surge sweep', async () => {
   await runSurgePricing();
   await expireOldShifts();
   await openPreferredShifts();
   await notifySurgeExpiring();
 });
 
-cron.schedule('0 * * * *', async () => {
-  await checkAllVipStatuses();
-});
+scheduleSafe('0 * * * *', 'vip statuses', checkAllVipStatuses);
 
-cron.schedule('0 */6 * * *', async () => {
-  await checkExpiredIncentiveShifts();
-});
+scheduleSafe('0 */6 * * *', 'expired incentive shifts', checkExpiredIncentiveShifts);
 
 // Daily at 6 AM — credential expiration alerts
-cron.schedule('0 6 * * *', async () => {
-  await runCredentialAlerts();
-});
+scheduleSafe('0 6 * * *', 'credential alerts', runCredentialAlerts);
 
 // Daily at 8 AM — auto-send monthly recurring invoices
-cron.schedule('0 8 * * *', async () => {
-  await processMonthlyInvoices();
-});
+scheduleSafe('0 8 * * *', 'monthly invoices', processMonthlyInvoices);
 
 // Daily at 5 AM — purge week-dead auth sessions (expired/revoked rows)
 cron.schedule('0 5 * * *', async () => {
@@ -236,10 +240,25 @@ async function seedAdmin() {
   }
 }
 
+// Last-resort process guards: log instead of dying. A DB blip inside a
+// background job must never take the API down with it.
+process.on('unhandledRejection', (err) => {
+  console.error('[process] unhandled rejection:', err?.message || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] uncaught exception:', err?.message || err);
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   console.log(`SNAP Marketplace backend running on port ${PORT}`);
-  await seedAdmin();
+  // Boot work is best-effort: a Neon cold start must not crash-loop the
+  // process — serve requests (and 503 on /health) until the DB warms up.
+  try {
+    await seedAdmin();
+  } catch (err) {
+    console.error('[boot] seedAdmin failed (continuing):', err.message);
+  }
   await seedNetworkPriors(); // jump-start StaffIQ benchmark with published-norm priors
   await runSurgePricing();
   await checkAllVipStatuses();

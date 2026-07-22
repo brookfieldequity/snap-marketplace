@@ -6,7 +6,7 @@ const prisma = require('../config/db');
 const adminAuth = require('../middleware/adminAuth');
 const { sendWelcomeEmail, sendPasswordResetEmail, sendFacilityInvite } = require('../services/credentialEmail');
 const scorecard = require('../services/scorecard');
-const { accrueBookingFee, feeSummary } = require('../services/marketplaceFees');
+const { accrueBookingFee, feeSummary, MARKETPLACE_FEE_RATE } = require('../services/marketplaceFees');
 const { buildNameKey } = require('../services/nameKey');
 const { calculateStaffIQScore } = require('../utils/staffiqScore');
 const { csvCell } = require('../utils/exportCells');
@@ -41,6 +41,7 @@ router.get('/providers', adminAuth, async (req, res) => {
         _count: { select: { bookings: true, applications: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     // Task #14: a provider's facility affiliations come from the internal
@@ -355,7 +356,7 @@ router.patch('/disputes/:id/resolve', adminAuth, async (req, res) => {
         include: { shift: true },
       });
       const total = booking.shift.currentRate * parseFloat(finalHours);
-      const fee = total * ((booking.shift.platformFeePercent || 10) / 100);
+      const fee = total * ((booking.shift.platformFeePercent || 5) / 100);
       await prisma.shiftBooking.update({
         where: { id: booking.id },
         data: { totalShiftValue: total, platformFeeAmount: fee, completedAt: new Date(), paymentStatus: 'PROCESSING' },
@@ -480,7 +481,7 @@ router.get('/analytics', adminAuth, async (req, res) => {
     ]);
 
     const totalGTV = completedBookings.reduce((s, b) => s + (b.totalShiftValue || 0), 0);
-    const totalPlatformFees = completedBookings.reduce((s, b) => s + ((b.totalShiftValue || 0) * 0.1), 0);
+    const totalPlatformFees = completedBookings.reduce((s, b) => s + ((b.totalShiftValue || 0) * MARKETPLACE_FEE_RATE), 0);
 
     const shiftsByStatus = await prisma.shift.groupBy({
       by: ['status'],
@@ -1579,21 +1580,29 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
       });
     }
 
-    // Send the email. Fire-and-forget; we don't want a SendGrid hiccup to
-    // block the response — the invite already exists in the DB.
+    // Send the email and REPORT the outcome — the invite row exists either
+    // way, but "invite sent" must never be claimed when the coordinator will
+    // never receive the link.
     const claimLink = `${FACILITY_CLAIM_BASE}/facility-claim/${rawToken}`;
     const expiryDate = invite.expiresAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    sendFacilityInvite(
-      normalizedEmail,
-      recipientFirstName,  // resolved at top of handler: modal input || email derive || "there"
-      facility.name,
-      ROLE_LABELS[facilityRole],
-      claimLink,
-      expiryDate,
-    ).catch((e) => console.error('[admin] facility invite email failed:', e.message));
+    let emailSent = true;
+    try {
+      await sendFacilityInvite(
+        normalizedEmail,
+        recipientFirstName,  // resolved at top of handler: modal input || email derive || "there"
+        facility.name,
+        ROLE_LABELS[facilityRole],
+        claimLink,
+        expiryDate,
+      );
+    } catch (e) {
+      emailSent = false;
+      console.error('[admin] facility invite email failed:', e.message);
+    }
 
     res.status(201).json({
       ok: true,
+      emailSent,
       invite: {
         id: invite.id,
         email: invite.email,

@@ -4,7 +4,7 @@ const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const facilityAuth = require('../middleware/facilityAuth');
 const { requireFlag } = require('../config/featureFlags');
-const { notifyShiftPosted, notifySeriesPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
+const { notifyShiftPosted, notifySeriesPosted, notifyBooking, notifyApplication, notifyApplicationReview, notifyShiftCancelledByFacility, notifyBookingCancelledByProvider } = require('../services/notifications');
 const { aggregateFacilityRatings, aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 const { expandPattern } = require('../services/recurrence');
 const { VIEWER_WINDOW_MS } = require('../jobs/surge');
@@ -104,6 +104,7 @@ router.get('/feed', auth, async (req, res) => {
         : sort === 'featured' ? { featured: 'desc' }
         : sort === 'surge' ? { surgeMultiplier: 'desc' }
         : { createdAt: 'desc' },
+      take: 500, // DB-side cap — page slicing below is in-memory
     });
 
     // Day/Night derived from shift.startTime — "HH:MM" string (24h).
@@ -290,6 +291,26 @@ router.post('/:id/book', auth, async (req, res) => {
     if (!provider) return res.status(400).json({ error: 'Provider profile not found' });
     if (!provider.credentialed) return res.status(403).json({ error: 'Credentialing required to book shifts' });
 
+    // Double-booking guard, marketplace side: one active marketplace booking
+    // per provider per day, regardless of roster membership.
+    {
+      const dayISO = new Date(shift.date).toISOString().slice(0, 10);
+      const dayStart = new Date(dayISO + 'T00:00:00.000Z');
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const existingBooking = await prisma.shiftBooking.findFirst({
+        where: {
+          providerId: provider.id,
+          cancelledAt: null,
+          shift: { date: { gte: dayStart, lt: dayEnd }, status: { in: ['FILLED', 'COMPLETED', 'DISPUTED'] } },
+        },
+        include: { shift: { select: { facility: { select: { name: true } } } } },
+      });
+      if (existingBooking) {
+        const facilityName = existingBooking.shift?.facility?.name || 'another facility';
+        return res.status(409).json({ error: `You already have a booked shift at ${facilityName} that day` });
+      }
+    }
+
     // Double-booking guard (one provider, one master schedule): a provider on
     // an internal roster can't book a marketplace shift on a date they're
     // already assigned at ANY linked facility's internal schedule.
@@ -322,6 +343,9 @@ router.post('/:id/book', auth, async (req, res) => {
     const totalValue = shift.currentRate * shift.durationHours;
     const platformFee = totalValue * (shift.platformFeePercent / 100);
 
+    // The ShiftBooking.shiftId unique constraint is the real race guard — the
+    // VIP award rides the same transaction so a booking can never exist
+    // without its points/log.
     const [booking] = await prisma.$transaction([
       prisma.shiftBooking.create({
         data: {
@@ -342,20 +366,23 @@ router.post('/:id/book', auth, async (req, res) => {
           platformFeeAmount: platformFee,
         },
       }),
+      prisma.providerProfile.update({
+        where: { id: provider.id },
+        data: { vipPoints: { increment: 5 } },
+      }),
+      prisma.vIPPointsLog.create({
+        data: { providerId: provider.id, points: 5, reason: 'SHIFT_ACCEPTED' },
+      }),
     ]);
-
-    // VIP: award point for accepting
-    await prisma.providerProfile.update({
-      where: { id: provider.id },
-      data: { vipPoints: { increment: 5 } },
-    });
-    await prisma.vIPPointsLog.create({
-      data: { providerId: provider.id, points: 5, reason: 'SHIFT_ACCEPTED' },
-    });
 
     notifyBooking(shift.id, provider.id).catch((err) => console.error('notifyBooking:', err.message));
     res.status(201).json(booking);
   } catch (err) {
+    // Concurrent booking race: both callers pass the !shift.booking check but
+    // the unique constraint on ShiftBooking.shiftId lets only one through.
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Shift already booked' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Booking failed' });
   }
@@ -367,6 +394,10 @@ router.post('/:id/apply', auth, async (req, res) => {
   try {
     const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
     if (!provider) return res.status(400).json({ error: 'Provider profile not found' });
+
+    const shift = await prisma.shift.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!shift) return res.status(404).json({ error: 'Shift not found' });
+    if (shift.status !== 'LIVE') return res.status(400).json({ error: 'Shift not available' });
 
     const existing = await prisma.shiftApplication.findUnique({
       where: { shiftId_providerId: { shiftId: req.params.id, providerId: provider.id } },
@@ -381,6 +412,97 @@ router.post('/:id/apply', auth, async (req, res) => {
     res.status(201).json(application);
   } catch (err) {
     res.status(500).json({ error: 'Application failed' });
+  }
+});
+
+// ── Cancel shift (facility) ───────────────────────────────────────────────────
+// Terminal CANCELLED state. Allowed until hours are confirmed on either side;
+// a booked provider is notified (push + inbox + email). Deliberately NOT
+// flag-gated — a facility must always be able to cancel what it posted.
+
+router.post('/:id/cancel', facilityAuth, async (req, res) => {
+  try {
+    const shift = await prisma.shift.findFirst({
+      where: { id: req.params.id, facilityId: req.facility.id },
+      include: { booking: { include: { completion: true } } },
+    });
+    if (!shift) return res.status(404).json({ error: 'Shift not found' });
+    if (['COMPLETED', 'DISPUTED', 'CANCELLED', 'EXPIRED'].includes(shift.status)) {
+      return res.status(400).json({ error: `Shift can no longer be cancelled (${shift.status.toLowerCase()})` });
+    }
+    if (shift.booking?.completion) {
+      return res.status(400).json({ error: 'Hours have already been submitted for this shift — resolve the completion instead' });
+    }
+
+    const ops = [
+      prisma.shift.update({ where: { id: shift.id }, data: { status: 'CANCELLED' } }),
+    ];
+    if (shift.booking && !shift.booking.cancelledAt) {
+      ops.push(prisma.shiftBooking.update({
+        where: { id: shift.booking.id },
+        data: { cancelledAt: new Date() },
+      }));
+    }
+    await prisma.$transaction(ops);
+
+    if (shift.booking) {
+      notifyShiftCancelledByFacility(shift.id, shift.booking.providerId)
+        .catch((err) => console.error('notifyShiftCancelledByFacility:', err.message));
+    }
+    res.json({ status: 'CANCELLED', providerNotified: Boolean(shift.booking) });
+  } catch (err) {
+    console.error('[shifts] cancel failed:', err.message);
+    res.status(500).json({ error: 'Failed to cancel shift' });
+  }
+});
+
+// ── Cancel booking (provider) ─────────────────────────────────────────────────
+// Re-lists the shift as LIVE. The booking row is deleted (ShiftBooking.shiftId
+// is unique, so keeping a cancelled row would block rebooking); the reversal
+// VIP log entry is the audit breadcrumb. Blocked once hours are in flight.
+
+router.post('/:id/cancel-booking', auth, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+    if (!provider) return res.status(400).json({ error: 'Provider profile not found' });
+
+    const booking = await prisma.shiftBooking.findUnique({
+      where: { shiftId: req.params.id },
+      include: { completion: true, shift: { select: { id: true, status: true } } },
+    });
+    if (!booking || booking.providerId !== provider.id) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    if (booking.shift.status !== 'FILLED') {
+      return res.status(400).json({ error: 'This booking can no longer be cancelled' });
+    }
+    if (booking.completion) {
+      return res.status(400).json({ error: 'Hours have already been submitted for this shift' });
+    }
+
+    await prisma.$transaction([
+      prisma.shiftBooking.delete({ where: { id: booking.id } }),
+      prisma.shift.update({
+        where: { id: booking.shift.id },
+        data: { status: 'LIVE', platformFeeAmount: null },
+      }),
+      // Reverse the acceptance award; the log entry doubles as the audit trail
+      // for the deleted booking.
+      prisma.providerProfile.update({
+        where: { id: provider.id },
+        data: { vipPoints: { decrement: 5 } },
+      }),
+      prisma.vIPPointsLog.create({
+        data: { providerId: provider.id, points: -5, reason: 'BOOKING_CANCELLED' },
+      }),
+    ]);
+
+    notifyBookingCancelledByProvider(booking.shift.id, provider.id)
+      .catch((err) => console.error('notifyBookingCancelledByProvider:', err.message));
+    res.json({ status: 'CANCELLED', shiftRelisted: true });
+  } catch (err) {
+    console.error('[shifts] cancel-booking failed:', err.message);
+    res.status(500).json({ error: 'Failed to cancel booking' });
   }
 });
 
@@ -432,7 +554,7 @@ router.post('/', facilityAuth, requireFlag('marketplace_core'), async (req, res)
         estimatedTotal,
         depositAmount,
         status: 'DEPOSIT_PENDING',
-        platformFeePercent: 10,
+        platformFeePercent: 5,
       },
     });
 
@@ -510,7 +632,7 @@ router.post('/series', facilityAuth, requireFlag('marketplace_core'), async (req
       estimatedTotal,
       depositAmount,
       status: 'DEPOSIT_PENDING',
-      platformFeePercent: 10,
+      platformFeePercent: 5,
     }));
 
     await prisma.shift.createMany({ data });
@@ -598,8 +720,11 @@ router.get('/facility/mine', facilityAuth, async (req, res) => {
       maLicenseNumber: true, maLicenseExpiry: true,
       _count: { select: { bookings: true } },
     };
+    // 90-day floor keeps the payload bounded as history accumulates (all
+    // future shifts always included); older history belongs to reporting.
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
     const shifts = await prisma.shift.findMany({
-      where: { facilityId: req.facility.id },
+      where: { facilityId: req.facility.id, date: { gte: ninetyDaysAgo } },
       include: {
         applications: { include: { provider: { select: providerSelect } } },
         booking: { include: { provider: { select: providerSelect } } },

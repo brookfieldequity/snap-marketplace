@@ -210,7 +210,7 @@ router.post('/', adminAuth, async (req, res) => {
     // Marketplace transactions
     if (marketplaceFeeAmount > 0) {
       lineItems.push({
-        description: 'Marketplace Transactions — 4% Platform Fee',
+        description: 'Marketplace Transactions — 5% Platform Fee',
         detail: 'External shift fills via SNAP Marketplace',
         listPrice: marketplaceFeeAmount,
         discount: 0,

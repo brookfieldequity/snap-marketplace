@@ -77,6 +77,7 @@ router.get('/facility', facilityAuth, async (req, res) => {
         shift: { select: { id: true, date: true, specialty: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500, // newest 500 — this endpoint returned every message ever
     });
     res.json(messages);
   } catch (err) {

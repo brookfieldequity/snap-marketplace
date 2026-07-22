@@ -98,7 +98,7 @@ async function getScorecard() {
   const subscriptionMrr = subsByTier.reduce(
     (sum, r) => sum + (TIER_PRICE[r.tier] || 0) * r._count.tier, 0);
   const weekGtv = completedThisWeekBookings.reduce((s, b) => s + (b.totalShiftValue || 0), 0);
-  const txnFeeMonthlyEstimate = Math.round((weekGtv * 0.1) * (52 / 12));
+  const txnFeeMonthlyEstimate = Math.round((weekGtv * MARKETPLACE_FEE_RATE) * (52 / 12));
   const mrrEstimate = subscriptionMrr + txnFeeMonthlyEstimate;
   const mrrValue = manual?.mrrMonthly != null ? manual.mrrMonthly : mrrEstimate;
   const mrrIsManual = manual?.mrrMonthly != null;

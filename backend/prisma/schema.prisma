@@ -630,7 +630,7 @@ model Shift {
   depositConfirmed   Boolean   @default(false)
   depositConfirmedAt DateTime?
 
-  platformFeePercent Float         @default(10.0)
+  platformFeePercent Float         @default(5.0)
   platformFeeAmount  Float?
   paymentStatus      PaymentStatus @default(PENDING)
   paymentSettledAt   DateTime?

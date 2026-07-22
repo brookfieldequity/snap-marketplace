@@ -637,12 +637,69 @@ async function notifySeriesPosted({ facilityId, specialty, count, firstDate, las
   }
 }
 
+// ── Cancellations ─────────────────────────────────────────────────────────────
+
+// Facility cancelled a shift the provider had booked → push + inbox + email.
+async function notifyShiftCancelledByFacility(shiftId, providerId) {
+  try {
+    const [shift, provider] = await Promise.all([
+      prisma.shift.findUnique({ where: { id: shiftId }, include: { facility: { select: { name: true } } } }),
+      prisma.providerProfile.findUnique({ where: { id: providerId }, include: { user: { select: { email: true } } } }),
+    ]);
+    if (!shift || !provider) return;
+    const dateStr = fmtDate(shift.date);
+    const title = 'Shift cancelled';
+    const body = `${shift.facility.name} cancelled the ${shift.specialty} shift on ${dateStr}.`;
+
+    if (provider.expoPushToken) await sendPush([provider.expoPushToken], title, body, { shiftId });
+    await recordNotification(provider.id, { type: 'SHIFT_CANCELLED', title, body, data: { shiftId } });
+    if (provider.user?.email) {
+      await sendEmail(
+        provider.user.email,
+        `Shift Cancelled — ${shift.facility.name}, ${dateStr}`,
+        emailTemplate('Shift Cancelled', `
+          <p><strong>${shift.facility.name}</strong> has cancelled the <strong>${shift.specialty}</strong> shift on <strong>${dateStr}</strong> that you had booked.</p>
+          <p>No action is needed. The shift no longer appears on your schedule, and you can browse other open shifts in the app.</p>
+        `)
+      );
+    }
+  } catch (err) {
+    console.error('notifyShiftCancelledByFacility error:', err.message);
+  }
+}
+
+// Provider cancelled their booking → email the facility; the shift is re-listed.
+async function notifyBookingCancelledByProvider(shiftId, providerId) {
+  try {
+    const [shift, provider] = await Promise.all([
+      prisma.shift.findUnique({ where: { id: shiftId }, include: { facility: { select: { id: true, name: true } } } }),
+      prisma.providerProfile.findUnique({ where: { id: providerId } }),
+    ]);
+    if (!shift || !provider) return;
+    const facilityEmail = await getFacilityEmail(shift.facility.id);
+    const providerName = `${provider.firstName || ''} ${provider.lastName || ''}`.trim();
+    const dateStr = fmtDate(shift.date);
+    await sendEmail(
+      facilityEmail,
+      `Booking Cancelled — ${providerName} cancelled the ${shift.specialty} shift on ${dateStr}`,
+      emailTemplate('Booking Cancelled', `
+        <p><strong>${providerName}</strong> has cancelled their booking for your <strong>${shift.specialty}</strong> shift on <strong>${dateStr}</strong>.</p>
+        <p>The shift has automatically been re-listed as open on the marketplace so other providers can book it.</p>
+      `)
+    );
+  } catch (err) {
+    console.error('notifyBookingCancelledByProvider error:', err.message);
+  }
+}
+
 module.exports = {
   notifyShiftPosted,
   notifySeriesPosted,
   notifyBooking,
   notifyApplication,
   notifyApplicationReview,
+  notifyShiftCancelledByFacility,
+  notifyBookingCancelledByProvider,
   notifyCompletionConfirmed,
   notifyDispute,
   notifySurgeExpiring,
