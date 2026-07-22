@@ -1350,16 +1350,23 @@ router.get('/provider/:providerId/cme', credentialAuth, async (req, res) => {
   }
 })
 
-// GET /roster/:rosterId/cme — CME history looked up via roster entry NPI
+// GET /roster/:rosterId/cme — CME history looked up via roster entry NPI.
+// Phase-3 portal provider files navigate with InternalRosterEntry ids (the
+// ONE roster), so resolve there first; legacy FacilityRosterEntry ids still
+// work for pre-Phase-3 links. findFirst + facilityId keeps it tenant-scoped.
 router.get('/roster/:rosterId/cme', credentialAuth, async (req, res) => {
   try {
-    // findFirst + facilityId so one facility can never read another's roster.
-    const entry = await prisma.facilityRosterEntry.findFirst({
+    const portalEntry = await prisma.internalRosterEntry.findFirst({
+      where: { id: req.params.rosterId, facilityId: req.facilityId },
+      select: { npi: true },
+    })
+    const legacyEntry = portalEntry ? null : await prisma.facilityRosterEntry.findFirst({
       where: { id: req.params.rosterId, facilityId: req.facilityId },
       select: { npiNumber: true },
     })
-    const npi = entry?.npiNumber
-    if (!npi) return res.json({ entries: [], totalHours: 0, found: false })
+    // Digits-only so a formatting difference can never break the passport match.
+    const npi = String(portalEntry?.npi || legacyEntry?.npiNumber || '').replace(/\D/g, '')
+    if (!npi) return res.json({ entries: [], totalHours: 0, found: false, reason: 'NO_ROSTER_NPI' })
     if (!passportClient.isConfigured()) return res.json({ entries: [], totalHours: 0, found: false, bridgeUnconfigured: true })
     const data = await passportClient.getCmeHistory(npi)
     res.json(data)

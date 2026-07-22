@@ -296,7 +296,13 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
       <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px' }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>🎓 CME credits</div>
         {!cme || !cme.found || (cme.entries || []).length === 0 ? (
-          <div style={{ fontSize: 13, color: '#94A3B8' }}>No CME records yet — the provider logs credits in the SNAP app.</div>
+          <div style={{ fontSize: 13, color: '#94A3B8' }}>
+            {!cme ? 'Couldn’t load CME history — try refreshing.'
+              : cme.bridgeUnconfigured ? 'CME service isn’t connected on this server.'
+              : cme.reason === 'NO_ROSTER_NPI' ? 'This roster entry has no NPI — add one in Roster Settings to link CME.'
+              : !cme.found ? 'No SNAP passport matches this provider’s NPI yet.'
+              : 'No CME records yet — the provider logs credits in the SNAP app.'}
+          </div>
         ) : (
           <>
             <div style={{ fontSize: 13, color: '#374151', marginBottom: 8 }}><strong>{cme.totalHours}</strong> total hours</div>
