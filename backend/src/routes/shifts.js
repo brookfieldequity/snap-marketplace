@@ -3,6 +3,7 @@ const express = require('express');
 const prisma = require('../config/db');
 const auth = require('../middleware/auth');
 const facilityAuth = require('../middleware/facilityAuth');
+const { requireFlag } = require('../config/featureFlags');
 const { notifyShiftPosted, notifySeriesPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
 const { aggregateFacilityRatings, aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 const { expandPattern } = require('../services/recurrence');
@@ -385,7 +386,7 @@ router.post('/:id/apply', auth, async (req, res) => {
 
 // ── Post shift (facility) ─────────────────────────────────────────────────────
 
-router.post('/', facilityAuth, async (req, res) => {
+router.post('/', facilityAuth, requireFlag('marketplace_core'), async (req, res) => {
   try {
     const {
       specialty, date, startTime, durationHours, baseRate,
@@ -454,7 +455,7 @@ router.post('/', facilityAuth, async (req, res) => {
 // Expands a pattern into N shifts that share a recurrenceGroupId, all created
 // DEPOSIT_PENDING. One batched notification (not N). Deposit is then confirmed
 // for the whole group via /series/:groupId/confirm-deposit.
-router.post('/series', facilityAuth, async (req, res) => {
+router.post('/series', facilityAuth, requireFlag('marketplace_core'), async (req, res) => {
   try {
     const {
       specialty, startTime, durationHours, baseRate,

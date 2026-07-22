@@ -14,7 +14,13 @@ const {
 const learning = require('../services/staffiqLearning');
 const { backfillUntagged } = require('../services/rosterTag');
 
+const { requireFlag } = require('../config/featureFlags');
+
 const router = express.Router();
+
+// Server-side gating: every StaffIQ endpoint requires the facility's `staffiq`
+// feature flag (tier default or per-facility override), not just hidden UI.
+router.use(facilityAuth, requireFlag('staffiq'));
 
 // ── SNAP solution copy per insight type ───────────────────────────────────────
 
@@ -57,7 +63,7 @@ async function saveInsight(facilityId, insightType, insightData, dollarImpact, d
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET / — latest insight of each type + metadata, enriched with snapSolution
-router.get('/', facilityAuth, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const facilityId = req.facility.id;
 
@@ -112,7 +118,7 @@ router.get('/', facilityAuth, async (req, res) => {
 });
 
 // POST /analyze — run supervision-model-based analysis from uploaded schedule data
-router.post('/analyze', facilityAuth, async (req, res) => {
+router.post('/analyze', async (req, res) => {
   try {
     const facilityId = req.facility.id;
 
@@ -478,7 +484,7 @@ router.post('/analyze', facilityAuth, async (req, res) => {
 });
 
 // GET /dashboard — summary dashboard with savings, fill status, utilization metrics
-router.get('/dashboard', facilityAuth, async (req, res) => {
+router.get('/dashboard', async (req, res) => {
   try {
     const facilityId = req.facility.id;
     const now = new Date();
@@ -624,7 +630,7 @@ router.get('/dashboard', facilityAuth, async (req, res) => {
 });
 
 // GET /benchmark — facility's learned baseline + network benchmark + standing
-router.get('/benchmark', facilityAuth, async (req, res) => {
+router.get('/benchmark', async (req, res) => {
   try {
     const facilityId = req.facility.id;
     const [benchmark, profile] = await Promise.all([
@@ -656,7 +662,7 @@ router.get('/benchmark', facilityAuth, async (req, res) => {
 });
 
 // GET /data-readiness — confidence + prioritized "feed me more data" suggestions
-router.get('/data-readiness', facilityAuth, async (req, res) => {
+router.get('/data-readiness', async (req, res) => {
   try {
     const facilityId = req.facility.id;
     const [profile, agg, ratesCount, caseCount] = await Promise.all([
@@ -693,7 +699,7 @@ router.get('/data-readiness', facilityAuth, async (req, res) => {
 
 // POST /insights/:id/feedback — coordinator confirms/dismisses an insight.
 // This is the labeled signal the learning layer uses to calibrate over time.
-router.post('/insights/:id/feedback', facilityAuth, async (req, res) => {
+router.post('/insights/:id/feedback', async (req, res) => {
   try {
     const facilityId = req.facility.id;
     const { id } = req.params;

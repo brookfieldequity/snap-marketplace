@@ -139,6 +139,11 @@ router.delete('/me/site-rates/:siteName', facilityAuth, async (req, res) => {
 
 router.patch('/me/mode', facilityAuth, async (req, res) => {
   try {
+    // snapMode determines which product surfaces the facility sees. Only the
+    // facility's own ADMIN may change it — coordinators/staff cannot.
+    if (req.facilityRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only a facility admin can change the workspace mode' });
+    }
     const { snapMode } = req.body;
     const valid = ['MARKETPLACE', 'SHIFTS', 'BOTH'];
     if (!valid.includes(snapMode)) return res.status(400).json({ error: 'Invalid mode' });

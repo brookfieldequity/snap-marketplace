@@ -2,8 +2,12 @@ const express = require('express');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
 const { calculateStaffIQScore, getScoreStatus } = require('../utils/staffiqScore');
+const { requireFlag } = require('../config/featureFlags');
 
 const router = express.Router();
+
+// Server-side gating — same policy as routes/staffiq.js.
+router.use(facilityAuth, requireFlag('staffiq'));
 
 // ── GET / — latest StaffIQInput for this facility ─────────────────────────────
 

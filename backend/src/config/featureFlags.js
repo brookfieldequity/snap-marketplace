@@ -28,6 +28,11 @@ const FLAGS = {
     description: 'Annual ranked PTO bidding — providers rank weeks; allocation by seniority + capacity; waitlist.',
     category: 'SNAP Shifts',
   },
+  staffiq: {
+    label: 'StaffIQ',
+    description: 'StaffIQ efficiency analysis, insights, score history, and benchmarks.',
+    category: 'SNAP Shifts',
+  },
   // SNAP Marketplace — Position 1
   marketplace_core: {
     label: 'Marketplace Core',
@@ -79,18 +84,24 @@ const TIER_DEFAULTS = {
     marketplace_core: true,
     shift_verification: true,
     transaction_fees: true,
+    // staffiq ON at BASIC for now so enabling server-side enforcement changes
+    // nothing for existing facilities. DECISION before onboarding non-pilot
+    // customers: flip this to false so StaffIQ is Professional+ per pricing.
+    staffiq: true,
     // payroll_builder OFF — Basic facilities don't get payroll export.
   },
   PROFESSIONAL: {
     marketplace_core: true,
     shift_verification: true,
     transaction_fees: true,
+    staffiq: true,
     payroll_builder: true,
   },
   ENTERPRISE: {
     marketplace_core: true,
     shift_verification: true,
     transaction_fees: true,
+    staffiq: true,
     payroll_builder: true,
   },
 };
