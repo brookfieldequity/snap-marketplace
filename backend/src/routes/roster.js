@@ -97,7 +97,7 @@ async function sendCredentialingInvite(entry, facility) {
   // Diagnostic: an INVITE_CREATED is the only mode that emails a claim link.
   // EXISTING_PROVIDER / ALREADY_GRANTED send a push / nothing (provider already
   // has a passport) — which is why an invite can "succeed" with no email.
-  console.log(`[credentialing-invite] mode=${result.mode} delivered=${delivered.join('+') || 'none'} status=${status} npi=${entry.npi}`);
+  console.log(`[credentialing-invite] mode=${result.mode} delivered=${delivered.join('+') || 'none'} status=${status} entry=${entry.id}`);
 
   return { id: entry.id, name, ok: true, mode: result.mode, status, delivered };
 }

@@ -88,7 +88,7 @@ async function federatedProviderLogin(email, password) {
       data: { password: hashed },
       include: { providerProfile: true },
     });
-    console.log(`[authBridge] synced password from credentialing for ${normalizedEmail}`);
+    console.log(`[authBridge] synced password from credentialing for user ${user.id}`);
     return user;
   }
 
@@ -109,7 +109,7 @@ async function federatedProviderLogin(email, password) {
     },
     include: { providerProfile: true },
   });
-  console.log(`[authBridge] provisioned marketplace account from credentialing login: ${normalizedEmail}`);
+  console.log(`[authBridge] provisioned marketplace account from credentialing login: user ${user.id}`);
   return user;
 }
 

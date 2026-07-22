@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const prisma = require('./config/db');
 // Validates required env (JWT_SECRET, CORS_ORIGINS in prod) at boot — throws if missing.
 const { corsOrigins } = require('./config/env');
-const { globalLimiter, authLimiter } = require('./middleware/rateLimit');
+const { globalLimiter, authLimiter, publicToolsLimiter } = require('./middleware/rateLimit');
 
 const authRoutes = require('./routes/auth');
 const shiftRoutes = require('./routes/shifts');
@@ -75,7 +75,9 @@ app.get('/health', async (req, res) => {
     res.json({ status: 'ok', app: 'SNAP Marketplace', db: 'connected' });
   } catch (err) {
     console.error('[health] DB check failed:', err.message);
-    res.status(503).json({ status: 'degraded', app: 'SNAP Marketplace', db: 'disconnected', error: err.message });
+    // Detail stays in server logs — raw DB errors can leak infra detail on an
+    // unauthenticated endpoint.
+    res.status(503).json({ status: 'degraded', app: 'SNAP Marketplace', db: 'disconnected' });
   }
 });
 
@@ -94,6 +96,11 @@ app.use([
   '/api/credentialing/auth/forgot-password',
   '/api/credentialing/auth/reset-password',
 ], authLimiter);
+
+// Public endpoints that do real work without auth (calculator PDF/email sends,
+// NPI registry proxy) get a tighter limiter than the global backstop.
+app.use('/api/calculator', publicToolsLimiter);
+app.use('/api/providers/npi-lookup', publicToolsLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/shifts', shiftRoutes);

@@ -18,6 +18,17 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts, please try again later.' },
 });
 
+// Public unauthenticated endpoints that do real work (calculator PDF/email,
+// NPI registry proxy). Tighter than the global backstop so an anonymous
+// caller can't burn SendGrid quota or hammer the NPI registry.
+const publicToolsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
 // ── Admin login IP lockout ────────────────────────────────────────────────────
 // Tracks failed admin login attempts per IP. After MAX_ATTEMPTS failures within
 // WINDOW_MS, the IP is locked out for LOCKOUT_MS. Success clears the record.
@@ -64,4 +75,4 @@ function clearAdminFailures(ip) {
   adminFailMap.delete(ip);
 }
 
-module.exports = { globalLimiter, authLimiter, checkAdminLockout, recordAdminFailure, clearAdminFailures };
+module.exports = { globalLimiter, authLimiter, publicToolsLimiter, checkAdminLockout, recordAdminFailure, clearAdminFailures };

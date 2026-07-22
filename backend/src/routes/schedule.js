@@ -1986,7 +1986,12 @@ router.get('/ical/:rosterEntryId/:rest', async (req, res) => {
       where: { id: rosterEntryId },
       select: { id: true, providerName: true, icalToken: true, facility: { select: { name: true } } },
     });
-    if (!rosterEntry || !rosterEntry.icalToken || rosterEntry.icalToken !== icalToken) {
+    const stored = rosterEntry?.icalToken;
+    const tokenMatches =
+      stored &&
+      stored.length === icalToken.length &&
+      crypto.timingSafeEqual(Buffer.from(stored, 'utf8'), Buffer.from(icalToken, 'utf8'));
+    if (!tokenMatches) {
       return res.status(404).send('Subscription not found');
     }
 
