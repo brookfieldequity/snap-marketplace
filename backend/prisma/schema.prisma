@@ -643,6 +643,23 @@ model Shift {
   @@index([recurrenceGroupId])
 }
 
+// Distinct shift views for demand-based surge pricing (M2 fix): one row per
+// provider per shift per rolling window, so refresh-spamming a shift can't
+// inflate the surge multiplier. Deduped in CODE (routes/shifts.js) — there is
+// deliberately NO unique constraint here because Railway's boot `db push`
+// silently fails on new unique constraints. Rows older than the window are
+// pruned opportunistically by the surge job. Plain id columns, no relations:
+// purely additive.
+model ShiftViewer {
+  id         String   @id @default(cuid())
+  shiftId    String
+  providerId String
+  viewedAt   DateTime @default(now())
+
+  @@index([shiftId, providerId])
+  @@index([viewedAt])
+}
+
 model ShiftApplication {
   id         String            @id @default(cuid())
   shiftId    String

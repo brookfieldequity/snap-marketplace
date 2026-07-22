@@ -16,6 +16,7 @@ const {
   fmtDate,
 } = require('../services/payroll');
 const eorCost = require('../services/eorCost');
+const { sanitizeAoa } = require('../utils/exportCells');
 
 const router = express.Router();
 
@@ -641,7 +642,9 @@ router.get('/agency-invoice/export', async (req, res) => {
     if (!invoice) return res.status(404).json({ error: 'No agency invoice for that period' });
 
     // Build the sheet: title rows, header, lines, total — mirrors "CAPA All in".
-    const aoa = [
+    // sanitizeAoa neutralizes formula injection in the string cells (agency /
+    // payee names); numeric cells pass through untouched.
+    const aoa = sanitizeAoa([
       [`${invoice.employerName || 'Agency'} → ${req.facility.name} Invoice`],
       [`${fmtDate(periodStart)} to ${fmtDate(periodEnd)}`],
       [],
@@ -649,7 +652,7 @@ router.get('/agency-invoice/export', async (req, res) => {
       ...invoice.lines.map((l) => [l.contractorType, l.payeeName, l.hours, l.capaRate, l.amount]),
       [],
       ['', '', '', 'Total', invoice.total],
-    ];
+    ]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Invoice');

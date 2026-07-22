@@ -12,6 +12,7 @@ const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = re
 const { getSavings: getAutomationSavings } = require('../services/automationEvents')
 const { searchByName: nppesSearchByName } = require('../services/nppesLookup')
 const passportClient = require('../services/passportClient')
+const { csvCell } = require('../utils/exportCells')
 
 const router = express.Router()
 
@@ -615,6 +616,8 @@ router.get('/providers/export', credentialAuth, requireCoordinator, async (req, 
         creds = await prisma.providerCredential.findMany({ where: { providerId: entry.providerId } })
       }
       const summary = buildProviderSummary(entry, creds)
+      // csvCell escapes commas/quotes AND neutralizes formula injection in
+      // user-entered fields (names) — see utils/exportCells.js.
       rows.push([
         entry.lastName,
         entry.firstName,
@@ -625,7 +628,7 @@ router.get('/providers/export', credentialAuth, requireCoordinator, async (req, 
         summary.status,
         summary.passportCompletion + '%',
         summary.nextExpiration ? new Date(summary.nextExpiration).toLocaleDateString('en-US') : '',
-      ].join(','))
+      ].map(csvCell).join(','))
     }
 
     res.setHeader('Content-Type', 'text/csv')

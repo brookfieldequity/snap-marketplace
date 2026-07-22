@@ -8,6 +8,7 @@
 
 const prisma = require('../config/db');
 const { buildNameKey } = require('./nameKey');
+const { csvCell } = require('../utils/exportCells');
 
 // ── Canonical SNAP payroll fields ───────────────────────────────────────────────
 // Each maps to a value derived from a payroll line item / run. `synonyms` drive
@@ -231,11 +232,8 @@ function valueForField(field, { item, run, config }) {
   }
 }
 
-// CSV-escape a single cell.
-function csvCell(v) {
-  const s = String(v == null ? '' : v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+// CSV escaping + formula-injection sanitizing is shared across every export
+// writer — see utils/exportCells.js (csvCell imported above).
 
 // Generate the export CSV. `headers` is the ordered template columns; `map` is
 // header → SNAP field; `items` are the run's line items; `run`/`config` give

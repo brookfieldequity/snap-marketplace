@@ -6,6 +6,7 @@ const facilityAuth = require('../middleware/facilityAuth');
 const { notifyShiftPosted, notifySeriesPosted, notifyBooking, notifyApplication, notifyApplicationReview } = require('../services/notifications');
 const { aggregateFacilityRatings, aggregateProviderRatings, deriveProviderBadges } = require('../services/trust');
 const { expandPattern } = require('../services/recurrence');
+const { VIEWER_WINDOW_MS } = require('../jobs/surge');
 
 const router = express.Router();
 
@@ -218,19 +219,49 @@ router.get('/:id', auth, async (req, res) => {
     });
     if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-    // Increment viewer count
-    await prisma.shift.update({
-      where: { id: shift.id },
-      data: { currentViewers: { increment: 1 } },
-    });
-
     const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user.userId } });
+
+    // Record this view for surge demand tracking (M2 fix): DISTINCT providers
+    // within a rolling window, not a raw increment — one provider (or a
+    // facility user) refreshing repeatedly can't inflate the surge rate.
+    // Dedupe is code-level (deliberately no unique constraint: Railway's boot
+    // `db push` silently fails on those; a rare race just writes a second row
+    // that the distinct count absorbs). Tokens without a provider profile
+    // (facility/admin) never count toward demand.
+    const windowStart = new Date(Date.now() - VIEWER_WINDOW_MS);
+    if (provider) {
+      const existing = await prisma.shiftViewer.findFirst({
+        where: { shiftId: shift.id, providerId: provider.id, viewedAt: { gte: windowStart } },
+        select: { id: true },
+      });
+      if (existing) {
+        await prisma.shiftViewer.update({ where: { id: existing.id }, data: { viewedAt: new Date() } });
+      } else {
+        await prisma.shiftViewer.create({ data: { shiftId: shift.id, providerId: provider.id } });
+      }
+    }
+
+    // Sync the stored counter (the feed and apps keep reading currentViewers
+    // unchanged) to the distinct-viewer count for the window.
+    const distinctViewers = await prisma.shiftViewer.groupBy({
+      by: ['providerId'],
+      where: { shiftId: shift.id, viewedAt: { gte: windowStart } },
+    });
+    const currentViewers = distinctViewers.length;
+    if (currentViewers !== shift.currentViewers) {
+      await prisma.shift.update({
+        where: { id: shift.id },
+        data: { currentViewers },
+      });
+    }
+
     const myApplication = shift.applications.find((a) => a.providerId === provider?.id);
 
     const ratingMap = await aggregateFacilityRatings([shift.facilityId]);
 
     res.json({
       ...shift,
+      currentViewers,
       facility: { ...shift.facility, rating: ratingMap.get(shift.facilityId) || { avg: null, count: 0 } },
       myApplicationStatus: myApplication?.status || null,
       isBooked: !!shift.booking,

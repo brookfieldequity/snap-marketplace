@@ -9,6 +9,7 @@ const scorecard = require('../services/scorecard');
 const { accrueBookingFee, feeSummary } = require('../services/marketplaceFees');
 const { buildNameKey } = require('../services/nameKey');
 const { calculateStaffIQScore } = require('../utils/staffiqScore');
+const { csvCell } = require('../utils/exportCells');
 const normBizName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Where claim links land. The web app deploys separately from the backend
@@ -820,18 +821,11 @@ router.get('/calculator-leads/export', adminAuth, async (req, res) => {
       'reportGenerated', 'reportSentAt', 'followUpStatus', 'createdAt',
     ];
 
-    const escape = (val) => {
-      if (val == null) return '';
-      const str = String(val);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
+    // csvCell (utils/exportCells.js) escapes commas/quotes AND neutralizes
+    // formula injection in user-entered fields (facility/contact names).
     const csvRows = [
       headers.join(','),
-      ...leads.map((lead) => headers.map((h) => escape(lead[h])).join(',')),
+      ...leads.map((lead) => headers.map((h) => csvCell(lead[h])).join(',')),
     ];
 
     res.setHeader('Content-Type', 'text/csv');
