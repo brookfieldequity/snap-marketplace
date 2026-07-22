@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { credMapAPI } from '../../api.js'
+import { credMapAPI, credentialAPI } from '../../api.js'
 
 // Cred Maps — map a facility's credentialing program once; every provider's
 // packet populates from the passport. Hub (map cards + sticky-note reminders)
@@ -20,6 +20,27 @@ const OUTPUT_MODES = [
 ]
 
 const CONFIDENCE_DOT = { HIGH: '#22C55E', MEDIUM: '#F59E0B', LOW: '#EF4444' }
+
+const TASK_STATUS = {
+  AUTO_FILLED: { label: 'Auto-filled', icon: '⚡', bg: '#DCFCE7', fg: '#166534' },
+  DONE: { label: 'Done', icon: '✓', bg: '#DCFCE7', fg: '#166534' },
+  WAIVED: { label: 'Waived', icon: '—', bg: '#F1F5F9', fg: '#94A3B8' },
+  NEEDS_DOCUMENT: { label: 'Needs document', icon: '📄', bg: '#DBEAFE', fg: '#1E40AF' },
+  NEEDS_SIGNATURE: { label: 'Needs signature', icon: '✍️', bg: '#EDE9FE', fg: '#5B21B6' },
+  NEEDS_ACTION: { label: 'Needs action', icon: '🛠️', bg: '#FEF3C7', fg: '#92400E' },
+}
+
+const PACKET_STATUS = {
+  IN_PROGRESS: { label: 'In progress', bg: '#FEF3C7', fg: '#92400E' },
+  READY: { label: 'Ready', bg: '#DCFCE7', fg: '#166534' },
+  SENT: { label: 'Sent', bg: '#DBEAFE', fg: '#1E40AF' },
+}
+
+function fmtShortDate(d) {
+  if (!d) return ''
+  const dt = new Date(d)
+  return `${dt.getMonth() + 1}/${dt.getDate()}/${dt.getFullYear()}`
+}
 
 const NOTE_COLORS = ['#FEF08A', '#FBCFE8', '#BAE6FD', '#BBF7D0', '#FED7AA']
 
@@ -297,6 +318,257 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
   )
 }
 
+// ── Generate packet modal ────────────────────────────────────────────────────
+
+function GeneratePacketModal({ map, onClose, onGenerated }) {
+  const [roster, setRoster] = useState(null)
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [cycle, setCycle] = useState('INITIAL')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    credentialAPI.getPortalRoster()
+      .then((d) => setRoster((d.roster || []).filter((r) => r.npi)))
+      .catch((e) => { setRoster([]); setError(e.message || 'Failed to load roster') })
+  }, [])
+
+  const filtered = (roster || []).filter((r) =>
+    !query.trim() || (r.providerName || '').toLowerCase().includes(query.trim().toLowerCase())
+  )
+
+  async function generate() {
+    if (!selected) { setError('Pick a provider first.'); return }
+    setBusy(true); setError('')
+    try {
+      const { packet } = await credMapAPI.generatePacket(map.id, selected.npi, cycle)
+      onGenerated(packet.id)
+    } catch (e) {
+      setError(e.message || 'Generation failed.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={busy ? undefined : onClose}>
+      <div style={{ width: '100%', maxWidth: 460, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: 24 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>⚡ Generate packet</div>
+        <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, marginBottom: 14 }}>
+          {map.name} — SNAP fills every passport-covered item and opens tasks for the rest.
+        </div>
+        {busy ? (
+          <div style={{ textAlign: 'center', padding: '26px 0' }}>
+            <div style={{ fontSize: 30 }}>⚡</div>
+            <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0F172A', marginTop: 8 }}>Reading {selected?.providerName}'s passport…</div>
+          </div>
+        ) : (
+          <>
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search the roster…"
+              style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 13.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none', marginBottom: 10 }}
+            />
+            <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: 10 }}>
+              {roster === null ? (
+                <div style={{ padding: 14, fontSize: 13, color: '#94A3B8' }}>Loading roster…</div>
+              ) : filtered.length === 0 ? (
+                <div style={{ padding: 14, fontSize: 13, color: '#94A3B8' }}>No roster providers with an NPI match.</div>
+              ) : filtered.map((r) => (
+                <div
+                  key={r.id}
+                  onClick={() => setSelected(r)}
+                  style={{
+                    padding: '9px 13px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: selected?.id === r.id ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F8FAFC',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{r.providerName}</div>
+                    <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{r.providerType || ''} · NPI {r.npi}</div>
+                  </div>
+                  {r.passport?.hasGrant
+                    ? <span style={{ fontSize: 10.5, fontWeight: 800, color: '#166534', background: '#DCFCE7', borderRadius: 999, padding: '2px 8px' }}>PASSPORT ✓</span>
+                    : r.passport?.exists
+                      ? <span style={{ fontSize: 10.5, fontWeight: 800, color: '#92400E', background: '#FEF3C7', borderRadius: 999, padding: '2px 8px' }}>NO ACCESS</span>
+                      : <span style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', background: '#F1F5F9', borderRadius: 999, padding: '2px 8px' }}>NO PASSPORT</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+              <label style={{ fontSize: 12.5, color: '#64748B', fontWeight: 600 }}>Cycle</label>
+              <select value={cycle} onChange={(e) => setCycle(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff' }}>
+                <option value="INITIAL">Initial appointment</option>
+                <option value="RENEWAL">Renewal / reappointment</option>
+              </select>
+            </div>
+            {error && <div style={{ marginTop: 10, padding: '8px 12px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 12.5 }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={onClose} style={{ flex: 1, padding: '11px 0', background: '#F1F5F9', border: 'none', borderRadius: 10, color: '#475569', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={generate} disabled={!selected} style={{ flex: 2, padding: '11px 0', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, background: selected ? '#2563EB' : '#CBD5E1', color: '#fff', cursor: selected ? 'pointer' : 'not-allowed' }}>
+                ⚡ Generate for {selected ? selected.providerName.split(' ').slice(-1)[0] : '…'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Packet workspace (Stage 3) ───────────────────────────────────────────────
+
+function PacketWorkspace({ packetId, onBack }) {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [busyTask, setBusyTask] = useState(null)
+
+  const load = () => credMapAPI.getPacket(packetId).then(setData).catch((e) => setError(e.message))
+  useEffect(() => { load() }, [packetId])
+
+  async function setTask(task, patch) {
+    setBusyTask(task.id)
+    try { await credMapAPI.updatePacketTask(packetId, task.id, patch); await load() }
+    catch (e) { setError(e.message) }
+    finally { setBusyTask(null) }
+  }
+
+  async function setPacketStatus(status) {
+    try { await credMapAPI.updatePacket(packetId, { status }); await load() }
+    catch (e) { setError(e.message) }
+  }
+
+  async function refresh() {
+    try { await credMapAPI.refreshPacket(packetId); await load() }
+    catch (e) { setError(e.message) }
+  }
+
+  if (!data) {
+    return (
+      <div style={{ padding: 32 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>← Back</button>
+        <div style={{ color: '#94A3B8', fontSize: 14, marginTop: 20 }}>{error || 'Loading…'}</div>
+      </div>
+    )
+  }
+
+  const { packet, passport } = data
+  const ps = PACKET_STATUS[packet.status] || PACKET_STATUS.IN_PROGRESS
+  const openTasks = packet.tasks.filter((t) => !['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status))
+  const providerTasks = openTasks.filter((t) => t.assignee === 'PROVIDER')
+
+  // Group tasks by their item's section, in item order.
+  const groups = []
+  for (const t of packet.tasks) {
+    const section = t.item.section || 'General'
+    const last = groups[groups.length - 1]
+    if (last && last.section === section) last.tasks.push(t)
+    else groups.push({ section, tasks: [t] })
+  }
+
+  return (
+    <div style={{ padding: '28px 32px', maxWidth: 980 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← {packet.map?.name || 'Map'}</button>
+
+      {/* Header */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+              NPI {packet.npi} · {packet.cycle === 'RENEWAL' ? 'Renewal' : 'Initial appointment'} · generated {fmtShortDate(packet.createdAt)}
+            </div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: ps.bg, color: ps.fg }}>{ps.label}</span>
+          <button onClick={refresh} title="Re-check the passport for anything new" style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ↺ Refresh auto-fill
+          </button>
+          {packet.status === 'IN_PROGRESS' && (
+            <button onClick={() => setPacketStatus('READY')} disabled={packet.completeness < 100} title={packet.completeness < 100 ? 'Complete every item first' : 'Mark ready to send'} style={{ padding: '9px 16px', background: packet.completeness >= 100 ? '#16A34A' : '#CBD5E1', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: packet.completeness >= 100 ? 'pointer' : 'not-allowed' }}>
+              Mark ready ✓
+            </button>
+          )}
+          {packet.status === 'READY' && (
+            <button onClick={() => setPacketStatus('SENT')} style={{ padding: '9px 16px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              Mark sent to facility →
+            </button>
+          )}
+        </div>
+
+        {/* Completeness */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: packet.completeness >= 100 ? '#166534' : '#475569' }}>
+              {packet.tasks.filter((t) => ['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status)).length} of {packet.tasks.length} items complete
+              {providerTasks.length > 0 ? ` · ${providerTasks.length} waiting on the provider` : ''}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: packet.completeness >= 100 ? '#166534' : '#475569' }}>{packet.completeness}%</span>
+          </div>
+          <div style={{ height: 8, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ width: `${packet.completeness}%`, height: '100%', background: packet.completeness >= 100 ? 'linear-gradient(90deg, #22C55E, #16A34A)' : 'linear-gradient(90deg, #60A5FA, #2563EB)', borderRadius: 999, transition: 'width 0.4s ease' }} />
+          </div>
+        </div>
+
+        {(!passport.exists || !passport.hasGrant) && (
+          <div style={{ marginTop: 14, background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#92400E' }}>
+            {passport.bridgeUnconfigured ? 'Passport bridge is not configured — auto-fill is unavailable.'
+              : !passport.exists ? 'No SNAP Passport found for this NPI — invite the provider to claim their passport, then hit Refresh.'
+              : 'This provider hasn\'t granted your facility passport access yet — request access from their provider file, then hit Refresh.'}
+          </div>
+        )}
+      </div>
+
+      {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+      {/* Tasks by section */}
+      {groups.map((g) => (
+        <div key={g.section + g.tasks[0].id} style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{g.section}</div>
+          {g.tasks.map((t) => {
+            const st = TASK_STATUS[t.status] || TASK_STATUS.NEEDS_ACTION
+            const complete = ['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status)
+            const cred = t.passportCredential
+            return (
+              <div key={t.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyTask === t.id ? 0.5 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}>{st.icon} {st.label}</span>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: complete ? '#64748B' : '#0F172A' }}>
+                      {t.item.label}
+                      {!t.item.required && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: '#94A3B8' }}>OPTIONAL</span>}
+                      {t.item.fulfillment === 'SIGNATURE' && !t.item.esignOk && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 800, color: '#B91C1C' }}>✒️ WET INK</span>}
+                    </div>
+                    {cred && (
+                      <div style={{ fontSize: 11.5, color: '#166534', marginTop: 2 }}>
+                        ⚡ On passport{cred.jurisdiction ? ` · ${cred.jurisdiction}` : ''}{cred.expirationDate ? ` · expires ${fmtShortDate(cred.expirationDate)}` : ''} · {cred.status}
+                      </div>
+                    )}
+                    {t.note && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{t.note}</div>}
+                  </div>
+                  {!complete && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={() => setTask(t, { assignee: t.assignee === 'PROVIDER' ? 'COORDINATOR' : 'PROVIDER' })} title="Who owes this item" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, border: '1px solid #E2E8F0', background: t.assignee === 'PROVIDER' ? '#EFF6FF' : '#F8FAFC', color: t.assignee === 'PROVIDER' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
+                        {t.assignee === 'PROVIDER' ? '👤 Provider' : '🗂 Coordinator'}
+                      </button>
+                      <button onClick={() => setTask(t, { status: 'DONE' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: 'none', background: '#DCFCE7', color: '#166534', cursor: 'pointer' }}>Mark done</button>
+                      <button onClick={() => setTask(t, { status: 'WAIVED' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: 'none', background: '#F1F5F9', color: '#64748B', cursor: 'pointer' }}>Waive</button>
+                    </div>
+                  )}
+                  {complete && t.status !== 'AUTO_FILLED' && (
+                    <button onClick={() => setTask(t, { status: t.item.fulfillment === 'SIGNATURE' ? 'NEEDS_SIGNATURE' : t.item.fulfillment === 'DOCUMENT' ? 'NEEDS_DOCUMENT' : 'NEEDS_ACTION' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#64748B', cursor: 'pointer' }}>Reopen</button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Map builder ──────────────────────────────────────────────────────────────
 
 function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, dragTarget }) {
@@ -389,8 +661,10 @@ function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, d
   )
 }
 
-function MapBuilder({ mapId, taxonomy, onBack, onChanged }) {
+function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
   const [map, setMap] = useState(null)
+  const [packets, setPackets] = useState([])
+  const [showGen, setShowGen] = useState(false)
   const [error, setError] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -399,7 +673,8 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged }) {
   const [dragOverId, setDragOverId] = useState(null)
 
   const load = () => credMapAPI.getMap(mapId).then(({ map }) => setMap(map)).catch((e) => setError(e.message))
-  useEffect(() => { load() }, [mapId])
+  const loadPackets = () => credMapAPI.getPackets(mapId).then((d) => setPackets(d.packets)).catch(() => {})
+  useEffect(() => { load(); loadPackets() }, [mapId])
 
   const grouped = useMemo(() => {
     if (!map) return []
@@ -491,6 +766,11 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged }) {
             style={{ flex: 1, minWidth: 240, fontSize: 19, fontWeight: 800, color: '#0F172A', border: 'none', outline: 'none', background: 'transparent' }}
           />
           <StatusPill status={map.status} />
+          {map.status === 'CONFIRMED' && (
+            <button onClick={() => setShowGen(true)} style={{ padding: '9px 16px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              ⚡ Generate packet
+            </button>
+          )}
           {map.status === 'DRAFT' ? (
             <button onClick={() => patchMap({ status: 'CONFIRMED' })} style={{ padding: '9px 18px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
               Confirm map ✓
@@ -546,6 +826,29 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged }) {
         </div>
       </div>
 
+      {/* Packets off this map */}
+      {packets.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '14px 20px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>📦 Packets</div>
+          {packets.map((p) => {
+            const ps = PACKET_STATUS[p.status] || PACKET_STATUS.IN_PROGRESS
+            return (
+              <div key={p.id} onClick={() => onOpenPacket(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', borderTop: '1px solid #F8FAFC', cursor: 'pointer' }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{p.providerName || `NPI ${p.npi}`}</span>
+                  <span style={{ fontSize: 11.5, color: '#94A3B8', marginLeft: 8 }}>{p.cycle === 'RENEWAL' ? 'Renewal' : 'Initial'} · {fmtShortDate(p.createdAt)}</span>
+                </div>
+                <div style={{ width: 120, height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{ width: `${p.completeness}%`, height: '100%', background: p.completeness >= 100 ? '#16A34A' : '#2563EB', borderRadius: 999 }} />
+                </div>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#475569', width: 38, textAlign: 'right' }}>{p.completeness}%</span>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: ps.bg, color: ps.fg }}>{ps.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
       {/* Items, grouped by section */}
@@ -593,6 +896,14 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged }) {
           + Add requirement
         </button>
       )}
+
+      {showGen && (
+        <GeneratePacketModal
+          map={map}
+          onClose={() => setShowGen(false)}
+          onGenerated={(packetId) => { setShowGen(false); loadPackets(); onOpenPacket(packetId) }}
+        />
+      )}
     </div>
   )
 }
@@ -606,6 +917,7 @@ export default function CredMapPage() {
   const [taxonomy, setTaxonomy] = useState([])
   const [notes, setNotes] = useState([])
   const [openMapId, setOpenMapId] = useState(null)
+  const [openPacketId, setOpenPacketId] = useState(null)
   const [showNew, setShowNew] = useState(false)
   const [error, setError] = useState('')
 
@@ -631,8 +943,20 @@ export default function CredMapPage() {
     setOpenMapId(map.id)
   }
 
+  if (openPacketId) {
+    return <PacketWorkspace packetId={openPacketId} onBack={() => setOpenPacketId(null)} />
+  }
+
   if (openMapId) {
-    return <MapBuilder mapId={openMapId} taxonomy={taxonomy} onBack={() => { setOpenMapId(null); loadMaps() }} onChanged={() => {}} />
+    return (
+      <MapBuilder
+        mapId={openMapId}
+        taxonomy={taxonomy}
+        onBack={() => { setOpenMapId(null); loadMaps() }}
+        onChanged={() => {}}
+        onOpenPacket={(id) => setOpenPacketId(id)}
+      />
+    )
   }
 
   return (

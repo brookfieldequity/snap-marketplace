@@ -20,6 +20,7 @@ const crypto = require('crypto')
 const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
 const credMapIntake = require('../services/credMapIntake')
+const passportClient = require('../services/passportClient')
 const { TAXONOMY, CANONICAL_KEYS, STARTER_ITEMS, defaultsFor } = require('../services/credMapTaxonomy')
 
 const router = express.Router()
@@ -467,6 +468,258 @@ router.delete('/notes/:noteId', async (req, res) => {
   } catch (err) {
     console.error('[credmap/note-delete] error:', err)
     res.status(500).json({ error: 'Failed to delete note' })
+  }
+})
+
+// ── Packet generation (Stage 2) ──────────────────────────────────────────────
+// Generate = walk the confirmed map against the provider's LIVE passport:
+// auto-fillable items whose passport credential is present and current become
+// AUTO_FILLED; everything else becomes an open task. Credential facts are
+// never copied — the workspace re-reads the passport on every load.
+
+// Marketplace CredentialType (on CredMapItem) → passport-plane credential type.
+const PASSPORT_TYPE = {
+  STATE_LICENSE: 'STATE_LICENSE',
+  MA_CS_LICENSE: 'STATE_CS_LICENSE',
+  DEA_CERTIFICATE: 'DEA',
+  BOARD_CERTIFICATION: 'BOARD_CERTIFICATION',
+  MALPRACTICE_INSURANCE: 'MALPRACTICE_INSURANCE',
+  ACLS_CERTIFICATION: 'ACLS',
+  BLS_CERTIFICATION: 'BLS',
+}
+
+const COMPLETE_STATUSES = ['AUTO_FILLED', 'DONE', 'WAIVED']
+
+function completenessOf(tasks) {
+  if (!tasks.length) return 0
+  const done = tasks.filter((t) => COMPLETE_STATUSES.includes(t.status)).length
+  return Math.round((done / tasks.length) * 100)
+}
+
+async function passportSummaryFor(facilityId, npi) {
+  if (!passportClient.isConfigured()) return { bridgeUnconfigured: true, exists: false, hasGrant: false }
+  try {
+    const { summaries } = await passportClient.batchSummary(facilityId, [npi])
+    return summaries?.[0] || { exists: false, hasGrant: false }
+  } catch (err) {
+    console.error('[credmap/passport-summary] bridge error:', err.message)
+    return { bridgeError: true, exists: false, hasGrant: false }
+  }
+}
+
+// Decide each map item's initial task state against the passport summary.
+function planTask(item, summary) {
+  if (item.fulfillment === 'DOCUMENT') return { status: 'NEEDS_DOCUMENT', assignee: 'COORDINATOR' }
+  if (item.fulfillment === 'SIGNATURE') return { status: 'NEEDS_SIGNATURE', assignee: 'PROVIDER' }
+  if (item.fulfillment === 'MANUAL') return { status: 'NEEDS_ACTION', assignee: 'COORDINATOR' }
+
+  // AUTO_PASSPORT
+  if (!summary.exists || !summary.hasGrant) {
+    return { status: 'NEEDS_ACTION', assignee: 'COORDINATOR', note: !summary.exists ? 'No passport found for this NPI' : 'Passport access not granted yet' }
+  }
+  const passportType = item.credentialType ? PASSPORT_TYPE[item.credentialType] : null
+  if (!passportType) {
+    // Data-plane sections (CV, education, work history…) ride the passport
+    // profile itself — filled whenever a granted passport exists.
+    return { status: 'AUTO_FILLED', assignee: 'COORDINATOR', note: 'From passport profile' }
+  }
+  const cred = (summary.credentials || []).find((c) => c.type === passportType)
+  if (!cred) return { status: 'NEEDS_DOCUMENT', assignee: 'COORDINATOR', note: 'Not on the passport yet' }
+  if (cred.status === 'EXPIRED' || (cred.expirationDate && new Date(cred.expirationDate) < new Date())) {
+    return { status: 'NEEDS_DOCUMENT', assignee: 'COORDINATOR', note: 'Passport copy is expired — needs a current one' }
+  }
+  return { status: 'AUTO_FILLED', assignee: 'COORDINATOR' }
+}
+
+// POST /:id/packets — generate a packet for one provider off this map.
+router.post('/:id/packets', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id, mapItemsInclude)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (map.items.length === 0) return res.status(400).json({ error: 'Map has no items yet' })
+
+    const npi = String(req.body?.npi || '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(npi)) return res.status(400).json({ error: 'A 10-digit NPI is required' })
+    const cycle = req.body?.cycle === 'RENEWAL' ? 'RENEWAL' : 'INITIAL'
+
+    const rosterEntry = await prisma.internalRosterEntry.findFirst({
+      where: { facilityId: req.facilityId, npi },
+      select: { providerName: true },
+    })
+    const summary = await passportSummaryFor(req.facilityId, npi)
+    const providerName = rosterEntry?.providerName || summary.providerName || req.body?.providerName || null
+
+    const plans = map.items.map((item) => ({ item, plan: planTask(item, summary) }))
+    const packet = await prisma.credPacket.create({
+      data: {
+        mapId: map.id,
+        facilityId: req.facilityId,
+        npi,
+        providerName,
+        cycle,
+        createdById: req.credUser.id,
+        tasks: {
+          create: plans.map(({ item, plan }) => ({
+            itemId: item.id,
+            status: plan.status,
+            assignee: plan.assignee,
+            note: plan.note || null,
+            completedAt: COMPLETE_STATUSES.includes(plan.status) ? new Date() : null,
+          })),
+        },
+      },
+      include: { tasks: { include: { item: true } } },
+    })
+    const completeness = completenessOf(packet.tasks)
+    await prisma.credPacket.update({ where: { id: packet.id }, data: { completeness } })
+    await logMapAccess(req, map.id, 'CREDMAP_PACKET_GENERATE', `${providerName || npi} (${cycle})`)
+    res.status(201).json({ packet: { ...packet, completeness }, passport: summary })
+  } catch (err) {
+    console.error('[credmap/packet-generate] error:', err)
+    res.status(500).json({ error: 'Failed to generate packet' })
+  }
+})
+
+// GET /packets/list?mapId= — this facility's packets (newest first).
+router.get('/packets/list', async (req, res) => {
+  try {
+    const packets = await prisma.credPacket.findMany({
+      where: { facilityId: req.facilityId, ...(req.query.mapId ? { mapId: String(req.query.mapId) } : {}) },
+      include: { map: { select: { id: true, name: true, recredCycleMonths: true } }, tasks: { select: { status: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ packets: packets.map((p) => ({ ...p, completeness: completenessOf(p.tasks), tasks: undefined })) })
+  } catch (err) {
+    console.error('[credmap/packet-list] error:', err)
+    res.status(500).json({ error: 'Failed to load packets' })
+  }
+})
+
+// GET /packets/one/:packetId — the workspace payload: tasks (+items) merged
+// with the provider's live passport state.
+router.get('/packets/one/:packetId', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      include: {
+        map: { select: { id: true, name: true, recredCycleMonths: true, outputMode: true, status: true } },
+        tasks: { include: { item: true } },
+      },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    const summary = await passportSummaryFor(packet.facilityId, packet.npi)
+    const credByType = new Map((summary.credentials || []).map((c) => [c.type, c]))
+    const tasks = packet.tasks
+      .sort((a, b) => (a.item.position ?? 0) - (b.item.position ?? 0))
+      .map((t) => ({
+        ...t,
+        passportCredential: t.item.credentialType ? credByType.get(PASSPORT_TYPE[t.item.credentialType]) || null : null,
+      }))
+    res.json({ packet: { ...packet, tasks, completeness: completenessOf(packet.tasks) }, passport: summary })
+  } catch (err) {
+    console.error('[credmap/packet-get] error:', err)
+    res.status(500).json({ error: 'Failed to load packet' })
+  }
+})
+
+// PATCH /packets/one/:packetId — status transitions. Marking SENT stamps the
+// appointment clock (nextDueAt = now + map cycle) for renewal tracking.
+router.patch('/packets/one/:packetId', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      include: { map: { select: { recredCycleMonths: true } } },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    const { status } = req.body || {}
+    if (!['IN_PROGRESS', 'READY', 'SENT'].includes(status)) return res.status(400).json({ error: 'Invalid status' })
+
+    const updated = await prisma.credPacket.update({ where: { id: packet.id }, data: { status } })
+    if (status === 'SENT') {
+      const appointedAt = new Date()
+      const months = packet.map.recredCycleMonths
+      const nextDueAt = months ? new Date(new Date(appointedAt).setMonth(appointedAt.getMonth() + months)) : null
+      await prisma.credAppointment.upsert({
+        where: { mapId_npi: { mapId: packet.mapId, npi: packet.npi } },
+        create: { facilityId: packet.facilityId, mapId: packet.mapId, npi: packet.npi, providerName: packet.providerName, appointedAt, nextDueAt },
+        update: { appointedAt, nextDueAt, providerName: packet.providerName },
+      })
+      await logMapAccess(req, packet.mapId, 'CREDMAP_PACKET_SENT', `${packet.providerName || packet.npi}`)
+    }
+    res.json({ packet: updated })
+  } catch (err) {
+    console.error('[credmap/packet-update] error:', err)
+    res.status(500).json({ error: 'Failed to update packet' })
+  }
+})
+
+// PATCH /packets/one/:packetId/tasks/:taskId — coordinator works the gap list.
+router.patch('/packets/one/:packetId/tasks/:taskId', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId }, select: { id: true },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    const task = await prisma.credPacketTask.findFirst({ where: { id: req.params.taskId, packetId: packet.id } })
+    if (!task) return res.status(404).json({ error: 'Task not found' })
+
+    const { status, assignee, note } = req.body || {}
+    const data = {}
+    if (status !== undefined) {
+      if (!['AUTO_FILLED', 'NEEDS_DOCUMENT', 'NEEDS_SIGNATURE', 'NEEDS_ACTION', 'WAIVED', 'DONE'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' })
+      }
+      data.status = status
+      data.completedAt = COMPLETE_STATUSES.includes(status) ? new Date() : null
+    }
+    if (assignee !== undefined) {
+      if (!['COORDINATOR', 'PROVIDER'].includes(assignee)) return res.status(400).json({ error: 'Invalid assignee' })
+      data.assignee = assignee
+    }
+    if (note !== undefined) data.note = note ? String(note).trim().slice(0, 300) : null
+
+    await prisma.credPacketTask.update({ where: { id: task.id }, data })
+    const tasks = await prisma.credPacketTask.findMany({ where: { packetId: packet.id }, select: { status: true } })
+    const completeness = completenessOf(tasks)
+    await prisma.credPacket.update({ where: { id: packet.id }, data: { completeness } })
+    res.json({ ok: true, completeness })
+  } catch (err) {
+    console.error('[credmap/task-update] error:', err)
+    res.status(500).json({ error: 'Failed to update task' })
+  }
+})
+
+// POST /packets/one/:packetId/refresh — re-run the auto-fill pass against the
+// passport as it is NOW (e.g. the provider just uploaded a new certificate).
+// Only touches AUTO_PASSPORT tasks that aren't manually resolved.
+router.post('/packets/one/:packetId/refresh', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      include: { tasks: { include: { item: true } } },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    const summary = await passportSummaryFor(packet.facilityId, packet.npi)
+    let changed = 0
+    for (const t of packet.tasks) {
+      if (t.item.fulfillment !== 'AUTO_PASSPORT') continue
+      if (['DONE', 'WAIVED'].includes(t.status)) continue // coordinator's call stands
+      const plan = planTask(t.item, summary)
+      if (plan.status !== t.status) {
+        await prisma.credPacketTask.update({
+          where: { id: t.id },
+          data: { status: plan.status, note: plan.note || null, completedAt: COMPLETE_STATUSES.includes(plan.status) ? new Date() : null },
+        })
+        changed++
+      }
+    }
+    const tasks = await prisma.credPacketTask.findMany({ where: { packetId: packet.id }, select: { status: true } })
+    const completeness = completenessOf(tasks)
+    await prisma.credPacket.update({ where: { id: packet.id }, data: { completeness } })
+    res.json({ ok: true, changed, completeness })
+  } catch (err) {
+    console.error('[credmap/packet-refresh] error:', err)
+    res.status(500).json({ error: 'Failed to refresh packet' })
   }
 })
 

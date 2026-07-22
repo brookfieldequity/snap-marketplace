@@ -1018,6 +1018,16 @@ export const credMapAPI = {
   updateItem: (mapId, itemId, data) => apiFetch(`${BASE}/credmap/${mapId}/items/${itemId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
   deleteItem: (mapId, itemId) => apiFetch(`${BASE}/credmap/${mapId}/items/${itemId}`, { method: 'DELETE', headers: credHeaders() }),
   reorderItems: (mapId, itemIds) => apiFetch(`${BASE}/credmap/${mapId}/items/order`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ itemIds }) }),
+  // Packets (Stage 2/3 — generation + coordinator workspace)
+  generatePacket: (mapId, npi, cycle) =>
+    apiFetch(`${BASE}/credmap/${mapId}/packets`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ npi, cycle }) }),
+  getPackets: (mapId) => apiFetch(`${BASE}/credmap/packets/list${mapId ? `?mapId=${mapId}` : ''}`, { headers: credHeaders() }),
+  getPacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}`, { headers: credHeaders() }),
+  updatePacket: (packetId, data) => apiFetch(`${BASE}/credmap/packets/one/${packetId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  updatePacketTask: (packetId, taskId, data) =>
+    apiFetch(`${BASE}/credmap/packets/one/${packetId}/tasks/${taskId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  refreshPacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/refresh`, { method: 'POST', headers: credHeaders() }),
+
   // Sticky notes
   getNotes: (includeDone = false) => apiFetch(`${BASE}/credmap/notes/all${includeDone ? '?includeDone=true' : ''}`, { headers: credHeaders() }),
   addNote: (data) => apiFetch(`${BASE}/credmap/notes`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
