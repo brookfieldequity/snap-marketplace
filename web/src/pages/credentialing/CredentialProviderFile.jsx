@@ -33,6 +33,73 @@ function isoDay(d) {
   return d ? new Date(d).toISOString().slice(0, 10) : ''
 }
 
+// CME date-range CSV export — client-side from the already-loaded entries.
+// Cells are quoted and leading formula chars neutralized (same sanitizer rule
+// as the other exports).
+function csvCell(v) {
+  let s = v == null ? '' : String(v)
+  if (/^[=+\-@\t]/.test(s)) s = `'${s}`
+  return `"${s.replace(/"/g, '""')}"`
+}
+
+function CmeExportRow({ entries, providerName }) {
+  const year = new Date().getFullYear()
+  const [from, setFrom] = useState(`${year}-01-01`)
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
+
+  const inRange = entries
+    .filter((e) => {
+      const day = String(e.date || '').slice(0, 10)
+      return day && day >= from && day <= to
+    })
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+  const rangeHours = inRange.reduce((s, e) => s + (e.hours || 0), 0)
+
+  function download() {
+    const lines = [
+      ['SNAP Medical — CME Summary'],
+      [`Provider: ${providerName || '—'}`],
+      [`Date range: ${from} to ${to}`],
+      [`Generated: ${new Date().toISOString().slice(0, 10)}`],
+      [],
+      ['Date', 'End Date', 'Activity', 'Topic', 'Accrediting Body', 'Hours'],
+      ...inRange.map((e) => [
+        String(e.date).slice(0, 10),
+        e.endDate ? String(e.endDate).slice(0, 10) : '',
+        e.title || e.activity || 'CME activity',
+        e.topic || '',
+        e.accreditationBody || '',
+        e.hours,
+      ]),
+      [],
+      ['', '', '', '', 'TOTAL HOURS', rangeHours],
+    ]
+    const csv = lines.map((row) => row.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `CME-Summary-${(providerName || 'provider').replace(/\s+/g, '-')}-${from}-to-${to}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid #F1F5F9', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Export range:</span>
+      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '4px 6px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12 }} />
+      <span style={{ fontSize: 12, color: '#94A3B8' }}>to</span>
+      <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: '4px 6px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12 }} />
+      <button
+        onClick={download}
+        disabled={inRange.length === 0}
+        style={{ padding: '5px 12px', border: 'none', borderRadius: 7, background: inRange.length ? '#2563EB' : '#CBD5E1', color: '#fff', fontSize: 12, fontWeight: 700, cursor: inRange.length ? 'pointer' : 'default' }}
+      >
+        Download CSV ({inRange.length} · {rangeHours} hr)
+      </button>
+    </div>
+  )
+}
+
 export default function CredentialProviderFile({ rosterId, npi, permission, onBack }) {
   const [passport, setPassport] = useState(null)
   const [error, setError] = useState(null)
@@ -171,8 +238,8 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
                           <button
                             onClick={() => { setEditing(type); setEditDate(isoDay(c?.expirationDate)) }}
                             title={c ? 'Correct the expiration date' : 'Record this credential (e.g. expiry from a face sheet)'}
-                            style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#2563EB' }}
-                          >✎</button>
+                            style={{ marginLeft: 8, padding: '2px 9px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 6, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: '#2563EB' }}
+                          >✎ Edit</button>
                         )}
                       </span>
                     )}
@@ -238,6 +305,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
                 {e2.title || e2.activity || 'CME activity'} — {e2.hours} hr{e2.hours === 1 ? '' : 's'} {e2.date ? `· ${fmtDate(e2.date)}` : ''}
               </div>
             ))}
+            <CmeExportRow entries={cme.entries || []} providerName={`${passport?.provider?.firstName || ''} ${passport?.provider?.lastName || ''}`.trim()} />
           </>
         )}
       </div>
