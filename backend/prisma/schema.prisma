@@ -302,6 +302,9 @@ model ProviderProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Shift-notification fan-out filters on specialty for every new/surge shift.
+  @@index([specialty])
 }
 
 model Facility {
@@ -641,6 +644,10 @@ model Shift {
   updatedAt DateTime @updatedAt
 
   @@index([recurrenceGroupId])
+  // Hot-path filters: tenant scoping and the surge/notification sweeps on LIVE
+  // shifts. Plain indexes only — safe for the Railway boot `db push`.
+  @@index([facilityId])
+  @@index([status])
 }
 
 // Distinct shift views for demand-based surge pricing (M2 fix): one row per
@@ -698,6 +705,8 @@ model ShiftBooking {
   feeLedger      MarketplaceFeeLedger?
 
   createdAt DateTime @default(now())
+
+  @@index([providerId])
 }
 
 model ShiftCompletion {
@@ -801,6 +810,9 @@ model Message {
   facility   Facility        @relation(fields: [facilityId], references: [id])
   sender     ProviderProfile @relation(fields: [senderId], references: [id])
   createdAt  DateTime        @default(now())
+
+  @@index([shiftId])
+  @@index([facilityId])
 }
 
 // ── SNAP Shifts models ────────────────────────────────────────────────────────
@@ -1184,6 +1196,7 @@ model ScheduleAssignment {
   costComponents AssignmentCostComponent[] // EOR one-off pass-throughs (Phase 0)
 
   @@unique([scheduleDayId, roomNumber])
+  @@index([rosterId])
 }
 
 model SchedulingUpload {
