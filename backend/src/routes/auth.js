@@ -66,7 +66,7 @@ router.post('/provider/register', async (req, res) => {
       if (/^\d{10}$/.test(digits)) {
         const taken = await prisma.providerProfile.findUnique({ where: { npiNumber: digits }, select: { id: true } });
         if (!taken) npi = digits;
-        else console.warn(`[auth] registration NPI ${digits} already claimed — dropped`);
+        else console.warn(`[auth] registration NPI ***${digits.slice(-4)} already claimed — dropped`);
       }
     }
 
@@ -438,48 +438,6 @@ router.post('/facility/register', async (req, res) => {
   return res.status(410).json({
     error: 'Self-registration is no longer available. Facilities are set up by the SNAP team, who send an invite to set your password. Contact matt@snapmedical.app to get started.',
   });
-});
-
-// Legacy handler retained below the early-return for reference; never reached.
-router.post('/_facility/register-legacy', async (req, res) => {
-  try {
-    const { email, password, facilityName, facilityType, address, zipCode, tier } = req.body;
-    if (!email || !password || !facilityName) {
-      return res.status(400).json({ error: 'Email, password, and facility name required' });
-    }
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ error: 'Email already registered' });
-
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashed,
-        role: 'FACILITY_USER',
-      },
-    });
-
-    const facility = await prisma.facility.create({
-      data: {
-        name: facilityName,
-        facilityType,
-        address,
-        zipCode,
-        state: 'MA',
-        users: { create: { userId: user.id, facilityRole: 'ADMIN' } },
-        subscription: { create: { tier: tier || 'BASIC' } },
-      },
-      include: { subscription: true },
-    });
-
-    const token = await issueToken('FACILITY', { userId: user.id, email: user.email, role: 'FACILITY_USER', facilityId: facility.id }, req);
-
-    res.status(201).json({ token, user: { id: user.id, email: user.email }, facility: { id: facility.id, name: facility.name } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Registration failed' });
-  }
 });
 
 // ── Facility login ────────────────────────────────────────────────────────────
