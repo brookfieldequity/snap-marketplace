@@ -569,9 +569,19 @@ function PacketWorkspace({ packetId, onBack }) {
   const [showPreview, setShowPreview] = useState(false)
   const [error, setError] = useState('')
   const [busyTask, setBusyTask] = useState(null)
+  const [signLink, setSignLink] = useState(null) // { link, emailedTo, itemCount }
+  const [sendingLink, setSendingLink] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const load = () => credMapAPI.getPacket(packetId).then(setData).catch((e) => setError(e.message))
   useEffect(() => { load() }, [packetId])
+
+  async function sendSignLink() {
+    setSendingLink(true)
+    try { setSignLink(await credMapAPI.sendSignLink(packetId)) }
+    catch (e) { setError(e.message) }
+    finally { setSendingLink(false) }
+  }
 
   // Full passport detail (identifiers + documents) for the workspace cards
   // and the preview — richer than the summary the generate pass uses.
@@ -622,6 +632,7 @@ function PacketWorkspace({ packetId, onBack }) {
   const ps = PACKET_STATUS[packet.status] || PACKET_STATUS.IN_PROGRESS
   const openTasks = packet.tasks.filter((t) => !['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status))
   const providerTasks = openTasks.filter((t) => t.assignee === 'PROVIDER')
+  const openSignatures = openTasks.filter((t) => t.status === 'NEEDS_SIGNATURE' && t.item.fulfillment === 'SIGNATURE' && t.item.esignOk)
 
   // Group tasks by their item's section, in item order.
   const groups = []
@@ -649,6 +660,11 @@ function PacketWorkspace({ packetId, onBack }) {
           <button onClick={() => setShowPreview(true)} style={{ padding: '9px 16px', background: '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             👁 Preview packet
           </button>
+          {openSignatures.length > 0 && (
+            <button onClick={sendSignLink} disabled={sendingLink} style={{ padding: '9px 16px', background: '#7C3AED', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: sendingLink ? 'wait' : 'pointer' }}>
+              {sendingLink ? 'Creating link…' : `✍️ Send for signature (${openSignatures.length})`}
+            </button>
+          )}
           <button onClick={refresh} title="Re-check the passport for anything new" style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh auto-fill
           </button>
@@ -688,6 +704,30 @@ function PacketWorkspace({ packetId, onBack }) {
       </div>
 
       {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+      {signLink && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSignLink(null)}>
+          <div style={{ width: '100%', maxWidth: 460, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: 24 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>✍️ Signature link ready</div>
+            <div style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
+              {signLink.emailedTo
+                ? <>Emailed to <strong>{signLink.emailedTo}</strong> — one tap, they sign all {signLink.itemCount} item{signLink.itemCount === 1 ? '' : 's'} on their phone, and this board updates automatically.</>
+                : <>No SNAP email on file for this provider — copy the link below and text or email it to them directly. It signs all {signLink.itemCount} item{signLink.itemCount === 1 ? '' : 's'}.</>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <input readOnly value={signLink.link} onFocus={(e) => e.target.select()} style={{ flex: 1, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 12, color: '#475569', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace' }} />
+              <button
+                onClick={() => { navigator.clipboard?.writeText(signLink.link); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+                style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                {copied ? 'Copied ✓' : 'Copy'}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 10 }}>Link expires in 14 days. Signatures are recorded with identity, timestamp, and device for the audit trail.</div>
+            <button onClick={() => setSignLink(null)} style={{ width: '100%', marginTop: 14, padding: '10px 0', background: '#F1F5F9', border: 'none', borderRadius: 10, color: '#475569', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>Done</button>
+          </div>
+        </div>
+      )}
 
       {/* Tasks by section */}
       {groups.map((g) => (

@@ -1698,7 +1698,8 @@ model CredPacket {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  tasks CredPacketTask[]
+  tasks      CredPacketTask[]
+  signatures CredSignature[]
 
   @@index([facilityId, npi])
 }
@@ -1714,6 +1715,8 @@ model CredPacketTask {
   note        String?
   completedAt DateTime?
   updatedAt   DateTime         @updatedAt
+
+  signatures CredSignature[]
 }
 
 model CredAppointment {
@@ -1730,6 +1733,28 @@ model CredAppointment {
 
   @@unique([mapId, npi])
   @@index([facilityId, nextDueAt])
+}
+
+// E-sign events for packet signature tasks — the audit trail behind the
+// provider sign-link (ESIGN/UETA posture: signer identity, recorded consent,
+// timestamp, IP/user-agent). One row per task signed; the drawn signature is
+// kept as a data-URL PNG so the packet export can stamp it onto forms.
+model CredSignature {
+  id            String         @id @default(cuid())
+  facilityId    String
+  packetId      String
+  packet        CredPacket     @relation(fields: [packetId], references: [id])
+  taskId        String
+  task          CredPacketTask @relation(fields: [taskId], references: [id])
+  npi           String
+  signerName    String
+  signatureData String // data-URL PNG of the drawn signature
+  consentText   String
+  ipAddress     String?
+  userAgent     String?
+  signedAt      DateTime       @default(now())
+
+  @@index([packetId])
 }
 
 // Post-it reminders for the coordinator dashboard — same sticky-note design

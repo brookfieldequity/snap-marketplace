@@ -235,10 +235,28 @@ async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, rol
   })
 }
 
+// Signature request — the RFX-bar sign link: one tap from email to the pad.
+async function sendSignatureRequest(toEmail, providerName, facilityName, itemCount, signLink) {
+  await send({
+    to: toEmail,
+    from: FROM,
+    subject: `${facilityName} needs your signature (${itemCount} document${itemCount === 1 ? '' : 's'})`,
+    html: `
+      <h2>Your signature is requested</h2>
+      <p>Hi ${providerName},</p>
+      <p><strong>${facilityName}</strong> has your credentialing packet ready — it just needs your signature on ${itemCount === 1 ? 'one document' : `${itemCount} documents`}.</p>
+      <p>Review and sign right from your phone. No login needed — takes about a minute.</p>
+      <p><a href="${signLink}" style="background:#2563EB;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">Review &amp; Sign →</a></p>
+      <p style="color:#94A3B8;font-size:12px">This link is unique to you and expires in 14 days. If it has expired, ask your coordinator to send a fresh one.</p>
+    `,
+  })
+}
+
 module.exports = {
   sendExpirationAlertToFacility,
   sendExpirationReminderToProvider,
   sendProviderInvitation,
+  sendSignatureRequest,
   sendFacilityInvite,
   sendDocumentRequest,
   sendCredentialReminder,

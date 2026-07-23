@@ -1027,6 +1027,7 @@ export const credMapAPI = {
   updatePacketTask: (packetId, taskId, data) =>
     apiFetch(`${BASE}/credmap/packets/one/${packetId}/tasks/${taskId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
   refreshPacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/refresh`, { method: 'POST', headers: credHeaders() }),
+  sendSignLink: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/sign-link`, { method: 'POST', headers: credHeaders() }),
 
   // Sticky notes
   getNotes: (includeDone = false) => apiFetch(`${BASE}/credmap/notes/all${includeDone ? '?includeDone=true' : ''}`, { headers: credHeaders() }),

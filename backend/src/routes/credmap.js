@@ -689,6 +689,57 @@ router.patch('/packets/one/:packetId/tasks/:taskId', async (req, res) => {
   }
 })
 
+// POST /packets/one/:packetId/sign-link — mint the provider sign link (one
+// link clears every open e-signable signature task) and email it to the
+// provider's SNAP account address when we have one. Always returns the link
+// so the coordinator can copy/text it herself (SMS rides Twilio approval).
+router.post('/packets/one/:packetId/sign-link', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      include: { map: { select: { name: true } }, tasks: { include: { item: { select: { fulfillment: true, esignOk: true } } } } },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    const openSignatures = packet.tasks.filter(
+      (t) => t.status === 'NEEDS_SIGNATURE' && t.item.fulfillment === 'SIGNATURE' && t.item.esignOk
+    )
+    if (openSignatures.length === 0) {
+      return res.status(400).json({ error: 'No open e-signable signature items on this packet.' })
+    }
+
+    const { signLinkToken } = require('./sign')
+    const token = signLinkToken(packet.id)
+    const base = (process.env.APP_URL || 'https://ai.snapmedical.app').replace(/\/$/, '')
+    const link = `${base}/sign/${encodeURIComponent(token)}`
+
+    let emailedTo = null
+    const rosterEntry = await prisma.internalRosterEntry.findFirst({
+      where: { facilityId: req.facilityId, npi: packet.npi },
+      select: { snapAccountEmail: true, providerName: true },
+    })
+    if (rosterEntry?.snapAccountEmail) {
+      try {
+        const { sendSignatureRequest } = require('../services/credentialEmail')
+        await sendSignatureRequest(
+          rosterEntry.snapAccountEmail,
+          packet.providerName || rosterEntry.providerName || 'there',
+          packet.map?.name || 'Your facility',
+          openSignatures.length,
+          link
+        )
+        emailedTo = rosterEntry.snapAccountEmail
+      } catch (err) {
+        console.error('[credmap/sign-link] email failed (link still returned):', err.message)
+      }
+    }
+    await logMapAccess(req, packet.mapId, 'CREDMAP_SIGN_LINK_SENT', `${packet.providerName || packet.npi} (${openSignatures.length} items)`)
+    res.json({ link, emailedTo, itemCount: openSignatures.length })
+  } catch (err) {
+    console.error('[credmap/sign-link] error:', err)
+    res.status(500).json({ error: 'Failed to create sign link' })
+  }
+})
+
 // POST /packets/one/:packetId/refresh — re-run the auto-fill pass against the
 // passport as it is NOW (e.g. the provider just uploaded a new certificate).
 // Only touches AUTO_PASSPORT tasks that aren't manually resolved.
