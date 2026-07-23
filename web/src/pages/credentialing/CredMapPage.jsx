@@ -1122,7 +1122,66 @@ const VALUE_KEY_LABEL = {
   today: "Today's date",
 }
 
-function FieldMappingPanel({ mapId, roster, onClose }) {
+// SNAP-side, one-time-per-form: paste the Anvil PDF Template id and map its
+// field aliases to passport data. Once a template id is set, this map's
+// "Fill facility PDF" fills the facility's real (flat) form via Anvil — used
+// when the packet isn't a fillable AcroForm PDF.
+function AnvilSetup({ mapId, map }) {
+  const [castEid, setCastEid] = useState(map.anvilCastEid || '')
+  const [rows, setRows] = useState(() =>
+    Object.entries(map.anvilAliasMap || {}).map(([alias, key]) => ({ alias, key }))
+  )
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [err, setErr] = useState('')
+
+  function setRow(i, patch) { setRows((r) => r.map((row, j) => j === i ? { ...row, ...patch } : row)); setSaved(false) }
+
+  async function save() {
+    setSaving(true); setErr('')
+    try {
+      const aliasMap = {}
+      for (const r of rows) if (r.alias.trim() && r.key) aliasMap[r.alias.trim()] = r.key
+      await credMapAPI.saveAnvil(mapId, castEid.trim() || null, aliasMap)
+      setSaved(true)
+    } catch (e) { setErr(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid #E2E8F0', padding: '14px 24px', background: '#FAFAFF' }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: '#5B21B6' }}>🖇 Anvil template (flat / print-to-fill forms)</div>
+      <div style={{ fontSize: 11.5, color: '#64748B', margin: '3px 0 10px' }}>
+        For forms that aren't fillable PDFs. Build the template once in Anvil, paste its ID here, and map each Anvil field alias to passport data. When set, this form fills via Anvil for every provider.
+      </div>
+      <input
+        value={castEid}
+        onChange={(e) => { setCastEid(e.target.value); setSaved(false) }}
+        placeholder="Anvil PDF Template ID (castEid)"
+        style={{ width: '100%', padding: '8px 11px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace', marginBottom: 10 }}
+      />
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+          <input value={r.alias} onChange={(e) => setRow(i, { alias: e.target.value })} placeholder="Anvil field alias" style={{ flex: 1, padding: '6px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontFamily: 'monospace' }} />
+          <span style={{ color: '#94A3B8' }}>→</span>
+          <select value={r.key} onChange={(e) => setRow(i, { key: e.target.value })} style={{ flex: 1, padding: '6px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, background: '#fff' }}>
+            {Object.entries(VALUE_KEY_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+          </select>
+          <button onClick={() => setRows((rr) => rr.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#CBD5E1', fontSize: 15, cursor: 'pointer', fontWeight: 700 }}>×</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+        <button onClick={() => setRows((r) => [...r, { alias: '', key: 'LEAVE_BLANK' }])} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>+ Add field</button>
+        <div style={{ flex: 1 }} />
+        {err && <span style={{ color: '#DC2626', fontSize: 12 }}>{err}</span>}
+        {saved && <span style={{ color: '#16A34A', fontSize: 12, fontWeight: 700 }}>Saved ✓</span>}
+        <button onClick={save} disabled={saving} style={{ padding: '7px 14px', background: '#7C3AED', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save Anvil setup'}</button>
+      </div>
+    </div>
+  )
+}
+
+function FieldMappingPanel({ mapId, map, roster, onClose }) {
   const [data, setData] = useState(null)
   const [previewNpi, setPreviewNpi] = useState('')
   const [edits, setEdits] = useState({})
@@ -1235,6 +1294,8 @@ function FieldMappingPanel({ mapId, roster, onClose }) {
             </table>
           )}
         </div>
+
+        {data?.notFillable && <AnvilSetup mapId={mapId} map={map} />}
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12 }}>
           {error && <span style={{ color: '#DC2626', fontSize: 12.5 }}>{error}</span>}
@@ -1622,7 +1683,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
       )}
 
       {showFieldMap && (
-        <FieldMappingPanel mapId={mapId} roster={roster} onClose={() => setShowFieldMap(false)} />
+        <FieldMappingPanel mapId={mapId} map={map} roster={roster} onClose={() => setShowFieldMap(false)} />
       )}
     </div>
   )

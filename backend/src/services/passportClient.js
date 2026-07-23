@@ -356,11 +356,29 @@ async function demoSeedPassports(facilityId, facilityName) {
   throw err;
 }
 
+/**
+ * POST /api/service/anvil/fill-pdf — fill an Anvil PDF Template (Cast) with
+ * data (resolved marketplace-side from the provider's passport) and return
+ * the filled PDF buffer. Anvil's API key lives on the cred backend, so the
+ * fill is proxied through the same service bridge.
+ */
+async function fillAnvilPdf(castEid, data, title) {
+  const { status, body, ok } = await callPassportApi('/api/service/anvil/fill-pdf', {
+    method: 'POST',
+    body: JSON.stringify({ castEid, data, title }),
+  });
+  if (ok && body?.pdfBase64) return Buffer.from(body.pdfBase64, 'base64');
+  const err = new Error(body?.error || `Anvil fill failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
   getPassport,
   requestGrant,
+  fillAnvilPdf,
   invite,
   getCmeHistory,
   getProviderCredentialSummary,

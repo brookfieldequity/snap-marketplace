@@ -1034,6 +1034,7 @@ export const credMapAPI = {
   getFieldMap: (mapId, npi) => apiFetch(`${BASE}/credmap/${mapId}/fields${npi ? `?npi=${npi}` : ''}`, { headers: credHeaders() }),
   saveFieldMap: (mapId, fieldMap) => apiFetch(`${BASE}/credmap/${mapId}/fields`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fieldMap }) }),
   rebuildFieldMap: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/fields/rebuild`, { method: 'POST', headers: credHeaders() }),
+  saveAnvil: (mapId, castEid, aliasMap) => apiFetch(`${BASE}/credmap/${mapId}/anvil`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ castEid, aliasMap }) }),
 
   // Renewal tracking (appointment clocks)
   getRenewals: () => apiFetch(`${BASE}/credmap/renewals/list`, { headers: credHeaders() }),

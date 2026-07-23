@@ -786,6 +786,37 @@ router.get('/:id/fields', async (req, res) => {
   }
 })
 
+// PUT /:id/anvil — attach an Anvil PDF Template to this map (the SNAP-side,
+// one-time setup once the template is built in Anvil's dashboard). Body:
+// { castEid, aliasMap: { alias: valueKey } }. Setting a castEid switches the
+// map's "Fill facility PDF" onto the Anvil path.
+router.put('/:id/anvil', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const { castEid, aliasMap } = req.body || {}
+    const data = {}
+    if (castEid !== undefined) data.anvilCastEid = castEid ? String(castEid).trim() : null
+    if (aliasMap !== undefined) {
+      if (aliasMap === null) data.anvilAliasMap = null
+      else if (typeof aliasMap === 'object') {
+        const { VALUE_KEYS } = require('../services/credMapPdf')
+        const clean = {}
+        for (const [k, v] of Object.entries(aliasMap)) {
+          if (typeof k === 'string' && VALUE_KEYS.includes(v)) clean[k] = v
+        }
+        data.anvilAliasMap = clean
+      } else return res.status(400).json({ error: 'aliasMap must be an object' })
+    }
+    const updated = await prisma.credProgramMap.update({ where: { id: map.id }, data })
+    await logMapAccess(req, map.id, 'CREDMAP_ANVIL_SET', updated.anvilCastEid || 'cleared')
+    res.json({ ok: true, anvilCastEid: updated.anvilCastEid, anvilAliasMap: updated.anvilAliasMap })
+  } catch (err) {
+    console.error('[credmap/anvil-set] error:', err)
+    res.status(500).json({ error: 'Failed to save Anvil template' })
+  }
+})
+
 // POST /:id/fields/rebuild — throw away the stored mapping and re-run the
 // (now label-aware) AI pass. For maps built before label extraction, or after
 // re-uploading a corrected form.

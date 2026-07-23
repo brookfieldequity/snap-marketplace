@@ -162,6 +162,15 @@ async function s3PutBuffer(key, buffer, contentType) {
  */
 async function renderFilledPdf({ packet, map, passport }) {
   if (!process.env.AWS_S3_BUCKET) { const e = new Error('Document storage is not configured'); e.code = 'NOT_CONFIGURED'; throw e }
+
+  // Preferred path for flat / print-to-fill packets: an Anvil PDF Template
+  // (created once per facility form). Alias→value-key mapping lives on the
+  // map; values resolve live from the passport. Falls through to the AcroForm
+  // path below only when no Anvil template is configured.
+  if (map.anvilCastEid) {
+    return renderViaAnvil({ packet, map, passport })
+  }
+
   if (!map.sourceDocPath) { const e = new Error('This map has no uploaded facility PDF'); e.code = 'NO_SOURCE_DOC'; throw e }
 
   const { PDFDocument } = require('pdf-lib')
@@ -251,6 +260,34 @@ async function renderFilledPdf({ packet, map, passport }) {
   })
 
   return { generatedDocPath, generatedDocName, fieldCount: textNames.length, filledCount, signatureStamped }
+}
+
+/**
+ * Fill via an Anvil PDF Template (flat / print-to-fill packets). The map's
+ * anvilAliasMap ties each Anvil field alias to a passport value-key; we
+ * resolve those against the live passport, ask the cred backend to fill the
+ * template, and store the result exactly like the AcroForm path.
+ */
+async function renderViaAnvil({ packet, map, passport }) {
+  const passportClient = require('./passportClient')
+  const aliasMap = (map.anvilAliasMap && typeof map.anvilAliasMap === 'object') ? map.anvilAliasMap : {}
+
+  const data = {}
+  let filledCount = 0
+  for (const [alias, valueKey] of Object.entries(aliasMap)) {
+    const value = resolveValue(valueKey, passport)
+    if (value) { data[alias] = value; filledCount++ }
+  }
+
+  const filled = await passportClient.fillAnvilPdf(map.anvilCastEid, data, `${packet.providerName || packet.npi} — ${map.name}`)
+
+  const providerSlug = (packet.providerName || packet.npi).replace(/[^A-Za-z0-9]+/g, '_')
+  const generatedDocName = `${providerSlug}_${map.name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 60)}_filled.pdf`
+  const generatedDocPath = `credpackets/${packet.facilityId}/${packet.id}/${Date.now()}_${crypto.randomUUID()}.pdf`
+  await s3PutBuffer(generatedDocPath, filled, 'application/pdf')
+  await prisma.credPacket.update({ where: { id: packet.id }, data: { generatedDocPath, generatedDocName } })
+
+  return { generatedDocPath, generatedDocName, fieldCount: Object.keys(aliasMap).length, filledCount, signatureStamped: false, engine: 'anvil' }
 }
 
 /**
