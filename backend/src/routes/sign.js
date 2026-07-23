@@ -96,9 +96,10 @@ router.get('/:token/document', async (req, res) => {
     const key = packet?.map?.sourceDocPath
     if (!key || !process.env.AWS_S3_BUCKET) return res.status(404).json({ error: 'No document available' })
 
-    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
+    const { GetObjectCommand } = require('@aws-sdk/client-s3')
     const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
-    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
+    const { clientForBucket } = require('../services/s3Buckets')
+    const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
     const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key }), { expiresIn: 900 })
     res.redirect(url)
   } catch (err) {

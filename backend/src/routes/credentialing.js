@@ -1168,9 +1168,13 @@ router.get('/doc/:token', async (req, res) => {
     const filePath = verifyDocToken(req.params.token)
 
     if (process.env.AWS_S3_BUCKET) {
-      const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
+      const { GetObjectCommand } = require('@aws-sdk/client-s3')
       const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
-      const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
+      const { clientForBucket } = require('../services/s3Buckets')
+      // Presign against the bucket's ACTUAL region — a region mismatch makes
+      // S3 answer PermanentRedirect on the browser-opened URL (us-east-2
+      // bucket vs us-east-1 default).
+      const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
       const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: filePath }), { expiresIn: 900 })
       return res.redirect(url)
     }

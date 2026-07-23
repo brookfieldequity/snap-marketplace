@@ -134,14 +134,11 @@ function resolveValue(source, passport) {
   return ''
 }
 
-function s3() {
-  const { S3Client } = require('@aws-sdk/client-s3')
-  return new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
-}
-
 async function s3GetBuffer(key) {
   const { GetObjectCommand } = require('@aws-sdk/client-s3')
-  const resp = await s3().send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key }))
+  const { clientForBucket } = require('./s3Buckets')
+  const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
+  const resp = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key }))
   const chunks = []
   for await (const chunk of resp.Body) chunks.push(chunk)
   return Buffer.concat(chunks)
@@ -149,10 +146,12 @@ async function s3GetBuffer(key) {
 
 async function s3PutBuffer(key, buffer, contentType) {
   const { PutObjectCommand } = require('@aws-sdk/client-s3')
+  const { clientForBucket } = require('./s3Buckets')
+  const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
   const sse = process.env.AWS_KMS_KEY_ID
     ? { ServerSideEncryption: 'aws:kms', SSEKMSKeyId: process.env.AWS_KMS_KEY_ID }
     : { ServerSideEncryption: 'AES256' }
-  await s3().send(new PutObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key, Body: buffer, ContentType: contentType, ...sse }))
+  await s3.send(new PutObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key, Body: buffer, ContentType: contentType, ...sse }))
 }
 
 /**
