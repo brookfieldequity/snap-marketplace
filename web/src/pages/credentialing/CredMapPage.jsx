@@ -90,6 +90,121 @@ function PacketPreview({ packet, passportDetail, onBack }) {
 
   const completeCount = packet.tasks.filter((t) => ['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status)).length
 
+  // Real profile substance for data-plane sections — the coordinator reads
+  // actual entries, not a checkmark. Returns null when we have no renderer
+  // (or no data) for the canonical type, falling back to the generic line.
+  const S = passportDetail?.sections
+  const prov = passportDetail?.provider
+  const rowStyle = { fontSize: 12.5, color: '#0F172A', padding: '2px 0' }
+  const subStyle = { color: '#64748B' }
+  const passportTag = <div style={{ fontSize: 10.5, color: '#16A34A', fontWeight: 700, marginTop: 3 }}>⚡ FILLED FROM SNAP PASSPORT</div>
+  const emptyNote = (what) => (
+    <div style={{ fontSize: 12.5, color: '#92400E' }}>Nothing recorded on the passport for {what} yet — worth a check before sending.</div>
+  )
+
+  function sectionContent(canonicalType) {
+    if (!S) return null
+    switch (canonicalType) {
+      case 'APPLICATION_FORM': {
+        if (!prov) return null
+        return (
+          <div>
+            <div style={rowStyle}><strong>{prov.firstName} {prov.lastName}</strong>{prov.specialty ? <span style={subStyle}> · {prov.specialty}</span> : null}</div>
+            <div style={rowStyle}><span style={subStyle}>NPI</span> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{prov.npi}</span>
+              {prov.dateOfBirth ? <span style={subStyle}> · DOB {prov.dateOfBirth}</span> : null}
+              {prov.licenseState ? <span style={subStyle}> · Licensed in {prov.licenseState}</span> : null}</div>
+            {passportTag}
+          </div>
+        )
+      }
+      case 'WORK_HISTORY_CV': {
+        const rows = S.workHistory || []
+        if (rows.length === 0) return emptyNote('work history')
+        return (
+          <div>
+            {rows.map((w, i) => (
+              <div key={i} style={rowStyle}>
+                <strong>{w.role || 'Position'}</strong> — {w.employer || 'Employer'}
+                <span style={subStyle}> · {w.startDate || '?'} – {w.currentlyEmployed ? 'present' : (w.endDate || '?')}</span>
+              </div>
+            ))}
+            {passportTag}
+          </div>
+        )
+      }
+      case 'EDUCATION_TRAINING': {
+        const rows = S.education || []
+        if (rows.length === 0) return emptyNote('education & training')
+        const levelLabel = { HIGH_SCHOOL: 'High school', COLLEGE: 'College', MED_SCHOOL: 'Medical school', RESIDENCY: 'Residency', FELLOWSHIP: 'Fellowship' }
+        return (
+          <div>
+            {rows.map((e, i) => (
+              <div key={i} style={rowStyle}>
+                <strong>{levelLabel[e.level] || e.level}</strong>{e.institution ? ` — ${e.institution}` : ''}
+                {e.graduationDate ? <span style={subStyle}> · {e.graduationDate}</span> : null}
+              </div>
+            ))}
+            {passportTag}
+          </div>
+        )
+      }
+      case 'HOSPITAL_PRIVILEGES': {
+        const rows = S.hospitalPrivileges || []
+        if (rows.length === 0) return emptyNote('hospital privileges')
+        return (
+          <div>
+            {rows.map((h, i) => {
+              const flags = [h.denied && 'DENIED', h.suspended && 'SUSPENDED', h.revoked && 'REVOKED'].filter(Boolean)
+              return (
+                <div key={i} style={rowStyle}>
+                  <strong>{h.hospitalName || 'Hospital'}</strong>
+                  <span style={subStyle}> · {h.startDate || '?'} – {h.currentlyActive ? 'present' : (h.endDate || '?')}</span>
+                  {flags.length > 0 && <span style={{ color: '#DC2626', fontWeight: 800 }}> · {flags.join(', ')}</span>}
+                </div>
+              )
+            })}
+            {passportTag}
+          </div>
+        )
+      }
+      case 'MALPRACTICE_HISTORY': {
+        const m = S.malpractice || {}
+        if (m.hasHistory === false) {
+          return <div><div style={rowStyle}>No malpractice history reported <span style={subStyle}>· attested by provider</span></div>{passportTag}</div>
+        }
+        const rows = m.incidents || []
+        if (rows.length === 0) return emptyNote('malpractice history')
+        return (
+          <div>
+            {rows.map((inc, i) => (
+              <div key={i} style={rowStyle}>
+                <strong>{inc.type}</strong>{inc.year ? <span style={subStyle}> · {inc.year}</span> : null}
+                {inc.amount ? <span style={subStyle}> · {inc.amount}</span> : null}
+                {inc.resolved ? <span style={{ color: '#16A34A', fontWeight: 700 }}> · resolved</span> : null}
+                {inc.description ? <div style={{ fontSize: 11.5, color: '#64748B' }}>{inc.description}</div> : null}
+              </div>
+            ))}
+            {passportTag}
+          </div>
+        )
+      }
+      case 'NPDB_QUERY': {
+        if (S.npdbAuthorized) {
+          return <div><div style={rowStyle}>NPDB self-query authorization on file ✓</div>{passportTag}</div>
+        }
+        return emptyNote('NPDB authorization')
+      }
+      case 'MALPRACTICE_INSURANCE': {
+        // Credential row renders the cert; add the carrier when we know it.
+        return S.malpractice?.carrier
+          ? <div><div style={rowStyle}><strong>{S.malpractice.carrier}</strong> <span style={subStyle}>· current certificate on passport</span></div>{passportTag}</div>
+          : null
+      }
+      default:
+        return null
+    }
+  }
+
   function valueBlock(t) {
     const cred = t.item.credentialType ? detailByType[PASSPORT_TYPE_UI[t.item.credentialType]] : null
     if (t.status === 'AUTO_FILLED' && cred) {
@@ -111,6 +226,8 @@ function PacketPreview({ packet, passportDetail, onBack }) {
       )
     }
     if (t.status === 'AUTO_FILLED') {
+      const rendered = sectionContent(t.item.canonicalType)
+      if (rendered) return rendered
       return <div style={{ fontSize: 12.5, color: '#166534' }}>Included from the provider's passport profile <span style={{ fontSize: 10.5, fontWeight: 700 }}>⚡</span></div>
     }
     if (t.status === 'DONE') {
