@@ -26,8 +26,9 @@ const Anthropic = require('@anthropic-ai/sdk')
 const { VALUE_KEYS } = require('./passportFields')
 
 const MODEL = process.env.CREDMAP_MODEL || 'claude-opus-4-8'
-const MAX_SECTIONS = 40
-const MAX_FIELDS = 400 // runaway-output cap across all sections
+const MAX_SECTIONS = 60
+const MAX_FIELDS = 500 // runaway-output cap across all sections
+const MAX_OUTPUT_TOKENS = 32000 // big multi-site packets need room; streamed to dodge HTTP timeouts
 
 // Canonical attestation questions. Every medical-staff application asks a
 // recurring set of yes/no legal questions; normalizing them to these keys is
@@ -131,6 +132,7 @@ Rules:
 - Prefer PASSPORT for anything SNAP can fill; only use PROVIDER when it genuinely cannot.
 - Group fields under the section headings the form actually uses.
 - Work-history grids, education grids, and reference blocks: represent them as ONE field each (type longtext, source PASSPORT with the closest valueKey for history/education, or PROVIDER for references) — do not enumerate every row.
+- If the packet repeats a near-identical form for multiple sites/locations (e.g. one privilege or delineation form per facility), capture it ONCE as a single section and note in the section description that it applies per site — do NOT duplicate the whole section for every location. Keep the output focused on distinct fields.
 - Never invent sections or fields not in the application. If a page is unreadable, still record what you can and say so in notes.
 
 Call record_form_structure exactly once.`
@@ -180,17 +182,27 @@ async function analyzeFormStructure(files) {
     ...files.map((f) => bufferContentBlock(f.buffer, f.mimeType)),
     { type: 'text', text: STRUCTURE_PROMPT },
   ]
-  const resp = await withApiRetries(() => client.messages.create({
-    model: MODEL,
-    max_tokens: 12000, // structure can be long; capped by MAX_FIELDS below
-    tools: [STRUCTURE_TOOL],
-    tool_choice: { type: 'tool', name: 'record_form_structure' },
-    messages: [{ role: 'user', content }],
-  }))
+  // Stream: a long/multi-site packet can emit a large structure, and a big
+  // max_tokens on a non-streaming call risks an HTTP timeout. finalMessage()
+  // gives us the completed tool call plus stop_reason.
+  const resp = await withApiRetries(async () => {
+    const stream = client.messages.stream({
+      model: MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      tools: [STRUCTURE_TOOL],
+      tool_choice: { type: 'tool', name: 'record_form_structure' },
+      messages: [{ role: 'user', content }],
+    })
+    return stream.finalMessage()
+  })
   const call = resp.content.find((b) => b.type === 'tool_use')
-  if (!call) throw new Error('no structure returned')
+  if (!call) { const e = new Error('The reader did not return a form structure'); e.code = 'NO_STRUCTURE'; throw e }
 
-  return normalizeStructure(call.input)
+  const structure = normalizeStructure(call.input)
+  // If we hit the token cap the tail of the form was cut off — the caller keeps
+  // what we got but warns, so a partial native form is never mistaken for whole.
+  structure.truncated = resp.stop_reason === 'max_tokens'
+  return structure
 }
 
 // Validate + normalize the AI output into the stored shape (safe against bad

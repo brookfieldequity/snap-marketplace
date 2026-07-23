@@ -929,11 +929,22 @@ router.post('/:id/form-structure/build', async (req, res) => {
     const buffer = await getSourceBuffer(map.sourceDocPath)
     const mime = /\.pdf$/i.test(map.sourceDocName || map.sourceDocPath) ? 'application/pdf' : 'image/png'
     const structure = await credFormStructure.analyzeFormStructure([{ buffer, mimeType: mime }])
-    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formStructure: structure } })
-
     const stats = credFormStructure.structureStats(structure)
-    await logMapAccess(req, map.id, 'CREDMAP_STRUCTURE_BUILD', `${stats.sections} sections · ${stats.total} fields`)
-    res.json({ ok: true, structure, stats })
+
+    // Empty result = the reader couldn't parse the form (scanned images, or so
+    // long the output was exhausted). Don't overwrite a prior good structure
+    // with nothing, and never report an empty form as "ready".
+    if (stats.sections === 0 || stats.total === 0) {
+      await logMapAccess(req, map.id, 'CREDMAP_STRUCTURE_BUILD_EMPTY', '0 sections')
+      return res.status(422).json({
+        error: 'SNAP couldn’t read this form’s fields — it may be scanned images or unusually long. The clean packet and “Fill their PDF” paths still work.',
+        stats,
+      })
+    }
+
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formStructure: structure } })
+    await logMapAccess(req, map.id, 'CREDMAP_STRUCTURE_BUILD', `${stats.sections} sections · ${stats.total} fields${structure.truncated ? ' (truncated)' : ''}`)
+    res.json({ ok: true, structure, stats, truncated: Boolean(structure.truncated) })
   } catch (err) {
     console.error('[credmap/structure-build] error:', err)
     res.status(500).json({ error: 'Failed to build the native form' })
