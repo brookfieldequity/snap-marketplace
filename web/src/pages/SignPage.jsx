@@ -241,6 +241,7 @@ export default function SignPage({ token }) {
               <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
                 <div style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{q.label}</div>
                 {q.explain && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{q.explain}</div>}
+                {q.fromPassport && <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 3 }}>✓ Answered on a previous application — confirm or change</div>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   {['NO', 'YES'].map((opt) => (
                     <button

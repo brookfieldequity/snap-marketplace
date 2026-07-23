@@ -49,11 +49,20 @@ async function loadPacket(packetId) {
   })
 }
 
+// Best-effort passport read (used for both the review panel and prefill). Null
+// when the bridge is down or the facility lacks a grant — the page still works.
+async function loadPassport(packet) {
+  const passportClient = require('../services/passportClient')
+  if (!passportClient.isConfigured()) return null
+  try { return await passportClient.getPassport(packet.npi, packet.facilityId) } catch { return null }
+}
+
 // The provider-answerable questions on this packet's native form (PROVIDER +
 // ATTESTATION fields), pre-filled with any answer the provider already gave —
-// including canonical attestations answered on a DIFFERENT facility's form (the
-// common-app payoff). Returns [] when the map has no native structure yet.
-async function buildQuestions(packet) {
+// including canonical attestations answered on a DIFFERENT facility's form,
+// carried over from the passport (the common-app payoff). Returns [] when the
+// map has no native structure yet.
+async function buildQuestions(packet, passport) {
   const structure = packet.map?.formStructure
   if (!structure || !Array.isArray(structure.sections)) return []
   const { answerableFields } = require('../services/credFormStructure')
@@ -61,24 +70,33 @@ async function buildQuestions(packet) {
   if (fields.length === 0) return []
   const rows = await prisma.credFormAnswer.findMany({ where: { facilityId: packet.facilityId, npi: packet.npi } })
   const saved = Object.fromEntries(rows.map((a) => [a.questionKey, a.value]))
-  return fields.map((f) => ({
-    questionKey: f.questionKey,
-    label: f.label,
-    section: f.section,
-    type: f.type,
-    source: f.source,
-    explain: f.explain || null,
-    value: saved[f.questionKey] || '',
-  }))
+  const passportAtt = passport?.sections?.attestations || {}
+  return fields.map((f) => {
+    // This tenant's saved answer wins; otherwise a canonical attestation the
+    // provider already answered elsewhere (from the passport) pre-fills.
+    let value = saved[f.questionKey] || ''
+    let fromPassport = false
+    if (!value && f.source === 'ATTESTATION' && f.canonicalAttestation && f.canonicalAttestation !== 'OTHER') {
+      value = passportAtt[f.canonicalAttestation]?.value || ''
+      fromPassport = Boolean(value)
+    }
+    return {
+      questionKey: f.questionKey,
+      label: f.label,
+      section: f.section,
+      type: f.type,
+      source: f.source,
+      explain: f.explain || null,
+      value,
+      fromPassport,
+    }
+  })
 }
 
 // A compact, read-only view of the verified facts SNAP already holds — shown
 // first so the provider sees "here's what we have" before answering the gaps.
-async function buildPassportReview(packet) {
-  const passportClient = require('../services/passportClient')
-  if (!passportClient.isConfigured()) return []
-  let passport
-  try { passport = await passportClient.getPassport(packet.npi, packet.facilityId) } catch { return [] }
+function buildPassportReview(passport) {
+  if (!passport) return []
   const { resolveValue } = require('../services/passportFields')
   const rows = [
     ['Name', 'provider.fullName'], ['NPI', 'provider.npi'], ['Specialty', 'provider.specialty'],
@@ -104,7 +122,9 @@ router.get('/:token', async (req, res) => {
     if (!packet) return res.status(404).json({ error: 'This packet no longer exists.' })
 
     const open = signableTasks(packet)
-    const [questions, review] = await Promise.all([buildQuestions(packet), buildPassportReview(packet)])
+    const passport = await loadPassport(packet)
+    const questions = await buildQuestions(packet, passport)
+    const review = buildPassportReview(passport)
     res.json({
       providerName: packet.providerName,
       facilityName: packet.map?.name || 'your facility',
@@ -190,6 +210,7 @@ router.post('/:token/complete', async (req, res) => {
     // for this map are writable. Canonical attestations upsert by their shared
     // key, so the answer pre-fills every future application (the common app).
     let answersSaved = 0
+    const canonicalAttestations = [] // { key, value } to persist onto the passport
     const incoming = Array.isArray(req.body.answers) ? req.body.answers : []
     if (incoming.length > 0 && packet.map?.formStructure?.sections) {
       const { answerableFields } = require('../services/credFormStructure')
@@ -211,8 +232,23 @@ router.post('/:token/complete', async (req, res) => {
           create: { facilityId: packet.facilityId, npi: packet.npi, questionKey: f.questionKey, label: f.label, value, source: f.source, answeredVia: packet.id, signedName: name },
           update: { value, label: f.label, source: f.source, answeredVia: packet.id, signedName: name },
         }))
+        // Canonical attestations also live on the passport (common-app layer).
+        if (f.source === 'ATTESTATION' && f.canonicalAttestation && f.canonicalAttestation !== 'OTHER') {
+          canonicalAttestations.push({ key: f.canonicalAttestation, value })
+        }
       }
       if (ops.length) { await prisma.$transaction(ops); answersSaved = ops.length }
+    }
+
+    // Persist canonical attestations onto the passport so they carry across
+    // every facility / credentialing org. Best-effort: the marketplace answer
+    // is already saved above, so a bridge hiccup never loses the response.
+    if (canonicalAttestations.length > 0) {
+      const passportClient = require('../services/passportClient')
+      if (passportClient.isConfigured()) {
+        passportClient.saveAttestations(packet.npi, packet.facilityId, canonicalAttestations, { signerName: name })
+          .catch((e) => console.error('[sign/complete] passport attestation push failed (non-fatal):', e.message))
+      }
     }
 
     // ── Sign the open documents (subset optional) ────────────────────────────

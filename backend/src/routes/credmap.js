@@ -971,7 +971,14 @@ router.get('/:id/form-structure', async (req, res) => {
         let preview = null
         if (npi) {
           if (f.source === 'PASSPORT') preview = passport ? resolveValue(f.valueKey, passport) : ''
-          else if (f.source === 'PROVIDER' || f.source === 'ATTESTATION') preview = answers[qk] || ''
+          else if (f.source === 'PROVIDER' || f.source === 'ATTESTATION') {
+            preview = answers[qk] || ''
+            // Canonical attestation answered on another facility's form carries
+            // over from the passport.
+            if (!preview && f.source === 'ATTESTATION' && f.canonicalAttestation && f.canonicalAttestation !== 'OTHER') {
+              preview = passport?.sections?.attestations?.[f.canonicalAttestation]?.value || ''
+            }
+          }
         }
         return { ...f, questionKey: qk, preview }
       }),

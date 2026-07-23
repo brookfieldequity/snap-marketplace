@@ -544,7 +544,13 @@ async function renderNativeForm({ packet, map, passport }) {
 
       if (field.source === 'ATTESTATION') {
         ensure(30)
-        const ans = String(answers[qk]?.value || '').toUpperCase()
+        // This tenant's saved answer wins; else a canonical attestation the
+        // provider answered on another facility's form (carried on the passport).
+        let ansVal = answers[qk]?.value
+        if (!ansVal && field.canonicalAttestation && field.canonicalAttestation !== 'OTHER') {
+          ansVal = passport?.sections?.attestations?.[field.canonicalAttestation]?.value
+        }
+        const ans = String(ansVal || '').toUpperCase()
         const yes = ans === 'YES', no = ans === 'NO'
         doc.font('Helvetica').fontSize(9.5).fillColor('#0F172A').text(field.label)
         doc.font(yes || no ? 'Helvetica-Bold' : 'Helvetica').fontSize(9.5).fillColor(yes || no ? '#0F172A' : '#334155')

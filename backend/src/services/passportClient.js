@@ -235,6 +235,26 @@ async function updateCredential(npi, facilityId, type, fields) {
 }
 
 /**
+ * POST /api/service/passport/:npi/attestations
+ *
+ * The common-app answer layer: persist a provider's canonical yes/no
+ * attestation answers onto the passport (by NPI) so they pre-fill every future
+ * facility application. `answers` = [{ key, value: 'YES'|'NO', signerName? }].
+ * Requires an active grant (granteeRef=facilityId). Returns { saved, skipped }.
+ */
+async function saveAttestations(npi, facilityId, answers, { signerName } = {}) {
+  const path = `/api/service/passport/${encodeURIComponent(npi)}/attestations?granteeRef=${encodeURIComponent(facilityId)}`;
+  const { status, body, ok } = await callPassportApi(path, {
+    method: 'POST',
+    body: JSON.stringify({ granteeRef: facilityId, signerName, answers }),
+  });
+  if (ok) return body;
+  const err = new Error(body?.error || `attestation save failed (HTTP ${status})`);
+  err.status = status;
+  throw err;
+}
+
+/**
  * POST /api/service/passport/:npi/documents
  *
  * Coordinator document upload on behalf of a granted provider. `file` is
@@ -430,6 +450,7 @@ module.exports = {
   getProviderCredentialSummary,
   batchSummary,
   updateCredential,
+  saveAttestations,
   uploadDocument,
   createIntakeBatch,
   listIntakeBatches,
