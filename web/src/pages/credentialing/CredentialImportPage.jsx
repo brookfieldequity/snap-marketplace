@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { credentialAPI } from '../../api.js'
+import CvDossierModal from './CvDossierModal.jsx'
 
 // Smart Document Intake — "ease of switch." Drop your existing credentialing
 // files (PDFs, scans, or whole ZIP folders); AI reads each one, suggests what
@@ -20,6 +21,7 @@ export default function CredentialImportPage() {
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState(null)
   const [committing, setCommitting] = useState(false)
+  const [reviewItem, setReviewItem] = useState(null)
   const fileRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -149,15 +151,23 @@ export default function CredentialImportPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {batch.items.map((item) => <IntakeCard key={item.id} item={item} onSave={saveItem} />)}
+            {batch.items.map((item) => <IntakeCard key={item.id} item={item} onSave={saveItem} onReviewProfile={setReviewItem} />)}
           </div>
         </div>
+      )}
+
+      {reviewItem && (
+        <CvDossierModal
+          item={reviewItem}
+          onClose={() => setReviewItem(null)}
+          onSaved={async (item) => { await saveItem(item, { status: 'CONFIRMED' }); setReviewItem(null) }}
+        />
       )}
     </div>
   )
 }
 
-function IntakeCard({ item, onSave }) {
+function IntakeCard({ item, onSave, onReviewProfile }) {
   const [edit, setEdit] = useState(false)
   const [f, setF] = useState({})
   // Filed states are read-only; REJECTED is read-only but restorable (a
@@ -186,7 +196,17 @@ function IntakeCard({ item, onSave }) {
           </a>
           {item.sourcePath && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{item.sourcePath}</div>}
         </div>
-        <span style={{ padding: '3px 10px', borderRadius: 999, background: `${statusChip[0]}18`, color: statusChip[0], fontSize: 12, fontWeight: 700 }}>{statusChip[1]}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {item.cvProfile?.cvDetected && !done && (
+            <button
+              onClick={() => onReviewProfile(item)}
+              style={{ padding: '6px 13px', background: '#EDE9FE', border: 'none', borderRadius: 999, color: '#5B21B6', fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              ✨ Review profile
+            </button>
+          )}
+          <span style={{ padding: '3px 10px', borderRadius: 999, background: `${statusChip[0]}18`, color: statusChip[0], fontSize: 12, fontWeight: 700 }}>{statusChip[1]}</span>
+        </div>
       </div>
 
       {item.status !== 'PENDING' && (
