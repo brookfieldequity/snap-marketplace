@@ -43,7 +43,7 @@ async function loadPacket(packetId) {
   return prisma.credPacket.findUnique({
     where: { id: packetId },
     include: {
-      map: { select: { name: true } },
+      map: { select: { name: true, sourceDocPath: true, sourceDocName: true } },
       tasks: { include: { item: true } },
     },
   })
@@ -67,6 +67,10 @@ router.get('/:token', async (req, res) => {
       facilityName: packet.map?.name || 'your facility',
       cycle: packet.cycle,
       consentText: CONSENT_TEXT,
+      // The facility's actual form, reviewable before signing.
+      sourceDoc: packet.map?.sourceDocPath && process.env.AWS_S3_BUCKET
+        ? { name: packet.map.sourceDocName || 'Facility form' }
+        : null,
       items: open
         .sort((a, b) => (a.item.position ?? 0) - (b.item.position ?? 0))
         .map((t) => ({ taskId: t.id, label: t.item.label, section: t.item.section, notes: t.item.notes })),
@@ -78,8 +82,35 @@ router.get('/:token', async (req, res) => {
   }
 })
 
-// POST /api/sign/:token/complete — apply the drawn signature to every open
-// e-signable signature task, with the audit row per task.
+// GET /api/sign/:token/document — review the facility's form before signing.
+// The sign token is the credential; redirects to a short-lived presigned URL.
+router.get('/:token/document', async (req, res) => {
+  try {
+    let packetId
+    try {
+      packetId = verifyLinkToken(req.params.token)
+    } catch {
+      return res.status(401).json({ error: 'This signing link is invalid or has expired.' })
+    }
+    const packet = await loadPacket(packetId)
+    const key = packet?.map?.sourceDocPath
+    if (!key || !process.env.AWS_S3_BUCKET) return res.status(404).json({ error: 'No document available' })
+
+    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
+    const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
+    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1', followRegionRedirects: true })
+    const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: key }), { expiresIn: 900 })
+    res.redirect(url)
+  } catch (err) {
+    console.error('[sign/document] error:', err)
+    res.status(500).json({ error: 'Failed to open document' })
+  }
+})
+
+// POST /api/sign/:token/complete — apply the drawn signature to the SELECTED
+// open e-signable signature tasks (default: all), with the audit row per
+// task. Unselected items stay pending — the coordinator can resend a fresh
+// link for them any time.
 router.post('/:token/complete', async (req, res) => {
   try {
     let packetId
@@ -102,18 +133,26 @@ router.post('/:token/complete', async (req, res) => {
     if (sig.length > MAX_SIGNATURE_BYTES) return res.status(400).json({ error: 'Signature image is too large — try again.' })
 
     const open = signableTasks(packet)
-    if (open.length === 0) return res.json({ ok: true, signed: 0, alreadyComplete: true })
+    if (open.length === 0) return res.json({ ok: true, signed: 0, remaining: 0, alreadyComplete: true })
+
+    // Optional subset: sign only the checked items; ids must be open tasks.
+    let selected = open
+    if (Array.isArray(req.body.taskIds)) {
+      const wanted = new Set(req.body.taskIds.map(String))
+      selected = open.filter((t) => wanted.has(t.id))
+      if (selected.length === 0) return res.status(400).json({ error: 'Select at least one document to sign.' })
+    }
 
     const now = new Date()
     const dateLabel = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`
     await prisma.$transaction([
-      ...open.map((t) =>
+      ...selected.map((t) =>
         prisma.credPacketTask.update({
           where: { id: t.id },
           data: { status: 'DONE', completedAt: now, note: `Signed electronically by ${name} · ${dateLabel}` },
         })
       ),
-      ...open.map((t) =>
+      ...selected.map((t) =>
         prisma.credSignature.create({
           data: {
             facilityId: packet.facilityId,
@@ -137,7 +176,7 @@ router.post('/:token/complete', async (req, res) => {
     const completeness = tasks.length ? Math.round((done / tasks.length) * 100) : 0
     await prisma.credPacket.update({ where: { id: packet.id }, data: { completeness } })
 
-    res.json({ ok: true, signed: open.length })
+    res.json({ ok: true, signed: selected.length, remaining: open.length - selected.length })
   } catch (err) {
     console.error('[sign/complete] error:', err)
     res.status(500).json({ error: 'Signing failed — please try again' })

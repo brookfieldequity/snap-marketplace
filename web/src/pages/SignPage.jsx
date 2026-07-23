@@ -91,8 +91,9 @@ export default function SignPage({ token }) {
   const [name, setName] = useState('')
   const [consent, setConsent] = useState(false)
   const [inked, setInked] = useState(false)
+  const [checked, setChecked] = useState({}) // taskId -> bool
   const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(null) // { signed }
+  const [done, setDone] = useState(null) // { signed, remaining }
 
   useEffect(() => {
     fetch(`${BASE}/sign/${encodeURIComponent(token)}`)
@@ -101,11 +102,16 @@ export default function SignPage({ token }) {
         if (!r.ok) throw new Error(d.error || 'Failed to load')
         setData(d)
         if (d.providerName) setName(d.providerName)
+        // Everything starts checked — uncheck to hold something back.
+        setChecked(Object.fromEntries((d.items || []).map((it) => [it.taskId, true])))
       })
       .catch((e) => setError(e.message))
   }, [token])
 
+  const selectedIds = Object.entries(checked).filter(([, v]) => v).map(([k]) => k)
+
   async function submit() {
+    if (selectedIds.length === 0) { setError('Check at least one document to sign.'); return }
     if (!inked) { setError('Please draw your signature first.'); return }
     if (!consent) { setError('Please check the agreement box.'); return }
     if (!name.trim()) { setError('Please type your full legal name.'); return }
@@ -115,7 +121,7 @@ export default function SignPage({ token }) {
       const res = await fetch(`${BASE}/sign/${encodeURIComponent(token)}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signerName: name.trim(), signatureDataUrl: canvasDataUrl(), consent: true }),
+        body: JSON.stringify({ signerName: name.trim(), signatureDataUrl: canvasDataUrl(), consent: true, taskIds: selectedIds }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || 'Signing failed')
@@ -159,9 +165,14 @@ export default function SignPage({ token }) {
         <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', marginTop: 14 }}>Complete</div>
         <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 8 }}>
           {done?.signed
-            ? `Your signature was applied to ${done.signed} document${done.signed === 1 ? '' : 's'}. Your credentialing coordinator has been updated — nothing else is needed.`
+            ? `Your signature was applied to ${done.signed} document${done.signed === 1 ? '' : 's'}. Your credentialing coordinator has been updated.`
             : 'Everything here is already signed. Nothing else is needed.'}
         </div>
+        {done?.remaining > 0 && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, fontSize: 12.5, color: '#92400E' }}>
+            {done.remaining} document{done.remaining === 1 ? '' : 's'} left unsigned — no problem. {done.remaining === 1 ? 'It stays' : 'They stay'} pending and your coordinator can send you a fresh link whenever you're ready.
+          </div>
+        )}
       </div>
     )
   }
@@ -172,16 +183,42 @@ export default function SignPage({ token }) {
         {data.facilityName} needs your signature
       </div>
       <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 16 }}>
-        Hi {data.providerName || 'there'} — review the {data.items.length === 1 ? 'document' : `${data.items.length} documents`} below, then sign once at the bottom.
+        Hi {data.providerName || 'there'} — review the {data.items.length === 1 ? 'document' : `${data.items.length} documents`} below. Uncheck anything you'd rather sign later; it stays pending, not lost.
       </div>
 
-      {data.items.map((it, i) => (
-        <div key={it.taskId} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#2563EB' }}>{i + 1}.</span>
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{it.label}</div>
+      {data.items.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            onClick={() => setChecked(Object.fromEntries(data.items.map((it) => [it.taskId, selectedIds.length !== data.items.length])))}
+            style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+          >
+            {selectedIds.length === data.items.length ? 'Uncheck all' : 'Check all'}
+          </button>
+        </div>
+      )}
+
+      {data.items.map((it) => (
+        <div key={it.taskId} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: checked[it.taskId] ? '#F8FAFC' : '#fff', border: `1px solid ${checked[it.taskId] ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, marginBottom: 8, alignItems: 'flex-start' }}>
+          <input
+            type="checkbox"
+            checked={!!checked[it.taskId]}
+            onChange={(e) => setChecked((c) => ({ ...c, [it.taskId]: e.target.checked }))}
+            style={{ marginTop: 3, width: 17, height: 17, accentColor: '#2563EB' }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: checked[it.taskId] ? '#0F172A' : '#94A3B8' }}>{it.label}</div>
             {it.section && <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{it.section}</div>}
             {it.notes && <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>{it.notes}</div>}
+            {data.sourceDoc && (
+              <a
+                href={`${BASE}/sign/${encodeURIComponent(token)}/document`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'inline-block', fontSize: 12, fontWeight: 700, color: '#2563EB', textDecoration: 'none', marginTop: 4 }}
+              >
+                📄 Review the form ↗
+              </a>
+            )}
           </div>
         </div>
       ))}
@@ -210,10 +247,14 @@ export default function SignPage({ token }) {
 
       <button
         onClick={submit}
-        disabled={submitting}
-        style={{ width: '100%', marginTop: 16, padding: '14px 0', background: submitting ? '#93C5FD' : '#2563EB', border: 'none', borderRadius: 12, color: '#fff', fontSize: 15.5, fontWeight: 800, cursor: submitting ? 'wait' : 'pointer' }}
+        disabled={submitting || selectedIds.length === 0}
+        style={{ width: '100%', marginTop: 16, padding: '14px 0', background: submitting ? '#93C5FD' : selectedIds.length === 0 ? '#CBD5E1' : '#2563EB', border: 'none', borderRadius: 12, color: '#fff', fontSize: 15.5, fontWeight: 800, cursor: submitting ? 'wait' : selectedIds.length === 0 ? 'not-allowed' : 'pointer' }}
       >
-        {submitting ? 'Applying signature…' : `Sign ${data.items.length === 1 ? 'document' : `all ${data.items.length} documents`} ✓`}
+        {submitting ? 'Applying signature…'
+          : selectedIds.length === 0 ? 'Check a document to sign'
+          : selectedIds.length === data.items.length
+            ? `Sign ${data.items.length === 1 ? 'document' : `all ${data.items.length} documents`} ✓`
+            : `Sign ${selectedIds.length} of ${data.items.length} documents ✓`}
       </button>
       <div style={{ textAlign: 'center', fontSize: 11, color: '#94A3B8', marginTop: 10 }}>
         Your signature, the date, and this device are recorded for the credentialing audit trail.
