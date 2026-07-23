@@ -58,6 +58,37 @@ function Section({ title, children }) {
   )
 }
 
+// ⚠️ TESTING ONLY — REMOVE BEFORE GENERAL RELEASE (2026-07-23) ⚠️
+// Wipes a provider's CV-populated passport data so the full flow can be re-run.
+function TestingReset({ roster }) {
+  const [npi, setNpi] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  async function reset() {
+    const r = roster.find((x) => x.npi === npi)
+    if (!npi) return
+    if (!window.confirm(`TESTING RESET — wipe ${r?.providerName || npi}'s CV-populated passport data (contact, education, work history, affiliations, CV docs)? Identity is kept. This cannot be undone.`)) return
+    setBusy(true); setMsg('')
+    try {
+      const res = await credentialAPI.resetCvProvider(npi)
+      setMsg(res.reset ? `Reset ✓ — cleared ${res.cleared?.education || 0} edu, ${res.cleared?.workHistory || 0} work, ${res.cleared?.affiliations || 0} affiliations, ${res.cleared?.cvDocuments || 0} CV docs.` : 'No passport found for that NPI.')
+    } catch (e) { setMsg(e.message) }
+    finally { setBusy(false) }
+  }
+  return (
+    <div style={{ border: '1px dashed #FCA5A5', background: '#FEF2F2', borderRadius: 10, padding: '10px 14px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11.5, fontWeight: 800, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🧪 Testing reset</span>
+      <select value={npi} onChange={(e) => setNpi(e.target.value)} style={{ padding: '6px 9px', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12.5, background: '#fff' }}>
+        <option value="">Provider…</option>
+        {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
+      </select>
+      <button onClick={reset} disabled={busy || !npi} style={{ padding: '6px 13px', background: !npi ? '#FCA5A5' : '#DC2626', border: 'none', borderRadius: 7, color: '#fff', fontSize: 12, fontWeight: 800, cursor: !npi ? 'not-allowed' : 'pointer' }}>{busy ? 'Resetting…' : 'Wipe & re-test'}</button>
+      {msg && <span style={{ fontSize: 12, color: '#B91C1C' }}>{msg}</span>}
+      <span style={{ fontSize: 11, color: '#94A3B8' }}>(remove before launch)</span>
+    </div>
+  )
+}
+
 export default function CredCvReader() {
   const [roster, setRoster] = useState([])
   const [npi, setNpi] = useState('')
@@ -121,6 +152,10 @@ export default function CredCvReader() {
       <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4, marginBottom: 20 }}>
         Upload a provider's CV and SNAP fills their whole profile — contact, training, work history, certifications. Glance, then save. No typing.
       </div>
+
+      {/* ⚠️ TESTING ONLY — remove before general release (2026-07-23) */}
+      <TestingReset roster={roster} />
+
 
       {done ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '40px 24px', textAlign: 'center' }}>

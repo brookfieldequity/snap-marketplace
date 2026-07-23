@@ -405,6 +405,17 @@ async function commitCv(profile, npi) {
   throw err
 }
 
+// ⚠️ TESTING ONLY — REMOVE BEFORE GENERAL RELEASE (2026-07-23) ⚠️
+async function resetCvProvider(npi) {
+  const { status, body, ok } = await callPassportApi('/api/service/cv/reset', {
+    method: 'POST', body: JSON.stringify({ npi }),
+  })
+  if (ok) return body
+  const err = new Error(body?.error || `Reset failed (HTTP ${status})`)
+  err.status = status
+  throw err
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
@@ -413,6 +424,7 @@ module.exports = {
   fillAnvilPdf,
   extractCv,
   commitCv,
+  resetCvProvider,
   invite,
   getCmeHistory,
   getProviderCredentialSummary,

@@ -733,6 +733,8 @@ export const credentialAPI = {
     return data.profile
   },
   commitCv: (profile, npi) => apiFetch(`${BASE}/credentialing/portal/cv/commit`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ profile, npi }) }),
+  // ⚠️ TESTING ONLY — remove before general release (2026-07-23)
+  resetCvProvider: (npi) => apiFetch(`${BASE}/credentialing/portal/cv/reset`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ npi }) }),
 
   // Cost-savings widget — time-saved by SNAP automation across this facility.
   // Returns { thisWeek, thisMonth, total } where each is

@@ -1577,6 +1577,22 @@ router.post('/portal/cv/commit', credentialAuth, requireCoordinator, async (req,
   }
 })
 
+// ⚠️ TESTING ONLY — REMOVE BEFORE GENERAL RELEASE (2026-07-23) ⚠️
+// Wipe a provider's CV-populated passport data so the full flow can be re-run.
+router.post('/portal/cv/reset', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    const npi = String(req.body?.npi || '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(npi)) return res.status(400).json({ error: 'A 10-digit NPI is required' })
+    const result = await passportClient.resetCvProvider(npi)
+    await logAccess(req.facilityId, req.credUser.id, npi, 'CV_PROFILE_RESET_TESTING', null, null, req)
+    res.json(result)
+  } catch (err) {
+    console.error('[credentialing/cv-reset] error:', err.message)
+    res.status(500).json({ error: 'Reset failed' })
+  }
+})
+
 // ── Smart Document Intake (ease of switch) ───────────────────────────────────
 // Coordinator uploads their existing credentialing files (PDFs/images/ZIPs);
 // everything streams through to the passport backend's encrypted intake
