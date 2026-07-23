@@ -1653,8 +1653,9 @@ model CredProgramMap {
   sourceDocName     String?
   aiNotes           String? // analyzer's summary for the review pass
   formFieldMap      Json? // AcroForm field name → passport value-key mapping (AI-built once, reused per provider)
-  anvilCastEid      String? // Anvil PDF Template (Cast) eid — set once per facility form for flat/print-to-fill packets
+  anvilCastEid      String? // Anvil PDF Template (Cast) eid — dormant advanced override for flat packets
   anvilAliasMap     Json? // Anvil field alias → passport value-key (reused per provider)
+  flatFillPlan      Json? // AUTO-detected overlay plan for flat/print-to-fill packets: { confidence, fills:[{label,valueKey,page,x,y,placement}] }. AI-built once per form, reused per provider, coordinator-correctable.
   createdById       String
   createdBy         CredentialUser    @relation(fields: [createdById], references: [id])
   createdAt         DateTime          @default(now())

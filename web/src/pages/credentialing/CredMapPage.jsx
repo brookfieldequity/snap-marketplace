@@ -691,13 +691,16 @@ function PacketWorkspace({ packetId, onBack }) {
   const [sendingLink, setSendingLink] = useState(false)
   const [copied, setCopied] = useState(false)
   const [rendering, setRendering] = useState(false)
+  const [renderNote, setRenderNote] = useState('')
 
   async function renderPdf() {
     setRendering(true)
-    setError('')
+    setError(''); setRenderNote('')
     try {
       const result = await credMapAPI.renderPacketPdf(packetId)
       await load()
+      if (result.engine === 'clean-packet') setRenderNote('This form couldn’t be auto-read confidently, so SNAP produced a clean, complete packet instead. Open Field mapping to map it onto their exact form.')
+      else if (result.engine === 'overlay') setRenderNote(`Filled ${result.filledCount} field${result.filledCount === 1 ? '' : 's'} onto the facility’s form. Check it, and fix any placement in Field mapping.`)
       if (result.docToken) window.open(credMapAPI.docUrl(result.docToken), '_blank')
     } catch (e) { setError(e.message) }
     finally { setRendering(false) }
@@ -842,6 +845,7 @@ function PacketWorkspace({ packetId, onBack }) {
       </div>
 
       {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      {renderNote && <div style={{ padding: '9px 13px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#1E40AF', fontSize: 12.5, marginBottom: 12 }}>{renderNote}</div>}
 
       {signLink && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSignLink(null)}>
@@ -1232,7 +1236,12 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
             <div>
               <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>Field mapping — what SNAP types where</div>
               <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>
-                {data && !data.notFillable ? `${data.mappedCount} of ${data.totalCount} fields mapped to passport data. Correct any below — saved for every provider on this form.` : 'Reading the facility form…'}
+                {!data ? 'Reading the facility form…'
+                  : data.cleanPacket ? 'No facility form uploaded — SNAP produces a clean, complete packet instead.'
+                  : `${data.mappedCount} of ${data.totalCount} ${data.engine === 'overlay' ? 'fields auto-detected on the form' : 'fields mapped'}. Correct any below — saved for every provider on this form.`}
+                {data?.engine === 'overlay' && data?.cleanFallback && (
+                  <span style={{ color: '#92400E', fontWeight: 700 }}> · low read confidence — this form will deliver as the clean SNAP packet unless you map fields below.</span>
+                )}
               </div>
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
@@ -1244,8 +1253,8 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
               {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
             </select>
             <div style={{ flex: 1 }} />
-            {data && !data.notFillable && (
-              <button onClick={rebuild} disabled={rebuilding} title="Re-run the AI mapping using the labels printed next to each field" style={{ padding: '6px 12px', background: '#EDE9FE', border: 'none', borderRadius: 8, color: '#5B21B6', fontSize: 12, fontWeight: 800, cursor: rebuilding ? 'wait' : 'pointer' }}>
+            {data && !data.cleanPacket && (
+              <button onClick={rebuild} disabled={rebuilding} title="Re-run the AI detection using the labels printed on the form" style={{ padding: '6px 12px', background: '#EDE9FE', border: 'none', borderRadius: 8, color: '#5B21B6', fontSize: 12, fontWeight: 800, cursor: rebuilding ? 'wait' : 'pointer' }}>
                 {rebuilding ? 'Re-mapping…' : '✨ Re-run AI mapping'}
               </button>
             )}
@@ -1253,9 +1262,9 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
         </div>
 
         <div style={{ overflowY: 'auto', padding: '8px 24px', flex: 1 }}>
-          {data?.notFillable ? (
-            <div style={{ padding: '30px 0', textAlign: 'center', color: '#92400E', fontSize: 13.5 }}>
-              This packet isn't a fillable PDF (no form fields inside it), so there's nothing to auto-type. The packet preview still shows all the data; box-mapped filling for scanned forms is coming.
+          {data?.cleanPacket ? (
+            <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748B', fontSize: 13.5 }}>
+              No facility form is uploaded to this map, so “Fill facility PDF” produces a clean, complete SNAP packet from the passport — nothing to map here.
             </div>
           ) : !data ? (
             <div style={{ padding: '30px 0', textAlign: 'center', color: '#94A3B8', fontSize: 13.5 }}>Loading…</div>
@@ -1295,14 +1304,12 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
           )}
         </div>
 
-        {data?.notFillable && <AnvilSetup mapId={mapId} map={map} />}
-
         <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12 }}>
           {error && <span style={{ color: '#DC2626', fontSize: 12.5 }}>{error}</span>}
           {saved && <span style={{ color: '#16A34A', fontSize: 12.5, fontWeight: 700 }}>Saved ✓</span>}
           <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{ padding: '9px 16px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Close</button>
-          {data && !data.notFillable && (
+          {data && !data.cleanPacket && (
             <button onClick={save} disabled={saving || Object.keys(edits).length === 0} style={{ padding: '9px 18px', background: Object.keys(edits).length === 0 ? '#CBD5E1' : '#2563EB', border: 'none', borderRadius: 9, color: '#fff', fontSize: 13, fontWeight: 800, cursor: Object.keys(edits).length === 0 ? 'not-allowed' : 'pointer' }}>
               {saving ? 'Saving…' : 'Save mapping'}
             </button>

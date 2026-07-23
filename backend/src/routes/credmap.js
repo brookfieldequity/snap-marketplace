@@ -739,31 +739,33 @@ router.get('/packets/one/:packetId', async (req, res) => {
 // field in the facility's PDF, its nearby label, what SNAP mapped it to, and
 // (if npi given) the value that resolves against that provider's passport.
 // Builds the map on first look so the panel shows the AI's proposal.
+async function getSourceBuffer(sourceDocPath) {
+  const { clientForBucket } = require('../services/s3Buckets')
+  const { GetObjectCommand } = require('@aws-sdk/client-s3')
+  const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
+  const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: sourceDocPath }))
+  const chunks = []
+  for await (const c of obj.Body) chunks.push(c)
+  return Buffer.concat(chunks)
+}
+
+// GET /:id/fields?npi= — the "what SNAP types where" panel, for BOTH form
+// kinds. Fillable PDFs: enumerated AcroForm fields. Flat / print-to-fill PDFs
+// (CAPA's case): the AUTO-detected overlay plan (labels the AI found + where
+// each value lands) — no human box-placement, ever. Returns a unified `fields`
+// list the panel renders + corrects.
 router.get('/:id/fields', async (req, res) => {
   try {
     const map = await scopedMap(req, req.params.id)
     if (!map) return res.status(404).json({ error: 'Map not found' })
     if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) {
-      return res.json({ notFillable: true, reason: 'NO_SOURCE_DOC', fields: [] })
+      // No facility form uploaded → the clean SNAP packet is the deliverable.
+      return res.json({ engine: 'clean', cleanPacket: true, fields: [] })
     }
 
-    const { inspectFields, buildFieldMap, resolveValue, VALUE_KEYS } = require('../services/credMapPdf')
-    const { clientForBucket } = require('../services/s3Buckets')
-    const { GetObjectCommand } = require('@aws-sdk/client-s3')
-    const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
-    const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: map.sourceDocPath }))
-    const chunks = []
-    for await (const c of obj.Body) chunks.push(c)
-    const buffer = Buffer.concat(chunks)
-
-    const { fieldNames, labels, notFillable } = await inspectFields(buffer)
-    if (notFillable) return res.json({ notFillable: true, reason: 'NOT_FILLABLE', fields: [] })
-
-    let fieldMap = map.formFieldMap
-    if (!fieldMap || typeof fieldMap !== 'object' || Object.keys(fieldMap).length === 0) {
-      fieldMap = await buildFieldMap(fieldNames, labels)
-      await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
-    }
+    const { inspectFields, buildFieldMap, detectFlatFills, resolveValue, VALUE_KEYS } = require('../services/credMapPdf')
+    const buffer = await getSourceBuffer(map.sourceDocPath)
+    const { fieldNames, labels } = await inspectFields(buffer)
 
     // Optional live value preview against a provider's passport.
     let passport = null
@@ -772,6 +774,29 @@ router.get('/:id/fields', async (req, res) => {
       try { passport = await passportClient.getPassport(npi, req.facilityId) } catch { /* preview only */ }
     }
 
+    // Flat form (no/very few real fields) → automatic overlay plan.
+    if (fieldNames.length < 5) {
+      let plan = map.flatFillPlan
+      if (!plan || !Array.isArray(plan.fills)) {
+        plan = await detectFlatFills(buffer)
+        await prisma.credProgramMap.update({ where: { id: map.id }, data: { flatFillPlan: plan } })
+      }
+      const fields = plan.fills.map((f) => ({
+        name: f.label,
+        label: f.label,
+        source: f.valueKey || 'LEAVE_BLANK',
+        value: passport ? resolveValue(f.valueKey, passport) : null,
+      }))
+      const mapped = fields.filter((f) => f.source && f.source !== 'LEAVE_BLANK').length
+      return res.json({ engine: 'overlay', confidence: plan.confidence, cleanFallback: plan.confidence === 'LOW' || mapped === 0, fields, valueKeys: VALUE_KEYS, mappedCount: mapped, totalCount: fields.length })
+    }
+
+    // Genuine fillable AcroForm.
+    let fieldMap = map.formFieldMap
+    if (!fieldMap || typeof fieldMap !== 'object' || Object.keys(fieldMap).length === 0) {
+      fieldMap = await buildFieldMap(fieldNames, labels)
+      await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
+    }
     const fields = fieldNames.map((name) => ({
       name,
       label: labels[name] || null,
@@ -779,7 +804,7 @@ router.get('/:id/fields', async (req, res) => {
       value: passport ? resolveValue(fieldMap[name], passport) : null,
     }))
     const mapped = fields.filter((f) => f.source && f.source !== 'LEAVE_BLANK').length
-    res.json({ notFillable: false, fields, valueKeys: VALUE_KEYS, mappedCount: mapped, totalCount: fields.length })
+    res.json({ engine: 'acroform', fields, valueKeys: VALUE_KEYS, mappedCount: mapped, totalCount: fields.length })
   } catch (err) {
     console.error('[credmap/fields] error:', err)
     res.status(500).json({ error: 'Failed to inspect form fields' })
@@ -824,31 +849,35 @@ router.post('/:id/fields/rebuild', async (req, res) => {
   try {
     const map = await scopedMap(req, req.params.id)
     if (!map) return res.status(404).json({ error: 'Map not found' })
-    if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) return res.status(400).json({ error: 'This map has no fillable facility PDF' })
+    if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) return res.status(400).json({ error: 'This map has no facility PDF' })
 
-    const { inspectFields, buildFieldMap } = require('../services/credMapPdf')
-    const { clientForBucket } = require('../services/s3Buckets')
-    const { GetObjectCommand } = require('@aws-sdk/client-s3')
-    const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
-    const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: map.sourceDocPath }))
-    const chunks = []
-    for await (const c of obj.Body) chunks.push(c)
-    const buffer = Buffer.concat(chunks)
+    const { inspectFields, buildFieldMap, detectFlatFills } = require('../services/credMapPdf')
+    const buffer = await getSourceBuffer(map.sourceDocPath)
+    const { fieldNames, labels } = await inspectFields(buffer)
 
-    const { fieldNames, labels, notFillable } = await inspectFields(buffer)
-    if (notFillable) return res.status(400).json({ error: 'This packet is not a fillable PDF', notFillable: true })
+    if (fieldNames.length < 5) {
+      // Flat form → re-run the automatic overlay detection.
+      const plan = await detectFlatFills(buffer)
+      await prisma.credProgramMap.update({ where: { id: map.id }, data: { flatFillPlan: plan } })
+      const mapped = plan.fills.filter((f) => f.valueKey && f.valueKey !== 'LEAVE_BLANK').length
+      await logMapAccess(req, map.id, 'CREDMAP_FLATPLAN_REBUILD', `${mapped} fills, ${plan.confidence}`)
+      return res.json({ ok: true, engine: 'overlay', confidence: plan.confidence, mappedCount: mapped, totalCount: plan.fills.length })
+    }
+
     const fieldMap = await buildFieldMap(fieldNames, labels)
     await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
     const mapped = Object.values(fieldMap).filter((v) => v && v !== 'LEAVE_BLANK').length
     await logMapAccess(req, map.id, 'CREDMAP_FIELDMAP_REBUILD', `${mapped}/${fieldNames.length} mapped`)
-    res.json({ ok: true, mappedCount: mapped, totalCount: fieldNames.length, labelsFound: Object.keys(labels).length })
+    res.json({ ok: true, engine: 'acroform', mappedCount: mapped, totalCount: fieldNames.length })
   } catch (err) {
     console.error('[credmap/fields-rebuild] error:', err)
-    res.status(500).json({ error: 'Failed to rebuild field mapping' })
+    res.status(500).json({ error: 'Failed to rebuild mapping' })
   }
 })
 
-// PUT /:id/fields — save coordinator corrections to the field mapping.
+// PUT /:id/fields — save coordinator corrections. Branches on which plan the
+// map holds: flat forms update the overlay plan's fills (keyed by label),
+// fillable forms update the AcroForm field map (keyed by field name).
 router.put('/:id/fields', async (req, res) => {
   try {
     const map = await scopedMap(req, req.params.id)
@@ -856,16 +885,27 @@ router.put('/:id/fields', async (req, res) => {
     const { fieldMap } = req.body || {}
     if (!fieldMap || typeof fieldMap !== 'object') return res.status(400).json({ error: 'fieldMap object required' })
     const { VALUE_KEYS } = require('../services/credMapPdf')
+
+    if (map.flatFillPlan && Array.isArray(map.flatFillPlan.fills)) {
+      // Flat overlay: apply new value-keys by label; drop fills set to blank.
+      const fills = map.flatFillPlan.fills
+        .map((f) => (Object.prototype.hasOwnProperty.call(fieldMap, f.label) ? { ...f, valueKey: fieldMap[f.label] } : f))
+        .filter((f) => VALUE_KEYS.includes(f.valueKey) && f.valueKey !== 'LEAVE_BLANK')
+      await prisma.credProgramMap.update({ where: { id: map.id }, data: { flatFillPlan: { ...map.flatFillPlan, fills } } })
+      await logMapAccess(req, map.id, 'CREDMAP_FLATPLAN_EDIT', `${fills.length} fills`)
+      return res.json({ ok: true, engine: 'overlay' })
+    }
+
     const clean = {}
     for (const [k, v] of Object.entries(fieldMap)) {
       if (typeof k === 'string' && VALUE_KEYS.includes(v)) clean[k] = v
     }
     await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: clean } })
     await logMapAccess(req, map.id, 'CREDMAP_FIELDMAP_EDIT', `${Object.keys(clean).length} fields`)
-    res.json({ ok: true })
+    res.json({ ok: true, engine: 'acroform' })
   } catch (err) {
     console.error('[credmap/fields-save] error:', err)
-    res.status(500).json({ error: 'Failed to save field mapping' })
+    res.status(500).json({ error: 'Failed to save mapping' })
   }
 })
 
