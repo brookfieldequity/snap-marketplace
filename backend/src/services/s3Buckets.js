@@ -15,6 +15,18 @@ const regionCache = new Map()
 
 async function regionForBucket(bucket) {
   if (regionCache.has(bucket)) return regionCache.get(bucket)
+
+  // Explicit override wins — a guaranteed path when the IAM key lacks
+  // s3:GetBucketLocation. Set AWS_S3_BUCKET_REGION (documents bucket) on
+  // Railway to pin it directly.
+  const explicit =
+    (bucket === process.env.AWS_S3_BUCKET && process.env.AWS_S3_BUCKET_REGION) ||
+    (bucket === process.env.AWS_S3_BUCKET_PHOTOS && process.env.AWS_S3_BUCKET_PHOTOS_REGION)
+  if (explicit) {
+    regionCache.set(bucket, explicit)
+    return explicit
+  }
+
   let region = process.env.AWS_REGION || 'us-east-1'
   try {
     const probe = new S3Client({ region: 'us-east-1', followRegionRedirects: true })
