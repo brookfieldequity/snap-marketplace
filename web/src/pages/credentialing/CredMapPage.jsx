@@ -97,7 +97,9 @@ function PacketPreview({ packet, passportDetail, onBack }) {
   const prov = passportDetail?.provider
   const rowStyle = { fontSize: 12.5, color: '#0F172A', padding: '2px 0' }
   const subStyle = { color: '#64748B' }
-  const passportTag = <div style={{ fontSize: 10.5, color: '#16A34A', fontWeight: 700, marginTop: 3 }}>⚡ FILLED FROM SNAP PASSPORT</div>
+  // Provenance is stated ONCE in the footer (blanket "unless otherwise
+  // noted" rule) — per-item stamps read as noise on a real packet.
+  const passportTag = null
   const emptyNote = (what) => (
     <div style={{ fontSize: 12.5, color: '#92400E' }}>Nothing recorded on the passport for {what} yet — worth a check before sending.</div>
   )
@@ -221,7 +223,6 @@ function PacketPreview({ packet, passportDetail, onBack }) {
               📄 {d.filename}
             </a>
           ))}
-          <div style={{ fontSize: 10.5, color: '#16A34A', fontWeight: 700, marginTop: 2 }}>⚡ FILLED FROM SNAP PASSPORT</div>
         </div>
       )
     }
@@ -295,7 +296,7 @@ function PacketPreview({ packet, passportDetail, onBack }) {
         ))}
 
         <div style={{ marginTop: 28, paddingTop: 12, borderTop: '1px solid #E2E8F0', fontSize: 10.5, color: '#94A3B8' }}>
-          Credential facts are read live from the provider's SNAP Passport at the time of preview. Items marked ⚡ were populated automatically; pending items are listed with their current owner.
+          Unless otherwise noted, all information and documents in this packet were populated directly from the provider's verified SNAP Passport, read live at the time of generation. Coordinator-provided, waived, and pending items are noted individually above.
         </div>
       </div>
     </div>
