@@ -373,12 +373,46 @@ async function fillAnvilPdf(castEid, data, title) {
   throw err;
 }
 
+/**
+ * CV Reader bridge — POST a CV buffer, get the extracted full profile back;
+ * then commit the (coordinator-confirmed) profile onto the passport by NPI.
+ * The AI + passport write live on the credentialing backend.
+ */
+async function extractCv(fileBuffer, filename, mimeType) {
+  const key = getServiceKey()
+  if (!key) { const e = new Error('CREDENTIALING_API_KEY not set'); e.code = 'BRIDGE_NOT_CONFIGURED'; throw e }
+  const form = new FormData()
+  form.append('file', new Blob([fileBuffer], { type: mimeType || 'application/pdf' }), filename || 'cv.pdf')
+  const res = await fetch(`${CRED_BACKEND_URL}/api/service/cv/extract`, {
+    method: 'POST',
+    headers: { 'X-Service-Key': key },
+    body: form,
+    signal: AbortSignal.timeout(60_000),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) { const e = new Error(body?.error || `CV extract failed (HTTP ${res.status})`); e.status = res.status; throw e }
+  return body.profile
+}
+
+async function commitCv(profile, npi) {
+  const { status, body, ok } = await callPassportApi('/api/service/cv/commit', {
+    method: 'POST',
+    body: JSON.stringify({ profile, npi }),
+  })
+  if (ok) return body
+  const err = new Error(body?.error || `CV commit failed (HTTP ${status})`)
+  err.status = status
+  throw err
+}
+
 module.exports = {
   isConfigured,
   getGrantStatus,
   getPassport,
   requestGrant,
   fillAnvilPdf,
+  extractCv,
+  commitCv,
   invite,
   getCmeHistory,
   getProviderCredentialSummary,

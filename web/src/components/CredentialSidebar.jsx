@@ -6,6 +6,7 @@ const NAV = {
     { key: 'providers', label: 'Providers', icon: '👥' },
     { key: 'expiring', label: 'Expiring Soon', icon: '⚠️' },
     { key: 'maps', label: 'Cred Maps', icon: '🗺️' },
+    { key: 'cvreader', label: 'Read a CV', icon: '📄' },
     { key: 'import', label: 'Import Documents', icon: '📥' },
     { key: 'roster', label: 'Roster Settings', icon: '📋' },
     { key: 'audit', label: 'Audit Log', icon: '🔍' },

@@ -69,6 +69,7 @@ import CredentialSettings from './CredentialSettings.jsx'
 import CredentialAuditLog from './CredentialAuditLog.jsx'
 import CredentialRosterSettings from './CredentialRosterSettings.jsx'
 import CredMapPage from './CredMapPage.jsx'
+import CredCvReader from './CredCvReader.jsx'
 
 export default function CredentialApp({ onBack }) {
   const [token, setToken] = useState(() => localStorage.getItem('snapCredToken') || null)
@@ -194,6 +195,10 @@ export default function CredentialApp({ onBack }) {
       case 'maps':
         if (permission !== 'COORDINATOR') return null
         return <CredMapPage />
+
+      case 'cvreader':
+        if (permission !== 'COORDINATOR') return null
+        return <CredCvReader />
 
       case 'import':
         if (permission !== 'COORDINATOR') return null

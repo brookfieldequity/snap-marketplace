@@ -718,6 +718,22 @@ export const credentialAPI = {
     return apiFetch(`${BASE}/credentialing/audit${q ? `?${q}` : ''}`, { headers: credHeaders() })
   },
 
+  // CV Reader — upload one CV → full extracted profile; then commit to passport.
+  extractCv: async (file) => {
+    const token = getCredToken()
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${BASE}/credentialing/portal/cv/extract`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    return data.profile
+  },
+  commitCv: (profile, npi) => apiFetch(`${BASE}/credentialing/portal/cv/commit`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ profile, npi }) }),
+
   // Cost-savings widget — time-saved by SNAP automation across this facility.
   // Returns { thisWeek, thisMonth, total } where each is
   // { eventCount, minutesSaved, hoursSaved, dollarsSaved }.

@@ -1540,6 +1540,43 @@ router.post('/passport/:npi/documents', credentialAuth, requireCoordinator, port
   }
 })
 
+// ── CV Reader (2026-07-23) ───────────────────────────────────────────────────
+// Upload one CV → the passport backend reads it into a full provider profile.
+// The coordinator reviews the extracted dossier, then commits it to the
+// provider's passport (by NPI). The passport-population engine behind Cred Map
+// auto-fill; also auto-fires when the file-cabinet intake spots a CV.
+
+const cvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
+
+router.post('/portal/cv/extract', credentialAuth, requireCoordinator, cvUpload.single('file'), async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    if (!req.file) return res.status(400).json({ error: 'No CV uploaded' })
+    const profile = await passportClient.extractCv(req.file.buffer, req.file.originalname, req.file.mimetype)
+    res.json({ profile })
+  } catch (err) {
+    if (err.status && err.status < 500) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/cv-extract] error:', err.message)
+    res.status(500).json({ error: 'Failed to read CV' })
+  }
+})
+
+router.post('/portal/cv/commit', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
+    const { profile, npi } = req.body || {}
+    if (!profile) return res.status(400).json({ error: 'profile required' })
+    const result = await passportClient.commitCv(profile, String(npi || '').replace(/\D/g, '') || undefined)
+    if (result.committed) {
+      await logAccess(req.facilityId, req.credUser.id, npi || 'cv', 'CV_PROFILE_COMMIT', null, null, req)
+    }
+    res.json(result)
+  } catch (err) {
+    console.error('[credentialing/cv-commit] error:', err.message)
+    res.status(500).json({ error: 'Failed to save CV profile' })
+  }
+})
+
 // ── Smart Document Intake (ease of switch) ───────────────────────────────────
 // Coordinator uploads their existing credentialing files (PDFs/images/ZIPs);
 // everything streams through to the passport backend's encrypted intake
