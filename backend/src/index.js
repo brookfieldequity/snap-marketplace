@@ -184,6 +184,9 @@ scheduleSafe('0 */6 * * *', 'expired incentive shifts', checkExpiredIncentiveShi
 // Daily at 6 AM — credential expiration alerts
 scheduleSafe('0 6 * * *', 'credential alerts', runCredentialAlerts);
 
+// Daily at 6 AM — recredentialing appointment-clock alerts (Cred Maps plane)
+scheduleSafe('0 6 * * *', 'renewal alerts', require('./jobs/renewalAlerts').runRenewalAlerts);
+
 // Daily at 8 AM — auto-send monthly recurring invoices
 scheduleSafe('0 8 * * *', 'monthly invoices', processMonthlyInvoices);
 

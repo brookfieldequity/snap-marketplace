@@ -782,6 +782,177 @@ function PacketWorkspace({ packetId, onBack }) {
   )
 }
 
+// ── Renewals board — the recredentialing control tower ───────────────────────
+// Every tracked provider × facility with their appointment clock. Dates are
+// coordinator-recorded (the facility board's date — never the packet-sent
+// date); nextDue defaults to appointed + the map's cycle but is editable
+// because facilities override cycles all the time. Supports backfill so
+// pre-SNAP credentialing history is trackable day one.
+
+function isoDay(d) {
+  if (!d) return ''
+  return new Date(d).toISOString().slice(0, 10)
+}
+
+function daysLeft(d) {
+  if (!d) return null
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const t = new Date(d)
+  const end = new Date(t.getFullYear(), t.getMonth(), t.getDate())
+  return Math.round((end - start) / 86400000)
+}
+
+function RenewalsView({ maps, onOpenPacket }) {
+  const [appointments, setAppointments] = useState(null)
+  const [roster, setRoster] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [addMapId, setAddMapId] = useState('')
+  const [addNpi, setAddNpi] = useState('')
+  const [addDate, setAddDate] = useState('')
+  const [busyId, setBusyId] = useState(null)
+  const [error, setError] = useState('')
+
+  const load = () => credMapAPI.getRenewals().then((d) => setAppointments(d.appointments)).catch((e) => setError(e.message))
+  useEffect(() => {
+    load()
+    credentialAPI.getPortalRoster().then((d) => setRoster((d.roster || []).filter((r) => r.npi))).catch(() => {})
+  }, [])
+
+  const confirmedMaps = maps.filter((m) => m.status !== 'ARCHIVED')
+
+  async function patch(a, data) {
+    setBusyId(a.id)
+    try { await credMapAPI.updateRenewal(a.id, data); await load() }
+    catch (e) { setError(e.message) }
+    finally { setBusyId(null) }
+  }
+
+  async function add() {
+    if (!addMapId || !addNpi) { setError('Pick a facility map and a provider.'); return }
+    setError('')
+    const r = roster.find((x) => x.npi === addNpi)
+    try {
+      await credMapAPI.addRenewal({ mapId: addMapId, npi: addNpi, providerName: r?.providerName, appointedAt: addDate || null })
+      setAdding(false); setAddNpi(''); setAddDate('')
+      await load()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function renew(a) {
+    setBusyId(a.id)
+    try {
+      const { packet } = await credMapAPI.generatePacket(a.mapId, a.npi, 'RENEWAL')
+      onOpenPacket(packet.id)
+    } catch (e) { setError(e.message); setBusyId(null) }
+  }
+
+  if (appointments === null) {
+    return <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0', textAlign: 'center' }}>{error || 'Loading…'}</div>
+  }
+
+  const buckets = { OVERDUE: [], SOON: [], UPCOMING: [], NO_DATE: [] }
+  for (const a of appointments) {
+    const d = daysLeft(a.nextDueAt)
+    if (d === null) buckets.NO_DATE.push({ ...a, _days: null })
+    else if (d < 0) buckets.OVERDUE.push({ ...a, _days: d })
+    else if (d <= 90) buckets.SOON.push({ ...a, _days: d })
+    else buckets.UPCOMING.push({ ...a, _days: d })
+  }
+
+  const stat = (label, count, color) => (
+    <div style={{ flex: 1, minWidth: 120, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px' }}>
+      <div style={{ fontSize: 26, fontWeight: 900, color }}>{count}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+    </div>
+  )
+
+  const BUCKET_META = [
+    ['OVERDUE', '🔴 Overdue', '#DC2626'],
+    ['SOON', '🟠 Due within 90 days', '#D97706'],
+    ['UPCOMING', '🟢 Up to date', '#16A34A'],
+    ['NO_DATE', '⚪ Awaiting appointment date', '#94A3B8'],
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        {stat('Overdue', buckets.OVERDUE.length, buckets.OVERDUE.length ? '#DC2626' : '#CBD5E1')}
+        {stat('Due ≤ 90 days', buckets.SOON.length, buckets.SOON.length ? '#D97706' : '#CBD5E1')}
+        {stat('Up to date', buckets.UPCOMING.length, '#16A34A')}
+        {stat('Tracked', appointments.length, '#0F172A')}
+      </div>
+
+      {/* Track a provider (backfill) */}
+      {adding ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
+          <select value={addMapId} onChange={(e) => setAddMapId(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
+            <option value="">Facility map…</option>
+            {confirmedMaps.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <select value={addNpi} onChange={(e) => setAddNpi(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
+            <option value="">Provider…</option>
+            {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
+          </select>
+          <label style={{ fontSize: 12, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Appointed
+            <input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} style={{ padding: '7px 9px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5 }} />
+          </label>
+          <button onClick={add} style={{ padding: '8px 16px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}>Track</button>
+          <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} style={{ marginBottom: 18, padding: '10px 18px', background: 'none', border: '1px dashed #CBD5E1', borderRadius: 10, color: '#64748B', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          + Track a provider (backfill existing credentialing)
+        </button>
+      )}
+
+      {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+      {appointments.length === 0 && (
+        <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 32 }}>🕰️</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginTop: 8 }}>No renewal clocks yet</div>
+          <div style={{ fontSize: 13, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
+            Providers land here when a packet is marked Sent, or track one manually above — record their appointment date once and SNAP watches the clock forever.
+          </div>
+        </div>
+      )}
+
+      {BUCKET_META.map(([key, title, color]) => buckets[key].length > 0 && (
+        <div key={key} style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color, marginBottom: 8 }}>{title} ({buckets[key].length})</div>
+          {buckets[key].map((a) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: '#fff', border: '1px solid #E2E8F0', borderLeft: `4px solid ${color}`, borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyId === a.id ? 0.5 : 1 }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{a.providerName || `NPI ${a.npi}`}</div>
+                <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{a.map?.name}{a.map?.recredCycleMonths ? ` · ${a.map.recredCycleMonths}-month cycle` : ''}</div>
+              </div>
+              <label style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Appointed
+                <input type="date" defaultValue={isoDay(a.appointedAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.appointedAt)) patch(a, { appointedAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12 }} />
+              </label>
+              <label style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Next due
+                <input type="date" defaultValue={isoDay(a.nextDueAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.nextDueAt)) patch(a, { nextDueAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12 }} />
+              </label>
+              {a._days !== null && (
+                <span style={{ fontSize: 11.5, fontWeight: 800, color, whiteSpace: 'nowrap', width: 76, textAlign: 'center' }}>
+                  {a._days < 0 ? `${-a._days}d over` : `${a._days}d left`}
+                </span>
+              )}
+              <button onClick={() => renew(a)} title="Generate a renewal packet — the map fills it from the passport" style={{ padding: '7px 13px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                ⚡ Renew
+              </button>
+              <button onClick={() => credMapAPI.deleteRenewal(a.id).then(load).catch((e) => setError(e.message))} title="Stop tracking" style={{ background: 'none', border: 'none', color: '#CBD5E1', fontSize: 15, cursor: 'pointer', padding: '0 2px', fontWeight: 700 }}>×</button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Map builder ──────────────────────────────────────────────────────────────
 
 function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, dragTarget }) {
@@ -1132,6 +1303,7 @@ export default function CredMapPage() {
   const [openMapId, setOpenMapId] = useState(null)
   const [openPacketId, setOpenPacketId] = useState(null)
   const [showNew, setShowNew] = useState(false)
+  const [tab, setTab] = useState('maps') // 'maps' | 'renewals'
   const [error, setError] = useState('')
 
   const loadMaps = () => credMapAPI.getMaps().then((d) => { setMaps(d.maps); setAiAvailable(d.aiAvailable) }).catch((e) => setError(e.message))
@@ -1181,23 +1353,48 @@ export default function CredMapPage() {
             Map a facility's credentialing program once — every provider's packet populates from the passport, renewals included.
           </div>
         </div>
-        <button onClick={() => setShowNew(true)} style={{ padding: '11px 20px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
-          + New Cred Map
-        </button>
+        {tab === 'maps' && (
+          <button onClick={() => setShowNew(true)} style={{ padding: '11px 20px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
+            + New Cred Map
+          </button>
+        )}
       </div>
 
-      <div style={{ margin: '20px 0 0' }}>
-        <StickyNotesStrip
-          notes={notes}
-          onAdd={async (text, color) => { await credMapAPI.addNote({ text, color }); loadNotes() }}
-          onDone={async (n) => { await credMapAPI.updateNote(n.id, { done: true }); loadNotes() }}
-          onDelete={async (n) => { await credMapAPI.deleteNote(n.id); loadNotes() }}
-        />
+      {/* Maps / Renewals tabs */}
+      <div style={{ display: 'flex', gap: 4, margin: '16px 0 0', borderBottom: '1px solid #E2E8F0' }}>
+        {[['maps', '🗺️ Maps'], ['renewals', '🔄 Renewals']].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            style={{
+              padding: '9px 18px', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', background: 'none',
+              border: 'none', borderBottom: `2.5px solid ${tab === key ? '#2563EB' : 'transparent'}`,
+              color: tab === key ? '#2563EB' : '#64748B', marginBottom: -1,
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      {tab === 'maps' && (
+        <div style={{ margin: '20px 0 0' }}>
+          <StickyNotesStrip
+            notes={notes}
+            onAdd={async (text, color) => { await credMapAPI.addNote({ text, color }); loadNotes() }}
+            onDone={async (n) => { await credMapAPI.updateNote(n.id, { done: true }); loadNotes() }}
+            onDelete={async (n) => { await credMapAPI.deleteNote(n.id); loadNotes() }}
+          />
+        </div>
+      )}
 
-      {maps === null ? (
+      {error && <div style={{ padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13, marginBottom: 12, marginTop: tab === 'renewals' ? 20 : 0 }}>{error}</div>}
+
+      {tab === 'renewals' ? (
+        <div style={{ marginTop: 20 }}>
+          <RenewalsView maps={maps || []} onOpenPacket={(id) => setOpenPacketId(id)} />
+        </div>
+      ) : maps === null ? (
         <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0', textAlign: 'center' }}>Loading…</div>
       ) : maps.length === 0 ? (
         <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>

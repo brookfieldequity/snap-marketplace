@@ -398,6 +398,111 @@ router.put('/:id/items/order', async (req, res) => {
   }
 })
 
+// ── Renewal tracking (appointment clocks) ────────────────────────────────────
+// One CredAppointment per provider × map: when the facility actually
+// appointed them (their board's date, recorded by the coordinator — NOT the
+// packet-sent date) and when recredentialing is next due. nextDueAt defaults
+// to appointedAt + the map's cycle but is directly editable — facilities
+// override cycles all the time. Rows also support backfill: providers
+// credentialed long before SNAP get tracked the moment Diana types a date.
+
+function addMonths(date, months) {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + months)
+  return d
+}
+
+function parseDay(v) {
+  if (!v) return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+// GET /renewals/list — every tracked appointment for this facility.
+router.get('/renewals/list', async (req, res) => {
+  try {
+    const appointments = await prisma.credAppointment.findMany({
+      where: { facilityId: req.facilityId },
+      include: { map: { select: { id: true, name: true, recredCycleMonths: true, status: true } } },
+      orderBy: [{ nextDueAt: { sort: 'asc', nulls: 'last' } }, { providerName: 'asc' }],
+    })
+    res.json({ appointments })
+  } catch (err) {
+    console.error('[credmap/renewals-list] error:', err)
+    res.status(500).json({ error: 'Failed to load renewals' })
+  }
+})
+
+// POST /renewals — track a provider (backfill or manual add). Upserts on
+// map × NPI so re-adding just updates the dates.
+router.post('/renewals', async (req, res) => {
+  try {
+    const { mapId, npi: rawNpi, providerName, appointedAt, nextDueAt } = req.body || {}
+    const map = await scopedMap(req, mapId)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const npi = String(rawNpi || '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(npi)) return res.status(400).json({ error: 'A 10-digit NPI is required' })
+
+    const appointed = parseDay(appointedAt)
+    const due = parseDay(nextDueAt) || (appointed && map.recredCycleMonths ? addMonths(appointed, map.recredCycleMonths) : null)
+    const name = providerName ? String(providerName).trim().slice(0, 140) : null
+
+    const appointment = await prisma.credAppointment.upsert({
+      where: { mapId_npi: { mapId: map.id, npi } },
+      create: { facilityId: req.facilityId, mapId: map.id, npi, providerName: name, appointedAt: appointed, nextDueAt: due },
+      update: { providerName: name || undefined, appointedAt: appointed, nextDueAt: due },
+    })
+    res.status(201).json({ appointment })
+  } catch (err) {
+    console.error('[credmap/renewals-add] error:', err)
+    res.status(500).json({ error: 'Failed to track provider' })
+  }
+})
+
+// PATCH /renewals/:appointmentId — edit dates. Setting appointedAt without an
+// explicit nextDueAt recomputes the due date from the map's cycle.
+router.patch('/renewals/:appointmentId', async (req, res) => {
+  try {
+    const existing = await prisma.credAppointment.findFirst({
+      where: { id: req.params.appointmentId, facilityId: req.facilityId },
+      include: { map: { select: { recredCycleMonths: true } } },
+    })
+    if (!existing) return res.status(404).json({ error: 'Not found' })
+
+    const { appointedAt, nextDueAt, providerName } = req.body || {}
+    const data = {}
+    if (providerName !== undefined) data.providerName = providerName ? String(providerName).trim().slice(0, 140) : null
+    if (appointedAt !== undefined) {
+      data.appointedAt = parseDay(appointedAt)
+      if (nextDueAt === undefined && data.appointedAt && existing.map.recredCycleMonths) {
+        data.nextDueAt = addMonths(data.appointedAt, existing.map.recredCycleMonths)
+      }
+    }
+    if (nextDueAt !== undefined) data.nextDueAt = parseDay(nextDueAt)
+
+    const appointment = await prisma.credAppointment.update({ where: { id: existing.id }, data })
+    res.json({ appointment })
+  } catch (err) {
+    console.error('[credmap/renewals-update] error:', err)
+    res.status(500).json({ error: 'Failed to update' })
+  }
+})
+
+// DELETE /renewals/:appointmentId — stop tracking.
+router.delete('/renewals/:appointmentId', async (req, res) => {
+  try {
+    const existing = await prisma.credAppointment.findFirst({
+      where: { id: req.params.appointmentId, facilityId: req.facilityId },
+    })
+    if (!existing) return res.status(404).json({ error: 'Not found' })
+    await prisma.credAppointment.delete({ where: { id: existing.id } })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[credmap/renewals-delete] error:', err)
+    res.status(500).json({ error: 'Failed to remove' })
+  }
+})
+
 // ── Sticky notes (coordinator reminders) ─────────────────────────────────────
 
 router.get('/notes/all', async (req, res) => {
@@ -636,13 +741,13 @@ router.patch('/packets/one/:packetId', async (req, res) => {
 
     const updated = await prisma.credPacket.update({ where: { id: packet.id }, data: { status } })
     if (status === 'SENT') {
-      const appointedAt = new Date()
-      const months = packet.map.recredCycleMonths
-      const nextDueAt = months ? new Date(new Date(appointedAt).setMonth(appointedAt.getMonth() + months)) : null
+      // Sent ≠ appointed: the facility's board sets the real appointment date.
+      // Ensure the provider is on the renewal dashboard as "awaiting date" —
+      // never overwrite dates a coordinator has recorded.
       await prisma.credAppointment.upsert({
         where: { mapId_npi: { mapId: packet.mapId, npi: packet.npi } },
-        create: { facilityId: packet.facilityId, mapId: packet.mapId, npi: packet.npi, providerName: packet.providerName, appointedAt, nextDueAt },
-        update: { appointedAt, nextDueAt, providerName: packet.providerName },
+        create: { facilityId: packet.facilityId, mapId: packet.mapId, npi: packet.npi, providerName: packet.providerName },
+        update: { providerName: packet.providerName || undefined },
       })
       await logMapAccess(req, packet.mapId, 'CREDMAP_PACKET_SENT', `${packet.providerName || packet.npi}`)
     }

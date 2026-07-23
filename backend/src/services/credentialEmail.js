@@ -252,11 +252,48 @@ async function sendSignatureRequest(toEmail, providerName, facilityName, itemCou
   })
 }
 
+// Recredentialing coming due — grouped per coordinator, fired only on
+// threshold days (90/60/30/7/0) by jobs/renewalAlerts.js.
+async function sendRenewalAlertToFacility(toEmail, items) {
+  const overdue = items.filter((i) => i.daysLeft <= 0).length
+  const rows = items.map((i) => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0"><strong>${i.providerName}</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0">${i.facilityLabel}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0">${i.dueDate}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;color:${i.daysLeft <= 0 ? '#DC2626' : i.daysLeft <= 30 ? '#D97706' : '#475569'};font-weight:700">
+        ${i.daysLeft <= 0 ? 'DUE NOW' : `${i.daysLeft} days`}
+      </td>
+    </tr>`).join('')
+  await send({
+    to: toEmail,
+    from: FROM,
+    subject: overdue
+      ? `Recredentialing due now: ${overdue} provider${overdue === 1 ? '' : 's'}`
+      : `Recredentialing coming due: ${items.length} provider${items.length === 1 ? '' : 's'}`,
+    html: `
+      <h2>Recredentialing clock check</h2>
+      <p>The following providers are coming due for reappointment:</p>
+      <table style="border-collapse:collapse;font-size:14px">
+        <tr>
+          <th style="padding:8px 12px;text-align:left;color:#64748B;font-size:12px">PROVIDER</th>
+          <th style="padding:8px 12px;text-align:left;color:#64748B;font-size:12px">FACILITY</th>
+          <th style="padding:8px 12px;text-align:left;color:#64748B;font-size:12px">DUE</th>
+          <th style="padding:8px 12px;text-align:left;color:#64748B;font-size:12px">TIME LEFT</th>
+        </tr>
+        ${rows}
+      </table>
+      <p style="margin-top:16px">Open the Renewals board in your SNAP Credentialing portal to generate renewal packets — the facility's map is already in place, so most items fill themselves.</p>
+    `,
+  })
+}
+
 module.exports = {
   sendExpirationAlertToFacility,
   sendExpirationReminderToProvider,
   sendProviderInvitation,
   sendSignatureRequest,
+  sendRenewalAlertToFacility,
   sendFacilityInvite,
   sendDocumentRequest,
   sendCredentialReminder,

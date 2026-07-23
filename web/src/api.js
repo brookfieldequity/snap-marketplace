@@ -1029,6 +1029,12 @@ export const credMapAPI = {
   refreshPacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/refresh`, { method: 'POST', headers: credHeaders() }),
   sendSignLink: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/sign-link`, { method: 'POST', headers: credHeaders() }),
 
+  // Renewal tracking (appointment clocks)
+  getRenewals: () => apiFetch(`${BASE}/credmap/renewals/list`, { headers: credHeaders() }),
+  addRenewal: (data) => apiFetch(`${BASE}/credmap/renewals`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
+  updateRenewal: (id, data) => apiFetch(`${BASE}/credmap/renewals/${id}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
+  deleteRenewal: (id) => apiFetch(`${BASE}/credmap/renewals/${id}`, { method: 'DELETE', headers: credHeaders() }),
+
   // Sticky notes
   getNotes: (includeDone = false) => apiFetch(`${BASE}/credmap/notes/all${includeDone ? '?includeDone=true' : ''}`, { headers: credHeaders() }),
   addNote: (data) => apiFetch(`${BASE}/credmap/notes`, { method: 'POST', headers: credHeaders(), body: JSON.stringify(data) }),
