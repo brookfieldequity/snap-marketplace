@@ -42,6 +42,149 @@ function fmtShortDate(d) {
   return `${dt.getMonth() + 1}/${dt.getDate()}/${dt.getFullYear()}`
 }
 
+// Marketplace CredentialType (on map items) → passport-plane credential type.
+// Mirror of the backend PASSPORT_TYPE map in routes/credmap.js.
+const PASSPORT_TYPE_UI = {
+  STATE_LICENSE: 'STATE_LICENSE',
+  MA_CS_LICENSE: 'STATE_CS_LICENSE',
+  DEA_CERTIFICATE: 'DEA',
+  BOARD_CERTIFICATION: 'BOARD_CERTIFICATION',
+  MALPRACTICE_INSURANCE: 'MALPRACTICE_INSURANCE',
+  ACLS_CERTIFICATION: 'ACLS',
+  BLS_CERTIFICATION: 'BLS',
+}
+
+// ── Packet preview — the rendered document the coordinator can trust ─────────
+// A paper-style view of the packet AS IT STANDS: every requirement with the
+// actual passport values (identifier, expiry, documents) or a clearly-marked
+// pending slot. Printable (interim export until the Anvil-filled PDF lands).
+
+function PacketPreview({ packet, passportDetail, onBack }) {
+  useEffect(() => {
+    if (!document.getElementById('snap-packet-print')) {
+      const style = document.createElement('style')
+      style.id = 'snap-packet-print'
+      style.textContent = `@media print {
+        body * { visibility: hidden !important; }
+        #packet-preview, #packet-preview * { visibility: visible !important; }
+        #packet-preview { position: absolute !important; top: 0; left: 0; width: 100%; box-shadow: none !important; margin: 0 !important; }
+        .no-print { display: none !important; }
+      }`
+      document.head.appendChild(style)
+    }
+  }, [])
+
+  const detailByType = useMemo(() => {
+    const m = {}
+    for (const c of passportDetail?.credentials || []) m[c.type] = c
+    return m
+  }, [passportDetail])
+
+  const groups = []
+  for (const t of packet.tasks) {
+    const section = t.item.section || 'General'
+    const last = groups[groups.length - 1]
+    if (last && last.section === section) last.tasks.push(t)
+    else groups.push({ section, tasks: [t] })
+  }
+
+  const completeCount = packet.tasks.filter((t) => ['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status)).length
+
+  function valueBlock(t) {
+    const cred = t.item.credentialType ? detailByType[PASSPORT_TYPE_UI[t.item.credentialType]] : null
+    if (t.status === 'AUTO_FILLED' && cred) {
+      return (
+        <div>
+          <div style={{ fontSize: 13.5, color: '#0F172A' }}>
+            {cred.identifier && <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{cred.identifier}</span>}
+            {cred.identifier && (cred.expirationDate || cred.status) && <span style={{ color: '#94A3B8' }}> · </span>}
+            {cred.expirationDate && <span>expires {fmtShortDate(cred.expirationDate)}</span>}
+            {cred.status && <span style={{ color: '#94A3B8' }}> · {cred.status}</span>}
+          </div>
+          {(cred.documents || []).map((d) => (
+            <a key={d.id} className="no-print" href={d.downloadUrl || '#'} target="_blank" rel="noreferrer" style={{ display: 'inline-block', color: '#2563EB', fontSize: 12, textDecoration: 'none', marginRight: 12, marginTop: 2 }}>
+              📄 {d.filename}
+            </a>
+          ))}
+          <div style={{ fontSize: 10.5, color: '#16A34A', fontWeight: 700, marginTop: 2 }}>⚡ FILLED FROM SNAP PASSPORT</div>
+        </div>
+      )
+    }
+    if (t.status === 'AUTO_FILLED') {
+      return <div style={{ fontSize: 12.5, color: '#166534' }}>Included from the provider's passport profile <span style={{ fontSize: 10.5, fontWeight: 700 }}>⚡</span></div>
+    }
+    if (t.status === 'DONE') {
+      return <div style={{ fontSize: 12.5, color: '#166534' }}>✓ Provided by coordinator{t.note ? ` — ${t.note}` : ''}</div>
+    }
+    if (t.status === 'WAIVED') {
+      return <div style={{ fontSize: 12.5, color: '#94A3B8', textDecoration: 'line-through' }}>Waived{t.note ? ` — ${t.note}` : ''}</div>
+    }
+    const st = TASK_STATUS[t.status] || TASK_STATUS.NEEDS_ACTION
+    return (
+      <div style={{ border: '1.5px dashed #FCD34D', background: '#FFFBEB', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, color: '#92400E' }}>
+        {st.icon} Awaiting — {st.label.toLowerCase()} · {t.assignee === 'PROVIDER' ? 'with the provider' : 'with the coordinator'}
+        {t.item.fulfillment === 'SIGNATURE' && !t.item.esignOk ? ' · wet ink required' : ''}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '28px 32px', maxWidth: 900 }}>
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>← Back to workspace</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => window.print()} style={{ padding: '9px 16px', background: '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+          🖨 Print / Save PDF
+        </button>
+      </div>
+
+      {/* The paper */}
+      <div id="packet-preview" style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 4, boxShadow: '0 10px 40px rgba(15,23,42,0.08)', padding: '44px 52px' }}>
+        {/* Letterhead */}
+        <div style={{ borderBottom: '3px solid #0F172A', paddingBottom: 16, marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>{packet.map?.name}</div>
+              <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+                Credentialing {packet.cycle === 'RENEWAL' ? 'Reappointment' : 'Initial Appointment'} Packet
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
+              <div style={{ fontSize: 12, color: '#64748B', fontFamily: 'monospace' }}>NPI {packet.npi}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#94A3B8', marginBottom: 24 }}>
+          <span>Prepared with SNAP Credentialing · {fmtShortDate(new Date())}</span>
+          <span>{completeCount} of {packet.tasks.length} items complete</span>
+        </div>
+
+        {groups.map((g) => (
+          <div key={g.section + g.tasks[0].id} style={{ marginBottom: 22, breakInside: 'avoid' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '1px solid #E2E8F0', paddingBottom: 5, marginBottom: 10 }}>
+              {g.section}
+            </div>
+            {g.tasks.map((t) => (
+              <div key={t.id} style={{ display: 'flex', gap: 18, padding: '7px 0', alignItems: 'flex-start' }}>
+                <div style={{ width: 250, flexShrink: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                  {t.item.label}
+                  {!t.item.required && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>OPTIONAL</span>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>{valueBlock(t)}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div style={{ marginTop: 28, paddingTop: 12, borderTop: '1px solid #E2E8F0', fontSize: 10.5, color: '#94A3B8' }}>
+          Credential facts are read live from the provider's SNAP Passport at the time of preview. Items marked ⚡ were populated automatically; pending items are listed with their current owner.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const NOTE_COLORS = ['#FEF08A', '#FBCFE8', '#BAE6FD', '#BBF7D0', '#FED7AA']
 
 function useKalamFont() {
@@ -422,11 +565,27 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
 
 function PacketWorkspace({ packetId, onBack }) {
   const [data, setData] = useState(null)
+  const [fullPassport, setFullPassport] = useState(null)
+  const [showPreview, setShowPreview] = useState(false)
   const [error, setError] = useState('')
   const [busyTask, setBusyTask] = useState(null)
 
   const load = () => credMapAPI.getPacket(packetId).then(setData).catch((e) => setError(e.message))
   useEffect(() => { load() }, [packetId])
+
+  // Full passport detail (identifiers + documents) for the workspace cards
+  // and the preview — richer than the summary the generate pass uses.
+  useEffect(() => {
+    const npi = data?.packet?.npi
+    if (!npi) return
+    credentialAPI.getPassport(npi).then(setFullPassport).catch(() => setFullPassport(null))
+  }, [data?.packet?.npi])
+
+  const detailByType = useMemo(() => {
+    const m = {}
+    for (const c of fullPassport?.credentials || []) m[c.type] = c
+    return m
+  }, [fullPassport])
 
   async function setTask(task, patch) {
     setBusyTask(task.id)
@@ -455,6 +614,11 @@ function PacketWorkspace({ packetId, onBack }) {
   }
 
   const { packet, passport } = data
+
+  if (showPreview) {
+    return <PacketPreview packet={packet} passportDetail={fullPassport} onBack={() => setShowPreview(false)} />
+  }
+
   const ps = PACKET_STATUS[packet.status] || PACKET_STATUS.IN_PROGRESS
   const openTasks = packet.tasks.filter((t) => !['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status))
   const providerTasks = openTasks.filter((t) => t.assignee === 'PROVIDER')
@@ -482,6 +646,9 @@ function PacketWorkspace({ packetId, onBack }) {
             </div>
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: ps.bg, color: ps.fg }}>{ps.label}</span>
+          <button onClick={() => setShowPreview(true)} style={{ padding: '9px 16px', background: '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+            👁 Preview packet
+          </button>
           <button onClick={refresh} title="Re-check the passport for anything new" style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh auto-fill
           </button>
@@ -529,7 +696,9 @@ function PacketWorkspace({ packetId, onBack }) {
           {g.tasks.map((t) => {
             const st = TASK_STATUS[t.status] || TASK_STATUS.NEEDS_ACTION
             const complete = ['AUTO_FILLED', 'DONE', 'WAIVED'].includes(t.status)
-            const cred = t.passportCredential
+            // Prefer the full passport detail (identifier + docs) over the
+            // lighter summary the generate pass stored on the task.
+            const cred = (t.item.credentialType && detailByType[PASSPORT_TYPE_UI[t.item.credentialType]]) || t.passportCredential
             return (
               <div key={t.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyTask === t.id ? 0.5 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -542,7 +711,11 @@ function PacketWorkspace({ packetId, onBack }) {
                     </div>
                     {cred && (
                       <div style={{ fontSize: 11.5, color: '#166534', marginTop: 2 }}>
-                        ⚡ On passport{cred.jurisdiction ? ` · ${cred.jurisdiction}` : ''}{cred.expirationDate ? ` · expires ${fmtShortDate(cred.expirationDate)}` : ''} · {cred.status}
+                        ⚡ {cred.identifier ? <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{cred.identifier}</span> : 'On passport'}
+                        {cred.jurisdiction ? ` · ${cred.jurisdiction}` : ''}{cred.expirationDate ? ` · expires ${fmtShortDate(cred.expirationDate)}` : ''} · {cred.status}
+                        {(cred.documents || []).map((d) => (
+                          <a key={d.id} href={d.downloadUrl || '#'} target="_blank" rel="noreferrer" style={{ marginLeft: 10, color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>📄 view</a>
+                        ))}
                       </div>
                     )}
                     {t.note && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{t.note}</div>}
