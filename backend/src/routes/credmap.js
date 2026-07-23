@@ -19,6 +19,7 @@ const path = require('path')
 const crypto = require('crypto')
 const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
+const { signDocToken } = require('../middleware/credentialAuth')
 const credMapIntake = require('../services/credMapIntake')
 const passportClient = require('../services/passportClient')
 const { TAXONOMY, CANONICAL_KEYS, STARTER_ITEMS, defaultsFor } = require('../services/credMapTaxonomy')
@@ -720,10 +721,53 @@ router.get('/packets/one/:packetId', async (req, res) => {
         ...t,
         passportCredential: t.item.credentialType ? credByType.get(PASSPORT_TYPE[t.item.credentialType]) || null : null,
       }))
-    res.json({ packet: { ...packet, tasks, completeness: completenessOf(packet.tasks) }, passport: summary })
+    res.json({
+      packet: { ...packet, tasks, completeness: completenessOf(packet.tasks) },
+      passport: summary,
+      // Filled-PDF download rides the existing short-lived doc-token route.
+      generatedDoc: packet.generatedDocPath
+        ? { name: packet.generatedDocName, token: signDocToken(packet.generatedDocPath) }
+        : null,
+    })
   } catch (err) {
     console.error('[credmap/packet-get] error:', err)
     res.status(500).json({ error: 'Failed to load packet' })
+  }
+})
+
+// POST /packets/one/:packetId/render — produce the filled facility PDF: the
+// facility's exact form, typed full of the provider's live passport data,
+// e-signature stamped on signature lines. Field mapping is AI-built once per
+// map and reused for every provider.
+router.post('/packets/one/:packetId/render', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      include: { map: true },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+
+    let passport
+    try {
+      passport = await passportClient.getPassport(packet.npi, req.facilityId)
+    } catch (err) {
+      if (err.status === 403 || err.status === 404) {
+        return res.status(400).json({ error: 'Passport access is required to fill the form — invite the provider or request access first.' })
+      }
+      throw err
+    }
+
+    const { renderFilledPdf } = require('../services/credMapPdf')
+    const result = await renderFilledPdf({ packet, map: packet.map, passport })
+    await logMapAccess(req, packet.mapId, 'CREDMAP_PDF_RENDER', result.generatedDocName)
+    res.json({ ok: true, ...result, docToken: signDocToken(result.generatedDocPath) })
+  } catch (err) {
+    if (['NOT_CONFIGURED', 'NO_SOURCE_DOC', 'NOT_FILLABLE'].includes(err.code)) {
+      return res.status(400).json({ error: err.message, code: err.code })
+    }
+    console.error('[credmap/packet-render] error:', err)
+    res.status(500).json({ error: 'Failed to render the filled PDF' })
   }
 })
 
@@ -791,6 +835,29 @@ router.patch('/packets/one/:packetId/tasks/:taskId', async (req, res) => {
   } catch (err) {
     console.error('[credmap/task-update] error:', err)
     res.status(500).json({ error: 'Failed to update task' })
+  }
+})
+
+// DELETE /packets/one/:packetId — remove a packet (its tasks and signature
+// audit rows go with it). Used for demo resets and misfires; the map and the
+// passport are untouched.
+router.delete('/packets/one/:packetId', async (req, res) => {
+  try {
+    const packet = await prisma.credPacket.findFirst({
+      where: { id: req.params.packetId, facilityId: req.facilityId },
+      select: { id: true, mapId: true, providerName: true, npi: true },
+    })
+    if (!packet) return res.status(404).json({ error: 'Packet not found' })
+    await prisma.$transaction([
+      prisma.credSignature.deleteMany({ where: { packetId: packet.id } }),
+      prisma.credPacketTask.deleteMany({ where: { packetId: packet.id } }),
+      prisma.credPacket.delete({ where: { id: packet.id } }),
+    ])
+    await logMapAccess(req, packet.mapId, 'CREDMAP_PACKET_DELETE', packet.providerName || packet.npi)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[credmap/packet-delete] error:', err)
+    res.status(500).json({ error: 'Failed to delete packet' })
   }
 })
 

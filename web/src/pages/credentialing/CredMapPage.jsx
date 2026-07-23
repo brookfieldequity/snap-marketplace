@@ -690,6 +690,18 @@ function PacketWorkspace({ packetId, onBack }) {
   const [signLink, setSignLink] = useState(null) // { link, emailedTo, itemCount }
   const [sendingLink, setSendingLink] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [rendering, setRendering] = useState(false)
+
+  async function renderPdf() {
+    setRendering(true)
+    setError('')
+    try {
+      const result = await credMapAPI.renderPacketPdf(packetId)
+      await load()
+      if (result.docToken) window.open(credMapAPI.docUrl(result.docToken), '_blank')
+    } catch (e) { setError(e.message) }
+    finally { setRendering(false) }
+  }
 
   const load = () => credMapAPI.getPacket(packetId).then(setData).catch((e) => setError(e.message))
   useEffect(() => { load() }, [packetId])
@@ -782,6 +794,14 @@ function PacketWorkspace({ packetId, onBack }) {
             <button onClick={sendSignLink} disabled={sendingLink} style={{ padding: '9px 16px', background: '#7C3AED', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: sendingLink ? 'wait' : 'pointer' }}>
               {sendingLink ? 'Creating link…' : `✍️ Send for signature (${openSignatures.length})`}
             </button>
+          )}
+          <button onClick={renderPdf} disabled={rendering} title="Type the provider's passport data into the facility's own fillable PDF" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
+            {rendering ? 'Filling their form…' : '📄 Fill facility PDF'}
+          </button>
+          {data.generatedDoc?.token && (
+            <a href={credMapAPI.docUrl(data.generatedDoc.token)} target="_blank" rel="noreferrer" style={{ padding: '9px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, color: '#166534', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
+              ⬇ {data.generatedDoc.name || 'Filled packet'}
+            </a>
           )}
           <button onClick={refresh} title="Re-check the passport for anything new" style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ↺ Refresh auto-fill
@@ -1345,6 +1365,15 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
                 </div>
                 <span style={{ fontSize: 11.5, fontWeight: 800, color: '#475569', width: 38, textAlign: 'right' }}>{p.completeness}%</span>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: ps.bg, color: ps.fg }}>{ps.label}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!window.confirm(`Delete the packet for ${p.providerName || p.npi}? Tasks and signatures on it are removed; the map and passport are untouched.`)) return
+                    credMapAPI.deletePacket(p.id).then(loadPackets).catch((err) => setError(err.message))
+                  }}
+                  title="Delete packet"
+                  style={{ background: 'none', border: 'none', color: '#CBD5E1', fontSize: 15, cursor: 'pointer', padding: '0 2px', fontWeight: 700 }}
+                >×</button>
               </div>
             )
           })}
@@ -1398,6 +1427,20 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
           + Add requirement
         </button>
       )}
+
+      {/* Danger zone — demo resets and dead maps. Maps with packets refuse
+          to delete (409) until their packets are removed above. */}
+      <div style={{ marginTop: 26, textAlign: 'right' }}>
+        <button
+          onClick={() => {
+            if (!window.confirm(`Delete the map "${map.name}" and all its requirements? Packets must be deleted first; this cannot be undone.`)) return
+            credMapAPI.deleteMap(mapId).then(onBack).catch((err) => setError(err.message))
+          }}
+          style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, opacity: 0.7 }}
+        >
+          Delete this map
+        </button>
+      </div>
 
       {showGen && (
         <GeneratePacketModal

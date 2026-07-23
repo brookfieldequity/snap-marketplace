@@ -1652,6 +1652,7 @@ model CredProgramMap {
   sourceDocPath     String? // uploaded blank packet (S3 key)
   sourceDocName     String?
   aiNotes           String? // analyzer's summary for the review pass
+  formFieldMap      Json? // AcroForm field name → passport value-key mapping (AI-built once, reused per provider)
   createdById       String
   createdBy         CredentialUser    @relation(fields: [createdById], references: [id])
   createdAt         DateTime          @default(now())

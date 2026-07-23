@@ -1028,6 +1028,9 @@ export const credMapAPI = {
     apiFetch(`${BASE}/credmap/packets/one/${packetId}/tasks/${taskId}`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify(data) }),
   refreshPacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/refresh`, { method: 'POST', headers: credHeaders() }),
   sendSignLink: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/sign-link`, { method: 'POST', headers: credHeaders() }),
+  deletePacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}`, { method: 'DELETE', headers: credHeaders() }),
+  renderPacketPdf: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/render`, { method: 'POST', headers: credHeaders() }),
+  docUrl: (token) => `${BASE}/credentialing/doc/${token}`,
 
   // Renewal tracking (appointment clocks)
   getRenewals: () => apiFetch(`${BASE}/credmap/renewals/list`, { headers: credHeaders() }),
