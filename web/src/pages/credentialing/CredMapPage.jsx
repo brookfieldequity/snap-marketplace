@@ -706,6 +706,19 @@ function PacketWorkspace({ packetId, onBack }) {
     finally { setRendering(false) }
   }
 
+  async function renderNative() {
+    setRendering(true)
+    setError(''); setRenderNote('')
+    try {
+      const result = await credMapAPI.renderNativeForm(packetId)
+      await load()
+      if (result.engine === 'native') setRenderNote(`SNAP built its own version of this application — ${result.sections} section${result.sections === 1 ? '' : 's'}, filled from the passport${result.signatureStamped ? ', signature stamped' : ''}. Always renders perfectly, no placement to fix.`)
+      else if (result.engine === 'clean-packet') setRenderNote('No native form has been built for this map yet — SNAP produced a clean packet instead. Build the native form on the map to mirror the facility’s application exactly.')
+      if (result.docToken) window.open(credMapAPI.docUrl(result.docToken), '_blank')
+    } catch (e) { setError(e.message) }
+    finally { setRendering(false) }
+  }
+
   const load = () => credMapAPI.getPacket(packetId).then(setData).catch((e) => setError(e.message))
   useEffect(() => { load() }, [packetId])
 
@@ -798,8 +811,11 @@ function PacketWorkspace({ packetId, onBack }) {
               {sendingLink ? 'Creating link…' : `✍️ Send for signature (${openSignatures.length})`}
             </button>
           )}
-          <button onClick={renderPdf} disabled={rendering} title="Type the provider's passport data into the facility's own fillable PDF" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
-            {rendering ? 'Filling their form…' : '📄 Fill facility PDF'}
+          <button onClick={renderNative} disabled={rendering} title="SNAP renders its own version of the facility's application, filled from the verified passport — always perfect, nothing to place" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
+            {rendering ? 'Building form…' : '📋 SNAP native form'}
+          </button>
+          <button onClick={renderPdf} disabled={rendering} title="Overlay: type the provider's passport data onto the facility's own PDF (fallback for facilities that require their exact form)" style={{ padding: '9px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: rendering ? 'wait' : 'pointer' }}>
+            {rendering ? '…' : '📄 Fill their PDF'}
           </button>
           {data.generatedDoc?.token && (
             <a href={credMapAPI.docUrl(data.generatedDoc.token)} target="_blank" rel="noreferrer" style={{ padding: '9px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, color: '#166534', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
@@ -1424,6 +1440,19 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
   const [newType, setNewType] = useState('OTHER')
   const [dragId, setDragId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
+  const [building, setBuilding] = useState(false)
+  const [structureNote, setStructureNote] = useState('')
+
+  async function buildNative() {
+    setBuilding(true); setError(''); setStructureNote('')
+    try {
+      const { stats } = await credMapAPI.buildFormStructure(mapId)
+      await load()
+      setStructureNote(`Native form ready — ${stats.sections} section${stats.sections === 1 ? '' : 's'}. SNAP auto-fills ${stats.passport}, provider answers ${stats.provider + stats.attestation}, ${stats.signature} to sign. Generate a packet, then hit “📋 SNAP native form”.`)
+      onChanged()
+    } catch (e) { setError(e.message) }
+    finally { setBuilding(false) }
+  }
 
   const load = () => credMapAPI.getMap(mapId).then(({ map }) => setMap(map)).catch((e) => setError(e.message))
   const loadPackets = () => credMapAPI.getPackets(mapId).then((d) => setPackets(d.packets)).catch(() => {})
@@ -1528,7 +1557,12 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
             </button>
           )}
           {map.sourceDocName && (
-            <button onClick={() => setShowFieldMap(true)} title="See and correct what SNAP types into each box of the facility's PDF" style={{ padding: '9px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={buildNative} disabled={building} title="Read the facility's application and build SNAP's own native version of it — the scalable way to deliver their information without overlaying their PDF" style={{ padding: '9px 16px', background: map.formStructure ? '#fff' : '#0F172A', border: map.formStructure ? '1px solid #CBD5E1' : 'none', borderRadius: 10, color: map.formStructure ? '#475569' : '#fff', fontSize: 13, fontWeight: 700, cursor: building ? 'wait' : 'pointer' }}>
+              {building ? 'Reading their form…' : map.formStructure ? '📋 Rebuild native form' : '📋 Build native form'}
+            </button>
+          )}
+          {map.sourceDocName && (
+            <button onClick={() => setShowFieldMap(true)} title="Overlay fallback: see and correct what SNAP types onto the facility's own PDF" style={{ padding: '9px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, color: '#94A3B8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
               🧩 Field mapping
             </button>
           )}
@@ -1574,6 +1608,17 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
         {map.aiNotes && (
           <div style={{ marginTop: 14, background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#1E40AF' }}>
             ✨ {map.aiNotes}
+          </div>
+        )}
+
+        {structureNote && (
+          <div style={{ marginTop: 12, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#166534' }}>
+            📋 {structureNote}
+          </div>
+        )}
+        {!structureNote && map.formStructure && Array.isArray(map.formStructure.sections) && (
+          <div style={{ marginTop: 12, fontSize: 12, color: '#16A34A', fontWeight: 600 }}>
+            📋 Native form ready — {map.formStructure.sections.length} section{map.formStructure.sections.length === 1 ? '' : 's'} mirror this facility’s application.
           </div>
         )}
 

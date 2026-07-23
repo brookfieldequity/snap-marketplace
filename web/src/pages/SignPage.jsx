@@ -92,8 +92,9 @@ export default function SignPage({ token }) {
   const [consent, setConsent] = useState(false)
   const [inked, setInked] = useState(false)
   const [checked, setChecked] = useState({}) // taskId -> bool
+  const [answers, setAnswers] = useState({}) // questionKey -> value
   const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(null) // { signed, remaining }
+  const [done, setDone] = useState(null) // { signed, remaining, answersSaved }
 
   useEffect(() => {
     fetch(`${BASE}/sign/${encodeURIComponent(token)}`)
@@ -104,24 +105,45 @@ export default function SignPage({ token }) {
         if (d.providerName) setName(d.providerName)
         // Everything starts checked — uncheck to hold something back.
         setChecked(Object.fromEntries((d.items || []).map((it) => [it.taskId, true])))
+        // Pre-fill any answer the provider already gave (incl. attestations
+        // answered on another facility's form — the common-app payoff).
+        setAnswers(Object.fromEntries((d.questions || []).map((q) => [q.questionKey, q.value || ''])))
       })
       .catch((e) => setError(e.message))
   }, [token])
 
   const selectedIds = Object.entries(checked).filter(([, v]) => v).map(([k]) => k)
+  const questions = data?.questions || []
+  const attestations = questions.filter((q) => q.source === 'ATTESTATION')
+  const providerFields = questions.filter((q) => q.source === 'PROVIDER')
+  const unanswered = attestations.filter((q) => !answers[q.questionKey])
+  const hasDocs = (data?.items || []).length > 0
+  const setAnswer = (k, v) => setAnswers((a) => ({ ...a, [k]: v }))
 
   async function submit() {
-    if (selectedIds.length === 0) { setError('Check at least one document to sign.'); return }
-    if (!inked) { setError('Please draw your signature first.'); return }
-    if (!consent) { setError('Please check the agreement box.'); return }
     if (!name.trim()) { setError('Please type your full legal name.'); return }
+    if (!consent) { setError('Please check the agreement box.'); return }
+    if (unanswered.length > 0) { setError(`Please answer all ${attestations.length} yes/no questions.`); return }
+    if (hasDocs) {
+      if (selectedIds.length === 0) { setError('Check at least one document to sign.'); return }
+      if (!inked) { setError('Please draw your signature first.'); return }
+    }
     setError('')
     setSubmitting(true)
     try {
+      const answerList = Object.entries(answers)
+        .filter(([, v]) => v !== '' && v != null)
+        .map(([questionKey, value]) => ({ questionKey, value }))
       const res = await fetch(`${BASE}/sign/${encodeURIComponent(token)}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signerName: name.trim(), signatureDataUrl: canvasDataUrl(), consent: true, taskIds: selectedIds }),
+        body: JSON.stringify({
+          signerName: name.trim(),
+          signatureDataUrl: inked ? canvasDataUrl() : undefined,
+          consent: true,
+          taskIds: selectedIds,
+          answers: answerList,
+        }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || 'Signing failed')
@@ -164,9 +186,12 @@ export default function SignPage({ token }) {
         <div style={{ width: 64, height: 64, borderRadius: 999, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: 30 }}>✓</div>
         <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', marginTop: 14 }}>Complete</div>
         <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 8 }}>
-          {done?.signed
-            ? `Your signature was applied to ${done.signed} document${done.signed === 1 ? '' : 's'}. Your credentialing coordinator has been updated.`
-            : 'Everything here is already signed. Nothing else is needed.'}
+          {done?.signed || done?.answersSaved
+            ? `${[
+                done?.signed ? `Your signature was applied to ${done.signed} document${done.signed === 1 ? '' : 's'}` : '',
+                done?.answersSaved ? `${done.answersSaved} answer${done.answersSaved === 1 ? '' : 's'} saved` : '',
+              ].filter(Boolean).join(' · ')}. Your coordinator has been updated — and your answers are saved, so the next facility's application starts pre-filled.`
+            : 'Everything here is already done. Nothing else is needed.'}
         </div>
         {done?.remaining > 0 && (
           <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, fontSize: 12.5, color: '#92400E' }}>
@@ -180,11 +205,96 @@ export default function SignPage({ token }) {
   return shell(
     <div style={{ background: '#fff', borderRadius: 20, padding: '26px 22px', boxShadow: '0 10px 40px rgba(15,23,42,0.08)' }}>
       <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
-        {data.facilityName} needs your signature
+        {data.facilityName}
       </div>
       <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 16 }}>
-        Hi {data.providerName || 'there'} — review the {data.items.length === 1 ? 'document' : `${data.items.length} documents`} below. Uncheck anything you'd rather sign later; it stays pending, not lost.
+        Hi {data.providerName || 'there'} — confirm your information, answer a few questions, and sign. It takes a minute, and your answers carry over to your next application.
       </div>
+
+      {/* What SNAP already has, verified — read-only. */}
+      {(data.review || []).length > 0 && (
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>
+            ✓ From your verified SNAP passport
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
+            {data.review.map((r) => (
+              <div key={r.label} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: '#64748B' }}>{r.label}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 10.5, color: '#16A34A', marginTop: 8 }}>SNAP fills these automatically — no need to re-enter them.</div>
+        </div>
+      )}
+
+      {/* The gaps: yes/no attestations + provider-only fields, answered once. */}
+      {attestations.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>
+            A few questions {unanswered.length > 0 && <span style={{ color: '#DC2626' }}>· {unanswered.length} left</span>}
+          </div>
+          {attestations.map((q) => {
+            const v = answers[q.questionKey]
+            return (
+              <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{q.label}</div>
+                {q.explain && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{q.explain}</div>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  {['NO', 'YES'].map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setAnswer(q.questionKey, opt)}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                        border: v === opt ? '1.5px solid #2563EB' : '1.5px solid #E2E8F0',
+                        background: v === opt ? (opt === 'YES' ? '#FEF3C7' : '#EFF6FF') : '#fff',
+                        color: v === opt ? '#0F172A' : '#64748B',
+                      }}
+                    >
+                      {opt === 'YES' ? 'Yes' : 'No'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {providerFields.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {providerFields.map((q) => (
+            <div key={q.questionKey} style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>{q.label}</label>
+              {q.type === 'longtext' ? (
+                <textarea
+                  value={answers[q.questionKey] || ''}
+                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                  rows={3}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                />
+              ) : (
+                <input
+                  value={answers[q.questionKey] || ''}
+                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                  type={q.type === 'date' ? 'text' : 'text'}
+                  placeholder={q.type === 'date' ? 'MM/DD/YYYY' : ''}
+                  style={{ width: '100%', padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Documents to sign, if any. */}
+      {hasDocs && (
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '14px 0 8px' }}>
+          {data.items.length === 1 ? 'Document to sign' : `${data.items.length} documents to sign`}
+        </div>
+      )}
 
       {data.items.length > 1 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
@@ -233,10 +343,12 @@ export default function SignPage({ token }) {
         />
       </div>
 
-      <div id="sign-pad" style={{ marginTop: 14 }}>
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>Signature</label>
-        <SignatureCanvas onChange={setInked} />
-      </div>
+      {hasDocs && (
+        <div id="sign-pad" style={{ marginTop: 14 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>Signature</label>
+          <SignatureCanvas onChange={setInked} />
+        </div>
+      )}
 
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, cursor: 'pointer' }}>
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3 }} />
@@ -245,19 +357,29 @@ export default function SignPage({ token }) {
 
       {error && <div style={{ marginTop: 12, padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13 }}>{error}</div>}
 
-      <button
-        onClick={submit}
-        disabled={submitting || selectedIds.length === 0}
-        style={{ width: '100%', marginTop: 16, padding: '14px 0', background: submitting ? '#93C5FD' : selectedIds.length === 0 ? '#CBD5E1' : '#2563EB', border: 'none', borderRadius: 12, color: '#fff', fontSize: 15.5, fontWeight: 800, cursor: submitting ? 'wait' : selectedIds.length === 0 ? 'not-allowed' : 'pointer' }}
-      >
-        {submitting ? 'Applying signature…'
-          : selectedIds.length === 0 ? 'Check a document to sign'
-          : selectedIds.length === data.items.length
-            ? `Sign ${data.items.length === 1 ? 'document' : `all ${data.items.length} documents`} ✓`
-            : `Sign ${selectedIds.length} of ${data.items.length} documents ✓`}
-      </button>
+      {(() => {
+        const blocked = submitting || unanswered.length > 0 || (hasDocs && selectedIds.length === 0)
+        const label = submitting ? 'Submitting…'
+          : unanswered.length > 0 ? `Answer ${unanswered.length} more question${unanswered.length === 1 ? '' : 's'}`
+          : hasDocs
+            ? (selectedIds.length === 0 ? 'Check a document to sign'
+              : selectedIds.length === data.items.length
+                ? `Submit & sign ${data.items.length === 1 ? 'document' : `all ${data.items.length}`} ✓`
+                : `Submit & sign ${selectedIds.length} of ${data.items.length} ✓`)
+            : 'Submit my answers ✓'
+        return (
+          <button
+            onClick={submit}
+            disabled={blocked}
+            style={{ width: '100%', marginTop: 16, padding: '14px 0', background: blocked && !submitting ? '#CBD5E1' : submitting ? '#93C5FD' : '#2563EB', border: 'none', borderRadius: 12, color: '#fff', fontSize: 15.5, fontWeight: 800, cursor: submitting ? 'wait' : blocked ? 'not-allowed' : 'pointer' }}
+          >
+            {label}
+          </button>
+        )
+      })()}
       <div style={{ textAlign: 'center', fontSize: 11, color: '#94A3B8', marginTop: 10 }}>
-        Your signature, the date, and this device are recorded for the credentialing audit trail.
+        {hasDocs ? 'Your signature, the date, and this device are recorded for the credentialing audit trail.'
+          : 'Your answers, name, and consent are recorded for the credentialing audit trail.'}
       </div>
     </div>
   )

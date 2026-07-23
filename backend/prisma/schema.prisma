@@ -226,8 +226,8 @@ model User {
   providerProfile            ProviderProfile?
   facilityMemberships        FacilityUser[]
   scheduleBuildRunsTriggered ScheduleBuildRun[]
-  facilityInvitesSent        FacilityInvite[]   @relation("FacilityInviteSentBy")
-  facilityInvitesClaimed     FacilityInvite[]   @relation("FacilityInviteClaimedBy")
+  facilityInvitesSent        FacilityInvite[]      @relation("FacilityInviteSentBy")
+  facilityInvitesClaimed     FacilityInvite[]      @relation("FacilityInviteClaimedBy")
   passwordResets             PasswordReset[]
   agreementAcceptances       AgreementAcceptance[]
   benchmarkConsents          BenchmarkConsent[]
@@ -349,55 +349,55 @@ model Facility {
   //     "supervisionRatio": 3|4 }     // overrides coverage-template ratio
   staffiqLocationConfig  Json?
 
-  invoices            SnapInvoice[]
-  users               FacilityUser[]
-  subscription        FacilitySubscription?
-  shifts              Shift[]
-  preferredProviders  PreferredProvider[]
-  providerRatings     ProviderRating[]
-  facilityRatings     FacilityRating[]
-  messages            Message[]
-  rosterEntries       InternalRosterEntry[]
-  availabilityWindows AvailabilityWindow[]
-  scheduleDays        ScheduleDay[]
-  schedulingUploads   SchedulingUpload[]
-  scheduleFeedback    ScheduleFeedback[]
-  schedulingRecords   SchedulingRecord[]
-  staffiqInsights     StaffIQInsight[]
-  incentiveShifts     InternalIncentiveShift[]
-  staffiqInputs       StaffIQInput[]
-  staffiqScoreHistory StaffIQScoreHistory[]
-  staffingProfile     FacilityStaffingProfile?
-  staffiqOutcomes     StaffIQOutcome[]
-  credentialUsers     CredentialUser[]
-  credRosterEntries   FacilityRosterEntry[]
-  credMaps            CredProgramMap[]
-  coverageTemplates   CoverageTemplate[]
-  holidays            FacilityHoliday[]
-  scheduleBuildRuns   ScheduleBuildRun[]
-  automationEvents    AutomationEvent[]
-  providerLocations   ProviderLocation[]
-  siteRates           FacilitySiteRate[]
-  roiBaseline         FacilityRoiBaseline?
-  roiSnapshots        FacilityRoiSnapshot[]
-  facilityInvites     FacilityInvite[]
+  invoices             SnapInvoice[]
+  users                FacilityUser[]
+  subscription         FacilitySubscription?
+  shifts               Shift[]
+  preferredProviders   PreferredProvider[]
+  providerRatings      ProviderRating[]
+  facilityRatings      FacilityRating[]
+  messages             Message[]
+  rosterEntries        InternalRosterEntry[]
+  availabilityWindows  AvailabilityWindow[]
+  scheduleDays         ScheduleDay[]
+  schedulingUploads    SchedulingUpload[]
+  scheduleFeedback     ScheduleFeedback[]
+  schedulingRecords    SchedulingRecord[]
+  staffiqInsights      StaffIQInsight[]
+  incentiveShifts      InternalIncentiveShift[]
+  staffiqInputs        StaffIQInput[]
+  staffiqScoreHistory  StaffIQScoreHistory[]
+  staffingProfile      FacilityStaffingProfile?
+  staffiqOutcomes      StaffIQOutcome[]
+  credentialUsers      CredentialUser[]
+  credRosterEntries    FacilityRosterEntry[]
+  credMaps             CredProgramMap[]
+  coverageTemplates    CoverageTemplate[]
+  holidays             FacilityHoliday[]
+  scheduleBuildRuns    ScheduleBuildRun[]
+  automationEvents     AutomationEvent[]
+  providerLocations    ProviderLocation[]
+  siteRates            FacilitySiteRate[]
+  roiBaseline          FacilityRoiBaseline?
+  roiSnapshots         FacilityRoiSnapshot[]
+  facilityInvites      FacilityInvite[]
   agreementAcceptances AgreementAcceptance[]
-  benchmarkConsents   BenchmarkConsent[]
-  locationContacts    FacilityLocationContact[]
-  roomCountRequests   RoomCountRequest[]
-  scheduleRequests    ScheduleRequest[]
-  featureFlags        FacilityFeatureFlag[]
-  payrollTemplates    PayrollTemplateConfig[]
-  payrollRuns         PayrollRun[]
-  marketplaceFees     MarketplaceFeeLedger[]
-  ptoWindows          PtoWindow[]
+  benchmarkConsents    BenchmarkConsent[]
+  locationContacts     FacilityLocationContact[]
+  roomCountRequests    RoomCountRequest[]
+  scheduleRequests     ScheduleRequest[]
+  featureFlags         FacilityFeatureFlag[]
+  payrollTemplates     PayrollTemplateConfig[]
+  payrollRuns          PayrollRun[]
+  marketplaceFees      MarketplaceFeeLedger[]
+  ptoWindows           PtoWindow[]
   // EOR (Phase 0). selfEmployer = this facility's own-W2 Employer row;
   // employerLinks = external agencies (APNE, JJM) allowed to staff it.
-  selfEmployer        Employer?                @relation("FacilitySelfEmployer")
-  employerLinks       EmployerFacilityLink[]
-  hourEntries         ProviderHourEntry[]
-  locations           FacilityLocation[]
-  siteHourDefaults    SiteHourDefault[]
+  selfEmployer         Employer?                 @relation("FacilitySelfEmployer")
+  employerLinks        EmployerFacilityLink[]
+  hourEntries          ProviderHourEntry[]
+  locations            FacilityLocation[]
+  siteHourDefaults     SiteHourDefault[]
   availabilityRequests AvailabilityRequest[]
 
   createdAt DateTime @default(now())
@@ -556,28 +556,28 @@ model SnapInvoice {
   paymentLink     String? // e.g. Stripe payment link URL, shown as button in invoice email
 
   // Line items JSON array: { description, detail, listPrice, discount, discountLabel, amount }
-  lineItems     Json
+  lineItems Json
 
   // Totals
-  listTotal     Float   // sum of listPrice (what they would pay at full rate)
-  discountTotal Float   @default(0)
-  amountDue     Float   // listTotal - discountTotal
+  listTotal     Float // sum of listPrice (what they would pay at full rate)
+  discountTotal Float @default(0)
+  amountDue     Float // listTotal - discountTotal
 
   // Promo / Founder's config — stored for audit trail + auto-expiry reminders
-  discountType   String?  // 'FOUNDER' | 'PROMO_1MO' | 'PROMO_2MO' | 'PROMO_3MO' | 'PROMO_6MO'
-  promoFeatures  String?  // e.g. 'SNAP Complete' — what they get free during promo
+  discountType   String? // 'FOUNDER' | 'PROMO_1MO' | 'PROMO_2MO' | 'PROMO_3MO' | 'PROMO_6MO'
+  promoFeatures  String? // e.g. 'SNAP Complete' — what they get free during promo
   promoExpiresAt DateTime?
 
-  status     String   @default("DRAFT") // DRAFT | SENT | PAID | VOID
-  invoiceDate DateTime @default(now())
-  dueDate    DateTime
-  sentAt     DateTime?
-  paidAt     DateTime?
-  notes      String?
+  status      String    @default("DRAFT") // DRAFT | SENT | PAID | VOID
+  invoiceDate DateTime  @default(now())
+  dueDate     DateTime
+  sentAt      DateTime?
+  paidAt      DateTime?
+  notes       String?
 
   // Recurring billing
-  billingCycle  String    @default("ONCE") // ONCE | MONTHLY
-  nextRecurAt   DateTime? // next auto-send date when billingCycle = MONTHLY
+  billingCycle String    @default("ONCE") // ONCE | MONTHLY
+  nextRecurAt  DateTime? // next auto-send date when billingCycle = MONTHLY
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -976,7 +976,7 @@ model InternalRosterEntry {
   // Computed by a future background job from ShiftCompletion history (no-shows,
   // late arrivals, cancellations). null = not yet computed; algorithm treats
   // null as the practice's average (currently 0.85 as a sensible default).
-  reliabilityScore Float?
+  reliabilityScore  Float?
   // Admin-assigned quality score 1–5 (null = unrated). Set by the facility
   // coordinator to reward proven excellence. Feeds the HIGHEST_QUALITY and
   // HYBRID schedule builder modes as a 20% weight alongside reliability.
@@ -996,15 +996,15 @@ model InternalRosterEntry {
   // senior). Unused by Feature A; added now so the profile card holds it.
   seniorityRank Int?
 
-  scheduleAssignments ScheduleAssignment[]
-  incentiveResponses  InternalIncentiveShiftResponse[]
-  scheduleFeedback    ScheduleFeedback[]
-  locations           ProviderLocation[]
-  timeOff             RosterTimeOff[]
-  availability        RosterAvailability[]
-  scheduleRequests    ScheduleRequest[]
-  rateHistory         RosterRateHistory[]
-  payrollLineItems    PayrollRunProvider[]
+  scheduleAssignments  ScheduleAssignment[]
+  incentiveResponses   InternalIncentiveShiftResponse[]
+  scheduleFeedback     ScheduleFeedback[]
+  locations            ProviderLocation[]
+  timeOff              RosterTimeOff[]
+  availability         RosterAvailability[]
+  scheduleRequests     ScheduleRequest[]
+  rateHistory          RosterRateHistory[]
+  payrollLineItems     PayrollRunProvider[]
   ptoBids              PtoBid[]
   ptoAllocations       PtoAllocation[]
   costComponents       AssignmentCostComponent[] // EOR pass-throughs (Phase 0)
@@ -1656,6 +1656,7 @@ model CredProgramMap {
   anvilCastEid      String? // Anvil PDF Template (Cast) eid — dormant advanced override for flat packets
   anvilAliasMap     Json? // Anvil field alias → passport value-key (reused per provider)
   flatFillPlan      Json? // AUTO-detected overlay plan for flat/print-to-fill packets: { confidence, fills:[{label,valueKey,page,x,y,placement}] }. AI-built once per form, reused per provider, coordinator-correctable.
+  formStructure     Json? // NATIVE-FORM template: AI-extracted structure of the facility's application — { version, title, sections:[{ heading, fields:[{ key, label, type, source, valueKey?, canonicalAttestation?, explain?, required }] }] }. SNAP renders its OWN document mirroring their form (no PDF overlay). Built once per map, reused per provider.
   createdById       String
   createdBy         CredentialUser    @relation(fields: [createdById], references: [id])
   createdAt         DateTime          @default(now())
@@ -1759,6 +1760,31 @@ model CredSignature {
   signedAt      DateTime       @default(now())
 
   @@index([packetId])
+}
+
+// Provider answers to the parts of an application the passport does NOT hold —
+// attestation yes/nos ("ever convicted of a felony?", "ever had privileges
+// denied?") and facility form-fields the provider fills in. Keyed on
+// (facilityId, npi, questionKey) so an answer given on ONE application pre-fills
+// EVERY future one — the common-app seed. Attestation questions carry a
+// canonical key (e.g. "felony_conviction") so they match across facilities;
+// facility-specific fields key on "map:<mapId>:<fieldKey>". This is the answer
+// layer the native-form renderer reads alongside the live passport.
+model CredFormAnswer {
+  id          String   @id @default(cuid())
+  facilityId  String // portal tenant
+  npi         String // the provider
+  questionKey String // canonical attestation key or "map:<mapId>:<fieldKey>"
+  label       String // the question as last asked, for display/audit
+  value       String // the answer ("YES" / "NO" / free text / date)
+  source      String // ATTESTATION | PROVIDER
+  answeredVia String? // packet id or sign-token context the answer came in on
+  signedName  String? // legal name attached at time of answer (attestations)
+  answeredAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([facilityId, npi, questionKey])
+  @@index([facilityId, npi])
 }
 
 // Post-it reminders for the coordinator dashboard — same sticky-note design
@@ -2196,29 +2222,29 @@ model PayrollTemplateConfig {
 // csvContent is the immutable generated export, stored so History can
 // re-download the exact file that was produced.
 model PayrollRun {
-  id             String           @id @default(cuid())
-  facilityId     String
-  facility       Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  system         PayrollSystem
-  payClass       PayrollClass
-  periodStart    DateTime
-  periodEnd      DateTime
-  providerCount        Int              @default(0)
-  totalHours           Float            @default(0)
-  totalGross           Float            @default(0)
-  totalBonus           Float            @default(0)
-  totalReimbursement   Float            @default(0)
+  id                 String           @id @default(cuid())
+  facilityId         String
+  facility           Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  system             PayrollSystem
+  payClass           PayrollClass
+  periodStart        DateTime
+  periodEnd          DateTime
+  providerCount      Int              @default(0)
+  totalHours         Float            @default(0)
+  totalGross         Float            @default(0)
+  totalBonus         Float            @default(0)
+  totalReimbursement Float            @default(0)
   // Run-level invoice number — the SAME value for every provider on this run
   // (Gusto's invoice_number column), set once per payroll and incremented each run.
-  invoiceNumber  String?
-  status         PayrollRunStatus @default(DRAFT)
-  csvContent     String? // stored copy of the generated CSV (set on export)
-  fileName       String?
-  exportedById   String? // facility User id who exported
-  exportedByName String?
-  exportedAt     DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  invoiceNumber      String?
+  status             PayrollRunStatus @default(DRAFT)
+  csvContent         String? // stored copy of the generated CSV (set on export)
+  fileName           String?
+  exportedById       String? // facility User id who exported
+  exportedByName     String?
+  exportedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   lineItems PayrollRunProvider[]
 
@@ -2426,7 +2452,7 @@ model PayrollLineDraft {
   reimbursement Float?
   // Row-level "Approved" checkmark in the review grid — persisted so leaving
   // the page doesn't reset the coordinator's review progress.
-  approved      Boolean  @default(false)
+  approved      Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2559,8 +2585,8 @@ model AgreementAcceptance {
   facility         Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   userId           String
   user             User     @relation(fields: [userId], references: [id])
-  agreementVersion String   // e.g. "v1.0-2026-06-29"
-  tier             String   // tier selected at time of acceptance
+  agreementVersion String // e.g. "v1.0-2026-06-29"
+  tier             String // tier selected at time of acceptance
   ipAddress        String?
   userAgent        String?
   acceptedAt       DateTime @default(now())
@@ -2582,12 +2608,12 @@ model BenchmarkConsent {
   facility       Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   userId         String
   user           User      @relation(fields: [userId], references: [id])
-  consentVersion String    // e.g. "v1.0-2026-07-12"
+  consentVersion String // e.g. "v1.0-2026-07-12"
   ipAddress      String?
   userAgent      String?
   acceptedAt     DateTime  @default(now())
   revokedAt      DateTime?
-  revokedById    String?   // userId of the revoking facility user
+  revokedById    String? // userId of the revoking facility user
 
   @@index([facilityId])
 }
@@ -2611,13 +2637,13 @@ model AvailabilityRequest {
   month         Int
   deadline      DateTime
   sentAt        DateTime?
-  sentVia       String?   // "SMS" | "EMAIL" | "BOTH"
+  sentVia       String? // "SMS" | "EMAIL" | "BOTH"
   submittedAt   DateTime? // when the provider first submitted
   lastUpdatedAt DateTime? // updated on every subsequent submit
   createdAt     DateTime  @default(now())
 
-  facility       Facility            @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  rosterEntry    InternalRosterEntry @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
+  facility       Facility             @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  rosterEntry    InternalRosterEntry  @relation(fields: [rosterEntryId], references: [id], onDelete: Cascade)
   daySubmissions AvailDaySubmission[]
 
   @@unique([facilityId, rosterEntryId, year, month])
@@ -2679,12 +2705,12 @@ model RoomCountRequest {
   month         Int
   deadline      DateTime
   sentAt        DateTime?
-  sentVia       String?   // "EMAIL"
+  sentVia       String? // "EMAIL"
   submittedAt   DateTime? // when the site first submitted (the timestamp shown in the builder)
   lastUpdatedAt DateTime? // updated on every subsequent submit
   createdAt     DateTime  @default(now())
 
-  facility  Facility        @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  facility  Facility       @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   dayCounts RoomCountDay[]
 
   @@unique([facilityId, location, year, month])

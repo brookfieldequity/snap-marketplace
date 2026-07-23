@@ -21,6 +21,7 @@ const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
 const { signDocToken } = require('../middleware/credentialAuth')
 const credMapIntake = require('../services/credMapIntake')
+const credFormStructure = require('../services/credFormStructure')
 const passportClient = require('../services/passportClient')
 const { TAXONOMY, CANONICAL_KEYS, STARTER_ITEMS, defaultsFor } = require('../services/credMapTaxonomy')
 
@@ -909,6 +910,98 @@ router.put('/:id/fields', async (req, res) => {
   }
 })
 
+// ── Native form structure (the scalable path) ────────────────────────────────
+// POST /:id/form-structure/build — read the uploaded facility packet and
+// extract its FULL structure (sections + typed fields), so SNAP can render its
+// own native version of that application. Built once per map, reused for every
+// provider. Mirrors /fields/rebuild but produces the native template.
+router.post('/:id/form-structure/build', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) {
+      return res.status(400).json({ error: 'Upload the facility application first, then build its native form.' })
+    }
+    if (!credFormStructure.isConfigured()) {
+      return res.status(503).json({ error: 'AI is not configured on this environment (ANTHROPIC_API_KEY).' })
+    }
+
+    const buffer = await getSourceBuffer(map.sourceDocPath)
+    const mime = /\.pdf$/i.test(map.sourceDocName || map.sourceDocPath) ? 'application/pdf' : 'image/png'
+    const structure = await credFormStructure.analyzeFormStructure([{ buffer, mimeType: mime }])
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formStructure: structure } })
+
+    const stats = credFormStructure.structureStats(structure)
+    await logMapAccess(req, map.id, 'CREDMAP_STRUCTURE_BUILD', `${stats.sections} sections · ${stats.total} fields`)
+    res.json({ ok: true, structure, stats })
+  } catch (err) {
+    console.error('[credmap/structure-build] error:', err)
+    res.status(500).json({ error: 'Failed to build the native form' })
+  }
+})
+
+// GET /:id/form-structure?npi= — the stored native template + counts, and (with
+// npi) a live preview of what each field resolves to for a provider: passport
+// values + that provider's saved answers.
+router.get('/:id/form-structure', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const structure = map.formStructure && Array.isArray(map.formStructure.sections) ? map.formStructure : null
+    if (!structure) return res.json({ structure: null, stats: credFormStructure.structureStats(null) })
+
+    const { resolveValue } = require('../services/credMapPdf')
+    let passport = null
+    let answers = {}
+    const npi = String(req.query.npi || '').replace(/\D/g, '')
+    if (npi) {
+      if (passportClient.isConfigured()) {
+        try { passport = await passportClient.getPassport(npi, req.facilityId) } catch { /* preview only */ }
+      }
+      const rows = await prisma.credFormAnswer.findMany({ where: { facilityId: req.facilityId, npi } })
+      answers = Object.fromEntries(rows.map((a) => [a.questionKey, a.value]))
+    }
+
+    // Attach a resolved preview value per field (null when no npi requested).
+    const sections = structure.sections.map((sec) => ({
+      heading: sec.heading,
+      description: sec.description || null,
+      fields: (sec.fields || []).map((f) => {
+        const qk = credFormStructure.questionKeyFor(f, map.id)
+        let preview = null
+        if (npi) {
+          if (f.source === 'PASSPORT') preview = passport ? resolveValue(f.valueKey, passport) : ''
+          else if (f.source === 'PROVIDER' || f.source === 'ATTESTATION') preview = answers[qk] || ''
+        }
+        return { ...f, questionKey: qk, preview }
+      }),
+    }))
+    res.json({ structure: { ...structure, sections }, stats: credFormStructure.structureStats(structure) })
+  } catch (err) {
+    console.error('[credmap/structure-get] error:', err)
+    res.status(500).json({ error: 'Failed to load the native form' })
+  }
+})
+
+// PATCH /:id/form-structure — save coordinator edits to the native template
+// (full replace of the sections array; the shape is re-normalized server-side
+// so bad enums / missing keys can't corrupt it).
+router.patch('/:id/form-structure', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const incoming = req.body?.structure
+    if (!incoming || !Array.isArray(incoming.sections)) return res.status(400).json({ error: 'structure.sections required' })
+    const structure = credFormStructure.normalizeStructure(incoming)
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formStructure: structure } })
+    await logMapAccess(req, map.id, 'CREDMAP_STRUCTURE_EDIT', `${structure.sections.length} sections`)
+    res.json({ ok: true, structure, stats: credFormStructure.structureStats(structure) })
+  } catch (err) {
+    console.error('[credmap/structure-edit] error:', err)
+    res.status(500).json({ error: 'Failed to save the native form' })
+  }
+})
+
 // POST /packets/one/:packetId/render — produce the filled facility PDF: the
 // facility's exact form, typed full of the provider's live passport data,
 // e-signature stamped on signature lines. Field mapping is AI-built once per
@@ -932,9 +1025,13 @@ router.post('/packets/one/:packetId/render', async (req, res) => {
       throw err
     }
 
+    // engine=native → SNAP's own document mirroring the facility's application
+    // (the scalable default when a form structure exists). Otherwise the
+    // overlay/AcroForm/clean-packet auto-path.
+    const engine = req.body?.engine === 'native' ? 'native' : undefined
     const { renderFilledPdf } = require('../services/credMapPdf')
-    const result = await renderFilledPdf({ packet, map: packet.map, passport })
-    await logMapAccess(req, packet.mapId, 'CREDMAP_PDF_RENDER', result.generatedDocName)
+    const result = await renderFilledPdf({ packet, map: packet.map, passport, engine })
+    await logMapAccess(req, packet.mapId, engine === 'native' ? 'CREDMAP_NATIVE_RENDER' : 'CREDMAP_PDF_RENDER', result.generatedDocName)
     res.json({ ok: true, ...result, docToken: signDocToken(result.generatedDocPath) })
   } catch (err) {
     if (['NOT_CONFIGURED', 'NO_SOURCE_DOC', 'NOT_FILLABLE'].includes(err.code)) {

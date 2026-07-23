@@ -16,6 +16,7 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const crypto = require('crypto')
 const prisma = require('../config/db')
+const { VALUE_KEYS, resolveValue, fmtDate } = require('./passportFields')
 
 const MODEL = process.env.CREDMAP_MODEL || 'claude-opus-4-8'
 
@@ -25,20 +26,6 @@ function getClient() {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   return _client
 }
-
-// The value vocabulary the AI maps form fields onto. Everything resolvable
-// from the passport payload (provider + credentials + sections) or context.
-const VALUE_KEYS = [
-  'provider.fullName', 'provider.firstName', 'provider.lastName', 'provider.npi',
-  'provider.dateOfBirth', 'provider.specialty', 'provider.licenseState',
-  'cred.STATE_LICENSE.identifier', 'cred.STATE_LICENSE.expirationDate',
-  'cred.STATE_CS_LICENSE.identifier', 'cred.STATE_CS_LICENSE.expirationDate',
-  'cred.DEA.identifier', 'cred.DEA.expirationDate',
-  'cred.BOARD_CERTIFICATION.identifier', 'cred.BOARD_CERTIFICATION.expirationDate',
-  'cred.MALPRACTICE_INSURANCE.identifier', 'cred.MALPRACTICE_INSURANCE.expirationDate',
-  'cred.ACLS.expirationDate', 'cred.BLS.expirationDate',
-  'malpractice.carrier', 'today', 'LEAVE_BLANK',
-]
 
 const MAPPING_TOOL = {
   name: 'record_field_mapping',
@@ -105,36 +92,6 @@ async function buildFieldMap(fieldNames, labels = {}) {
   return map
 }
 
-function fmtDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return String(v)
-  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
-}
-
-// Resolve a value key against the full passport payload.
-function resolveValue(source, passport) {
-  if (!source || source === 'LEAVE_BLANK') return ''
-  const prov = passport?.provider || {}
-  const creds = passport?.credentials || []
-  const credByType = Object.fromEntries(creds.map((c) => [c.type, c]))
-  const parts = source.split('.')
-  if (source === 'today') return fmtDate(new Date())
-  if (parts[0] === 'provider') {
-    if (parts[1] === 'fullName') return `${prov.firstName || ''} ${prov.lastName || ''}`.trim()
-    if (parts[1] === 'dateOfBirth') return prov.dateOfBirth || ''
-    return String(prov[parts[1]] || '')
-  }
-  if (parts[0] === 'cred') {
-    const c = credByType[parts[1]]
-    if (!c) return ''
-    if (parts[2] === 'expirationDate') return fmtDate(c.expirationDate)
-    return String(c[parts[2]] || '')
-  }
-  if (source === 'malpractice.carrier') return passport?.sections?.malpractice?.carrier || ''
-  return ''
-}
-
 async function s3GetBuffer(key) {
   const { GetObjectCommand } = require('@aws-sdk/client-s3')
   const { clientForBucket } = require('./s3Buckets')
@@ -160,8 +117,14 @@ async function s3PutBuffer(key, buffer, contentType) {
  * { generatedDocPath, generatedDocName, fieldCount, filledCount, signatureStamped }.
  * Throws coded errors: NOT_CONFIGURED, NO_SOURCE_DOC, NOT_FILLABLE.
  */
-async function renderFilledPdf({ packet, map, passport }) {
+async function renderFilledPdf({ packet, map, passport, engine }) {
   if (!process.env.AWS_S3_BUCKET) { const e = new Error('Document storage is not configured'); e.code = 'NOT_CONFIGURED'; throw e }
+
+  // Native-form engine: SNAP renders its OWN document mirroring the facility's
+  // application structure — no overlay, always perfect. The scalable default
+  // once a form structure has been built (credFormStructure). Falls back to the
+  // clean packet when no structure exists yet.
+  if (engine === 'native') return renderNativeForm({ packet, map, passport })
 
   // Dormant advanced override: an explicitly-configured Anvil PDF Template.
   // Nothing depends on it — the automatic paths below need no setup.
@@ -477,6 +440,147 @@ async function renderCleanPacket({ packet, map, passport }) {
   return { ...saved, filledCount: creds.length, engine: 'clean-packet' }
 }
 
+// ── Native SNAP form ─────────────────────────────────────────────────────────
+// The scaling reframe made real: instead of overlaying the facility's PDF, we
+// render SNAP's OWN document that mirrors THAT facility's application —
+// section-by-section, field-by-field — populated from the live passport and the
+// provider's saved answers (CredFormAnswer). Always renders perfectly; no
+// per-facility placement. Requires map.formStructure (credFormStructure); with
+// none it degrades to the generic clean packet.
+async function renderNativeForm({ packet, map, passport }) {
+  const structure = map.formStructure
+  if (!structure || !Array.isArray(structure.sections) || structure.sections.length === 0) {
+    return renderCleanPacket({ packet, map, passport })
+  }
+  const { questionKeyFor } = require('./credFormStructure')
+
+  // Provider's saved answers (attestations + typed fields), keyed by questionKey.
+  const answerRows = await prisma.credFormAnswer.findMany({
+    where: { facilityId: packet.facilityId, npi: packet.npi },
+  })
+  const answers = Object.fromEntries(answerRows.map((a) => [a.questionKey, a]))
+
+  // Latest captured e-signature to stamp on signature lines.
+  const sig = await prisma.credSignature.findFirst({ where: { packetId: packet.id }, orderBy: { signedAt: 'desc' } })
+  const sigPng = sig?.signatureData?.startsWith('data:image/png;base64,')
+    ? Buffer.from(sig.signatureData.split(',')[1], 'base64') : null
+
+  const PDFDocument = require('pdfkit')
+  const doc = new PDFDocument({ size: 'LETTER', margins: { top: 54, bottom: 54, left: 54, right: 54 } })
+  const chunks = []
+  doc.on('data', (c) => chunks.push(c))
+  const done = new Promise((resolve) => doc.on('end', resolve))
+
+  const prov = passport?.provider || {}
+  const left = doc.page.margins.left
+  const rightX = doc.page.width - doc.page.margins.right
+  const bottom = () => doc.page.height - doc.page.margins.bottom
+  const ensure = (h) => { if (doc.y + h > bottom()) doc.addPage() }
+
+  // Header — the application title (their form's name) + who it's for.
+  doc.font('Helvetica-Bold').fontSize(16).fillColor('#0F172A').text(structure.title || map.name || 'Credentialing Application')
+  doc.moveTo(left, doc.y + 3).lineTo(rightX, doc.y + 3).lineWidth(2).strokeColor('#0F172A').stroke()
+  doc.moveDown(0.6)
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0F172A')
+    .text([prov.firstName, prov.middleName, prov.lastName, prov.suffix].filter(Boolean).join(' ').trim() || packet.providerName || `NPI ${packet.npi}`)
+  doc.font('Helvetica').fontSize(9).fillColor('#64748B')
+    .text(`NPI ${packet.npi}${prov.specialty ? ` · ${prov.specialty}` : ''}${packet.cycle === 'RENEWAL' ? ' · Reappointment' : ''}`)
+  doc.moveDown(0.5)
+
+  const sectionHeading = (title, description) => {
+    ensure(46)
+    doc.moveDown(0.5)
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#0F172A').text(String(title || 'Section').toUpperCase())
+    doc.moveTo(left, doc.y + 2).lineTo(rightX, doc.y + 2).lineWidth(0.75).strokeColor('#CBD5E1').stroke()
+    doc.moveDown(0.35)
+    if (description) { doc.font('Helvetica-Oblique').fontSize(8.5).fillColor('#64748B').text(description); doc.moveDown(0.2) }
+  }
+
+  const kv = (label, value) => {
+    const empty = value == null || value === ''
+    doc.fontSize(9.5)
+    doc.font('Helvetica-Bold').fillColor('#334155').text(`${label}:  `, { continued: true })
+    if (empty) doc.font('Helvetica').fillColor('#CBD5E1').text('______________________________')
+    else doc.font('Helvetica').fillColor('#0F172A').text(String(value))
+  }
+
+  const multiline = (label, value) => {
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#334155').text(`${label}:`)
+    const lines = String(value || '').split('\n').filter((l) => l.trim())
+    if (lines.length === 0) { doc.font('Helvetica').fontSize(9.5).fillColor('#CBD5E1').text('   ______________________________'); return }
+    for (const l of lines) doc.font('Helvetica').fontSize(9.5).fillColor('#0F172A').text(`   •  ${l}`)
+  }
+
+  for (const section of structure.sections) {
+    sectionHeading(section.heading, section.description)
+    for (const field of section.fields || []) {
+      const qk = questionKeyFor(field, map.id)
+
+      if (field.source === 'STATIC') {
+        doc.moveDown(0.15)
+        doc.font('Helvetica').fontSize(9).fillColor('#475569').text(field.label)
+        continue
+      }
+
+      if (field.source === 'SIGNATURE') {
+        ensure(64)
+        doc.moveDown(0.5)
+        if (sigPng) {
+          try { doc.image(sigPng, left, doc.y, { fit: [190, 44] }) } catch { /* ignore bad png */ }
+          doc.y += 46
+        } else {
+          doc.moveDown(1.4)
+        }
+        doc.moveTo(left, doc.y).lineTo(left + 260, doc.y).lineWidth(0.75).strokeColor('#94A3B8').stroke()
+        doc.moveTo(left + 300, doc.y).lineTo(left + 430, doc.y).lineWidth(0.75).strokeColor('#94A3B8').stroke()
+        doc.moveDown(0.15)
+        const dateStr = sig ? fmtDate(sig.signedAt) : ''
+        doc.font('Helvetica').fontSize(8).fillColor('#64748B')
+          .text(field.label || 'Signature', left, doc.y, { continued: true, width: 260 })
+          .text(`          Date${dateStr ? `:  ${dateStr}` : ''}`)
+        if (sig) doc.font('Helvetica-Oblique').fontSize(7.5).fillColor('#94A3B8').text(`Signed electronically by ${sig.signerName}`)
+        continue
+      }
+
+      if (field.source === 'ATTESTATION') {
+        ensure(30)
+        const ans = String(answers[qk]?.value || '').toUpperCase()
+        const yes = ans === 'YES', no = ans === 'NO'
+        doc.font('Helvetica').fontSize(9.5).fillColor('#0F172A').text(field.label)
+        doc.font(yes || no ? 'Helvetica-Bold' : 'Helvetica').fontSize(9.5).fillColor(yes || no ? '#0F172A' : '#334155')
+          .text(`      ${yes ? '[X]' : '[  ]'}  Yes        ${no ? '[X]' : '[  ]'}  No`)
+        if (field.explain) doc.font('Helvetica-Oblique').fontSize(8).fillColor('#94A3B8').text(`      ${field.explain}`)
+        doc.moveDown(0.15)
+        continue
+      }
+
+      // PASSPORT (auto-filled) or PROVIDER (typed once, saved to the answer layer)
+      const value = field.source === 'PASSPORT'
+        ? resolveValue(field.valueKey, passport)
+        : (answers[qk]?.value || '')
+      ensure(18)
+      if (field.type === 'longtext' || String(value).includes('\n')) multiline(field.label, value)
+      else kv(field.label, value)
+      doc.moveDown(0.1)
+    }
+  }
+
+  // ONE footer provenance line (document-voice principle: whisper in documents).
+  doc.moveDown(1)
+  ensure(30)
+  doc.font('Helvetica').fontSize(7.5).fillColor('#94A3B8').text(
+    'Auto-filled fields were populated directly from the provider’s verified SNAP Passport, read live at generation. ' +
+    'Yes/no attestations and typed responses are the provider’s own answers; signatures were captured electronically with recorded consent (ESIGN/UETA).',
+    { align: 'left' }
+  )
+
+  doc.end()
+  await done
+  const out = Buffer.concat(chunks)
+  const saved = await storeGeneratedPdf(packet, map, out)
+  return { ...saved, engine: 'native', sections: structure.sections.length, signatureStamped: Boolean(sigPng) }
+}
+
 // Shared: store a generated PDF to encrypted S3 and record it on the packet.
 async function storeGeneratedPdf(packet, map, buffer) {
   const providerSlug = (packet.providerName || packet.npi).replace(/[^A-Za-z0-9]+/g, '_')
@@ -548,4 +652,4 @@ async function inspectFields(sourceBuffer) {
   return { fieldNames, labels, notFillable: false }
 }
 
-module.exports = { renderFilledPdf, inspectFields, detectFlatFills, buildFieldMap, resolveValue, VALUE_KEYS }
+module.exports = { renderFilledPdf, renderNativeForm, inspectFields, detectFlatFills, buildFieldMap, resolveValue, VALUE_KEYS }

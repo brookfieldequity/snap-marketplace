@@ -1052,7 +1052,13 @@ export const credMapAPI = {
   sendSignLink: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/sign-link`, { method: 'POST', headers: credHeaders() }),
   deletePacket: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}`, { method: 'DELETE', headers: credHeaders() }),
   renderPacketPdf: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/render`, { method: 'POST', headers: credHeaders() }),
+  // Native SNAP form: render our own document mirroring the facility's application.
+  renderNativeForm: (packetId) => apiFetch(`${BASE}/credmap/packets/one/${packetId}/render`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ engine: 'native' }) }),
   docUrl: (token) => `${BASE}/credentialing/doc/${token}`,
+  // Native-form structure (extract once per map, reused per provider)
+  buildFormStructure: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/form-structure/build`, { method: 'POST', headers: credHeaders() }),
+  getFormStructure: (mapId, npi) => apiFetch(`${BASE}/credmap/${mapId}/form-structure${npi ? `?npi=${npi}` : ''}`, { headers: credHeaders() }),
+  saveFormStructure: (mapId, structure) => apiFetch(`${BASE}/credmap/${mapId}/form-structure`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify({ structure }) }),
   getFieldMap: (mapId, npi) => apiFetch(`${BASE}/credmap/${mapId}/fields${npi ? `?npi=${npi}` : ''}`, { headers: credHeaders() }),
   saveFieldMap: (mapId, fieldMap) => apiFetch(`${BASE}/credmap/${mapId}/fields`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fieldMap }) }),
   rebuildFieldMap: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/fields/rebuild`, { method: 'POST', headers: credHeaders() }),
