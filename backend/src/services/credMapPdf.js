@@ -62,12 +62,13 @@ const MAPPING_TOOL = {
   },
 }
 
-const MAPPING_PROMPT = (fieldNames) => `You are mapping the form fields of a surgical facility's credentialing application PDF (anesthesia providers) to the data keys that should fill them.
+const MAPPING_PROMPT = (fieldNames, labels = {}) => `You are mapping the form fields of a surgical facility's credentialing application PDF (anesthesia providers) to the data keys that should fill them.
 
-Field names (exactly as they appear in the PDF):
-${fieldNames.map((n) => `- ${n}`).join('\n')}
+Each field is listed as: FIELD_NAME — nearby label text on the form (the label is the reliable signal; field names are often generic like "Text12").
+${fieldNames.map((n) => `- ${n}${labels[n] ? ` — "${labels[n]}"` : ''}`).join('\n')}
 
 Rules:
+- Use the nearby label text to decide what a field is for; the field name alone is often meaningless.
 - Map each field to the single best value key. "today" is the date the form is being completed.
 - License/DEA/certification numbers map to the matching cred.*.identifier; their expiration fields to cred.*.expirationDate.
 - Use LEAVE_BLANK for anything ambiguous, facility-internal (office use, approvals), reference/peer fields, yes/no questions, or fields SNAP data cannot confidently fill. Never guess.
@@ -84,8 +85,8 @@ async function withApiRetries(fn) {
   }
 }
 
-// AI pass: field names in, { fieldName: valueKey } out. Text fields only.
-async function buildFieldMap(fieldNames) {
+// AI pass: field names (+ nearby labels) in, { fieldName: valueKey } out.
+async function buildFieldMap(fieldNames, labels = {}) {
   const client = getClient()
   if (!client) throw new Error('ANTHROPIC_API_KEY not configured')
   const resp = await withApiRetries(() => client.messages.create({
@@ -93,7 +94,7 @@ async function buildFieldMap(fieldNames) {
     max_tokens: 8000,
     tools: [MAPPING_TOOL],
     tool_choice: { type: 'tool', name: 'record_field_mapping' },
-    messages: [{ role: 'user', content: MAPPING_PROMPT(fieldNames) }],
+    messages: [{ role: 'user', content: MAPPING_PROMPT(fieldNames, labels) }],
   }))
   const call = resp.content.find((b) => b.type === 'tool_use')
   if (!call) throw new Error('no mapping returned')
@@ -179,10 +180,13 @@ async function renderFilledPdf({ packet, map, passport }) {
   const textFields = fields.filter((f) => f.constructor.name === 'PDFTextField')
   const textNames = textFields.map((f) => f.getName())
 
-  // Map once per facility, reuse forever (coordinator can re-map by re-uploading).
+  // Map once per facility, reuse forever (coordinator can re-map / correct
+  // via the field-mapping panel). Build label-aware so generic field names
+  // ("Text12") still map via the text printed next to them.
   let fieldMap = map.formFieldMap
   if (!fieldMap || typeof fieldMap !== 'object' || Object.keys(fieldMap).length === 0) {
-    fieldMap = await buildFieldMap(textNames)
+    const { labels } = await inspectFields(sourceBuffer)
+    fieldMap = await buildFieldMap(textNames, labels)
     await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
   }
 
@@ -249,4 +253,65 @@ async function renderFilledPdf({ packet, map, passport }) {
   return { generatedDocPath, generatedDocName, fieldCount: textNames.length, filledCount, signatureStamped }
 }
 
-module.exports = { renderFilledPdf }
+/**
+ * Enumerate a fillable packet's text fields + nearby label text, for the
+ * mapping review panel and for label-aware AI mapping. Returns
+ * { fieldNames: [...], labels: { field: "text near it" }, notFillable: bool }.
+ * Label extraction is best-effort (pdfjs) — field names still work without it.
+ */
+async function inspectFields(sourceBuffer) {
+  const { PDFDocument } = require('pdf-lib')
+  const pdfDoc = await PDFDocument.load(sourceBuffer, { ignoreEncryption: true })
+  const form = pdfDoc.getForm()
+  const textFields = form.getFields().filter((f) => f.constructor.name === 'PDFTextField')
+  if (textFields.length === 0) return { fieldNames: [], labels: {}, notFillable: true }
+
+  const fieldNames = textFields.map((f) => f.getName())
+
+  // Best-effort: pull the text word closest-left / closest-above each field
+  // widget so generic field names ("Text12") gain human meaning.
+  const labels = {}
+  try {
+    const pdfjs = require('pdfjs-dist/legacy/build/pdf.js')
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(sourceBuffer), useSystemFonts: true }).promise
+    const pageWords = []
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p)
+      const content = await page.getTextContent()
+      const vh = page.getViewport({ scale: 1 }).height
+      for (const item of content.items) {
+        if (!item.str.trim()) continue
+        // pdf.js transform origin is top-left; convert to PDF bottom-left y.
+        const x = item.transform[4]
+        const y = vh - item.transform[5]
+        pageWords.push({ page: p, x, y, str: item.str.trim() })
+      }
+    }
+    for (const f of textFields) {
+      const widget = f.acroField.getWidgets()[0]
+      if (!widget) continue
+      const r = widget.getRectangle()
+      const pageRef = widget.P()
+      const pageIndex = pdfDoc.getPages().findIndex((pg) => pg.ref === pageRef || pg.ref.toString() === pageRef?.toString())
+      const pageNo = pageIndex + 1
+      const midY = r.y + r.height / 2
+      // Nearest words to the left on the same line, then above.
+      const left = pageWords
+        .filter((w) => w.page === pageNo && Math.abs(w.y - midY) < r.height && w.x < r.x)
+        .sort((a, b) => (r.x - a.x) - (r.x - b.x))
+        .slice(0, 4).map((w) => w.str)
+      const above = pageWords
+        .filter((w) => w.page === pageNo && w.y > midY && w.y - midY < 24 && Math.abs(w.x - r.x) < 120)
+        .sort((a, b) => (a.y - midY) - (b.y - midY))
+        .slice(0, 4).map((w) => w.str)
+      const label = (left.length ? left.join(' ') : above.join(' ')).slice(0, 80)
+      if (label) labels[f.getName()] = label
+    }
+  } catch (err) {
+    console.error('[credMapPdf] label extraction skipped:', err.message)
+  }
+
+  return { fieldNames, labels, notFillable: false }
+}
+
+module.exports = { renderFilledPdf, inspectFields, buildFieldMap, resolveValue, VALUE_KEYS }

@@ -1091,6 +1091,167 @@ function RenewalsView({ maps, onOpenPacket }) {
   )
 }
 
+// ── Field-mapping review panel ───────────────────────────────────────────────
+// Transparency + correction: every fillable field in the facility's PDF, the
+// label printed next to it, and what SNAP types there — editable. Diagnoses an
+// under-filled form (generic field names, or genuinely sparse passport data)
+// and lets the coordinator fix any mis-map, saved on the map for every provider.
+
+const VALUE_KEY_LABEL = {
+  LEAVE_BLANK: '— leave blank —',
+  'provider.fullName': 'Provider full name',
+  'provider.firstName': 'First name',
+  'provider.lastName': 'Last name',
+  'provider.npi': 'NPI',
+  'provider.dateOfBirth': 'Date of birth',
+  'provider.specialty': 'Specialty',
+  'provider.licenseState': 'License state',
+  'cred.STATE_LICENSE.identifier': 'State license #',
+  'cred.STATE_LICENSE.expirationDate': 'State license expiry',
+  'cred.STATE_CS_LICENSE.identifier': 'State CS license #',
+  'cred.STATE_CS_LICENSE.expirationDate': 'State CS license expiry',
+  'cred.DEA.identifier': 'DEA #',
+  'cred.DEA.expirationDate': 'DEA expiry',
+  'cred.BOARD_CERTIFICATION.identifier': 'Board cert #',
+  'cred.BOARD_CERTIFICATION.expirationDate': 'Board cert expiry',
+  'cred.MALPRACTICE_INSURANCE.identifier': 'Malpractice policy #',
+  'cred.MALPRACTICE_INSURANCE.expirationDate': 'Malpractice expiry',
+  'cred.ACLS.expirationDate': 'ACLS expiry',
+  'cred.BLS.expirationDate': 'BLS expiry',
+  'malpractice.carrier': 'Malpractice carrier',
+  today: "Today's date",
+}
+
+function FieldMappingPanel({ mapId, roster, onClose }) {
+  const [data, setData] = useState(null)
+  const [previewNpi, setPreviewNpi] = useState('')
+  const [edits, setEdits] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [error, setError] = useState('')
+
+  async function rebuild() {
+    setRebuilding(true); setError('')
+    try {
+      await credMapAPI.rebuildFieldMap(mapId)
+      setEdits({})
+      load(previewNpi)
+    } catch (e) { setError(e.message) }
+    finally { setRebuilding(false) }
+  }
+
+  const load = (npi) => {
+    setData(null)
+    credMapAPI.getFieldMap(mapId, npi).then(setData).catch((e) => setError(e.message))
+  }
+  useEffect(() => { load(previewNpi) }, [previewNpi])
+
+  function setField(name, source) {
+    setEdits((e) => ({ ...e, [name]: source }))
+    setSaved(false)
+  }
+
+  async function save() {
+    setSaving(true); setError('')
+    try {
+      const fieldMap = {}
+      for (const f of data.fields) fieldMap[f.name] = edits[f.name] ?? f.source
+      await credMapAPI.saveFieldMap(mapId, fieldMap)
+      setSaved(true)
+      load(previewNpi)
+      setEdits({})
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: 760, maxHeight: '88vh', background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>Field mapping — what SNAP types where</div>
+              <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>
+                {data && !data.notFillable ? `${data.mappedCount} of ${data.totalCount} fields mapped to passport data. Correct any below — saved for every provider on this form.` : 'Reading the facility form…'}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Preview values for</span>
+            <select value={previewNpi} onChange={(e) => setPreviewNpi(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, color: '#0F172A', background: '#fff' }}>
+              <option value="">— no provider —</option>
+              {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
+            </select>
+            <div style={{ flex: 1 }} />
+            {data && !data.notFillable && (
+              <button onClick={rebuild} disabled={rebuilding} title="Re-run the AI mapping using the labels printed next to each field" style={{ padding: '6px 12px', background: '#EDE9FE', border: 'none', borderRadius: 8, color: '#5B21B6', fontSize: 12, fontWeight: 800, cursor: rebuilding ? 'wait' : 'pointer' }}>
+                {rebuilding ? 'Re-mapping…' : '✨ Re-run AI mapping'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: '8px 24px', flex: 1 }}>
+          {data?.notFillable ? (
+            <div style={{ padding: '30px 0', textAlign: 'center', color: '#92400E', fontSize: 13.5 }}>
+              This packet isn't a fillable PDF (no form fields inside it), so there's nothing to auto-type. The packet preview still shows all the data; box-mapped filling for scanned forms is coming.
+            </div>
+          ) : !data ? (
+            <div style={{ padding: '30px 0', textAlign: 'center', color: '#94A3B8', fontSize: 13.5 }}>Loading…</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ position: 'sticky', top: 0, background: '#fff' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 6px', color: '#64748B', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Field / label on form</th>
+                  <th style={{ textAlign: 'left', padding: '8px 6px', color: '#64748B', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>SNAP fills with</th>
+                  {previewNpi && <th style={{ textAlign: 'left', padding: '8px 6px', color: '#64748B', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Value</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {data.fields.map((f) => {
+                  const cur = edits[f.name] ?? f.source
+                  return (
+                    <tr key={f.name} style={{ borderTop: '1px solid #F1F5F9' }}>
+                      <td style={{ padding: '7px 6px', maxWidth: 260 }}>
+                        <div style={{ fontWeight: 700, color: '#0F172A' }}>{f.label || <span style={{ color: '#94A3B8', fontWeight: 400 }}>(no label)</span>}</div>
+                        <div style={{ fontSize: 10.5, color: '#CBD5E1', fontFamily: 'monospace' }}>{f.name}</div>
+                      </td>
+                      <td style={{ padding: '7px 6px' }}>
+                        <select value={cur} onChange={(e) => setField(f.name, e.target.value)} style={{ padding: '5px 7px', border: `1px solid ${cur !== 'LEAVE_BLANK' ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 7, fontSize: 12, color: cur !== 'LEAVE_BLANK' ? '#1E40AF' : '#94A3B8', background: '#fff', maxWidth: 200 }}>
+                          {Object.entries(VALUE_KEY_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+                        </select>
+                      </td>
+                      {previewNpi && (
+                        <td style={{ padding: '7px 6px', color: f.value ? '#166534' : '#CBD5E1', fontWeight: f.value ? 600 : 400 }}>
+                          {f.value || '—'}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {error && <span style={{ color: '#DC2626', fontSize: 12.5 }}>{error}</span>}
+          {saved && <span style={{ color: '#16A34A', fontSize: 12.5, fontWeight: 700 }}>Saved ✓</span>}
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ padding: '9px 16px', background: '#F1F5F9', border: 'none', borderRadius: 9, color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Close</button>
+          {data && !data.notFillable && (
+            <button onClick={save} disabled={saving || Object.keys(edits).length === 0} style={{ padding: '9px 18px', background: Object.keys(edits).length === 0 ? '#CBD5E1' : '#2563EB', border: 'none', borderRadius: 9, color: '#fff', fontSize: 13, fontWeight: 800, cursor: Object.keys(edits).length === 0 ? 'not-allowed' : 'pointer' }}>
+              {saving ? 'Saving…' : 'Save mapping'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Map builder ──────────────────────────────────────────────────────────────
 
 function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, dragTarget }) {
@@ -1187,6 +1348,8 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
   const [map, setMap] = useState(null)
   const [packets, setPackets] = useState([])
   const [showGen, setShowGen] = useState(false)
+  const [showFieldMap, setShowFieldMap] = useState(false)
+  const [roster, setRoster] = useState([])
   const [error, setError] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -1196,7 +1359,10 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
 
   const load = () => credMapAPI.getMap(mapId).then(({ map }) => setMap(map)).catch((e) => setError(e.message))
   const loadPackets = () => credMapAPI.getPackets(mapId).then((d) => setPackets(d.packets)).catch(() => {})
-  useEffect(() => { load(); loadPackets() }, [mapId])
+  useEffect(() => {
+    load(); loadPackets()
+    credentialAPI.getPortalRoster().then((d) => setRoster((d.roster || []).filter((r) => r.npi))).catch(() => {})
+  }, [mapId])
 
   const grouped = useMemo(() => {
     if (!map) return []
@@ -1291,6 +1457,11 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
           {map.status === 'CONFIRMED' && (
             <button onClick={() => setShowGen(true)} style={{ padding: '9px 16px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
               ⚡ Generate packet
+            </button>
+          )}
+          {map.sourceDocName && (
+            <button onClick={() => setShowFieldMap(true)} title="See and correct what SNAP types into each box of the facility's PDF" style={{ padding: '9px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              🧩 Field mapping
             </button>
           )}
           {map.status === 'DRAFT' ? (
@@ -1448,6 +1619,10 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
           onClose={() => setShowGen(false)}
           onGenerated={(packetId) => { setShowGen(false); loadPackets(); onOpenPacket(packetId) }}
         />
+      )}
+
+      {showFieldMap && (
+        <FieldMappingPanel mapId={mapId} roster={roster} onClose={() => setShowFieldMap(false)} />
       )}
     </div>
   )

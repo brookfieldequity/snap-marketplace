@@ -735,6 +735,109 @@ router.get('/packets/one/:packetId', async (req, res) => {
   }
 })
 
+// GET /:id/fields?npi= — the field-mapping review panel: every fillable
+// field in the facility's PDF, its nearby label, what SNAP mapped it to, and
+// (if npi given) the value that resolves against that provider's passport.
+// Builds the map on first look so the panel shows the AI's proposal.
+router.get('/:id/fields', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) {
+      return res.json({ notFillable: true, reason: 'NO_SOURCE_DOC', fields: [] })
+    }
+
+    const { inspectFields, buildFieldMap, resolveValue, VALUE_KEYS } = require('../services/credMapPdf')
+    const { clientForBucket } = require('../services/s3Buckets')
+    const { GetObjectCommand } = require('@aws-sdk/client-s3')
+    const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
+    const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: map.sourceDocPath }))
+    const chunks = []
+    for await (const c of obj.Body) chunks.push(c)
+    const buffer = Buffer.concat(chunks)
+
+    const { fieldNames, labels, notFillable } = await inspectFields(buffer)
+    if (notFillable) return res.json({ notFillable: true, reason: 'NOT_FILLABLE', fields: [] })
+
+    let fieldMap = map.formFieldMap
+    if (!fieldMap || typeof fieldMap !== 'object' || Object.keys(fieldMap).length === 0) {
+      fieldMap = await buildFieldMap(fieldNames, labels)
+      await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
+    }
+
+    // Optional live value preview against a provider's passport.
+    let passport = null
+    const npi = String(req.query.npi || '').replace(/\D/g, '')
+    if (npi && passportClient.isConfigured()) {
+      try { passport = await passportClient.getPassport(npi, req.facilityId) } catch { /* preview only */ }
+    }
+
+    const fields = fieldNames.map((name) => ({
+      name,
+      label: labels[name] || null,
+      source: fieldMap[name] || 'LEAVE_BLANK',
+      value: passport ? resolveValue(fieldMap[name], passport) : null,
+    }))
+    const mapped = fields.filter((f) => f.source && f.source !== 'LEAVE_BLANK').length
+    res.json({ notFillable: false, fields, valueKeys: VALUE_KEYS, mappedCount: mapped, totalCount: fields.length })
+  } catch (err) {
+    console.error('[credmap/fields] error:', err)
+    res.status(500).json({ error: 'Failed to inspect form fields' })
+  }
+})
+
+// POST /:id/fields/rebuild — throw away the stored mapping and re-run the
+// (now label-aware) AI pass. For maps built before label extraction, or after
+// re-uploading a corrected form.
+router.post('/:id/fields/rebuild', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath || !process.env.AWS_S3_BUCKET) return res.status(400).json({ error: 'This map has no fillable facility PDF' })
+
+    const { inspectFields, buildFieldMap } = require('../services/credMapPdf')
+    const { clientForBucket } = require('../services/s3Buckets')
+    const { GetObjectCommand } = require('@aws-sdk/client-s3')
+    const s3 = await clientForBucket(process.env.AWS_S3_BUCKET)
+    const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: map.sourceDocPath }))
+    const chunks = []
+    for await (const c of obj.Body) chunks.push(c)
+    const buffer = Buffer.concat(chunks)
+
+    const { fieldNames, labels, notFillable } = await inspectFields(buffer)
+    if (notFillable) return res.status(400).json({ error: 'This packet is not a fillable PDF', notFillable: true })
+    const fieldMap = await buildFieldMap(fieldNames, labels)
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: fieldMap } })
+    const mapped = Object.values(fieldMap).filter((v) => v && v !== 'LEAVE_BLANK').length
+    await logMapAccess(req, map.id, 'CREDMAP_FIELDMAP_REBUILD', `${mapped}/${fieldNames.length} mapped`)
+    res.json({ ok: true, mappedCount: mapped, totalCount: fieldNames.length, labelsFound: Object.keys(labels).length })
+  } catch (err) {
+    console.error('[credmap/fields-rebuild] error:', err)
+    res.status(500).json({ error: 'Failed to rebuild field mapping' })
+  }
+})
+
+// PUT /:id/fields — save coordinator corrections to the field mapping.
+router.put('/:id/fields', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const { fieldMap } = req.body || {}
+    if (!fieldMap || typeof fieldMap !== 'object') return res.status(400).json({ error: 'fieldMap object required' })
+    const { VALUE_KEYS } = require('../services/credMapPdf')
+    const clean = {}
+    for (const [k, v] of Object.entries(fieldMap)) {
+      if (typeof k === 'string' && VALUE_KEYS.includes(v)) clean[k] = v
+    }
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { formFieldMap: clean } })
+    await logMapAccess(req, map.id, 'CREDMAP_FIELDMAP_EDIT', `${Object.keys(clean).length} fields`)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[credmap/fields-save] error:', err)
+    res.status(500).json({ error: 'Failed to save field mapping' })
+  }
+})
+
 // POST /packets/one/:packetId/render — produce the filled facility PDF: the
 // facility's exact form, typed full of the provider's live passport data,
 // e-signature stamped on signature lines. Field mapping is AI-built once per
