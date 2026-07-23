@@ -121,8 +121,14 @@ const STRUCTURE_PROMPT = `You are reading a facility's BLANK credentialing appli
 Walk the application top to bottom. Output every section in order, and within each section every field/question the applicant is asked to complete.
 
 For each field, decide the SOURCE:
-- PASSPORT — data SNAP already holds verified (name, NPI, DOB, license/DEA/board numbers and expirations, address, malpractice carrier). Set valueKey to the closest passport value.
-- PROVIDER — something the provider must type that SNAP does not hold (e.g. references, a specific explanation, extra contact details).
+- PASSPORT — data SNAP holds on the provider's verified passport. This is BROAD — especially once the provider's CV has been read in, the passport holds far more than just license numbers. It covers:
+  · Identity: full legal name, first/middle/last, suffix, former names, date of birth, NPI, specialty
+  · Contact: mailing address (street, city, state, zip), phone, email
+  · Licensure & certifications: state license number + expiration, controlled-substance registration, DEA number + expiration, board certification + expiration, ACLS expiration, BLS expiration
+  · Malpractice: carrier, policy number + expiration
+  · History — render each of these as ONE longtext field: complete work / employment history (valueKey list.workHistory), education & training history (valueKey list.education), hospital / facility affiliations (valueKey list.hospitalPrivileges)
+  Choose the closest valueKey from the list. PREFER PASSPORT for any field the passport could answer — SNAP fills what it has and leaves the rest blank, which is always better than making the provider re-type information it already holds.
+- PROVIDER — only for things genuinely NOT on the passport: professional references / peers, a specific written explanation, or a facility-internal detail SNAP has no source for. Do not use PROVIDER for standard demographics, contact info, work history, education, or affiliations — those are PASSPORT.
 - ATTESTATION — a yes/no legal question ("Have you ever been convicted of a felony?", "Have your privileges ever been suspended?"). Set canonicalAttestation to the matching key, or OTHER. Put any "if yes, explain" instruction in explain.
 - SIGNATURE — a signature line or "date signed" line.
 - STATIC — a heading or instruction with no input.
