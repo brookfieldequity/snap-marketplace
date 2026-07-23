@@ -70,6 +70,30 @@ import CredentialAuditLog from './CredentialAuditLog.jsx'
 import CredentialRosterSettings from './CredentialRosterSettings.jsx'
 import CredMapPage from './CredMapPage.jsx'
 import CredCvReader from './CredCvReader.jsx'
+import CredReportsPage from './CredReportsPage.jsx'
+
+// Settings hub — folds Users, Roster, and Audit Log under one "Settings" tab
+// so the sidebar stays to the seven plain-language tabs.
+function SettingsHub({ initial = 'users' }) {
+  const [tab, setTab] = React.useState(initial)
+  const TABS = [['users', 'Users'], ['roster', 'Roster'], ['audit', 'Audit Log']]
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, padding: '0 32px', borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
+        {TABS.map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)} style={{
+            padding: '14px 18px', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', background: 'none',
+            border: 'none', borderBottom: `2.5px solid ${tab === key ? '#2563EB' : 'transparent'}`,
+            color: tab === key ? '#2563EB' : '#64748B', marginBottom: -1,
+          }}>{label}</button>
+        ))}
+      </div>
+      {tab === 'users' && <CredentialSettings />}
+      {tab === 'roster' && <CredentialRosterSettings />}
+      {tab === 'audit' && <CredentialAuditLog />}
+    </div>
+  )
+}
 
 export default function CredentialApp({ onBack }) {
   const [token, setToken] = useState(() => localStorage.getItem('snapCredToken') || null)
@@ -204,17 +228,16 @@ export default function CredentialApp({ onBack }) {
         if (permission !== 'COORDINATOR') return null
         return <CredentialImportPage />
 
-      case 'roster':
+      case 'reports':
         if (permission !== 'COORDINATOR') return null
-        return <CredentialRosterSettings />
+        return <CredReportsPage />
 
+      // Settings hub — Users, Roster, and Audit Log folded under one tab.
+      case 'settings':
+      case 'roster':
       case 'audit':
         if (permission !== 'COORDINATOR') return null
-        return <CredentialAuditLog />
-
-      case 'settings':
-        if (permission !== 'COORDINATOR') return null
-        return <CredentialSettings />
+        return <SettingsHub initial={safePage === 'settings' ? 'users' : safePage} />
 
       default:
         return <CredentialDashboard onNavigate={handleNavigate} />

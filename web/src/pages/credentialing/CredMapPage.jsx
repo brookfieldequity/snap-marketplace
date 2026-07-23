@@ -1752,21 +1752,21 @@ export default function CredMapPage() {
     <div style={{ padding: '28px 32px', maxWidth: 1080 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Cred Maps</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Facility Packets</h1>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4 }}>
-            Map a facility's credentialing program once — every provider's packet populates from the passport, renewals included.
+            Set up a facility's requirements once — then any provider's packet builds itself from the passport, renewals included.
           </div>
         </div>
         {tab === 'maps' && (
           <button onClick={() => setShowNew(true)} style={{ padding: '11px 20px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
-            + New Cred Map
+            + New facility
           </button>
         )}
       </div>
 
       {/* Maps / Renewals tabs */}
       <div style={{ display: 'flex', gap: 4, margin: '16px 0 0', borderBottom: '1px solid #E2E8F0' }}>
-        {[['maps', '🗺️ Maps'], ['renewals', '🔄 Renewals']].map(([key, label]) => (
+        {[['maps', '📦 Facilities'], ['renewals', '🔄 Renewals']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -1803,12 +1803,12 @@ export default function CredMapPage() {
       ) : maps.length === 0 ? (
         <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 36 }}>🗺️</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facility maps yet</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facilities set up yet</div>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
-            Upload a facility's blank credentialing packet and SNAP will map their entire program in about a minute. Map it once — it works for every provider, every renewal.
+            Upload a facility's blank credentialing packet and SNAP learns their whole application in about a minute. Set it up once — it works for every provider, every renewal.
           </div>
           <button onClick={() => setShowNew(true)} style={{ marginTop: 18, padding: '11px 22px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
-            ✨ Map your first facility
+            ✨ Set up your first facility
           </button>
         </div>
       ) : (

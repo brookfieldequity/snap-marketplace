@@ -1540,6 +1540,40 @@ router.post('/passport/:npi/documents', credentialAuth, requireCoordinator, port
   }
 })
 
+// ── Reports (2026-07-23) — customizable roster export ────────────────────────
+// GET /portal/reports/fields — the column catalog for the picker.
+router.get('/portal/reports/fields', credentialAuth, requireCoordinator, (req, res) => {
+  const { FIELDS } = require('../services/credReport')
+  res.json({ fields: FIELDS.map((f) => ({ key: f.key, label: f.label })) })
+})
+
+// POST /portal/reports — { npis:[...], fields:[...], format } → spreadsheet.
+// npis are validated against THIS facility's roster (never export another's).
+router.post('/portal/reports', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    const { npis, fields, format } = req.body || {}
+    if (!Array.isArray(npis) || npis.length === 0) return res.status(400).json({ error: 'Pick at least one provider.' })
+    if (!Array.isArray(fields) || fields.length === 0) return res.status(400).json({ error: 'Pick at least one column.' })
+
+    const wanted = new Set(npis.map((n) => String(n).replace(/\D/g, '')))
+    const roster = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facilityId, npi: { in: [...wanted] } },
+      select: { npi: true, providerName: true },
+    })
+    const providers = roster.map((r) => ({ npi: r.npi, name: r.providerName }))
+    if (providers.length === 0) return res.status(400).json({ error: 'None of those providers are on your roster.' })
+
+    const { buildRosterReport } = require('../services/credReport')
+    const result = await buildRosterReport({ facilityId: req.facilityId, providers, fieldKeys: fields, format })
+    await logAccess(req.facilityId, req.credUser.id, 'report', 'REPORT_EXPORT', null, `${providers.length} providers × ${fields.length} cols`, req)
+    res.json(result)
+  } catch (err) {
+    console.error('[credentialing/reports] error:', err.message)
+    res.status(500).json({ error: err.message || 'Failed to build report' })
+  }
+})
+
 // ── CV Reader (2026-07-23) ───────────────────────────────────────────────────
 // Upload one CV → the passport backend reads it into a full provider profile.
 // The coordinator reviews the extracted dossier, then commits it to the

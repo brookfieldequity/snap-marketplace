@@ -718,6 +718,10 @@ export const credentialAPI = {
     return apiFetch(`${BASE}/credentialing/audit${q ? `?${q}` : ''}`, { headers: credHeaders() })
   },
 
+  // Reports — customizable roster export (pick providers + columns → CSV/Excel)
+  getReportFields: () => apiFetch(`${BASE}/credentialing/portal/reports/fields`, { headers: credHeaders() }),
+  buildReport: (npis, fields, format) => apiFetch(`${BASE}/credentialing/portal/reports`, { method: 'POST', headers: credHeaders(), body: JSON.stringify({ npis, fields, format }) }),
+
   // CV Reader — upload one CV → full extracted profile; then commit to passport.
   extractCv: async (file) => {
     const token = getCredToken()

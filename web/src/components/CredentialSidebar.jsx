@@ -4,13 +4,11 @@ const NAV = {
   COORDINATOR: [
     { key: 'dashboard', label: 'Dashboard', icon: '📊' },
     { key: 'providers', label: 'Providers', icon: '👥' },
-    { key: 'expiring', label: 'Expiring Soon', icon: '⚠️' },
-    { key: 'maps', label: 'Cred Maps', icon: '🗺️' },
+    { key: 'import', label: 'Add Documents', icon: '📥' },
     { key: 'cvreader', label: 'Read a CV', icon: '📄' },
-    { key: 'import', label: 'Import Documents', icon: '📥' },
-    { key: 'roster', label: 'Roster Settings', icon: '📋' },
-    { key: 'audit', label: 'Audit Log', icon: '🔍' },
-    { key: 'settings', label: 'Users & Settings', icon: '⚙️' },
+    { key: 'maps', label: 'Facility Packets', icon: '📦' },
+    { key: 'reports', label: 'Reports', icon: '📈' },
+    { key: 'settings', label: 'Settings', icon: '⚙️' },
   ],
   DEPT_HEAD: [
     { key: 'dashboard', label: 'Dashboard', icon: '📊' },
