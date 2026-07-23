@@ -280,6 +280,85 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
         </table>
       </div>
 
+      {/* Profile — contact, education/training, work history, affiliations,
+          documents. Populated by the CV Reader; read live from the passport. */}
+      {(() => {
+        const p = passport.provider || {}
+        const S = passport.sections || {}
+        const docs = passport.profileDocuments || []
+        const LEVEL = { COLLEGE: 'College / Nursing', MED_SCHOOL: 'Medical / CRNA School', RESIDENCY: 'Residency', FELLOWSHIP: 'Fellowship' }
+        const card = { background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px', marginBottom: 24 }
+        const head = { fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }
+        const row = (label, val) => (
+          <div style={{ display: 'flex', gap: 12, padding: '3px 0' }}>
+            <div style={{ width: 90, flexShrink: 0, fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>{label}</div>
+            <div style={{ fontSize: 13.5, color: val ? '#0F172A' : '#CBD5E1' }}>{val || '—'}</div>
+          </div>
+        )
+        const addr = [p.addressStreet, p.addressCity, p.addressState, p.addressZip].filter(Boolean).join(', ')
+        return (
+          <>
+            <div style={card}>
+              <div style={head}>👤 Contact & Demographics</div>
+              {row('Name', [p.firstName, p.middleName, p.lastName, p.suffix].filter(Boolean).join(' ') || null)}
+              {p.formerNames && row('Former', p.formerNames)}
+              {row('Specialty', p.specialty)}
+              {row('Email', p.email)}
+              {row('Phone', p.phone)}
+              {row('Address', addr)}
+              {row('DOB', p.dateOfBirth)}
+            </div>
+
+            {(S.education?.length > 0) && (
+              <div style={card}>
+                <div style={head}>🎓 Education & Training</div>
+                {S.education.map((e, i) => (
+                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                    <strong>{LEVEL[e.level] || e.level}</strong>{e.institution ? ` — ${e.institution}` : ''}
+                    {e.graduationDate ? <span style={{ color: '#94A3B8' }}> · {e.graduationDate}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(S.workHistory?.length > 0) && (
+              <div style={card}>
+                <div style={head}>💼 Work History</div>
+                {S.workHistory.map((w, i) => (
+                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                    <strong>{w.role || 'Position'}</strong>{w.employer ? ` — ${w.employer}` : ''}
+                    <span style={{ color: '#94A3B8' }}> · {w.startDate || '?'} – {w.currentlyEmployed ? 'present' : (w.endDate || '?')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(S.hospitalPrivileges?.length > 0) && (
+              <div style={card}>
+                <div style={head}>🏥 Hospital Affiliations</div>
+                {S.hospitalPrivileges.map((h, i) => (
+                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                    <strong>{h.hospitalName}</strong>
+                    <span style={{ color: '#94A3B8' }}> · {h.startDate || '?'} – {h.currentlyActive ? 'present' : (h.endDate || '?')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(docs.length > 0) && (
+              <div style={card}>
+                <div style={head}>📎 Documents</div>
+                {docs.map((d) => (
+                  <a key={d.id} href={d.downloadUrl || '#'} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 13, color: d.downloadUrl ? '#2563EB' : '#94A3B8', textDecoration: 'none', padding: '4px 0' }}>
+                    📄 {d.filename} {d.type ? <span style={{ color: '#94A3B8', fontSize: 11.5 }}>· {d.type}</span> : null}
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        )
+      })()}
+
       {/* Signed documents (e-sign) */}
       {passport.signatures?.length > 0 && (
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px', marginBottom: 24 }}>
