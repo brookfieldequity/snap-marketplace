@@ -294,6 +294,7 @@ export const facilityAPI = {
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   setRoomsForSite: (location, roomsRequired, year, month) => apiFetch(`${BASE}/schedule/rooms-bulk`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, roomsRequired, year, month }) }),
+  createScheduleShare: (location, year, month) => apiFetch(`${BASE}/schedule/share`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, year, month }) }),
   deleteScheduleDay: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}`, { method: 'DELETE', headers: facilityHeaders() }),
   recordScheduleFeedback: (data) => apiFetch(`${BASE}/schedule/feedback`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getScheduleIntelligence: () => apiFetch(`${BASE}/schedule/intelligence`, { headers: facilityHeaders() }),
@@ -981,6 +982,11 @@ export const facilityClaimAPI = {
 
 // ─── Public Availability Submission API ───────────────────────────────────────
 // No auth — the URL token is the credential.
+// Public shareable facility schedule — no auth, the token is the credential.
+export const scheduleShareAPI = {
+  get: (token) => apiFetch(`${BASE}/schedule-share/${token}`, { headers: { 'Content-Type': 'application/json' } }),
+}
+
 export const availAPI = {
   getRequest: (token) =>
     apiFetch(`${BASE}/avail/${token}`, {

@@ -538,6 +538,48 @@ function RoomCountPanel({ year, month, onNavigate, onApplied }) {
   )
 }
 
+// One site's "get the shareable schedule link" chip. Mints (or reuses) the
+// per-site monthly link and copies it to send to that surgical center.
+function SiteShareRow({ location, year, month }) {
+  const [link, setLink] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  function copy(l) { if (navigator.clipboard) navigator.clipboard.writeText(l); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+  async function gen() {
+    setBusy(true)
+    try { const r = await facilityAPI.createScheduleShare(location, year, month); setLink(r.link); copy(r.link) }
+    catch (e) { alert(e.message || 'Could not create link.') }
+    finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 8px 5px 10px' }}>
+      <strong style={{ color: '#0F172A', fontWeight: 700 }}>{location}</strong>
+      {link ? (
+        <>
+          <input readOnly value={link} onFocus={(e) => e.target.select()} style={{ width: 188, padding: '3px 6px', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 11, color: '#475569', fontFamily: 'monospace' }} />
+          <button onClick={() => copy(link)} style={{ padding: '4px 9px', background: copied ? '#16A34A' : '#0F172A', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>{copied ? 'Copied ✓' : 'Copy'}</button>
+        </>
+      ) : (
+        <button onClick={gen} disabled={busy} style={{ padding: '4px 10px', background: busy ? '#CBD5E1' : '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: busy ? 'default' : 'pointer' }}>{busy ? '…' : '🔗 Get link'}</button>
+      )}
+    </div>
+  )
+}
+
+function ShareSchedulePanel({ locations, year, month }) {
+  if (!locations || locations.length === 0) return null
+  const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
+  return (
+    <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>📤 Send site schedules — {monthName} {year}</div>
+      <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Each surgical center gets a link to their own monthly schedule — viewable on any device and printable to PDF. Publish first, then send.</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+        {locations.map((loc) => <SiteShareRow key={loc} location={loc} year={year} month={month} />)}
+      </div>
+    </div>
+  )
+}
+
 function getDaysInMonth(year, month) { return new Date(year, month, 0).getDate() }
 function getFirstDayOfWeek(year, month) { const d = new Date(year, month - 1, 1).getDay(); return (d + 6) % 7 }
 
@@ -1409,6 +1451,12 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
       {/* Provider Availability — request + track self-submission from roster members */}
       <RoomCountPanel year={year} month={month} onNavigate={onNavigate} onApplied={load} />
+
+      <ShareSchedulePanel
+        locations={[...new Set(((Array.isArray(scheduleData) ? scheduleData : scheduleData?.days) || []).map((d) => d.location).filter(Boolean))].sort()}
+        year={year}
+        month={month}
+      />
 
       <ProviderAvailabilityPanel
         year={year}

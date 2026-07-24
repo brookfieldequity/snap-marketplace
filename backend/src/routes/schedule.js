@@ -284,6 +284,29 @@ router.post('/rooms-bulk', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /share — mint/return the no-login shareable link to ONE site's monthly
+// schedule (sent to that surgical center). Idempotent per (site, year, month):
+// re-sending returns the same link; a new month mints a fresh one.
+router.post('/share', facilityAuth, async (req, res) => {
+  try {
+    const { location, year, month } = req.body || {};
+    const yr = Number(year);
+    const mo = Number(month);
+    if (!location?.trim() || !Number.isInteger(yr) || !Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'location, year and month (1–12) are required' });
+    }
+    const share = await prisma.scheduleShare.upsert({
+      where: { facilityId_location_year_month: { facilityId: req.facility.id, location: location.trim(), year: yr, month: mo } },
+      create: { facilityId: req.facility.id, location: location.trim(), year: yr, month: mo },
+      update: {},
+    });
+    res.json({ token: share.token, link: `${availPublicBaseUrl()}/s/${share.token}` });
+  } catch (err) {
+    console.error('[schedule/share] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /days/:id — delete a schedule day (assignments cascade via schema)
 router.delete('/days/:id', facilityAuth, async (req, res) => {
   try {

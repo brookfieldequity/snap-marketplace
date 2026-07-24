@@ -8,6 +8,7 @@ import useIsNarrow from './lib/useIsNarrow.js'
 import AvailabilityPage from './pages/public/AvailabilityPage.jsx'
 import SignPage from './pages/SignPage.jsx'
 import RoomCountPage from './pages/public/RoomCountPage.jsx'
+import PublicSchedulePage from './pages/public/PublicSchedulePage.jsx'
 import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
 import PtoRankPage from './pages/PtoRankPage.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
@@ -126,6 +127,14 @@ export default function App() {
     window.location.pathname.match(/^\/rooms\/([^/?#]+)/)
   if (roomsMatch) {
     return <RoomCountPage token={decodeURIComponent(roomsMatch[1])} />
+  }
+
+  // Public per-site monthly schedule (sent to each surgical center) — /s/:token
+  // No login required; the token in the URL is the credential.
+  const schedShareMatch = typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/s\/([^/?#]+)/)
+  if (schedShareMatch) {
+    return <PublicSchedulePage token={decodeURIComponent(schedShareMatch[1])} />
   }
 
   const claimMatch = typeof window !== 'undefined' &&

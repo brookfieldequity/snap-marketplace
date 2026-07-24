@@ -360,6 +360,7 @@ model Facility {
   rosterEntries        InternalRosterEntry[]
   availabilityWindows  AvailabilityWindow[]
   scheduleDays         ScheduleDay[]
+  scheduleShares       ScheduleShare[]
   schedulingUploads    SchedulingUpload[]
   scheduleFeedback     ScheduleFeedback[]
   schedulingRecords    SchedulingRecord[]
@@ -1177,6 +1178,24 @@ model ScheduleDay {
   assignments ScheduleAssignment[]
 
   @@unique([facilityId, date, location])
+}
+
+// A no-login shareable link to one site's monthly schedule, sent to that
+// surgical center each month. One token per (facility, site, year, month) —
+// re-sending reuses the same link; a new month mints a fresh one.
+model ScheduleShare {
+  id         String   @id @default(cuid())
+  facilityId String
+  location   String
+  year       Int
+  month      Int
+  token      String   @unique @default(cuid())
+  createdAt  DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, location, year, month])
+  @@index([facilityId])
 }
 
 model ScheduleAssignment {
