@@ -28,9 +28,9 @@ module.exports = `<!DOCTYPE html>
 <div class="wrap">
   <div class="logo">SNAP <span>Medical</span></div>
   <h1>Terms of Service</h1>
-  <div class="updated">SNAP Medical Technologies, LLC · Last updated July 21, 2026</div>
+  <div class="updated">Essential Anesthesia Partners LLC (d/b/a SNAP Medical Technologies) · Last updated July 24, 2026</div>
   <div class="card">
-    <p>These Terms of Service ("Terms") govern your use of the SNAP mobile application and related services (the "Service") operated by SNAP Medical Technologies, LLC ("SNAP," "we," "us"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
+    <p>These Terms of Service ("Terms") govern your use of the SNAP mobile application and related services (the "Service") operated by Essential Anesthesia Partners LLC, doing business as SNAP Medical Technologies ("SNAP," "we," "us"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
 
     <h2>1. What SNAP is</h2>
     <p>SNAP is a software platform for anesthesia professionals. Depending on how your account is configured, the Service lets you: browse and book open shifts posted by surgical facilities (the "Marketplace"); view schedules published by practices or facilities whose roster you are on; submit availability, schedule requests, and worked hours; and communicate with facilities about shifts.</p>

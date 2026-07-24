@@ -2640,6 +2640,7 @@ model AvailabilityRequest {
   sentVia       String? // "SMS" | "EMAIL" | "BOTH"
   submittedAt   DateTime? // when the provider first submitted
   lastUpdatedAt DateTime? // updated on every subsequent submit
+  smsConsentAt  DateTime? // when the provider affirmed SMS opt-in on submit
   createdAt     DateTime  @default(now())
 
   facility       Facility             @relation(fields: [facilityId], references: [id], onDelete: Cascade)

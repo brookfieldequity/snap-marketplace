@@ -115,6 +115,7 @@ export default function AvailabilityPage({ token }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [consent, setConsent] = useState(false) // SMS opt-in — required to submit
   const longPressTimer = useRef(null)
   // Desktop = a fine pointer (mouse). Drives the pencil affordance on unset days
   // so a provider can drop a "maybe" sticky note without right-click/long-press.
@@ -313,7 +314,7 @@ export default function AvailabilityPage({ token }) {
           })
         }
       }
-      await availAPI.submit(token, dates)
+      await availAPI.submit(token, dates, consent)
       setSaved(true)
       setHasChanges(false)
     } catch (err) {
@@ -687,42 +688,62 @@ export default function AvailabilityPage({ token }) {
       {/* ── Bottom sticky bar ── */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(10px)',
+        background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(10px)',
         borderTop: '1px solid #E2E8F0',
-        padding: '14px 20px calc(14px + env(safe-area-inset-bottom))',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        padding: '11px 20px calc(12px + env(safe-area-inset-bottom))',
+        display: 'flex', flexDirection: 'column', gap: 9,
         boxShadow: '0 -6px 24px rgba(15,23,42,0.08)',
         zIndex: 100,
         maxWidth: 520, margin: '0 auto',
       }}>
-        <div style={{ display: 'flex', gap: 14, fontSize: 13, color: '#64748B' }}>
-          <span><strong style={{ color: '#2563EB', fontSize: 16 }}>{availableCount}</strong> avail</span>
-          <span><strong style={{ color: '#DC2626', fontSize: 16 }}>{unavailableCount}</strong> off</span>
-          {maybeCount > 0 && <span><strong style={{ color: '#D97706', fontSize: 16 }}>{maybeCount}</strong> maybe</span>}
-          {noteCount > 0 && <span><strong style={{ color: '#CA8A04', fontSize: 16 }}>{noteCount}</strong> notes</span>}
-        </div>
-        {isLocked ? (
-          <div style={{ fontSize: 13, color: '#94A3B8', fontWeight: 700 }}>Closed</div>
-        ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={!hasChanges || saving}
-            style={{
-              padding: '12px 26px',
-              background: hasChanges && !saving ? 'linear-gradient(135deg,#2563EB,#3B82F6)' : '#CBD5E1',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 12,
-              fontSize: 15,
-              fontWeight: 700,
-              cursor: hasChanges && !saving ? 'pointer' : 'default',
-              boxShadow: hasChanges && !saving ? '0 6px 16px rgba(37,99,235,0.35)' : 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            {saving ? 'Saving…' : 'Submit'}
-          </button>
+        {/* SMS opt-in consent — required before submitting. Providers give
+            explicit, recorded consent to receive scheduling texts (Twilio/CTIA
+            toll-free verification requirement). */}
+        {!isLocked && (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 11.5, lineHeight: 1.4, color: '#64748B' }}>
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              style={{ marginTop: 1, width: 16, height: 16, flex: 'none', accentColor: '#2563EB', cursor: 'pointer' }}
+            />
+            <span>
+              I agree to receive scheduling text messages from my facility via SNAP. Frequency varies; msg &amp; data rates may apply. Reply STOP to opt out.{' '}
+              <a href="/sms-terms" target="_blank" rel="noreferrer" style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}>SMS Terms</a>
+            </span>
+          </label>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 14, fontSize: 13, color: '#64748B' }}>
+            <span><strong style={{ color: '#2563EB', fontSize: 16 }}>{availableCount}</strong> avail</span>
+            <span><strong style={{ color: '#DC2626', fontSize: 16 }}>{unavailableCount}</strong> off</span>
+            {maybeCount > 0 && <span><strong style={{ color: '#D97706', fontSize: 16 }}>{maybeCount}</strong> maybe</span>}
+            {noteCount > 0 && <span><strong style={{ color: '#CA8A04', fontSize: 16 }}>{noteCount}</strong> notes</span>}
+          </div>
+          {isLocked ? (
+            <div style={{ fontSize: 13, color: '#94A3B8', fontWeight: 700 }}>Closed</div>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={!hasChanges || saving || !consent}
+              title={!consent ? 'Please agree to the SMS terms to submit' : undefined}
+              style={{
+                padding: '12px 26px',
+                background: hasChanges && !saving && consent ? 'linear-gradient(135deg,#2563EB,#3B82F6)' : '#CBD5E1',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: hasChanges && !saving && consent ? 'pointer' : 'default',
+                boxShadow: hasChanges && !saving && consent ? '0 6px 16px rgba(37,99,235,0.35)' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >
+              {saving ? 'Saving…' : 'Submit'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Post-it note modal ── */}

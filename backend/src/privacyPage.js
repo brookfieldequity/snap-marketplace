@@ -27,7 +27,7 @@ module.exports = `<!DOCTYPE html>
 <div class="wrap">
   <div class="logo">SNAP <span>Medical</span></div>
   <h1>Privacy Policy</h1>
-  <div class="updated">SNAP Medical Technologies, LLC · Last updated July 18, 2026</div>
+  <div class="updated">Essential Anesthesia Partners LLC (d/b/a SNAP Medical Technologies) · Last updated July 24, 2026</div>
   <div class="card">
     <p>SNAP connects anesthesia providers with surgical facilities for shifts and scheduling. This policy explains what the SNAP app collects, why, and the control you keep over it.</p>
 
@@ -71,7 +71,7 @@ module.exports = `<!DOCTYPE html>
     <p>We will post any material changes to this page and update the date above.</p>
 
     <h2>Contact</h2>
-    <p>SNAP Medical Technologies, LLC (Massachusetts) · <a href="mailto:support@snapmedical.app">support@snapmedical.app</a></p>
+    <p>Essential Anesthesia Partners LLC (d/b/a SNAP Medical Technologies), Massachusetts · <a href="mailto:support@snapmedical.app">support@snapmedical.app</a></p>
   </div>
 </div>
 </body>

@@ -37,10 +37,11 @@ export default function SmsTermsPage() {
           A provider&rsquo;s mobile number is provided by the healthcare facility
           that contracts or employs them, through SNAP Medical&rsquo;s roster
           management, so that SNAP can deliver that provider&rsquo;s work schedule
-          and shift notifications. At the point a number is entered, the facility
-          confirms it is authorized to share it for this purpose. Providers may opt
-          out of texts at any time (see below) without affecting their work
-          relationship.
+          and shift notifications. In addition, when a provider submits their
+          availability through SNAP, they affirmatively confirm &mdash; by checking
+          a consent box &mdash; that they agree to receive these scheduling text
+          messages. Providers may opt out of texts at any time (see below) without
+          affecting their work relationship.
         </p>
 
         <h2 style={styles.h2}>Message frequency</h2>
@@ -66,6 +67,11 @@ export default function SmsTermsPage() {
           notifications described above. Questions:{' '}
           <a style={styles.a} href="mailto:matt@snapmedical.app">matt@snapmedical.app</a>.
         </p>
+
+        <p style={styles.legal}>
+          SNAP is operated by Essential Anesthesia Partners LLC (d/b/a SNAP Medical
+          Technologies), Massachusetts.
+        </p>
       </div>
     </div>
   )
@@ -82,4 +88,5 @@ const styles = {
   h2: { fontSize: 16, fontWeight: 800, color: '#0F172A', margin: '24px 0 6px' },
   p: { fontSize: 15, lineHeight: 1.6, color: '#334155', margin: '0 0 8px' },
   a: { color: '#2563EB', textDecoration: 'none', fontWeight: 600 },
+  legal: { fontSize: 12.5, lineHeight: 1.5, color: '#94A3B8', margin: '28px 0 0', borderTop: '1px solid #E2E8F0', paddingTop: 16 },
 }

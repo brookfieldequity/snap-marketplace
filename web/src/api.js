@@ -985,11 +985,11 @@ export const availAPI = {
     apiFetch(`${BASE}/avail/${token}`, {
       headers: { 'Content-Type': 'application/json' },
     }),
-  submit: (token, dates) =>
+  submit: (token, dates, consent) =>
     apiFetch(`${BASE}/avail/${token}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dates }),
+      body: JSON.stringify({ dates, consent: Boolean(consent) }),
     }),
 }
 

@@ -102,7 +102,7 @@ router.get('/:token', async (req, res) => {
 router.post('/:token/submit', async (req, res) => {
   try {
     const { token } = req.params;
-    const { dates } = req.body || {};
+    const { dates, consent } = req.body || {};
 
     if (!Array.isArray(dates)) {
       return res.status(400).json({ error: 'dates array is required' });
@@ -121,6 +121,7 @@ router.post('/:token/submit', async (req, res) => {
         month: true,
         deadline: true,
         submittedAt: true,
+        smsConsentAt: true,
         rosterEntry: { select: { providerName: true, linkedProviderId: true } },
         facility: { select: { name: true } },
       },
@@ -177,11 +178,15 @@ router.post('/:token/submit', async (req, res) => {
       }
 
       // Set submittedAt on first submission; always update lastUpdatedAt.
+      // Record the provider's SMS opt-in the first time they affirm it (the
+      // consent checkbox on the availability page — kept for the audit trail /
+      // toll-free verification evidence).
       await tx.availabilityRequest.update({
         where: { id: request.id },
         data: {
           submittedAt: request.submittedAt ?? now,
           lastUpdatedAt: now,
+          ...(consent && !request.smsConsentAt ? { smsConsentAt: now } : {}),
         },
       });
     });
