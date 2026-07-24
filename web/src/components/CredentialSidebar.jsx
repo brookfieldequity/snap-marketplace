@@ -6,7 +6,7 @@ const NAV = {
     { key: 'providers', label: 'Providers', icon: '👥' },
     { key: 'import', label: 'Add Documents', icon: '📥' },
     { key: 'cvreader', label: 'Read a CV', icon: '📄' },
-    { key: 'maps', label: 'Facility Packets', icon: '📦' },
+    { key: 'maps', label: 'Facility Applications', icon: '📦' },
     { key: 'reports', label: 'Reports', icon: '📈' },
     { key: 'settings', label: 'Settings', icon: '⚙️' },
   ],

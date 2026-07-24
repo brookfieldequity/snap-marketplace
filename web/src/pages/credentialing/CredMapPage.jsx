@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { credMapAPI, credentialAPI } from '../../api.js'
 
-// Cred Maps — map a facility's credentialing program once; every provider's
-// packet populates from the passport. Hub (map cards + sticky-note reminders)
-// plus the builder (AI-proposed items → review → confirm). Sticky notes and
-// drag-and-drop reuse the Shifts request-board design language (Kalam font).
+// Facility Applications — set up a facility's application template once; every
+// provider's packet populates from the passport. Hub (template cards +
+// sticky-note reminders) plus the builder (AI-proposed items → review →
+// confirm). Sticky notes and drag-and-drop reuse the Shifts request-board
+// design language (Kalam font).
 
 const FULFILLMENT = {
   AUTO_PASSPORT: { label: 'Auto from Passport', icon: '⚡', bg: '#DCFCE7', fg: '#166534' },
@@ -447,10 +448,10 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
     setBusy(true)
     try {
       if (mode === 'upload') {
-        if (files.length === 0) { setError('Drop the facility\'s blank packet first.'); setBusy(false); return }
+        if (files.length === 0) { setError('Drop the facility\'s blank application first.'); setBusy(false); return }
         await onAnalyze(files, name.trim() || undefined)
       } else {
-        if (!name.trim()) { setError('Give the map a name (usually the facility).'); setBusy(false); return }
+        if (!name.trim()) { setError('Give the template a name (usually the facility).'); setBusy(false); return }
         await onCreate(name.trim(), true)
       }
     } catch (err) {
@@ -476,13 +477,13 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={busy ? undefined : onClose}>
       <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: '20px 24px 0' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>New Cred Map</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>New Facility Application Template</div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 16 }}>
-            Map this facility's credentialing program once — every provider's packet populates from the passport.
+            Set up this facility's application once — every provider's packet populates from the passport.
           </div>
         </div>
         <div style={{ display: 'flex' }}>
-          {tabBtn('upload', '✨ Upload their packet')}
+          {tabBtn('upload', '✨ Upload their application')}
           {tabBtn('scratch', '📋 Standard checklist')}
         </div>
         <div style={{ padding: 24 }}>
@@ -490,7 +491,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
             <div style={{ textAlign: 'center', padding: '30px 0' }}>
               <div style={{ fontSize: 34 }}>🔍</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>
-                {mode === 'upload' ? 'Reading the packet…' : 'Setting up…'}
+                {mode === 'upload' ? 'Reading the application…' : 'Setting up…'}
               </div>
               {mode === 'upload' && (
                 <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 6 }}>
@@ -526,7 +527,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                     ) : (
                       <>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: '#334155', marginTop: 8 }}>
-                          Drop the facility's blank application packet
+                          Drop the facility's blank application
                         </div>
                         <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>PDF or scans · up to 5 files · 25 MB each</div>
                       </>
@@ -536,7 +537,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Map name (optional — SNAP will read it off the packet)"
+                    placeholder="Template name (optional — SNAP reads it off the application)"
                     style={{ width: '100%', marginTop: 14, padding: '11px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
                   />
                 </>
@@ -544,7 +545,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
               {mode === 'scratch' && (
                 <>
                   <div style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
-                    Starts the map with the 17 requirements on essentially every ASC application — then tailor it to this facility.
+                    Starts the template with the 17 requirements on essentially every ASC application — then tailor it to this facility.
                   </div>
                   <input
                     autoFocus
@@ -568,7 +569,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                     cursor: mode === 'upload' && !aiAvailable ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {mode === 'upload' ? '✨ Analyze packet' : 'Create map'}
+                  {mode === 'upload' ? '✨ Analyze application' : 'Create template'}
                 </button>
               </div>
             </>
@@ -614,9 +615,9 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={busy ? undefined : onClose}>
       <div style={{ width: '100%', maxWidth: 460, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: 24 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>⚡ Generate packet</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>⚡ Generate a packet</div>
         <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, marginBottom: 14 }}>
-          {map.name} — SNAP fills every passport-covered item and opens tasks for the rest.
+          {map.name} — SNAP fills every passport-covered item from the provider's passport and opens tasks for the rest.
         </div>
         {busy ? (
           <div style={{ textAlign: 'center', padding: '26px 0' }}>
@@ -699,8 +700,8 @@ function PacketWorkspace({ packetId, onBack }) {
     try {
       const result = await credMapAPI.renderPacketPdf(packetId)
       await load()
-      if (result.engine === 'clean-packet') setRenderNote('This form couldn’t be auto-read confidently, so SNAP produced a clean, complete packet instead. Open Field mapping to map it onto their exact form.')
-      else if (result.engine === 'overlay') setRenderNote(`Filled ${result.filledCount} field${result.filledCount === 1 ? '' : 's'} onto the facility’s form. Check it, and fix any placement in Field mapping.`)
+      if (result.engine === 'clean-packet') setRenderNote('This form couldn’t be auto-read confidently, so SNAP produced a clean, complete packet instead. Open Facility PDF setup to map it onto their exact form.')
+      else if (result.engine === 'overlay') setRenderNote(`Filled ${result.filledCount} field${result.filledCount === 1 ? '' : 's'} onto the facility’s form. Check it, and fix any placement in Facility PDF setup.`)
       if (result.docToken) window.open(credMapAPI.docUrl(result.docToken), '_blank')
     } catch (e) { setError(e.message) }
     finally { setRendering(false) }
@@ -712,8 +713,8 @@ function PacketWorkspace({ packetId, onBack }) {
     try {
       const result = await credMapAPI.renderNativeForm(packetId)
       await load()
-      if (result.engine === 'native') setRenderNote(`SNAP built its own version of this application — ${result.sections} section${result.sections === 1 ? '' : 's'}, filled from the passport${result.signatureStamped ? ', signature stamped' : ''}. Always renders perfectly, no placement to fix.`)
-      else if (result.engine === 'clean-packet') setRenderNote('No native form has been built for this map yet — SNAP produced a clean packet instead. Build the native form on the map to mirror the facility’s application exactly.')
+      if (result.engine === 'native') setRenderNote(`SNAP built its digital form of this application — ${result.sections} section${result.sections === 1 ? '' : 's'}, filled from the passport${result.signatureStamped ? ', signature stamped' : ''}. Always renders perfectly, no placement to fix.`)
+      else if (result.engine === 'clean-packet') setRenderNote('SNAP’s digital form isn’t ready for this template yet — SNAP produced a clean packet instead. Confirm the template (or use Rebuild SNAP’s digital form) to mirror the facility’s application exactly.')
       if (result.docToken) window.open(credMapAPI.docUrl(result.docToken), '_blank')
     } catch (e) { setError(e.message) }
     finally { setRendering(false) }
@@ -791,7 +792,7 @@ function PacketWorkspace({ packetId, onBack }) {
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 980 }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← {packet.map?.name || 'Map'}</button>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← {packet.map?.name || 'Application'}</button>
 
       {/* Header */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
@@ -811,11 +812,11 @@ function PacketWorkspace({ packetId, onBack }) {
               {sendingLink ? 'Creating link…' : `✍️ Send for signature (${openSignatures.length})`}
             </button>
           )}
-          <button onClick={renderNative} disabled={rendering} title="SNAP renders its own version of the facility's application, filled from the verified passport — always perfect, nothing to place" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
-            {rendering ? 'Building form…' : '📋 SNAP native form'}
+          <button onClick={renderNative} disabled={rendering} title="SNAP builds its own clean digital form of the facility's application, filled from the verified passport — always perfect, nothing to place" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
+            {rendering ? 'Building form…' : '📋 Generate SNAP’s digital form'}
           </button>
-          <button onClick={renderPdf} disabled={rendering} title="Overlay: type the provider's passport data onto the facility's own PDF (fallback for facilities that require their exact form)" style={{ padding: '9px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: rendering ? 'wait' : 'pointer' }}>
-            {rendering ? '…' : '📄 Fill their PDF'}
+          <button onClick={renderPdf} disabled={rendering} title="Fallback: type the provider's passport data onto the facility's own PDF — only for facilities that require their exact form" style={{ padding: '9px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: rendering ? 'wait' : 'pointer' }}>
+            {rendering ? '…' : '📄 Fill facility PDF'}
           </button>
           {data.generatedDoc?.token && (
             <a href={credMapAPI.docUrl(data.generatedDoc.token)} target="_blank" rel="noreferrer" style={{ padding: '9px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, color: '#166534', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
@@ -987,7 +988,7 @@ function RenewalsView({ maps, onOpenPacket }) {
   }
 
   async function add() {
-    if (!addMapId || !addNpi) { setError('Pick a facility map and a provider.'); return }
+    if (!addMapId || !addNpi) { setError('Pick a facility application and a provider.'); return }
     setError('')
     const r = roster.find((x) => x.npi === addNpi)
     try {
@@ -1045,7 +1046,7 @@ function RenewalsView({ maps, onOpenPacket }) {
       {adding ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
           <select value={addMapId} onChange={(e) => setAddMapId(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
-            <option value="">Facility map…</option>
+            <option value="">Facility application…</option>
             {confirmedMaps.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           <select value={addNpi} onChange={(e) => setAddNpi(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
@@ -1099,7 +1100,7 @@ function RenewalsView({ maps, onOpenPacket }) {
                   {a._days < 0 ? `${-a._days}d over` : `${a._days}d left`}
                 </span>
               )}
-              <button onClick={() => renew(a)} title="Generate a renewal packet — the map fills it from the passport" style={{ padding: '7px 13px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+              <button onClick={() => renew(a)} title="Generate a renewal packet — the template fills it from the passport" style={{ padding: '7px 13px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
                 ⚡ Renew
               </button>
               <button onClick={() => credMapAPI.deleteRenewal(a.id).then(load).catch((e) => setError(e.message))} title="Stop tracking" style={{ background: 'none', border: 'none', color: '#CBD5E1', fontSize: 15, cursor: 'pointer', padding: '0 2px', fontWeight: 700 }}>×</button>
@@ -1250,7 +1251,7 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
         <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>Field mapping — what SNAP types where</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>Facility PDF — what SNAP types where</div>
               <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>
                 {!data ? 'Reading the facility form…'
                   : data.cleanPacket ? 'No facility form uploaded — SNAP produces a clean, complete packet instead.'
@@ -1280,7 +1281,7 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
         <div style={{ overflowY: 'auto', padding: '8px 24px', flex: 1 }}>
           {data?.cleanPacket ? (
             <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748B', fontSize: 13.5 }}>
-              No facility form is uploaded to this map, so “Fill facility PDF” produces a clean, complete SNAP packet from the passport — nothing to map here.
+              No facility form is uploaded to this template, so “Fill facility PDF” produces a clean, complete SNAP packet from the passport — nothing to map here.
             </div>
           ) : !data ? (
             <div style={{ padding: '30px 0', textAlign: 'center', color: '#94A3B8', fontSize: 13.5 }}>Loading…</div>
@@ -1448,10 +1449,18 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
     try {
       const { stats, truncated } = await credMapAPI.buildFormStructure(mapId)
       await load()
-      setStructureNote(`Native form ready — ${stats.sections} section${stats.sections === 1 ? '' : 's'}. SNAP auto-fills ${stats.passport}, provider answers ${stats.provider + stats.attestation}, ${stats.signature} to sign.${truncated ? ' ⚠️ This form is very long — the tail may be cut off; review the native form and rebuild if sections are missing.' : ' Generate a packet, then hit “📋 SNAP native form”.'}`)
+      setStructureNote(`SNAP’s digital form is ready — ${stats.sections} section${stats.sections === 1 ? '' : 's'}. SNAP auto-fills ${stats.passport}, provider answers ${stats.provider + stats.attestation}, ${stats.signature} to sign.${truncated ? ' ⚠️ This form is very long — the tail may be cut off; review SNAP’s digital form and rebuild if sections are missing.' : ' Generate a packet, then open “📋 Generate SNAP’s digital form”.'}`)
       onChanged()
     } catch (e) { setError(e.message) }
     finally { setBuilding(false) }
+  }
+
+  // Confirming the template finishes setup end to end: flip to CONFIRMED and,
+  // when the facility uploaded an application, auto-build SNAP's digital form so
+  // the coordinator never has to treat it as a separate step.
+  async function confirmSetup() {
+    await patchMap({ status: 'CONFIRMED' })
+    if (map?.sourceDocName && !hasNativeForm) await buildNative()
   }
 
   const hasNativeForm = Boolean(map?.formStructure && Array.isArray(map.formStructure.sections) && map.formStructure.sections.length > 0)
@@ -1531,7 +1540,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
   if (!map) {
     return (
       <div style={{ padding: 32 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>← All maps</button>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>← All applications</button>
         <div style={{ color: '#94A3B8', fontSize: 14, marginTop: 20 }}>{error || 'Loading…'}</div>
       </div>
     )
@@ -1541,7 +1550,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 980 }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← All maps</button>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← All applications</button>
 
       {/* Header card */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
@@ -1553,24 +1562,27 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
             style={{ flex: 1, minWidth: 240, fontSize: 19, fontWeight: 800, color: '#0F172A', border: 'none', outline: 'none', background: 'transparent' }}
           />
           <StatusPill status={map.status} />
-          {map.status === 'CONFIRMED' && (
-            <button onClick={() => setShowGen(true)} style={{ padding: '9px 16px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-              ⚡ Generate packet
+          <button
+            onClick={() => { if (map.status === 'CONFIRMED') setShowGen(true) }}
+            disabled={map.status !== 'CONFIRMED'}
+            title={map.status === 'CONFIRMED' ? 'Generate a provider’s packet from this template' : 'Confirm & finish setup first to start generating packets'}
+            style={{ padding: '9px 16px', background: map.status === 'CONFIRMED' ? '#2563EB' : '#E2E8F0', border: 'none', borderRadius: 10, color: map.status === 'CONFIRMED' ? '#fff' : '#94A3B8', fontSize: 13, fontWeight: 800, cursor: map.status === 'CONFIRMED' ? 'pointer' : 'not-allowed' }}
+          >
+            ⚡ Generate packet
+          </button>
+          {map.sourceDocName && (
+            <button onClick={buildNative} disabled={building} title="Rebuild SNAP's own clean digital form from the facility's application — normally built automatically when you confirm the template" style={{ padding: '9px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 700, cursor: building ? 'wait' : 'pointer' }}>
+              {building ? 'Reading their form…' : hasNativeForm ? '📋 Rebuild SNAP’s digital form' : '📋 Build SNAP’s digital form'}
             </button>
           )}
           {map.sourceDocName && (
-            <button onClick={buildNative} disabled={building} title="Read the facility's application and build SNAP's own native version of it — the scalable way to deliver their information without overlaying their PDF" style={{ padding: '9px 16px', background: hasNativeForm ? '#fff' : '#0F172A', border: hasNativeForm ? '1px solid #CBD5E1' : 'none', borderRadius: 10, color: hasNativeForm ? '#475569' : '#fff', fontSize: 13, fontWeight: 700, cursor: building ? 'wait' : 'pointer' }}>
-              {building ? 'Reading their form…' : hasNativeForm ? '📋 Rebuild native form' : '📋 Build native form'}
-            </button>
-          )}
-          {map.sourceDocName && (
-            <button onClick={() => setShowFieldMap(true)} title="Overlay fallback: see and correct what SNAP types onto the facility's own PDF" style={{ padding: '9px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, color: '#94A3B8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
-              🧩 Field mapping
+            <button onClick={() => setShowFieldMap(true)} title="Facility PDF fallback: see and correct what SNAP types onto the facility's own PDF" style={{ padding: '9px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, color: '#94A3B8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+              🧩 Facility PDF setup
             </button>
           )}
           {map.status === 'DRAFT' ? (
-            <button onClick={() => patchMap({ status: 'CONFIRMED' })} style={{ padding: '9px 18px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-              Confirm map ✓
+            <button onClick={confirmSetup} disabled={building} title="Confirm this template — SNAP finishes setup and builds its digital form" style={{ padding: '9px 18px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: building ? 'wait' : 'pointer' }}>
+              {building ? 'Finishing setup…' : 'Confirm & finish setup ✓'}
             </button>
           ) : (
             <button onClick={() => patchMap({ status: 'DRAFT' })} style={{ padding: '9px 14px', background: '#F1F5F9', border: 'none', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
@@ -1620,7 +1632,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
         )}
         {!structureNote && hasNativeForm && (
           <div style={{ marginTop: 12, fontSize: 12, color: '#16A34A', fontWeight: 600 }}>
-            📋 Native form ready — {map.formStructure.sections.length} section{map.formStructure.sections.length === 1 ? '' : 's'} mirror this facility’s application.
+            📋 SNAP’s digital form is ready — {map.formStructure.sections.length} section{map.formStructure.sections.length === 1 ? '' : 's'} mirror this facility’s application.
           </div>
         )}
 
@@ -1637,7 +1649,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
       {/* Packets off this map */}
       {packets.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '14px 20px', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>📦 Packets</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>📦 Provider packets</div>
           {packets.map((p) => {
             const ps = PACKET_STATUS[p.status] || PACKET_STATUS.IN_PROGRESS
             return (
@@ -1654,7 +1666,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (!window.confirm(`Delete the packet for ${p.providerName || p.npi}? Tasks and signatures on it are removed; the map and passport are untouched.`)) return
+                    if (!window.confirm(`Delete the packet for ${p.providerName || p.npi}? Tasks and signatures on it are removed; the template and passport are untouched.`)) return
                     credMapAPI.deletePacket(p.id).then(loadPackets).catch((err) => setError(err.message))
                   }}
                   title="Delete packet"
@@ -1719,12 +1731,12 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
       <div style={{ marginTop: 26, textAlign: 'right' }}>
         <button
           onClick={() => {
-            if (!window.confirm(`Delete the map "${map.name}" and all its requirements? Packets must be deleted first; this cannot be undone.`)) return
+            if (!window.confirm(`Delete the application template "${map.name}" and all its requirements? Packets must be deleted first; this cannot be undone.`)) return
             credMapAPI.deleteMap(mapId).then(onBack).catch((err) => setError(err.message))
           }}
           style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, opacity: 0.7 }}
         >
-          Delete this map
+          Delete this application template
         </button>
       </div>
 
@@ -1799,9 +1811,9 @@ export default function CredMapPage() {
     <div style={{ padding: '28px 32px', maxWidth: 1080 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Facility Packets</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Facility Applications</h1>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4 }}>
-            Set up a facility's requirements once — then any provider's packet builds itself from the passport, renewals included.
+            Set up each facility's application template once — then any provider's packet builds itself from the passport, renewals included.
           </div>
         </div>
         {tab === 'maps' && (
@@ -1850,9 +1862,9 @@ export default function CredMapPage() {
       ) : maps.length === 0 ? (
         <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 36 }}>🗺️</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facilities set up yet</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facility applications set up yet</div>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
-            Upload a facility's blank credentialing packet and SNAP learns their whole application in about a minute. Set it up once — it works for every provider, every renewal.
+            Upload a facility's blank application and SNAP learns their whole template in about a minute. Set it up once — it works for every provider, every renewal.
           </div>
           <button onClick={() => setShowNew(true)} style={{ marginTop: 18, padding: '11px 22px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
             ✨ Set up your first facility
