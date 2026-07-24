@@ -36,6 +36,9 @@ const lazyPage = (loader) => lazy(() =>
     })
 )
 
+// WC Recovery tab (workers'-comp underpayment recovery — wc_recovery flag)
+const WcApp = lazyPage(() => import('./pages/wc/WcApp.jsx'))
+
 // Facility marketplace pages
 const DashboardPage       = lazyPage(() => import('./pages/DashboardPage.jsx'))
 const PostShiftPage       = lazyPage(() => import('./pages/PostShiftPage.jsx'))
@@ -240,13 +243,14 @@ export default function App() {
   const TAB_META = {
     shifts:      { label: 'SNAP Shifts',      page: 'shifts-dashboard' },
     marketplace: { label: 'SNAP Marketplace', page: 'dashboard' },
-    ops:         { label: 'SNAP Ops',         page: 'hour-entry' },
+    // WC Recovery lives inside SNAP Ops; a WC-only facility lands there directly.
+    ops:         { label: 'SNAP Ops',         page: featureFlags.payroll_builder ? 'hour-entry' : 'wc-dashboard' },
     credentialing: { label: 'Credentialing',  page: null }, // SSO into the portal, not a facility page
   }
   const availableTabs = [
     (snapMode === 'SHIFTS' || snapMode === 'BOTH') && 'shifts',
     (snapMode === 'MARKETPLACE' || snapMode === 'BOTH') && 'marketplace',
-    featureFlags.payroll_builder && 'ops',
+    (featureFlags.payroll_builder || featureFlags.wc_recovery) && 'ops',
     'credentialing', // backend enforces facility-ADMIN on exchange
   ].filter(Boolean)
 
@@ -567,6 +571,11 @@ export default function App() {
             )}
             {isOpsMode && facilityPage ==='agency-metrics' && (
               <AgencyMetricsPage onNavigate={setFacilityPage} />
+            )}
+
+            {/* WC Recovery pages (wc_recovery flag; one component, sidebar-routed views) */}
+            {featureFlags.wc_recovery && facilityPage?.startsWith('wc-') && (
+              <WcApp page={facilityPage} onNavigate={setFacilityPage} />
             )}
 
             {/* SNAP Marketplace pages */}

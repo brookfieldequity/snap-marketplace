@@ -133,6 +133,10 @@ app.use('/api/credentialing', credentialingRoutes)
 // Cred Maps — per-facility credentialing programs mapped once, packets
 // auto-populated from the passport. See routes/credmap.js.
 app.use('/api/credmap', require('./routes/credmap'));
+// WC Recovery — workers'-comp underpayment recovery (MA entitlement engine,
+// demand packets, recovery ledger). Gated by the wc_recovery feature flag.
+// See WC-RECOVERY-BRIEF.md + routes/wc.js.
+app.use('/api/wc', require('./routes/wc'));
 // Facility-coordinator invite + claim. Replaces /auth/facility/register
 // per snap-applications/capa-pilot/facility-invite-spec.md (2026-06-09).
 app.use('/api/facility-claim', require('./routes/facilityClaim'));

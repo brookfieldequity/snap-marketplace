@@ -75,6 +75,16 @@ const FLAGS = {
     category: 'Payments (V3)',
     adminOnly: true,
   },
+  // WC Recovery — separately-priced workers'-comp payment recovery, shown as
+  // a section inside the SNAP Ops tab (WC-RECOVERY-BRIEF.md). Off at every
+  // tier until WC pricing is decided (add to TIER_DEFAULTS below to turn it
+  // on per-tier); until then a SNAP admin override enables design-partner
+  // groups (CAPA first).
+  wc_recovery: {
+    label: 'WC Recovery',
+    description: 'Workers\'-comp underpayment recovery — MA entitlement engine, demand packets, recovery ledger.',
+    category: 'SNAP Ops',
+  },
 };
 
 // Per-tier defaults. Anything omitted defaults to false. adminOnly flags are

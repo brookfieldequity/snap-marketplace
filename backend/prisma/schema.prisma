@@ -389,6 +389,7 @@ model Facility {
   scheduleRequests     ScheduleRequest[]
   featureFlags         FacilityFeatureFlag[]
   payrollTemplates     PayrollTemplateConfig[]
+  wcClient             WcClient?
   payrollRuns          PayrollRun[]
   marketplaceFees      MarketplaceFeeLedger[]
   ptoWindows           PtoWindow[]
@@ -2756,4 +2757,236 @@ model RoomCountDay {
 
   @@unique([requestId, date])
   @@index([requestId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SNAP WC Recovery models (2026-07-24)
+//
+// Workers'-comp payment recovery for anesthesia groups (WC-RECOVERY-BRIEF.md).
+// Massachusetts-only v1: the entitlement engine (src/wc/maFeeSchedule.js)
+// computes what each case is owed under 114.3 CMR 40.05(2); every underpaid
+// case is auto-staged with rung-1 packets (audit + corrected claim + demand).
+// SNAP stays OUTSIDE the money flow — WcRecoveryEvent is the auditable
+// received-recovery ledger that contingency invoicing bills against.
+//
+// Services-switch seams (build now, flip later): ownerType/assignee on work,
+// a driver-agnostic status machine, per-case activity log, and generate/send
+// decoupled on WcDocument.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum WcCaseSource {
+  BILLING_EXPORT
+  EMR_EXPORT
+  EOB_PDF
+  MANUAL
+}
+
+enum WcCaseStatus {
+  INGESTED
+  ENTITLEMENT_COMPUTED
+  UNDERPAYMENT_FLAGGED
+  PACKET_GENERATED
+  SUBMITTED
+  RESOLVED_RECOVERED
+  RESOLVED_NO_RECOVERY
+  CLOSED
+}
+
+enum WcOwnerType {
+  CUSTOMER
+  SNAP_OPERATOR
+}
+
+enum WcWorkItemType {
+  REVIEW_UNDERPAYMENT
+  CONFIRM_EXTRACTION
+  SUBMIT_DEMAND
+  CHASE_ADJUSTER
+  RECONCILE_REMIT
+}
+
+enum WcWorkItemStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum WcDocType {
+  AUDIT
+  CORRECTED_CLAIM
+  DEMAND_LETTER
+  PROHIBITED_PRACTICE_COMPLAINT
+  DIA_CLAIM
+  CLEAN_CLAIM
+}
+
+enum WcDocStatus {
+  DRAFT
+  GENERATED
+  SENT
+}
+
+// The anesthesia group / tenant. One per facility; contingencyPct is the
+// separately-priced billing rate applied to documented received recovery.
+model WcClient {
+  id             String   @id @default(cuid())
+  facilityId     String   @unique
+  facility       Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name           String
+  contingencyPct Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  cases WcCase[]
+}
+
+// The normalized case model — every adapter (billing export, EMR, EOB) lands
+// here, and every packet/letter renders from here. entitledAmount (the MA
+// schedule truth) is the source of truth; paidAmount is just reconciliation.
+model WcCase {
+  id         String       @id @default(cuid())
+  clientId   String
+  client     WcClient     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  source     WcCaseSource
+  status     WcCaseStatus @default(INGESTED)
+  ownerType  WcOwnerType  @default(CUSTOMER)
+  assigneeId String?
+
+  // Anesthesia detail — the entitlement math lives or dies on these.
+  asaCptCode        String?
+  baseUnits         Float?
+  anesthesiaMinutes Int?
+  physicalStatus    String? // P1..P6
+  qualifyingCircs   String[] // CPT 99100/99116/99135/99140
+
+  // Injury / claim metadata (clean-claim + submission requirements).
+  patientRef      String? // claim-scoped reference (initials/last-4) — NOT full name
+  claimNumber     String?
+  adjusterName    String?
+  adjusterContact String?
+  employerName    String?
+  payerName       String?
+  dateOfInjury    DateTime?
+  dateOfService   DateTime?
+  bodyPart        String?
+  authorization   String?
+
+  // Financials.
+  billedAmount   Float?
+  entitledAmount Float? // engine output — MA 114.3 CMR 40.05(2)
+  paidAmount     Float? // sum of remittances
+  gapAmount      Float? // entitled - paid = the recoverable
+
+  // Reinvention fields (brief ★ Design philosophy).
+  confidenceScore    Float? // 0..1 — drives auto-flow vs human-exception routing
+  nextAction         String? // the case's own computed next-best action
+  autoStaged         Boolean @default(false) // rung-1 packets pre-built at compute
+  underpaymentReason String? // detected pattern, e.g. REPRICED_TO_COMMERCIAL
+
+  entitlementCalc WcEntitlementCalc?
+  remittances     WcRemittance[]
+  documents       WcDocument[]
+  workItems       WcWorkItem[]
+  activity        WcActivityLog[]
+  recoveryEvents  WcRecoveryEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, status])
+  @@index([clientId, claimNumber])
+}
+
+// Auditable snapshot of one entitlement computation — the demand letter's
+// citation trail (schedule version, every unit input, the math).
+model WcEntitlementCalc {
+  id               String   @id @default(cuid())
+  caseId           String   @unique
+  case             WcCase   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  scheduleVersion  String
+  method           String // MA_COLD_START | MA_CALIBRATED
+  conversionFactor Float
+  minutesPerUnit   Float
+  totalUnits       Float
+  entitledAmount   Float
+  inputsJson       Json
+  createdAt        DateTime @default(now())
+}
+
+// One EOB / 835 payment line — the "received" side of reconciliation.
+model WcRemittance {
+  id           String       @id @default(cuid())
+  caseId       String
+  case         WcCase       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  paidAmount   Float
+  adjustments  Json? // CARC/RARC reason codes when present
+  receivedDate DateTime?
+  source       WcCaseSource
+  createdAt    DateTime     @default(now())
+
+  @@index([caseId])
+}
+
+// THE LEDGER — each recovered dollar as an auditable event, recognized when
+// RECEIVED (never expected). Sum(amount) is both the "SNAP recovered $X"
+// counter and the contingency invoice basis.
+model WcRecoveryEvent {
+  id           String   @id @default(cuid())
+  caseId       String
+  case         WcCase   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  amount       Float
+  basis        String // e.g. POST_DEMAND_PAYMENT
+  recognizedAt DateTime @default(now())
+  invoiced     Boolean  @default(false)
+
+  @@index([caseId])
+}
+
+// Assignable work — the services-switch seam. Today assignee is always the
+// group's own staff (CUSTOMER); a future SNAP desk is a permission change.
+model WcWorkItem {
+  id         String           @id @default(cuid())
+  caseId     String
+  case       WcCase           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type       WcWorkItemType
+  status     WcWorkItemStatus @default(OPEN)
+  ownerType  WcOwnerType      @default(CUSTOMER)
+  assigneeId String?
+  note       String?
+  dueAt      DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([caseId, status])
+}
+
+// Generated packets. Generation and sending are SEPARATE steps: the engine
+// generates automatically (born appeal-ready); a human approves the send.
+model WcDocument {
+  id          String      @id @default(cuid())
+  caseId      String
+  case        WcCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type        WcDocType
+  status      WcDocStatus @default(GENERATED)
+  generatedAt DateTime    @default(now())
+  sentAt      DateTime?
+  sentBy      String?
+  createdAt   DateTime    @default(now())
+
+  @@index([caseId])
+}
+
+// Per-case who/what/when — powers ledger auditability today and the future
+// services desk's provenance requirements.
+model WcActivityLog {
+  id        String      @id @default(cuid())
+  caseId    String
+  case      WcCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actorType WcOwnerType @default(CUSTOMER)
+  action    String
+  metaJson  Json?
+  createdAt DateTime    @default(now())
+
+  @@index([caseId])
 }

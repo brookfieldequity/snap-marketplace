@@ -53,6 +53,16 @@ const OPS_ITEMS = [
   { key: 'agency-metrics', label: 'Profitability',   icon: '📈' },
 ]
 
+// WC Recovery — workers'-comp underpayment recovery, a section inside the
+// SNAP Ops tab (wc_recovery flag, tier-controllable). All four views render
+// inside pages/wc/WcApp.jsx, keyed by these page names.
+const WC_ITEMS = [
+  { key: 'wc-dashboard', label: 'Dashboard',       icon: '🎯' },
+  { key: 'wc-cases',     label: 'Cases',           icon: '📁' },
+  { key: 'wc-ingest',    label: 'Upload Files',    icon: '📤' },
+  { key: 'wc-ledger',    label: 'Recovery Ledger', icon: '💰' },
+]
+
 const SHARED_ITEMS = [
   { key: 'providers',    label: 'Provider Management', icon: '👩‍⚕️' },
   { key: 'profile',      label: 'Facility Profile',    icon: '🏥' },
@@ -380,19 +390,39 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
           </>
         )}
 
-        {/* SNAP Ops section (practice management) */}
+        {/* SNAP Ops section (practice management). Payroll items ride the
+            payroll_builder flag; WC Recovery rides wc_recovery — a facility
+            can have either or both, and the tab shows whichever it has. */}
         {activeTab === 'ops' && (
           <>
-            <SectionHeader label="SNAP Ops" />
-            {OPS_ITEMS.map((item) => (
-              <NavItem
-                key={item.key}
-                item={item}
-                isActive={activePage === item.key}
-                onNavigate={navigate}
-              />
-            ))}
-            <Divider />
+            {featureFlags.payroll_builder && (
+              <>
+                <SectionHeader label="SNAP Ops" />
+                {OPS_ITEMS.map((item) => (
+                  <NavItem
+                    key={item.key}
+                    item={item}
+                    isActive={activePage === item.key}
+                    onNavigate={navigate}
+                  />
+                ))}
+                <Divider />
+              </>
+            )}
+            {featureFlags.wc_recovery && (
+              <>
+                <SectionHeader label="WC Recovery" />
+                {WC_ITEMS.map((item) => (
+                  <NavItem
+                    key={item.key}
+                    item={item}
+                    isActive={activePage === item.key}
+                    onNavigate={navigate}
+                  />
+                ))}
+                <Divider />
+              </>
+            )}
           </>
         )}
 
