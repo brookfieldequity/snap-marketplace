@@ -231,16 +231,53 @@ router.post('/days', facilityAuth, async (req, res) => {
       },
       update: {
         roomsRequired: roomsRequired !== undefined ? roomsRequired : undefined,
+        // An admin editing a day's rooms is an override that must survive a
+        // re-generate.
+        ...(roomsRequired !== undefined ? { roomsAdminSet: true } : {}),
       },
       create: {
         facilityId: req.facility.id,
         date: new Date(date),
         location,
         roomsRequired: roomsRequired || 1,
+        roomsAdminSet: true,
       },
     });
 
     res.status(201).json(day);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms-bulk — admin sets ONE room count across every day of a site in a
+// month, for a site that never returned a room-count card. Updates the month's
+// existing ScheduleDay rows for that site (generate the month first if none
+// exist) and marks them admin-set so a later re-generate preserves the count.
+router.post('/rooms-bulk', facilityAuth, async (req, res) => {
+  try {
+    const { location, roomsRequired, year, month } = req.body || {};
+    const rooms = Number(roomsRequired);
+    const yr = Number(year);
+    const mo = Number(month);
+    if (!location?.trim() || !Number.isInteger(rooms) || rooms < 0 || rooms > 50) {
+      return res.status(400).json({ error: 'location and a room count 0–50 are required' });
+    }
+    if (!Number.isInteger(yr) || !Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'valid year and month are required' });
+    }
+    const monthStart = new Date(Date.UTC(yr, mo - 1, 1));
+    const monthEnd = new Date(Date.UTC(yr, mo, 1));
+    const result = await prisma.scheduleDay.updateMany({
+      where: {
+        facilityId: req.facility.id,
+        location: location.trim(),
+        date: { gte: monthStart, lt: monthEnd },
+      },
+      data: { roomsRequired: rooms, roomsAdminSet: true },
+    });
+    res.json({ ok: true, updated: result.count, location: location.trim(), roomsRequired: rooms });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -1088,10 +1125,16 @@ router.post('/generate', facilityAuth, async (req, res) => {
         facilityId: req.facility.id,
         date: { gte: monthStart, lt: monthEnd },
       },
-      select: { date: true, location: true },
+      select: { date: true, location: true, roomsAdminSet: true },
     });
     const existingSet = new Set(
       existingRows.map((r) => `${r.date.toISOString().slice(0, 10)}::${r.location}`)
+    );
+    // Admin-set day counts (a per-day override, or a site-wide count the admin
+    // set because the facility never returned a card) are preserved verbatim —
+    // a re-generate never overwrites them.
+    const adminSetByKey = new Set(
+      existingRows.filter((r) => r.roomsAdminSet).map((r) => `${r.date.toISOString().slice(0, 10)}::${r.location}`)
     );
 
     // Run all upserts in a transaction so partial generation doesn't leave
@@ -1110,6 +1153,12 @@ router.post('/generate', facilityAuth, async (req, res) => {
         const entries = daysByDow[dow] || [];
         for (const entry of entries) {
           const key = `${iso}::${entry.location}`;
+          // An admin-set count is authoritative — never overwrite it.
+          if (adminSetByKey.has(key)) {
+            locationsSeen.add(entry.location);
+            rowsUpdated++;
+            continue;
+          }
           // Card-declared count wins over the template default when present.
           const carded = cardCountByKey.has(key);
           const rooms = carded ? cardCountByKey.get(key) : entry.roomsRequired;

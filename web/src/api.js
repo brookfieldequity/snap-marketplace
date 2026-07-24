@@ -293,6 +293,7 @@ export const facilityAPI = {
   scheduleExists: () => apiFetch(`${BASE}/schedule/exists`, { headers: facilityHeaders() }),
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  setRoomsForSite: (location, roomsRequired, year, month) => apiFetch(`${BASE}/schedule/rooms-bulk`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, roomsRequired, year, month }) }),
   deleteScheduleDay: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}`, { method: 'DELETE', headers: facilityHeaders() }),
   recordScheduleFeedback: (data) => apiFetch(`${BASE}/schedule/feedback`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getScheduleIntelligence: () => apiFetch(`${BASE}/schedule/intelligence`, { headers: facilityHeaders() }),

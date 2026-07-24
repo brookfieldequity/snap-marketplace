@@ -451,7 +451,49 @@ const RC_META = {
   LOCKED_NO_RESPONSE: { label: 'No response', bg: '#FFFBEB', fg: '#92400E', bd: '#FDE68A' },
   NOT_SENT: { label: 'Template default', bg: '#F1F5F9', fg: '#64748B', bd: '#E2E8F0' },
 }
-function RoomCountPanel({ year, month, onNavigate }) {
+// One site's chip. For any site that hasn't RETURNED a card, the admin can set
+// one room count across every day of that site this month (the "facility didn't
+// send it back" case) — marked admin-set so a re-generate preserves it.
+function SiteRoomChip({ r, year, month, onApplied }) {
+  const m = RC_META[r.status] || RC_META.NOT_SENT
+  const canSet = r.status !== 'RETURNED'
+  const [val, setVal] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  async function apply() {
+    const n = Number(val)
+    if (!Number.isInteger(n) || n < 0 || n > 50) { setMsg('0–50'); return }
+    setBusy(true); setMsg('')
+    try {
+      const res = await facilityAPI.setRoomsForSite(r.location, n, year, month)
+      if (res.updated > 0) { setMsg('Set ✓'); setVal(''); onApplied && onApplied() }
+      else setMsg('Generate month first')
+      setTimeout(() => setMsg(''), 2800)
+    } catch (e) { setMsg('Failed') }
+    finally { setBusy(false) }
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 10px' }}>
+      <strong style={{ color: '#0F172A', fontWeight: 700 }}>{r.location}</strong>
+      <span style={{ fontSize: 11, fontWeight: 700, color: m.fg, background: m.bg, border: `1px solid ${m.bd}`, padding: '2px 7px', borderRadius: 999 }}>{m.label}</span>
+      {r.status === 'RETURNED' && r.submittedAt && (
+        <span style={{ color: '#94A3B8' }}>{r.daysSubmitted}d · {new Date(r.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+      )}
+      {r.notes && r.notes.length > 0 && (
+        <span title={r.notes.map((n) => `${n.date}: ${n.note}`).join('\n')} style={{ color: '#B45309', fontWeight: 700 }}>✎{r.notes.length}</span>
+      )}
+      {canSet && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 2, paddingLeft: 7, borderLeft: '1px solid #E2E8F0' }}>
+          <input type="number" min={0} max={50} value={val} onChange={(e) => setVal(e.target.value)} placeholder="rms" style={{ width: 46, padding: '3px 6px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12 }} />
+          <button onClick={apply} disabled={busy || val === ''} title="Set this many rooms for every day of this site this month" style={{ padding: '4px 9px', background: busy || val === '' ? '#CBD5E1' : '#0F172A', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: busy || val === '' ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>Set all days</button>
+          {msg && <span style={{ fontSize: 11, fontWeight: 700, color: msg === 'Set ✓' ? '#16A34A' : '#B45309', whiteSpace: 'nowrap' }}>{msg}</span>}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function RoomCountPanel({ year, month, onNavigate, onApplied }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
@@ -487,21 +529,9 @@ function RoomCountPanel({ year, month, onNavigate }) {
         <div style={{ fontSize: 13, color: '#64748B', marginTop: 10 }}>No sites yet — add coverage templates and site contacts to send room-count cards.</div>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-          {rows.map((r) => {
-            const m = RC_META[r.status] || RC_META.NOT_SENT
-            return (
-              <span key={r.location} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 10px' }}>
-                <strong style={{ color: '#0F172A', fontWeight: 700 }}>{r.location}</strong>
-                <span style={{ fontSize: 11, fontWeight: 700, color: m.fg, background: m.bg, border: `1px solid ${m.bd}`, padding: '2px 7px', borderRadius: 999 }}>{m.label}</span>
-                {r.status === 'RETURNED' && r.submittedAt && (
-                  <span style={{ color: '#94A3B8' }}>{r.daysSubmitted}d · {new Date(r.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                )}
-                {r.notes && r.notes.length > 0 && (
-                  <span title={r.notes.map((n) => `${n.date}: ${n.note}`).join('\n')} style={{ color: '#B45309', fontWeight: 700 }}>✎{r.notes.length}</span>
-                )}
-              </span>
-            )
-          })}
+          {rows.map((r) => (
+            <SiteRoomChip key={r.location} r={r} year={year} month={month} onApplied={onApplied} />
+          ))}
         </div>
       )}
     </div>
@@ -1378,7 +1408,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       </div>
 
       {/* Provider Availability — request + track self-submission from roster members */}
-      <RoomCountPanel year={year} month={month} onNavigate={onNavigate} />
+      <RoomCountPanel year={year} month={month} onNavigate={onNavigate} onApplied={load} />
 
       <ProviderAvailabilityPanel
         year={year}
