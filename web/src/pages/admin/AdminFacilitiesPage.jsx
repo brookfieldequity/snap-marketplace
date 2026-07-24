@@ -570,6 +570,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
   const [submitting, setSubmitting]       = useState(false)
   const [error, setError]                 = useState(null)
   const [result, setResult]               = useState(null)
+  const [copied, setCopied]               = useState(false)
 
   async function submit(e) {
     e?.preventDefault()
@@ -583,7 +584,11 @@ function InviteUserModal({ facility, onClose, onSent }) {
         role,
         recipientName.trim() || undefined,
       )
-      setResult(r.invite || { email: email.trim().toLowerCase() })
+      setResult({
+        ...(r.invite || { email: email.trim().toLowerCase() }),
+        claimLink: r.claimLink || null,
+        emailSent: r.emailSent !== false,
+      })
     } catch (err) {
       setError(err.message || 'Could not send invite.')
     } finally {
@@ -593,8 +598,8 @@ function InviteUserModal({ facility, onClose, onSent }) {
 
   return (
     <ModalShell
-      title={result ? 'Invite sent ✓' : `Invite to ${facility.name}`}
-      subtitle={result ? null : 'They’ll receive an email with a secure link to set their password and log in.'}
+      title={result ? (result.emailSent ? 'Invite sent ✓' : 'Invite ready — send the link') : `Invite to ${facility.name}`}
+      subtitle={result ? null : 'They’ll receive an email with a secure link to set their password and log in — and you’ll get a copyable link too.'}
       onClose={onClose}
     >
       {!result && (
@@ -637,9 +642,38 @@ function InviteUserModal({ facility, onClose, onSent }) {
 
       {result && (
         <div>
-          <p style={{ margin: '0 0 12px', fontSize: 14, color: '#0F172A', lineHeight: 1.6 }}>
-            Sent an invite email to <strong>{result.email}</strong>. They’ll receive a link to set their password and log in.
-          </p>
+          {result.emailSent ? (
+            <p style={{ margin: '0 0 12px', fontSize: 14, color: '#0F172A', lineHeight: 1.6 }}>
+              Sent an invite email to <strong>{result.email}</strong>. They’ll receive a link to set their password and log in — and you can copy the same link below to send directly (in case the email lands in spam).
+            </p>
+          ) : (
+            <p style={{ margin: '0 0 12px', fontSize: 13.5, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 12px', lineHeight: 1.6 }}>
+              The invite for <strong>{result.email}</strong> is ready, but the email couldn’t be confirmed as sent. <strong>Copy the link below and send it to them directly.</strong>
+            </p>
+          )}
+
+          {result.claimLink && (
+            <div style={{ margin: '0 0 12px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Invite link</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  readOnly
+                  value={result.claimLink}
+                  onFocus={(e) => e.target.select()}
+                  style={{ flex: 1, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 12, color: '#475569', fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
+                />
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(result.claimLink); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+                  style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#0F172A', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  {copied ? 'Copied ✓' : 'Copy'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 6 }}>
+                Safe to send by text or email. Anyone with this link can claim the invite, so share it only with {result.email}.
+              </div>
+            </div>
+          )}
           {result.expiresAt && (
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748B' }}>
               The invite expires <strong>{new Date(result.expiresAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>.

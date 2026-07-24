@@ -1585,9 +1585,9 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
     // never receive the link.
     const claimLink = `${FACILITY_CLAIM_BASE}/facility-claim/${rawToken}`;
     const expiryDate = invite.expiresAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    let emailSent = true;
+    let emailSent = false;
     try {
-      await sendFacilityInvite(
+      emailSent = await sendFacilityInvite(
         normalizedEmail,
         recipientFirstName,  // resolved at top of handler: modal input || email derive || "there"
         facility.name,
@@ -1600,9 +1600,13 @@ router.post('/facilities/:id/invite', adminAuth, async (req, res) => {
       console.error('[admin] facility invite email failed:', e.message);
     }
 
+    // Return the claim link so the admin can always copy/send it directly —
+    // email delivery is never a single point of failure. The raw token is not
+    // stored (only its hash), so this response is the ONLY place it's exposed.
     res.status(201).json({
       ok: true,
       emailSent,
+      claimLink,
       invite: {
         id: invite.id,
         email: invite.email,

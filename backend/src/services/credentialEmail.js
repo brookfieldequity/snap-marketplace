@@ -36,10 +36,14 @@ function credTypeName(type) {
   return names[type] || type
 }
 
+// Returns true only if the message was actually handed to SendGrid without
+// error; false if the key is unset (no-op) or SendGrid rejected it. Callers
+// that care about delivery (e.g. the facility invite) use this to report an
+// honest "sent" state instead of assuming success.
 async function send(msg) {
   if (!process.env.SENDGRID_API_KEY) {
     console.log('[credentialEmail] SENDGRID_API_KEY not set — skipping:', msg.subject)
-    return
+    return false
   }
   try {
     // Disable SendGrid click tracking — it rewrites links through a branded
@@ -47,8 +51,10 @@ async function send(msg) {
     // causing "connection is not private" on invite links. Transactional email:
     // links must point straight to the real, valid-cert URL.
     await sgMail.send({ ...msg, trackingSettings: { clickTracking: { enable: false, enableText: false } } })
+    return true
   } catch (err) {
     console.error('[credentialEmail] SendGrid error:', err.response?.body || err.message)
+    return false
   }
 }
 
@@ -202,7 +208,7 @@ async function sendFacilityInvite(toEmail, recipientFirstName, facilityName, rol
     : 'Hi there,'
   const subject = `You've been invited to manage ${facilityName} on SNAP Medical`
 
-  await send({
+  return await send({
     to: toEmail,
     from: ADMIN_FROM,
     replyTo: 'matt@snapmedical.app',
