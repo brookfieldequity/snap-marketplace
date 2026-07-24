@@ -513,7 +513,18 @@ async function renderNativeForm({ packet, map, passport }) {
 
   for (const section of structure.sections) {
     sectionHeading(section.heading, section.description)
-    for (const field of section.fields || []) {
+    // Collapse a run of consecutive SIGNATURE fields into one stamped block.
+    // The extractor sometimes emits a paired "Date" line (or a duplicate
+    // "Signature of applicant") as a second signature field at the same spot;
+    // rendering each would stamp the captured signature twice in one place.
+    // Genuinely distinct signature lines are never adjacent, so they survive.
+    const fieldsToRender = []
+    for (const f of section.fields || []) {
+      const prev = fieldsToRender[fieldsToRender.length - 1]
+      if (f.source === 'SIGNATURE' && prev && prev.source === 'SIGNATURE') continue
+      fieldsToRender.push(f)
+    }
+    for (const field of fieldsToRender) {
       const qk = questionKeyFor(field, map.id)
 
       if (field.source === 'STATIC') {

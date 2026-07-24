@@ -237,6 +237,11 @@ function normalizeStructure(input) {
       }
       if (type === 'signature') source = 'SIGNATURE'
       if (type === 'static') source = 'STATIC'
+      // Drop a consecutive duplicate signature field — the reader sometimes
+      // emits a paired "Date signed" line (or a repeated label) as a second
+      // signature at the same spot, which would double-stamp the e-signature.
+      const prevKept = fields[fields.length - 1]
+      if (source === 'SIGNATURE' && prevKept && prevKept.source === 'SIGNATURE') continue
       fields.push({
         key: slugKey(f.label, fieldCount),
         label: clean(f.label, 240) || 'Field',
