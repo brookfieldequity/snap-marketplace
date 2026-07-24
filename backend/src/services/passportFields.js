@@ -25,7 +25,7 @@
 const VALUE_KEYS = [
   // Identity / demographics
   'provider.fullName', 'provider.firstName', 'provider.middleName', 'provider.lastName',
-  'provider.suffix', 'provider.npi', 'provider.dateOfBirth', 'provider.specialty',
+  'provider.suffix', 'provider.profTitle', 'provider.npi', 'provider.dateOfBirth', 'provider.specialty',
   'provider.licenseState', 'provider.email', 'provider.phone',
   'address.full', 'address.street', 'address.city', 'address.state', 'address.zip',
   // Credentials (number + expiry + status)
@@ -50,7 +50,8 @@ const VALUE_KEY_LABELS = {
   'provider.firstName': 'First name',
   'provider.middleName': 'Middle name',
   'provider.lastName': 'Last name',
-  'provider.suffix': 'Suffix',
+  'provider.suffix': 'Suffix (Jr., II)',
+  'provider.profTitle': 'Professional title / degree',
   'provider.npi': 'NPI',
   'provider.dateOfBirth': 'Date of birth',
   'provider.specialty': 'Specialty',
@@ -105,6 +106,22 @@ function eduLevel(v) {
   return EDU_LEVEL_LABELS[v] || String(v).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
 }
 
+// A passport "suffix" field frequently holds a professional degree (MD, DO,
+// PhD) instead of a generational name suffix (Jr., II). Split the two so the
+// degree lands in the professional-title field and the name suffix stays part
+// of the name — never render "Matthew Haverkamp MD" with MD as a name suffix,
+// and never put MD in a "Suffix (Jr., II)" blank.
+const NAME_SUFFIX_RE = /^(jr|sr|ii|iii|iv|v|2nd|3rd|4th)$/i
+function nameSuffixOnly(s) {
+  const t = String(s || '').trim()
+  return NAME_SUFFIX_RE.test(t.replace(/\.$/, '')) ? t : ''
+}
+function degreeFromSuffix(s) {
+  const t = String(s || '').trim()
+  if (!t) return ''
+  return NAME_SUFFIX_RE.test(t.replace(/\.$/, '')) ? '' : t
+}
+
 /** Resolve a value key against the full passport payload → string (never null). */
 function resolveValue(source, passport) {
   if (!source || source === 'LEAVE_BLANK') return ''
@@ -116,8 +133,10 @@ function resolveValue(source, passport) {
   const parts = source.split('.')
 
   if (parts[0] === 'provider') {
+    if (parts[1] === 'profTitle') return degreeFromSuffix(prov.suffix)
+    if (parts[1] === 'suffix') return nameSuffixOnly(prov.suffix)
     if (parts[1] === 'fullName') {
-      return [prov.firstName, prov.middleName, prov.lastName, prov.suffix]
+      return [prov.firstName, prov.middleName, prov.lastName, nameSuffixOnly(prov.suffix)]
         .filter(Boolean).join(' ').trim()
     }
     return String(prov[parts[1]] || '')

@@ -135,7 +135,7 @@ Walk the application top to bottom. Output every section in order, and within ea
 
 For each field, decide the SOURCE:
 - PASSPORT — data SNAP holds on the provider's verified passport. This is BROAD — especially once the provider's CV has been read in, the passport holds far more than just license numbers. It covers:
-  · Identity: full legal name, first/middle/last, suffix, date of birth, NPI, specialty
+  · Identity: full legal name, first/middle/last, name suffix like Jr./II (provider.suffix), professional title/degree like M.D./Ph.D. (provider.profTitle — map a "Prof. Title" or "Degree" field here, NOT to suffix), date of birth, NPI, specialty
   · Contact: mailing address (street, city, state, zip), phone, email
   · Licensure & certifications: state license number + expiration, controlled-substance registration, DEA number + expiration, board certification + expiration, ACLS expiration, BLS expiration
   · Malpractice: carrier, policy number + expiration

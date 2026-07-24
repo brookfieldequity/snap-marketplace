@@ -482,7 +482,7 @@ async function renderNativeForm({ packet, map, passport }) {
   doc.moveTo(left, doc.y + 3).lineTo(rightX, doc.y + 3).lineWidth(2).strokeColor('#0F172A').stroke()
   doc.moveDown(0.6)
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#0F172A')
-    .text([prov.firstName, prov.middleName, prov.lastName, prov.suffix].filter(Boolean).join(' ').trim() || packet.providerName || `NPI ${packet.npi}`)
+    .text(resolveValue('provider.fullName', passport) || packet.providerName || `NPI ${packet.npi}`)
   doc.font('Helvetica').fontSize(9).fillColor('#64748B')
     .text(`NPI ${packet.npi}${prov.specialty ? ` · ${prov.specialty}` : ''}${packet.cycle === 'RENEWAL' ? ' · Reappointment' : ''}`)
   doc.moveDown(0.5)
