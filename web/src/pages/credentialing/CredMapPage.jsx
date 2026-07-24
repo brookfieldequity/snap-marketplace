@@ -495,7 +495,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
               </div>
               {mode === 'upload' && (
                 <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 6 }}>
-                  SNAP is finding every requirement and wiring the passport auto-fill. ~30 seconds.
+                  SNAP is finding every requirement and wiring the passport auto-fill. ~1–2 minutes.
                 </div>
               )}
             </div>
@@ -1864,7 +1864,7 @@ export default function CredMapPage() {
           <div style={{ fontSize: 36 }}>🗺️</div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facility applications set up yet</div>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
-            Upload a facility's blank application and SNAP learns their whole template in about a minute. Set it up once — it works for every provider, every renewal.
+            Upload a facility's blank application and SNAP learns their whole template in a minute or two. Set it up once — it works for every provider, every renewal.
           </div>
           <button onClick={() => setShowNew(true)} style={{ marginTop: 18, padding: '11px 22px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
             ✨ Set up your first facility
