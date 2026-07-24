@@ -221,10 +221,25 @@ router.get('/', facilityAuth, async (req, res) => {
     // SNAP account; the passport is NPI-keyed).
     const npis = [...new Set(entries.map((e) => e.npi).filter(Boolean))];
     const credSummaries = await buildCredSummaries(req.facility.id, npis);
-    const withCreds = entries.map((e) => ({
-      ...e,
-      credSummary: (e.npi && credSummaries[e.npi]) || { status: 'NONE', soonestExpiry: null },
-    }));
+    // Home city/state/zip for the roster card, from the linked ProviderProfile.
+    // The marketplace has no street line (that lives in the passport), so the
+    // card shows a coarse location; blank when the row isn't linked to a SNAP
+    // provider. One batch query, no per-provider round-trips.
+    const linkedIds = [...new Set(entries.map((e) => e.linkedProviderId).filter(Boolean))];
+    const profiles = linkedIds.length
+      ? await prisma.providerProfile.findMany({ where: { id: { in: linkedIds } }, select: { id: true, city: true, state: true, zipCode: true } })
+      : [];
+    const profById = Object.fromEntries(profiles.map((p) => [p.id, p]));
+    const withCreds = entries.map((e) => {
+      const prof = e.linkedProviderId ? profById[e.linkedProviderId] : null;
+      return {
+        ...e,
+        credSummary: (e.npi && credSummaries[e.npi]) || { status: 'NONE', soonestExpiry: null },
+        homeCity: prof?.city || null,
+        homeState: prof?.state || null,
+        homeZip: prof?.zipCode || null,
+      };
+    });
     // Strip agency payroll rates the viewing facility isn't entitled to see.
     res.json(applyRosterRateLens(withCreds, req.facility.id));
   } catch (err) {

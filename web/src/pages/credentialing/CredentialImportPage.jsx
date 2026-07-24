@@ -179,6 +179,12 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
   const field = (k, fallback = '') => (f[k] !== undefined ? f[k] : item[k] ?? fallback)
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
 
+  // Expired documents default to Archive on intake — an expired license/cert is
+  // a historical record, not part of the active file. Archive becomes the
+  // recommended action; the coordinator can still file it if they want it.
+  const _exp = field('suggestedExpiration')
+  const isExpired = _exp && new Date(_exp) < new Date()
+
   const statusChip = {
     PENDING: ['#94A3B8', 'Reading…'], ANALYZED: [conf, `${item.confidence || ''} confidence`],
     FAILED: ['#EF4444', 'Could not read'], CONFIRMED: ['#2563EB', 'Confirmed — ready to file'],
@@ -232,16 +238,25 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
             <input disabled={done} type="date" value={isoDay(field('suggestedExpiration'))} onChange={set('suggestedExpiration')} style={sel} />
           </Labeled>
           {!done && (
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {isExpired && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#0369A1', background: '#E0F2FE', border: '1px solid #BAE6FD', borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                  ⏰ Expired — archive by default
+                </span>
+              )}
               <button
                 onClick={() => onSave(item, { ...f, status: 'CONFIRMED' })}
-                style={{ padding: '8px 14px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}
-              >✓ Confirm</button>
+                style={ isExpired
+                  ? { padding: '8px 12px', background: '#fff', color: '#059669', border: '1px solid #A7F3D0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }
+                  : { padding: '8px 14px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' } }
+              >✓ {isExpired ? 'File anyway' : 'Confirm'}</button>
               <button
                 title="Keep on file as a historical record — retained and auditable, never shown to facilities and never affects expiry tracking. For old expired licenses and superseded documents."
                 onClick={() => onSave(item, { ...f, status: 'ARCHIVE' })}
-                style={{ padding: '8px 12px', background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
-              >🗄 Archive</button>
+                style={ isExpired
+                  ? { padding: '8px 14px', background: '#0EA5E9', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }
+                  : { padding: '8px 12px', background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } }
+              >🗄 Archive{isExpired ? ' ✓' : ''}</button>
               <button
                 onClick={() => onSave(item, { status: 'REJECTED' })}
                 style={{ padding: '8px 12px', background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}

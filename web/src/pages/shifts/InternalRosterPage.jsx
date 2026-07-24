@@ -1112,6 +1112,16 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>⚠️ No NPI on file</div>
                 ) : null}
 
+                {p.phoneNumber && (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>📞 {p.phoneNumber}</div>
+                )}
+
+                {(p.homeCity || p.homeState) && (
+                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                    🏠 {[p.homeCity, p.homeState].filter(Boolean).join(', ')}{p.homeZip ? ` ${p.homeZip}` : ''}
+                  </div>
+                )}
+
                 {Array.isArray(p.locations) && p.locations.length > 0 && (
                   <div style={{ fontSize: 11, color: '#64748B' }}>
                     📍 {p.locations.map((l) => l.facilityName + (l.shiftSharePct != null ? ` ${l.shiftSharePct}%` : '')).join(' · ')}
