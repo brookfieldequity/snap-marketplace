@@ -41,21 +41,34 @@ const ATTESTATION_KEYS = [
   'license_denied_revoked_suspended',
   'license_voluntarily_surrendered',
   'license_disciplinary_action',
+  'complaint_filed_licensing_board',
   'dea_action_surrendered',
+  'narcotic_registration_another_state',
   'board_certification_revoked',
   'hospital_privileges_denied',
   'hospital_privileges_revoked_suspended',
   'privileges_voluntarily_relinquished',
   'membership_denied_other_facility',
   'resigned_under_investigation',
+  'employment_terminated_facility',
+  'facility_disciplinary_action',
+  'scientific_misconduct',
+  'financial_interest_referral',
+  'health_plan_participation_denied_terminated',
+  'medical_society_suspended_terminated',
+  'regulatory_agency_inquiry_action',
+  'cme_requirements_incomplete',
   'malpractice_claims_history',
   'malpractice_settlements_judgments',
   'professional_liability_denied_cancelled',
+  'professional_liability_terminated',
+  'liability_coverage_procedures_excluded',
   'medicare_medicaid_sanctioned',
   'opted_out_of_medicare',
   'npdb_reported',
   'oig_sam_excluded',
   'substance_abuse_impairment',
+  'illegal_drug_use_past',
   'physical_mental_health_impairment',
   'able_to_perform_privileges',
   'OTHER',
@@ -122,14 +135,14 @@ Walk the application top to bottom. Output every section in order, and within ea
 
 For each field, decide the SOURCE:
 - PASSPORT — data SNAP holds on the provider's verified passport. This is BROAD — especially once the provider's CV has been read in, the passport holds far more than just license numbers. It covers:
-  · Identity: full legal name, first/middle/last, suffix, former names, date of birth, NPI, specialty
+  · Identity: full legal name, first/middle/last, suffix, date of birth, NPI, specialty
   · Contact: mailing address (street, city, state, zip), phone, email
   · Licensure & certifications: state license number + expiration, controlled-substance registration, DEA number + expiration, board certification + expiration, ACLS expiration, BLS expiration
   · Malpractice: carrier, policy number + expiration
   · History — render each of these as ONE longtext field: complete work / employment history (valueKey list.workHistory), education & training history (valueKey list.education), hospital / facility affiliations (valueKey list.hospitalPrivileges)
-  Choose the closest valueKey from the list. PREFER PASSPORT for any field the passport could answer — SNAP fills what it has and leaves the rest blank, which is always better than making the provider re-type information it already holds.
+  Choose the closest valueKey from the list. PREFER PASSPORT for any field the passport could answer — SNAP fills what it has and leaves the rest blank, which is always better than making the provider re-type information it already holds. BUT accuracy first: only mark a field PASSPORT when a valueKey genuinely matches its meaning. If nothing fits (e.g. SSN, gender, place of birth, citizenship/visa, professional title/degree, ECFMG/USMLE, languages, sub-specialty, office/practice details, references), use PROVIDER — never force an unrelated valueKey onto a field just to make it PASSPORT. A wrong auto-fill is worse than a blank the provider completes.
 - PROVIDER — only for things genuinely NOT on the passport: professional references / peers, a specific written explanation, or a facility-internal detail SNAP has no source for. Do not use PROVIDER for standard demographics, contact info, work history, education, or affiliations — those are PASSPORT.
-- ATTESTATION — a yes/no legal question ("Have you ever been convicted of a felony?", "Have your privileges ever been suspended?"). Set canonicalAttestation to the matching key, or OTHER. Put any "if yes, explain" instruction in explain.
+- ATTESTATION — a yes/no legal question ("Have you ever been convicted of a felony?", "Have your privileges ever been suspended?"). Set canonicalAttestation to the matching key, or OTHER. Put any "if yes, explain" instruction in explain. A numbered list of yes/no legal questions (e.g. 1–24 on a standardized application) is a set of ATTESTATION fields — capture EVERY question, keeping its full wording as the label. Each distinct question maps to its OWN canonicalAttestation key; never assign the same key to two different questions on the same form — pick the closest distinct key, or OTHER.
 - SIGNATURE — a signature line or "date signed" line.
 - STATIC — a heading or instruction with no input.
 
@@ -138,6 +151,8 @@ Rules:
 - Prefer PASSPORT for anything SNAP can fill; only use PROVIDER when it genuinely cannot.
 - Group fields under the section headings the form actually uses.
 - Work-history grids, education grids, and reference blocks: represent them as ONE field each (type longtext, source PASSPORT with the closest valueKey for history/education, or PROVIDER for references) — do not enumerate every row.
+- Repeated entry blocks: when the form gives several identical blanks for the same kind of entry (e.g. three office/practice addresses, three board certifications, three professional references, three liability carriers, multiple prior-license or prior-employer rows), capture the block ONCE — do not emit an empty copy for every repeat.
+- Long legal text (an "Authorization and Release", acknowledgment, attestation-of-truth, confidentiality, or consent section) is STATIC: capture it as ONE short STATIC field that names the section — do NOT transcribe the full legal paragraphs — followed by the SIGNATURE and date line(s) it requires.
 - If the packet repeats a near-identical form for multiple sites/locations (e.g. one privilege or delineation form per facility), capture it ONCE as a single section and note in the section description that it applies per site — do NOT duplicate the whole section for every location. Keep the output focused on distinct fields.
 - Never invent sections or fields not in the application. If a page is unreadable, still record what you can and say so in notes.
 
@@ -244,7 +259,9 @@ function normalizeStructure(input) {
       if (source === 'SIGNATURE' && prevKept && prevKept.source === 'SIGNATURE') continue
       fields.push({
         key: slugKey(f.label, fieldCount),
-        label: clean(f.label, 240) || 'Field',
+        // Attestation/legal questions run long (IMA Q7 is ~300 chars) — cap
+        // high enough not to truncate the question mid-sentence in the readout.
+        label: clean(f.label, 600) || 'Field',
         type,
         source,
         valueKey,
