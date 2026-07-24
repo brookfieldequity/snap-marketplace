@@ -493,7 +493,11 @@ async function renderNativeForm({ packet, map, passport }) {
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#0F172A').text(String(title || 'Section').toUpperCase())
     doc.moveTo(left, doc.y + 2).lineTo(rightX, doc.y + 2).lineWidth(0.75).strokeColor('#CBD5E1').stroke()
     doc.moveDown(0.35)
-    if (description) { doc.font('Helvetica-Oblique').fontSize(8.5).fillColor('#64748B').text(description); doc.moveDown(0.2) }
+    // Suppress any SNAP processing note the reader may have echoed into a
+    // description ("Capture once; the form repeats identical blocks…") — a
+    // description should only ever be the application's own instruction.
+    const showDesc = description && !/capture once|repeats?\s+identical|do not (emit|duplicate)/i.test(String(description))
+    if (showDesc) { doc.font('Helvetica-Oblique').fontSize(8.5).fillColor('#64748B').text(description); doc.moveDown(0.2) }
   }
 
   const kv = (label, value) => {

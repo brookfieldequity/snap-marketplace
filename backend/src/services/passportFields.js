@@ -90,6 +90,21 @@ function fmtDate(v) {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
 }
 
+// Humanize the education level enum for rendered output ("MED_SCHOOL" reads as
+// "Medical school", not the raw key).
+const EDU_LEVEL_LABELS = {
+  HIGH_SCHOOL: 'High school',
+  COLLEGE: 'College',
+  MED_SCHOOL: 'Medical school',
+  RESIDENCY: 'Residency',
+  FELLOWSHIP: 'Fellowship',
+  INTERNSHIP: 'Internship',
+}
+function eduLevel(v) {
+  if (!v) return ''
+  return EDU_LEVEL_LABELS[v] || String(v).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+}
+
 /** Resolve a value key against the full passport payload → string (never null). */
 function resolveValue(source, passport) {
   if (!source || source === 'LEAVE_BLANK') return ''
@@ -136,7 +151,7 @@ function resolveValue(source, passport) {
     }
     if (parts[1] === 'education') {
       return (S.education || [])
-        .map((e) => `${e.level || ''}${e.institution ? ` — ${e.institution}` : ''}${e.graduationDate ? ` (${e.graduationDate})` : ''}`.trim())
+        .map((e) => `${eduLevel(e.level)}${e.institution ? ` — ${e.institution}` : ''}${e.graduationDate ? ` (${e.graduationDate})` : ''}`.trim())
         .join('\n')
     }
     if (parts[1] === 'hospitalPrivileges') {
