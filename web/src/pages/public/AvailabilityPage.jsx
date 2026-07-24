@@ -217,13 +217,15 @@ export default function AvailabilityPage({ token }) {
       const next = new Map(prev)
       const cur = prev.get(isoDate) || 'unset'
       let newState
+      // Full tap cycle: unset → available → unavailable → maybe → unset.
+      // "Maybe" is now reachable by tapping (note optional); a note can still be
+      // attached for context via long-press/pencil.
       if (cur === 'unset') newState = 'available'
-      // A tap on a "maybe" promotes it to a firm yes (its note is kept).
-      else if (cur === 'maybe') newState = 'available'
       else if (cur === 'available') newState = 'unavailable'
+      else if (cur === 'unavailable') newState = 'maybe'
       else {
+        // cur === 'maybe' → back to unset, dropping any attached note
         newState = 'unset'
-        // Clear note when cycling to unset
         setNotesByDate((pn) => {
           const nn = new Map(pn)
           nn.delete(isoDate)
