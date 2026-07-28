@@ -97,24 +97,35 @@ router.post('/ingest', upload.array('files', 6), async (req, res) => {
       return res.status(503).json({ error: 'AI intake is not configured (ANTHROPIC_API_KEY missing)' })
     }
 
-    const { sourceKind, notes, cases } = await wcIntake.readFiles(
+    const { notes, cases } = await wcIntake.readFiles(
       req.files.map((f) => ({ buffer: f.buffer, mimeType: f.mimetype, name: f.originalname }))
     )
 
     const results = { created: 0, merged: 0, remittances: 0, caseIds: [] }
-    for (const rec of cases) {
-      const { aiConfidence, paidAmount, ...fields } = rec
 
-      // Merge rule (brief §7): same claim number ⇒ same case. EOB paid lines
-      // land as remittances on the existing case (recovery recognition runs
-      // inside recordRemittance); other sources fill still-null fields only —
-      // the anesthesia record outranks a re-upload, nothing gets clobbered.
+    // Each extracted record carries the sourceKind of the document it came
+    // from. EOB records are processed LAST so a mixed batch (billing export +
+    // EOBs in one upload) creates the case first and the EOB paid line then
+    // lands on it — EOB dollars ALWAYS go through the remittance ledger
+    // (recovery recognition runs inside recordRemittance), never into
+    // WcCase.paidAmount directly.
+    const isEob = (rec) => rec.sourceKind === 'EOB_PDF'
+    const ordered = [...cases.filter((r) => !isEob(r)), ...cases.filter(isEob)]
+
+    for (const rec of ordered) {
+      const { aiConfidence, paidAmount, sourceKind, ...fields } = rec
+      const eobPaid = isEob(rec) && paidAmount != null
+
+      // Merge rule (brief §7): same claim number ⇒ same case. Merges fill
+      // still-null fields only — the anesthesia record outranks a re-upload,
+      // nothing gets clobbered.
       const existing = rec.claimNumber
         ? await prisma.wcCase.findFirst({
             where: { clientId: req.wcClient.id, claimNumber: rec.claimNumber },
           })
         : null
 
+      let caseId
       if (existing) {
         const fill = {}
         for (const [k, v] of Object.entries(fields)) {
@@ -123,29 +134,32 @@ router.post('/ingest', upload.array('files', 6), async (req, res) => {
         if (Object.keys(fill).length) {
           await prisma.wcCase.update({ where: { id: existing.id }, data: fill })
         }
-        if (paidAmount != null && sourceKind === 'EOB_PDF') {
-          await engine.recordRemittance(existing.id, { paidAmount, source: sourceKind }, req.user.userId)
-          results.remittances++
-        } else {
-          await engine.runCase(existing.id, req.user.userId)
-        }
+        caseId = existing.id
         results.merged++
-        results.caseIds.push(existing.id)
       } else {
         const created = await prisma.wcCase.create({
           data: {
             clientId: req.wcClient.id,
             source: sourceKind,
             ...fields,
-            paidAmount,
+            // An EOB-born case still books its paid dollars as a remittance below.
+            paidAmount: isEob(rec) ? null : paidAmount,
           },
         })
         await engine.logActivity(created.id, 'INGESTED', { sourceKind, aiConfidence }, req.user.userId)
-        await engine.runCase(created.id, req.user.userId)
+        caseId = created.id
         results.created++
-        results.caseIds.push(created.id)
       }
+
+      if (eobPaid) {
+        await engine.recordRemittance(caseId, { paidAmount, source: sourceKind }, req.user.userId)
+        results.remittances++
+      } else {
+        await engine.runCase(caseId, req.user.userId)
+      }
+      results.caseIds.push(caseId)
     }
+    results.caseIds = [...new Set(results.caseIds)]
 
     res.json({ ...results, notes })
   } catch (err) {

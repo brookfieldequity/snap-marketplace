@@ -54,13 +54,18 @@ const CASES_TOOL = {
       sourceKind: {
         type: 'string',
         enum: ['BILLING_EXPORT', 'EMR_EXPORT', 'EOB_PDF'],
-        description: 'What kind of document this is: a billing-system export, an EMR/anesthesia-record export, or a payer EOB/remittance.',
+        description: 'The PRIMARY document kind in this upload: a billing-system export, an EMR/anesthesia-record export, or a payer EOB/remittance. When the batch mixes kinds, pick the kind that contributed the most case lines.',
       },
       cases: {
         type: 'array',
         items: {
           type: 'object',
           properties: {
+            sourceKind: {
+              type: 'string',
+              enum: ['BILLING_EXPORT', 'EMR_EXPORT', 'EOB_PDF'],
+              description: 'Which uploaded document THIS entry came from. Always set it; it is what routes EOB paid lines to the remittance ledger.',
+            },
             patientRef: { type: 'string', description: 'Claim-scoped reference ONLY — patient initials or last-4 of an ID. NEVER the full patient name.' },
             claimNumber: { type: 'string', description: 'WC claim number exactly as printed, else empty' },
             payerName: { type: 'string', description: 'WC carrier / bill-review vendor name, else empty' },
@@ -99,6 +104,7 @@ Extract EVERY workers'-comp anesthesia case (one entry per case/claim line). Rul
 - patientRef: initials or last-4 only. Never record a full patient name.
 - Physical status (P1–P6) and qualifying circumstances (99100/99116/99135/99140) only when actually billed/shown.
 - paidAmount is what the payer PAID or allowed (from an EOB); billedAmount is what the group charged. Don't swap them.
+- One upload can MIX document kinds (e.g. a billing export plus one or more EOBs). Tag every case entry with the sourceKind of the specific document it came from. If the same claim appears in more than one uploaded document, record one entry PER document — the billing/EMR entry carries the anesthesia detail, the EOB entry carries the paid amount. Never merge lines from different documents into a single entry.
 - If a page or column is unreadable, still record the case with what is legible and set confidence LOW, noting it.
 
 Call record_wc_cases exactly once.`
@@ -144,6 +150,9 @@ const date = (v) => {
 /**
  * Read one or more uploaded files into normalized case records.
  * Returns { sourceKind, notes, cases: [normalized WcCase-shaped objects] }.
+ * Each case carries its own sourceKind (which uploaded document it came from);
+ * the top-level sourceKind is the batch's primary kind, kept as the fallback
+ * for entries the model failed to tag.
  */
 async function readFiles(files) {
   const client = getClient()
@@ -164,8 +173,11 @@ async function readFiles(files) {
   if (!call) throw new Error('no cases returned')
 
   const a = call.input
+  const VALID_KINDS = ['BILLING_EXPORT', 'EMR_EXPORT', 'EOB_PDF']
+  const sourceKind = VALID_KINDS.includes(a.sourceKind) ? a.sourceKind : 'BILLING_EXPORT'
   const VALID_QC = ['99100', '99116', '99135', '99140']
   const cases = (Array.isArray(a.cases) ? a.cases : []).slice(0, MAX_CASES).map((r) => ({
+    sourceKind: VALID_KINDS.includes(r.sourceKind) ? r.sourceKind : sourceKind,
     patientRef: clean(r.patientRef, 40),
     claimNumber: clean(r.claimNumber, 80),
     payerName: clean(r.payerName, 140),
@@ -184,10 +196,6 @@ async function readFiles(files) {
     authorization: clean(r.authorization, 80),
     aiConfidence: ['HIGH', 'MEDIUM', 'LOW'].includes(r.confidence) ? r.confidence : 'LOW',
   }))
-
-  const sourceKind = ['BILLING_EXPORT', 'EMR_EXPORT', 'EOB_PDF'].includes(a.sourceKind)
-    ? a.sourceKind
-    : 'BILLING_EXPORT'
 
   return { sourceKind, notes: clean(a.notes, 500), cases }
 }
