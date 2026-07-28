@@ -46,6 +46,27 @@ router.use(async (req, res, next) => {
   }
 })
 
+// ── Island handoff (Phase 4 PHI-island migration, 2026-07-28) ───────────────
+// WC PHI routes are moving to the island gateway (wc.snapmedical.app). The
+// marketplace's boundary role: authenticate the facility user + enforce the
+// wc_recovery flag (middleware above), then mint a short-lived token carrying
+// ONLY opaque claims. When the migration completes, this endpoint is all that
+// remains of WC in this file.
+const jwt = require('jsonwebtoken')
+router.post('/island-token', (req, res) => {
+  const token = jwt.sign(
+    {
+      type: 'wc-island',
+      facilityId: req.facility.id,
+      facilityName: req.facility.name,
+      userId: req.user.userId,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  )
+  res.json({ token, url: process.env.WC_ISLAND_URL || 'https://wc.snapmedical.app/api/wc' })
+})
+
 // Every case lookup is tenant-scoped — cross-tenant ids 404, never leak.
 async function findCase(req, id, include = null) {
   return prisma.wcCase.findFirst({

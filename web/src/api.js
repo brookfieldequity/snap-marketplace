@@ -1086,29 +1086,51 @@ export const credMapAPI = {
 
 // ─── WC Recovery API (workers'-comp underpayment recovery) ────────────────────
 // Facility-audience, gated server-side by the wc_recovery feature flag.
+//
+// PHI-island migration (2026-07-28): when VITE_WC_API_URL is set (e.g.
+// https://wc.snapmedical.app/api/wc), all WC calls go to the island gateway.
+// The marketplace backend only mints a short-lived island token (its flag
+// check runs at mint time) and never sees case data. Unset VITE_WC_API_URL =
+// legacy same-backend routing (pre-island local dev).
+
+const WC_BASE = import.meta.env.VITE_WC_API_URL || `${BASE}/wc`
+const WC_ON_ISLAND = Boolean(import.meta.env.VITE_WC_API_URL)
+
+let _wcToken = null
+let _wcTokenExp = 0
+
+async function wcHeaders(extra = {}) {
+  if (!WC_ON_ISLAND) return facilityHeaders(extra)
+  if (!_wcToken || Date.now() > _wcTokenExp) {
+    const r = await apiFetch(`${BASE}/wc/island-token`, { method: 'POST', headers: facilityHeaders() })
+    _wcToken = r.token
+    _wcTokenExp = Date.now() + 55 * 60_000 // refresh ahead of the 1h expiry
+  }
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${_wcToken}`, ...extra }
+}
+
+const wcFetch = async (path, opts = {}) =>
+  apiFetch(`${WC_BASE}${path}`, { ...opts, headers: await wcHeaders() })
 
 export const wcAPI = {
-  getSummary: () => apiFetch(`${BASE}/wc/summary`, { headers: facilityHeaders() }),
-  getCases: (status) => apiFetch(`${BASE}/wc/cases${status ? `?status=${status}` : ''}`, { headers: facilityHeaders() }),
-  getCase: (id) => apiFetch(`${BASE}/wc/cases/${id}`, { headers: facilityHeaders() }),
-  updateCase: (id, data) => apiFetch(`${BASE}/wc/cases/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
-  computeCase: (id) => apiFetch(`${BASE}/wc/cases/${id}/compute`, { method: 'POST', headers: facilityHeaders() }),
-  deleteCase: (id) => apiFetch(`${BASE}/wc/cases/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
-  addRemittance: (id, data) => apiFetch(`${BASE}/wc/cases/${id}/remittances`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
-  markDocSent: (caseId, docId) => apiFetch(`${BASE}/wc/cases/${caseId}/documents/${docId}/mark-sent`, { method: 'POST', headers: facilityHeaders() }),
-  getLedger: () => apiFetch(`${BASE}/wc/ledger`, { headers: facilityHeaders() }),
-  getWorkItems: () => apiFetch(`${BASE}/wc/workitems`, { headers: facilityHeaders() }),
-  updateWorkItem: (id, data) => apiFetch(`${BASE}/wc/workitems/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  getSummary: () => wcFetch('/summary'),
+  getCases: (status) => wcFetch(`/cases${status ? `?status=${status}` : ''}`),
+  getCase: (id) => wcFetch(`/cases/${id}`),
+  updateCase: (id, data) => wcFetch(`/cases/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  computeCase: (id) => wcFetch(`/cases/${id}/compute`, { method: 'POST' }),
+  deleteCase: (id) => wcFetch(`/cases/${id}`, { method: 'DELETE' }),
+  addRemittance: (id, data) => wcFetch(`/cases/${id}/remittances`, { method: 'POST', body: JSON.stringify(data) }),
+  markDocSent: (caseId, docId) => wcFetch(`/cases/${caseId}/documents/${docId}/mark-sent`, { method: 'POST' }),
+  getLedger: () => wcFetch('/ledger'),
+  getWorkItems: () => wcFetch('/workitems'),
+  updateWorkItem: (id, data) => wcFetch(`/workitems/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   // Ingest uploads: FormData — no Content-Type so the browser sets the boundary.
   ingest: async (files) => {
     const form = new FormData()
     for (const f of files) form.append('files', f)
-    const token = getFacilityToken()
-    const res = await fetch(`${BASE}/wc/ingest`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    })
+    const headers = await wcHeaders()
+    delete headers['Content-Type']
+    const res = await fetch(`${WC_BASE}/ingest`, { method: 'POST', headers, body: form })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       const err = new Error(data.error || `HTTP ${res.status}`)
@@ -1119,10 +1141,9 @@ export const wcAPI = {
   },
   // Authenticated PDF fetch → object URL the caller opens in a new tab.
   openDocPdf: async (caseId, docId) => {
-    const token = getFacilityToken()
-    const res = await fetch(`${BASE}/wc/cases/${caseId}/documents/${docId}/pdf`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const headers = await wcHeaders()
+    delete headers['Content-Type']
+    const res = await fetch(`${WC_BASE}/cases/${caseId}/documents/${docId}/pdf`, { headers })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       throw new Error(data.error || `HTTP ${res.status}`)
