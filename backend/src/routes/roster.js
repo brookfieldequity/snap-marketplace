@@ -10,6 +10,7 @@ const { sendProviderInvitation } = require('../services/credentialEmail');
 const { sendSMS, sendEmail } = require('../services/notifications');
 const { reverseLinkAllOrphans, linkOneRosterEntryIfMatched } = require('../services/rosterLink');
 const ptoService = require('../services/pto');
+const ptoImportService = require('../services/ptoImport');
 const { applyRosterRateLens, lensRosterEntry } = require('../services/rosterLens');
 const { importAllInRates, importPayrollRates } = require('../services/hourEntry');
 
@@ -569,6 +570,161 @@ router.delete('/time-off/:timeOffId', facilityAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[roster] time-off delete failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /time-off/upload-preview — parse a PTO spreadsheet (xlsx/csv/xls) and
+ * return a match preview WITHOUT writing anything. The coordinator confirms
+ * (and can remap names) in the UI, then commits via POST /time-off/import.
+ *
+ * Body: multipart, field `file`. Optional field `year` — the year to assume
+ * for year-less dates like "6/12" (defaults to the current year).
+ */
+router.post('/time-off/upload-preview', facilityAuth, (req, res) => {
+  rosterUpload.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'No file uploaded.' });
+    try {
+      const defaultYear = parseInt(req.body?.year, 10) || new Date().getUTCFullYear();
+      const { people, warnings } = ptoImportService.parsePtoWorkbook(req.file.buffer, { defaultYear });
+      if (people.length === 0) {
+        return res.status(422).json({
+          error: 'No PTO entries found. Supported layouts: one row per PTO range (Name / Start / End columns), or a grid with names down the side and dates across the top.',
+          warnings,
+        });
+      }
+
+      const roster = await prisma.internalRosterEntry.findMany({
+        where: { facilityId: req.facility.id },
+        select: { id: true, providerName: true },
+      });
+      for (const e of roster) e._tokens = ptoImportService.nameTokens(e.providerName);
+
+      // Existing time off across the workbook's span — used to flag duplicates
+      // so a re-upload of the same sheet doesn't double-enter anything.
+      const allDates = people.flatMap((p) => p.ranges.flatMap((r) => [r.startDate, r.endDate])).sort();
+      const existing = allDates.length > 0
+        ? await prisma.rosterTimeOff.findMany({
+            where: {
+              facilityId: req.facility.id,
+              startDate: { lte: new Date(allDates[allDates.length - 1]) },
+              endDate: { gte: new Date(allDates[0]) },
+            },
+            select: { rosterEntryId: true, startDate: true, endDate: true },
+          })
+        : [];
+      const existingByEntry = new Map();
+      for (const t of existing) {
+        const list = existingByEntry.get(t.rosterEntryId) || [];
+        list.push({ s: t.startDate.toISOString().slice(0, 10), e: t.endDate.toISOString().slice(0, 10) });
+        existingByEntry.set(t.rosterEntryId, list);
+      }
+
+      const rows = people.map((p) => {
+        const match = ptoImportService.matchToRoster(p.sourceName, roster);
+        const covered = match.rosterId ? existingByEntry.get(match.rosterId) || [] : [];
+        return {
+          sourceName: p.sourceName,
+          rosterId: match.rosterId,
+          matchName: match.rosterId ? roster.find((e) => e.id === match.rosterId)?.providerName : null,
+          confidence: Math.round(match.confidence * 100) / 100,
+          candidates: match.candidates.map((c) => ({ id: c.id, name: c.name })),
+          ranges: p.ranges.map((r) => ({
+            ...r,
+            duplicate: covered.some((c) => c.s <= r.startDate && c.e >= r.endDate),
+          })),
+        };
+      });
+
+      const totalRanges = rows.reduce((s, r) => s + r.ranges.length, 0);
+      res.json({
+        rows,
+        warnings,
+        summary: {
+          people: rows.length,
+          matched: rows.filter((r) => r.rosterId).length,
+          unmatched: rows.filter((r) => !r.rosterId).length,
+          ranges: totalRanges,
+          duplicates: rows.reduce((s, r) => s + r.ranges.filter((x) => x.duplicate).length, 0),
+        },
+      });
+    } catch (parseErr) {
+      console.error('[roster] time-off upload-preview failed:', parseErr);
+      res.status(422).json({ error: parseErr.message || 'Could not read that spreadsheet.' });
+    }
+  });
+});
+
+/**
+ * POST /time-off/import — commit a confirmed PTO import.
+ * Body: { entries: [{ rosterId, startDate, endDate, reason? }] } (≤ 2000).
+ * Skips entries already fully covered by an existing time-off range. Writes
+ * plain RosterTimeOff rows — the single table the Schedule Builder, day
+ * editor, availability grid, and PTO calendar all already read.
+ */
+router.post('/time-off/import', facilityAuth, async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+    if (entries.length === 0) return res.status(400).json({ error: 'No entries to import.' });
+    if (entries.length > 2000) return res.status(400).json({ error: 'Too many entries in one import (max 2000).' });
+
+    const rosterIds = [...new Set(entries.map((e) => e && e.rosterId).filter(Boolean))];
+    const owned = await prisma.internalRosterEntry.findMany({
+      where: { id: { in: rosterIds }, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((e) => e.id));
+
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const clean = [];
+    let invalid = 0;
+    for (const e of entries) {
+      if (!e || !ownedIds.has(e.rosterId) || !dateRe.test(e.startDate || '')) { invalid++; continue; }
+      const start = new Date(e.startDate + 'T00:00:00Z');
+      const end = dateRe.test(e.endDate || '') ? new Date(e.endDate + 'T00:00:00Z') : start;
+      if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) { invalid++; continue; }
+      clean.push({
+        rosterEntryId: e.rosterId,
+        facilityId: req.facility.id,
+        startDate: start,
+        endDate: end,
+        reason: typeof e.reason === 'string' && e.reason.trim() ? e.reason.trim().slice(0, 200) : null,
+      });
+    }
+    if (clean.length === 0) return res.status(400).json({ error: 'No valid entries to import.', invalid });
+
+    // Skip anything already fully covered by an existing range (idempotent
+    // re-uploads), including duplicates within this same batch.
+    const existing = await prisma.rosterTimeOff.findMany({
+      where: { facilityId: req.facility.id, rosterEntryId: { in: [...ownedIds] } },
+      select: { rosterEntryId: true, startDate: true, endDate: true },
+    });
+    const coveredBy = (list, row) => list.some((t) => t.startDate <= row.startDate && t.endDate >= row.endDate);
+    const byEntry = new Map();
+    for (const t of existing) {
+      const list = byEntry.get(t.rosterEntryId) || [];
+      list.push(t);
+      byEntry.set(t.rosterEntryId, list);
+    }
+    const toCreate = [];
+    let skipped = 0;
+    for (const row of clean) {
+      const list = byEntry.get(row.rosterEntryId) || [];
+      if (coveredBy(list, row)) { skipped++; continue; }
+      toCreate.push(row);
+      list.push(row); // in-batch dedupe
+      byEntry.set(row.rosterEntryId, list);
+    }
+
+    if (toCreate.length > 0) {
+      await prisma.rosterTimeOff.createMany({ data: toCreate });
+    }
+    console.log(`[roster] PTO import: facility=${req.facility.id} created=${toCreate.length} skipped=${skipped} invalid=${invalid}`);
+    res.json({ created: toCreate.length, skipped, invalid });
+  } catch (err) {
+    console.error('[roster] time-off import failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

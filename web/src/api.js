@@ -333,6 +333,19 @@ export const facilityAPI = {
   },
   addTimeOff: (rosterId, data) => apiFetch(`${BASE}/roster/${rosterId}/time-off`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   deleteTimeOff: (timeOffId) => apiFetch(`${BASE}/roster/time-off/${timeOffId}`, { method: 'DELETE', headers: facilityHeaders() }),
+  // PTO spreadsheet import — parse+match preview, then confirmed commit.
+  uploadPtoSheet: async (file, year) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (year) fd.append('year', String(year))
+    const token = localStorage.getItem('snapFacilityToken')
+    return apiFetch(`${BASE}/roster/time-off/upload-preview`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+  },
+  importTimeOff: (entries) => apiFetch(`${BASE}/roster/time-off/import`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ entries }) }),
 
   // Internal Roster — NPI disambiguation (review queue from multi-sheet imports)
   getNpiReview: () => apiFetch(`${BASE}/roster/npi-review`, { headers: facilityHeaders() }),

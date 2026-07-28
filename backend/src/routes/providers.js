@@ -239,9 +239,64 @@ router.get('/me/availability', auth, async (req, res) => {
     const start = new Date(year || new Date().getFullYear(), (month || new Date().getMonth()) - 1, 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 2, 0);
 
-    const availability = await prisma.providerAvailability.findMany({
+    let availability = await prisma.providerAvailability.findMany({
       where: { providerId: profile.id, date: { gte: start, lte: end } },
     });
+
+    // Facility-booked PTO overlay: RosterTimeOff is the authoritative time-off
+    // table (spreadsheet imports, coordinator entries, approved PTO requests
+    // all land there). Surface those days in the provider's own calendar as
+    // locked "unavailable" rows so the app always agrees with the facility's
+    // PTO calendar. Synthetic rows override any app-entered row on the same
+    // date. Non-critical — never fail the availability load over it.
+    let ptoDates = [];
+    try {
+      const rosterLinks = await prisma.internalRosterEntry.findMany({
+        where: { linkedProviderId: profile.id },
+        select: { id: true, facility: { select: { name: true } } },
+      });
+      if (rosterLinks.length > 0) {
+        const timeOff = await prisma.rosterTimeOff.findMany({
+          where: {
+            rosterEntryId: { in: rosterLinks.map((r) => r.id) },
+            startDate: { lte: end },
+            endDate: { gte: start },
+          },
+          select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
+        });
+        if (timeOff.length > 0) {
+          const facilityByEntry = Object.fromEntries(
+            rosterLinks.map((r) => [r.id, r.facility?.name || 'your facility'])
+          );
+          const DAY_MS = 24 * 60 * 60 * 1000;
+          const ptoByDate = new Map(); // iso -> synthetic row
+          for (const t of timeOff) {
+            const from = Math.max(t.startDate.getTime(), start.getTime());
+            const to = Math.min(t.endDate.getTime(), end.getTime());
+            for (let ts = from; ts <= to; ts += DAY_MS) {
+              const d = new Date(ts);
+              const iso = d.toISOString().slice(0, 10);
+              if (ptoByDate.has(iso)) continue;
+              ptoByDate.set(iso, {
+                id: `pto-${t.id}-${iso}`,
+                providerId: profile.id,
+                date: d,
+                available: false,
+                note: `PTO — ${facilityByEntry[t.rosterEntryId]}${t.reason ? ` (${t.reason})` : ''}`,
+                pto: true,
+              });
+            }
+          }
+          const isoOf = (v) => new Date(v).toISOString().slice(0, 10);
+          availability = availability
+            .filter((a) => !ptoByDate.has(isoOf(a.date)))
+            .concat([...ptoByDate.values()]);
+          ptoDates = [...ptoByDate.keys()].sort();
+        }
+      }
+    } catch (ptoErr) {
+      console.error('[availability] PTO overlay failed:', ptoErr.message);
+    }
 
     // Availability-request window status for the provider's linked roster
     // entries (the coordinator's monthly submission windows, normally reached
@@ -283,7 +338,9 @@ router.get('/me/availability', auth, async (req, res) => {
 
     // NOTE: response used to be the bare array; the app already tolerates
     // { availability } (see mobile AvailabilityScreen loadAvailability).
-    res.json({ availability, requestWindows });
+    // `ptoDates` lets a future app build render locked PTO cells; today's
+    // builds still show the days as unavailable via the merged rows above.
+    res.json({ availability, requestWindows, ptoDates });
   } catch (err) {
     console.error('[availability] load failed:', err);
     res.status(500).json({ error: 'Failed to load availability' });

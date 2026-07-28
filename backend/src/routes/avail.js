@@ -78,6 +78,37 @@ router.get('/:token', async (req, res) => {
       }
     }
 
+    // Facility-entered PTO (RosterTimeOff — the authoritative time-off table)
+    // covering this month. These days render as locked "PTO" cells on the
+    // link page: the coordinator's PTO calendar is the source of truth, so a
+    // provider can't accidentally re-mark a booked PTO day as available.
+    let ptoDates = [];
+    try {
+      const mStart = new Date(Date.UTC(request.year, request.month - 1, 1));
+      const mEnd = new Date(Date.UTC(request.year, request.month, 1));
+      const pto = await prisma.rosterTimeOff.findMany({
+        where: { rosterEntryId: request.rosterEntryId, startDate: { lt: mEnd }, endDate: { gte: mStart } },
+        select: { startDate: true, endDate: true, reason: true },
+      });
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const seen = new Map();
+      for (const t of pto) {
+        const from = Math.max(t.startDate.getTime(), mStart.getTime());
+        const to = Math.min(t.endDate.getTime(), mEnd.getTime() - DAY_MS);
+        for (let ts = from; ts <= to; ts += DAY_MS) {
+          seen.set(new Date(ts).toISOString().slice(0, 10), t.reason || null);
+        }
+      }
+      ptoDates = [...seen.entries()].sort().map(([date, reason]) => ({ date, reason }));
+      // PTO wins over any staged/app submission for the same date.
+      if (ptoDates.length > 0) {
+        const ptoSet = new Set(ptoDates.map((p) => p.date));
+        submissions = submissions.filter((s) => !ptoSet.has(s.date));
+      }
+    } catch (ptoErr) {
+      console.error('[avail] PTO overlay failed (page still served):', ptoErr.message);
+    }
+
     res.json({
       providerName: fullName,
       providerFirstName,
@@ -89,6 +120,7 @@ router.get('/:token', async (req, res) => {
       isLocked,
       submittedAt: request.submittedAt?.toISOString() || null,
       submissions,
+      ptoDates,
     });
   } catch (err) {
     console.error('[avail] GET failed:', err);
@@ -122,6 +154,7 @@ router.post('/:token/submit', async (req, res) => {
         deadline: true,
         submittedAt: true,
         smsConsentAt: true,
+        rosterEntryId: true,
         rosterEntry: { select: { providerName: true, linkedProviderId: true } },
         facility: { select: { name: true } },
       },
@@ -163,7 +196,24 @@ router.post('/:token/submit', async (req, res) => {
         note: typeof d.note === 'string' ? d.note.slice(0, 500) : null,
       });
     }
-    const cleanDates = [...byDate.values()];
+    let cleanDates = [...byDate.values()];
+
+    // Facility PTO is authoritative — drop any submission that lands on a
+    // booked RosterTimeOff day so the link can't flip a PTO day back to
+    // available (mirrors the locked cells on the page).
+    try {
+      const mStart = new Date(Date.UTC(request.year, request.month - 1, 1));
+      const mEnd = new Date(Date.UTC(request.year, request.month, 1));
+      const pto = await prisma.rosterTimeOff.findMany({
+        where: { rosterEntryId: request.rosterEntryId, startDate: { lt: mEnd }, endDate: { gte: mStart } },
+        select: { startDate: true, endDate: true },
+      });
+      if (pto.length > 0) {
+        cleanDates = cleanDates.filter((d) => !pto.some((t) => t.startDate <= d.date && t.endDate >= d.date));
+      }
+    } catch (ptoErr) {
+      console.error('[avail] PTO submit guard failed (submission continues):', ptoErr.message);
+    }
 
     // Full replace: delete all existing day submissions, then bulk-create new ones.
     await prisma.$transaction(async (tx) => {

@@ -56,7 +56,10 @@ function yearBounds(year) {
 
 // Compute the PTO counter for a set of roster entries in one year, in a single
 // query. Returns a Map rosterEntryId -> { annual, granted, used } where:
-//   granted = weekday PTO days booked this year (source='PTO', available=false)
+//   granted = weekday PTO days booked this year — the union of source='PTO'
+//             RosterAvailability rows (request/builder-granted PTO) and
+//             RosterTimeOff ranges (coordinator-entered + spreadsheet-imported
+//             PTO), deduped per date so overlaps count once
 //   used    = the subset of those whose date is on or before `asOf` (today)
 async function summarizeYear({ facilityId, entries, year, asOf }) {
   const { start, end } = yearBounds(year);
@@ -66,24 +69,49 @@ async function summarizeYear({ facilityId, entries, year, asOf }) {
   );
   if (ids.length === 0) return summary;
 
-  const rows = await prisma.rosterAvailability.findMany({
-    where: {
-      facilityId,
-      rosterEntryId: { in: ids },
-      source: 'PTO',
-      available: false,
-      date: { gte: start, lt: end },
-    },
-    select: { rosterEntryId: true, date: true },
-  });
+  const [rows, timeOff] = await Promise.all([
+    prisma.rosterAvailability.findMany({
+      where: {
+        facilityId,
+        rosterEntryId: { in: ids },
+        source: 'PTO',
+        available: false,
+        date: { gte: start, lt: end },
+      },
+      select: { rosterEntryId: true, date: true },
+    }),
+    prisma.rosterTimeOff.findMany({
+      where: {
+        facilityId,
+        rosterEntryId: { in: ids },
+        startDate: { lt: end },
+        endDate: { gte: start },
+      },
+      select: { rosterEntryId: true, startDate: true, endDate: true },
+    }),
+  ]);
 
   const cutoff = asOf ? new Date(asOf) : null;
-  for (const r of rows) {
-    if (!isWeekday(r.date)) continue; // weekends don't consume allotment
-    const s = summary.get(r.rosterEntryId);
-    if (!s) continue;
+  const counted = new Set(); // `${rosterEntryId}|${iso}` — dedupe across both sources
+  const countDay = (rosterEntryId, date) => {
+    if (!isWeekday(date)) return; // weekends don't consume allotment
+    const s = summary.get(rosterEntryId);
+    if (!s) return;
+    const key = `${rosterEntryId}|${new Date(date).toISOString().slice(0, 10)}`;
+    if (counted.has(key)) return;
+    counted.add(key);
     s.granted += 1;
-    if (cutoff && new Date(r.date) <= cutoff) s.used += 1;
+    if (cutoff && new Date(date) <= cutoff) s.used += 1;
+  };
+
+  for (const r of rows) countDay(r.rosterEntryId, r.date);
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  for (const t of timeOff) {
+    // Clamp the range to the year window before walking it day by day.
+    const from = Math.max(new Date(t.startDate).getTime(), start.getTime());
+    const to = Math.min(new Date(t.endDate).getTime(), end.getTime() - DAY_MS);
+    for (let ts = from; ts <= to; ts += DAY_MS) countDay(t.rosterEntryId, new Date(ts));
   }
   return summary;
 }

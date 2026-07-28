@@ -24,6 +24,7 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
   const [timeOff, setTimeOff] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [form, setForm] = useState({ rosterId: '', start: '', end: '', reason: '' })
   const [saving, setSaving] = useState(false)
 
@@ -118,8 +119,20 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
               <button onClick={() => shiftMonth(1)} style={navBtn}>›</button>
             </div>
             <Segmented value={manageView} onChange={setManageView} options={[{ v: 'calendar', label: 'Calendar' }, { v: 'list', label: 'List' }]} />
-            <button onClick={() => openAdd()} style={{ ...primaryBtn, marginLeft: 'auto' }}>+ Add PTO</button>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+              <button onClick={() => setUploadOpen(true)} style={{ ...ghostBtn, padding: '10px 16px', fontSize: 14 }}>⬆ Upload spreadsheet</button>
+              <button onClick={() => openAdd()} style={primaryBtn}>+ Add PTO</button>
+            </div>
           </div>
+
+          {uploadOpen && (
+            <UploadPtoModal
+              roster={roster}
+              year={year}
+              onClose={() => setUploadOpen(false)}
+              onImported={async () => { await load() }}
+            />
+          )}
 
           {/* Add PTO — centered overlay so it's visible no matter where you scrolled */}
           {addOpen && (
@@ -159,6 +172,181 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
     </div>
   )
 }
+
+// ── Upload spreadsheet → preview & match → import ──────────────────────────────
+// The org's existing PTO workbook (range list or name × dates grid, any tabs)
+// is parsed server-side into per-person ranges with fuzzy roster matching.
+// Nothing is written until the coordinator confirms the preview; unmatched
+// names can be remapped (or skipped) right in the table.
+function UploadPtoModal({ roster, year, onClose, onImported }) {
+  const [step, setStep] = useState('pick')      // 'pick' | 'preview' | 'done'
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [preview, setPreview] = useState(null)  // { rows, warnings, summary }
+  const [picks, setPicks] = useState({})        // sourceName -> rosterId | '' (skip)
+  const [result, setResult] = useState(null)    // { created, skipped }
+  const fileRef = React.useRef(null)
+
+  async function handleFile(file) {
+    if (!file) return
+    setBusy(true); setError(null)
+    try {
+      const res = await facilityAPI.uploadPtoSheet(file, year)
+      setPreview(res)
+      setPicks(Object.fromEntries(res.rows.map(r => [r.sourceName, r.rosterId || ''])))
+      setStep('preview')
+    } catch (e) {
+      setError(e.message || 'Could not read that spreadsheet.')
+    } finally { setBusy(false) }
+  }
+
+  const rows = preview?.rows || []
+  const entries = rows.flatMap(r => {
+    const rosterId = picks[r.sourceName]
+    if (!rosterId) return []
+    return r.ranges.filter(x => !x.duplicate).map(x => ({ rosterId, startDate: x.startDate, endDate: x.endDate, reason: x.reason }))
+  })
+  const skippedPeople = rows.filter(r => !picks[r.sourceName]).length
+  const dupCount = rows.reduce((s, r) => s + (picks[r.sourceName] ? r.ranges.filter(x => x.duplicate).length : 0), 0)
+
+  async function handleImport() {
+    setBusy(true); setError(null)
+    try {
+      const res = await facilityAPI.importTimeOff(entries)
+      setResult(res)
+      setStep('done')
+      await onImported()
+    } catch (e) {
+      setError(e.message || 'Import failed.')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: step === 'preview' ? 760 : 480, maxHeight: '86vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(15,23,42,0.28)' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 4 }}>
+          {step === 'done' ? 'PTO imported ✓' : 'Upload PTO spreadsheet'}
+        </div>
+
+        {step === 'pick' && (
+          <>
+            <p style={{ fontSize: 13.5, color: SLATE, lineHeight: 1.55, margin: '6px 0 16px' }}>
+              Already have this year's PTO in a spreadsheet? Upload it and we'll read it — either
+              <strong> one row per PTO range</strong> (Name / Start / End columns) or a
+              <strong> grid</strong> with names down the side and dates across the top (monthly tabs are fine).
+              You'll review every match before anything is saved.
+            </p>
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]) }}
+              style={{ border: `2px dashed ${LINE}`, borderRadius: 12, padding: '36px 20px', textAlign: 'center', cursor: 'pointer', background: '#F8FAFC' }}
+            >
+              {busy ? (
+                <div style={{ color: SLATE, fontWeight: 700 }}>Reading spreadsheet…</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 30, marginBottom: 8 }}>📄</div>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY }}>Drop your file here or click to browse</div>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>.xlsx, .xls, or .csv — up to 5&nbsp;MB</div>
+                </>
+              )}
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} onChange={e => handleFile(e.target.files?.[0])} />
+            </div>
+            {error && <div style={{ marginTop: 12, fontSize: 13, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px' }}>{error}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+              <button onClick={onClose} style={ghostBtn}>Cancel</button>
+            </div>
+          </>
+        )}
+
+        {step === 'preview' && preview && (
+          <>
+            <p style={{ fontSize: 13, color: SLATE, margin: '4px 0 12px' }}>
+              Found <strong>{preview.summary.ranges}</strong> PTO range{preview.summary.ranges === 1 ? '' : 's'} for <strong>{preview.summary.people}</strong> {preview.summary.people === 1 ? 'person' : 'people'}. Check the matches, fix any with the dropdowns, then import.
+            </p>
+            {preview.warnings?.length > 0 && (
+              <div style={{ fontSize: 12, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER}`, borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+                {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+              </div>
+            )}
+            <div style={{ overflow: 'auto', border: `1px solid ${LINE}`, borderRadius: 10, flex: 1, minHeight: 0 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0 }}>
+                    <th style={th}>In spreadsheet</th>
+                    <th style={th}>Roster member</th>
+                    <th style={th}>PTO ranges</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => {
+                    const picked = picks[r.sourceName]
+                    return (
+                      <tr key={r.sourceName} style={{ borderTop: `1px solid ${LINE}`, background: picked ? '#fff' : '#FAFAFA' }}>
+                        <td style={{ ...td, fontWeight: 700, color: NAVY, whiteSpace: 'nowrap' }}>
+                          {r.sourceName}
+                          {!r.rosterId && <div style={{ fontSize: 11, color: '#B91C1C', fontWeight: 600 }}>no confident match</div>}
+                        </td>
+                        <td style={td}>
+                          <select value={picked} onChange={e => setPicks(p => ({ ...p, [r.sourceName]: e.target.value }))} style={{ ...ctrl, padding: '6px 8px', fontSize: 12.5, maxWidth: 200 }}>
+                            <option value="">— skip this person —</option>
+                            {roster.map(p => <option key={p.id} value={p.id}>{p.providerName}</option>)}
+                          </select>
+                        </td>
+                        <td style={td}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {r.ranges.map((x, i) => (
+                              <span key={i} style={{ fontSize: 11.5, background: x.duplicate ? '#F1F5F9' : AMBER_BG, border: `1px solid ${x.duplicate ? LINE : AMBER}`, color: x.duplicate ? MUTED : AMBER_INK, borderRadius: 6, padding: '3px 7px', textDecoration: x.duplicate ? 'line-through' : 'none' }}>
+                                {fmtRange({ startDate: x.startDate, endDate: x.endDate })}{x.reason ? ` · ${x.reason}` : ''}{x.duplicate ? ' (already entered)' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {error && <div style={{ marginTop: 10, fontSize: 13, color: '#B91C1C' }}>{error}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+              <div style={{ fontSize: 12, color: MUTED }}>
+                {skippedPeople > 0 && <span>{skippedPeople} person{skippedPeople === 1 ? '' : 's'} will be skipped. </span>}
+                {dupCount > 0 && <span>{dupCount} duplicate range{dupCount === 1 ? '' : 's'} won't be re-added.</span>}
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button onClick={() => { setStep('pick'); setPreview(null); setError(null) }} style={ghostBtn}>Back</button>
+                <button onClick={handleImport} disabled={busy || entries.length === 0} style={{ ...primaryBtn, opacity: busy || entries.length === 0 ? 0.6 : 1 }}>
+                  {busy ? 'Importing…' : `Import ${entries.length} range${entries.length === 1 ? '' : 's'}`}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && result && (
+          <>
+            <p style={{ fontSize: 14, color: SLATE, lineHeight: 1.6, margin: '8px 0 4px' }}>
+              <strong style={{ color: NAVY }}>{result.created}</strong> PTO range{result.created === 1 ? '' : 's'} added{result.skipped > 0 ? ` (${result.skipped} already entered — skipped)` : ''}.
+            </p>
+            <p style={{ fontSize: 13, color: SLATE, lineHeight: 1.6, margin: '4px 0 0' }}>
+              This calendar is the source of truth — the imported PTO is now live in the providers' own
+              availability calendars, the Schedule Builder (they're held out of coverage automatically),
+              and the schedule day editor.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={onClose} style={primaryBtn}>Done</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const th = { textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 800, color: SLATE, textTransform: 'uppercase', letterSpacing: '0.04em' }
+const td = { padding: '9px 12px', verticalAlign: 'top' }
 
 // ── Calendar: roster (rows) × days (cols) ──────────────────────────────────────
 function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, onCell }) {

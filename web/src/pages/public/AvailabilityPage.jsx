@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { availAPI } from '../../api.js'
 
 // Federal holidays 2026 (hardcoded)
@@ -211,8 +211,17 @@ export default function AvailabilityPage({ token }) {
     }
   }, [])
 
+  // Facility-booked PTO days (from the coordinator's PTO calendar — the
+  // source of truth). Rendered as locked cells: not tappable, not submitted.
+  const ptoMap = useMemo(() => {
+    const m = new Map()
+    for (const p of data?.ptoDates || []) m.set(p.date, p.reason || null)
+    return m
+  }, [data])
+
   function cycleDay(isoDate) {
     if (data?.isLocked) return
+    if (ptoMap.has(isoDate)) return
     setDayStates((prev) => {
       const next = new Map(prev)
       const cur = prev.get(isoDate) || 'unset'
@@ -240,6 +249,7 @@ export default function AvailabilityPage({ token }) {
 
   function openNote(isoDate) {
     if (data?.isLocked) return
+    if (ptoMap.has(isoDate)) return
     setNoteOpen(isoDate)
     setNoteText(notesByDate.get(isoDate) || '')
   }
@@ -509,6 +519,7 @@ export default function AvailabilityPage({ token }) {
               { color: 'linear-gradient(135deg,#D97706,#F59E0B)', label: 'Maybe' },
               { color: '#F1F5F9', label: 'Not set', border: '#E2E8F0' },
               { color: POSTIT_YELLOW, label: 'Has note', border: '#EAB308', pin: true },
+              ...(ptoMap.size > 0 ? [{ color: '#FDE68A', label: 'PTO (booked)', border: '#F59E0B' }] : []),
             ].map(({ color, label, border, pin }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 14, height: 14, borderRadius: pin ? 2 : 4, background: color, border: border ? `1.5px solid ${border}` : 'none', transform: pin ? 'rotate(-8deg)' : 'none' }} />
@@ -529,15 +540,22 @@ export default function AvailabilityPage({ token }) {
             {cells.map((day, idx) => {
               if (!day) return <div key={idx} />
               const iso = padIso(year, month, day)
-              const state = dayStates.get(iso) || 'unset'
+              const isPto = ptoMap.has(iso)
+              const state = isPto ? 'unset' : (dayStates.get(iso) || 'unset')
               const holiday = FEDERAL_HOLIDAYS_2026[iso]
-              const hasNote = !!notesByDate.get(iso)
+              const hasNote = !isPto && !!notesByDate.get(iso)
               // cells[] already has firstDow leading blanks, so the column is
               // just idx % 7 (0 = Sunday … 6 = Saturday).
               const isWeekend = [0, 6].includes(idx % 7)
 
               let bg, textColor, border, shadow
-              if (state === 'available') {
+              if (isPto) {
+                // Booked PTO from the facility's calendar — locked, informational.
+                bg = '#FFFBEB'
+                textColor = '#B45309'
+                border = '1.5px solid #FDE68A'
+                shadow = 'none'
+              } else if (state === 'available') {
                 bg = 'linear-gradient(135deg,#2563EB,#3B82F6)'
                 textColor = '#fff'
                 border = 'none'
@@ -565,10 +583,11 @@ export default function AvailabilityPage({ token }) {
                 <div
                   key={iso}
                   className="snap-day"
+                  title={isPto ? `Booked PTO${ptoMap.get(iso) ? ` — ${ptoMap.get(iso)}` : ''} (set by your coordinator)` : undefined}
                   onClick={() => cycleDay(iso)}
                   onContextMenu={(e) => { e.preventDefault(); openNote(iso) }}
                   onTouchStart={() => {
-                    if (isLocked) return
+                    if (isLocked || isPto) return
                     longPressTimer.current = setTimeout(() => openNote(iso), 500)
                   }}
                   onTouchEnd={() => clearTimeout(longPressTimer.current)}
@@ -585,7 +604,7 @@ export default function AvailabilityPage({ token }) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: isLocked ? 'default' : 'pointer',
+                    cursor: isLocked || isPto ? 'default' : 'pointer',
                     userSelect: 'none',
                     WebkitTapHighlightColor: 'transparent',
                     boxShadow: shadow,
@@ -597,6 +616,13 @@ export default function AvailabilityPage({ token }) {
                   <div style={{ fontSize: 16, fontWeight: 700, color: textColor, lineHeight: 1 }}>
                     {day}
                   </div>
+
+                  {/* Booked PTO badge */}
+                  {isPto && (
+                    <div style={{ fontSize: 8, fontWeight: 800, color: '#B45309', letterSpacing: '0.04em', marginTop: 3 }}>
+                      🌴 PTO
+                    </div>
+                  )}
 
                   {/* Holiday name */}
                   {holiday && (
