@@ -8,6 +8,7 @@
 
 const prisma = require('../config/db');
 const roiCalc = require('./roiCalc');
+const { MARKETPLACE_FEE_RATE } = require('./marketplaceFees');
 
 // Live facility tier prices (display/sales — no billing yet). Used only for the
 // synthetic MRR estimate until Stripe exists. Keep in sync with the web pricing.
@@ -94,7 +95,7 @@ async function getScorecard() {
   const newProvidersWeek = newCredGroups.length;
 
   // #5 MRR — manual override if set, else synthetic estimate (tier counts × price
-  // + 10% platform-fee run-rate on this week's GTV annualized to monthly).
+  // + MARKETPLACE_FEE_RATE run-rate on this week's GTV annualized to monthly).
   const subscriptionMrr = subsByTier.reduce(
     (sum, r) => sum + (TIER_PRICE[r.tier] || 0) * r._count.tier, 0);
   const weekGtv = completedThisWeekBookings.reduce((s, b) => s + (b.totalShiftValue || 0), 0);
