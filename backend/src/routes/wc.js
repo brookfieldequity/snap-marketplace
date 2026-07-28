@@ -30,7 +30,9 @@ router.use(facilityAuth)
 router.use(async (req, res, next) => {
   try {
     const flags = await getEffectiveFlags(req.facility.id)
-    if (!flags?.wc_recovery?.enabled) {
+    // getEffectiveFlags returns { tier, flags: { name: { enabled } } } — the
+    // gate must unwrap .flags (same as routes/featureFlags.js does).
+    if (!flags?.flags?.wc_recovery?.enabled) {
       return res.status(403).json({ error: 'WC Recovery is not enabled for this group' })
     }
     let client = await prisma.wcClient.findUnique({ where: { facilityId: req.facility.id } })
