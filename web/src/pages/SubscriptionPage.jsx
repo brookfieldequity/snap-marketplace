@@ -15,7 +15,7 @@ PART 1 — SUBSCRIPTION TERMS
 
 1. SERVICES. SNAP Medical grants Facility a non-exclusive, non-transferable license to access and use the SNAP Medical platform (including SNAP Shifts, SNAP Marketplace, SNAP Credentialing, and SNAP Ops) during the subscription term, subject to the selected tier.
 
-2. FEES & BILLING. Subscription fees correspond to your selected tier and provider band (up to 25 / 26–75 / 76–150 providers). Annual list rates: SNAP Core $18,000–$48,000/yr; SNAP Staff IQ $30,000–$78,000/yr; SNAP Complete $40,000–$105,000/yr. Fees are billed on a monthly or annual cycle as stated on your order or invoice; monthly-cycle fees are one-twelfth of the applicable annual rate, invoiced on or about the first of each month. SNAP Complete subscribers are also subject to a 4% transaction fee on external marketplace shift fills, invoiced with the regular billing cycle. Invoices are due within thirty (30) days of the invoice date unless a different due date is stated on the invoice. Unpaid invoices accrue interest at 1.5% per month. Prices may be updated with 30 days written notice.
+2. FEES & BILLING. Subscription fees correspond to your selected tier and provider band (up to 25 / 26–75 / 76–150 providers). Annual list rates: SNAP Core $18,000–$48,000/yr; SNAP Staff IQ $30,000–$78,000/yr; SNAP Complete $40,000–$105,000/yr. Fees are billed on a monthly or annual cycle as stated on your order or invoice; monthly-cycle fees are one-twelfth of the applicable annual rate, invoiced on or about the first of each month. SNAP Complete subscribers are also subject to a 5% transaction fee on external marketplace shift fills, invoiced with the regular billing cycle. Invoices are due within thirty (30) days of the invoice date unless a different due date is stated on the invoice. Unpaid invoices accrue interest at 1.5% per month. Prices may be updated with 30 days written notice.
 
 2A. PROMOTIONAL & FOUNDING PARTNER PRICING. Where SNAP Medical offers promotional or Founding Partner pricing in writing, the discount is shown as a line item on each invoice, applies only for the promotional period stated on the invoice or offer, and expires automatically at the end of that period, after which the standard rates in Section 2 apply without further notice. Promotional pricing may be conditioned on separate written commitments (for example, benchmark cohort participation), and lapse of those commitments ends eligibility for the promotional rate at the next billing cycle.
 
@@ -125,7 +125,7 @@ const TIERS = [
       { text: 'VIP provider access', included: true },
       { text: 'Dedicated account manager', included: true },
       { text: 'Multi-location support', included: true },
-      { text: '4% fee on external marketplace fills only', included: true },
+      { text: '5% fee on external marketplace fills only', included: true },
     ],
   },
 ]

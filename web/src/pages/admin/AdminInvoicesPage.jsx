@@ -83,7 +83,7 @@ export default function AdminInvoicesPage() {
     promoFeatures: 'SNAP Complete',
     notes: '',
     dueDays: 30,
-    billingCycle: 'ONCE',  // 'ONCE' | 'MONTHLY'
+    billingCycle: 'MONTHLY',  // 'ONCE' | 'MONTHLY' — monthly is the default; annual contracts bill 1/12 each month
   })
 
   useEffect(() => {
@@ -124,7 +124,7 @@ export default function AdminInvoicesPage() {
         : ''
       const tierName = form.platformTier === 'STAFF_IQ' ? 'SNAP Staff IQ' : `SNAP ${form.platformTier.charAt(0) + form.platformTier.slice(1).toLowerCase()}`
       lines.push({
-        label: `${tierName} (Annual)${promoNote}`,
+        label: `${tierName} (annual contract)${promoNote}`,
         list,
         discount,
         amount: list - discount,
@@ -146,7 +146,7 @@ export default function AdminInvoicesPage() {
 
     if (form.includeMarketplace && form.marketplaceFeeAmount > 0) {
       lines.push({
-        label: 'Marketplace Transactions (4% fee)',
+        label: 'Marketplace Transactions (5% fee)',
         list: form.marketplaceFeeAmount,
         discount: 0,
         amount: form.marketplaceFeeAmount,
@@ -458,7 +458,7 @@ export default function AdminInvoicesPage() {
                 <SectionCard
                   checked={form.includeMarketplace}
                   onToggle={() => setForm(f => ({ ...f, includeMarketplace: !f.includeMarketplace }))}
-                  title="Marketplace Transaction Fee (4%)"
+                  title="Marketplace Transaction Fee (5%)"
                 >
                   {form.includeMarketplace && (
                     <div style={{ marginTop: 12 }}>

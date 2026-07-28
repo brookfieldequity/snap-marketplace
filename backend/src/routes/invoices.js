@@ -151,6 +151,8 @@ router.post('/', adminAuth, async (req, res) => {
 
     // Compute platform line item
     const lineItems = []
+    const isMonthly = billingCycle === 'MONTHLY'
+    const fmtUsd = (n) => '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
 
     if (platformTier && providerCount > 0) {
       const band = bandKey(providerCount)
@@ -172,8 +174,8 @@ router.post('/', adminAuth, async (req, res) => {
         : ''
 
       lineItems.push({
-        description: `${tierLabel} — Annual Platform Subscription`,
-        detail: `${bandLabel(providerCount)}${upgradeNote}`,
+        description: `${tierLabel} — ${isMonthly ? 'Monthly' : 'Annual'} Platform Subscription`,
+        detail: `${bandLabel(providerCount)}${isMonthly ? ` · 1/12 of ${fmtUsd(list - discount)}/yr` : ''}${upgradeNote}`,
         listPrice: list,
         discount,
         discountLabel,
@@ -199,7 +201,7 @@ router.post('/', adminAuth, async (req, res) => {
 
       lineItems.push({
         description: `SNAP Credentialing Passport — ${credProviderCount} Provider${credProviderCount > 1 ? 's' : ''}`,
-        detail: `${isAnnual ? 'Annual renewal' : 'Initial setup'} @ ${discountType === 'FOUNDER' ? `$${Math.floor(perProvider / 2)}/provider (Founding Partner rate, standard $${perProvider})` : `$${perProvider}/provider`}`,
+        detail: `${isAnnual ? 'Annual renewal' : 'Initial setup'} @ ${discountType === 'FOUNDER' ? `$${Math.floor(perProvider / 2)}/provider (Founding Partner rate, standard $${perProvider})` : `$${perProvider}/provider`}${isMonthly ? ' · billed monthly over 12 months' : ''}`,
         listPrice: list,
         discount,
         discountLabel,
@@ -418,9 +420,10 @@ router.post('/:id/send', adminAuth, async (req, res) => {
       Founder's Discount: <strong style="margin-left:16px">-${fmt(inv.discountTotal)}</strong>
     </div>` : ''}
     <div style="background:#2563EB;border-radius:8px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
-      <span style="color:#fff;font-size:15px;font-weight:700">TOTAL DUE</span>
-      <span style="color:#fff;font-size:20px;font-weight:800">${fmt(inv.amountDue)}</span>
+      <span style="color:#fff;font-size:15px;font-weight:700">TOTAL DUE${inv.billingCycle === 'MONTHLY' ? ' — MONTHLY' : ''}</span>
+      <span style="color:#fff;font-size:20px;font-weight:800">${fmt(inv.amountDue)}${inv.billingCycle === 'MONTHLY' ? '<span style="font-size:13px;opacity:0.85">/mo</span>' : ''}</span>
     </div>
+    ${inv.billingCycle === 'MONTHLY' ? `<p style="font-size:12px;color:#64748B;margin-top:10px">Billed in monthly installments — an invoice for this amount is sent automatically on the 1st of each month.</p>` : ''}
     ${savingsLine}
     ${inv.notes ? `<div style="margin-top:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569">${esc(inv.notes)}</div>` : ''}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:24px 0">

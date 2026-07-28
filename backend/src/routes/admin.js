@@ -496,15 +496,37 @@ router.get('/analytics', adminAuth, async (req, res) => {
       where: { bookings: { some: { confirmedAt: { gte: new Date(now.getTime() - 30 * 86400000) } } } },
     });
 
-    // Tier prices repriced 2026-06-10 (Basic 2.5k / Pro 5k / Ent 10k; $750 retired).
-    // Keep in sync with services/scorecard.js TIER_PRICE and the web pricing pages.
-    const subscriptionRevenue = {
-      BASIC: (subscriptions.find((s) => s.tier === 'BASIC')?._count.tier || 0) * 2500,
-      PROFESSIONAL: (subscriptions.find((s) => s.tier === 'PROFESSIONAL')?._count.tier || 0) * 5000,
-      ENTERPRISE: (subscriptions.find((s) => s.tier === 'ENTERPRISE')?._count.tier || 0) * 10000,
+    // Billing summary — REAL numbers from SnapInvoice only (the fabricated
+    // tier-count × price MRR estimate was removed 2026-07-28; never show
+    // financials that aren't backed by an actual invoice).
+    const [monthlyInvoices, outstandingAgg, collectedAgg] = await Promise.all([
+      prisma.snapInvoice.aggregate({
+        _sum: { amountDue: true },
+        _count: true,
+        where: { billingCycle: 'MONTHLY', status: { notIn: ['VOID'] } },
+      }),
+      prisma.snapInvoice.aggregate({
+        _sum: { amountDue: true },
+        _count: true,
+        where: { status: 'SENT' },
+      }),
+      prisma.snapInvoice.aggregate({
+        _sum: { amountDue: true },
+        _count: true,
+        where: { status: 'PAID', paidAt: { gte: yearStart } },
+      }),
+    ]);
+    const billing = {
+      monthlyRecurring: Math.round(monthlyInvoices._sum.amountDue || 0),
+      monthlyInvoiceCount: monthlyInvoices._count || 0,
+      outstanding: Math.round(outstandingAgg._sum.amountDue || 0),
+      outstandingCount: outstandingAgg._count || 0,
+      collectedYtd: Math.round(collectedAgg._sum.amountDue || 0),
+      collectedCount: collectedAgg._count || 0,
     };
 
     res.json({
+      billing,
       overview: {
         totalProviders,
         totalFacilities,
@@ -516,8 +538,6 @@ router.get('/analytics', adminAuth, async (req, res) => {
         disputedShifts,
         flaggedMessages,
       },
-      subscriptionRevenue,
-      subscriptionCounts: Object.fromEntries(subscriptions.map((s) => [s.tier, s._count.tier])),
       topFacilities,
       topProviders,
       licenseExpiringSoon,

@@ -120,10 +120,17 @@ function generateInvoicePdf(invoice, res) {
     y += 10
   }
 
+  const isMonthly = invoice.billingCycle === 'MONTHLY'
   doc.rect(L, y, W, 36).fill(SNAP_BLUE)
-  doc.fill('#fff').fontSize(13).font('Helvetica-Bold').text('TOTAL DUE', L + 12, y + 11)
-  doc.fill('#fff').fontSize(16).font('Helvetica-Bold').text(fmt(invoice.amountDue), 0, y + 9, { align: 'right', width: 556 })
+  doc.fill('#fff').fontSize(13).font('Helvetica-Bold').text(isMonthly ? 'TOTAL DUE — MONTHLY' : 'TOTAL DUE', L + 12, y + 11)
+  doc.fill('#fff').fontSize(16).font('Helvetica-Bold').text(`${fmt(invoice.amountDue)}${isMonthly ? '/mo' : ''}`, 0, y + 9, { align: 'right', width: 556 })
   y += 48
+
+  if (isMonthly) {
+    doc.fill(LIGHT).fontSize(9).font('Helvetica')
+      .text('Billed in monthly installments — an invoice for this amount is issued on the 1st of each month.', L, y, { width: W })
+    y += 16
+  }
 
   // ── Savings callout ───────────────────────────────────────────────────────
   if (invoice.listTotal > invoice.amountDue) {

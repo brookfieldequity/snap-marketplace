@@ -45,9 +45,7 @@ export default function AdminOverviewPage() {
   if (loading) return <div style={{ padding: '80px 40px', textAlign: 'center', color: '#94A3B8', fontSize: 15 }}>Loading analytics…</div>
 
   const o = data?.overview || {}
-  const subRev = data?.subscriptionRevenue || {}
-  const subCounts = data?.subscriptionCounts || {}
-  const subRevTotal = (subRev.BASIC || 0) + (subRev.PROFESSIONAL || 0) + (subRev.ENTERPRISE || 0)
+  const billing = data?.billing || {}
   const licenseExpiringSoon = data?.licenseExpiringSoon || []
 
   return (
@@ -70,38 +68,29 @@ export default function AdminOverviewPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
         <StatCard label="Gross Total Value"  value={fmt(o.totalGTV)}          icon="💰" color="#10B981" sub="All-time platform GTV" />
-        <StatCard label="Platform Fees"      value={fmt(o.totalPlatformFees)} icon="📊" color="#2563EB" sub="10% of GTV" />
+        <StatCard label="Platform Fees"      value={fmt(o.totalPlatformFees)} icon="📊" color="#2563EB" sub="5% platform fee" />
         <StatCard label="Disputed Shifts"    value={o.disputedShifts || 0}   icon="⚖️" danger={o.disputedShifts > 0} />
         <StatCard label="Flagged Messages"   value={o.flaggedMessages || 0}  icon="🚩" danger={o.flaggedMessages > 0} />
       </div>
 
-      {/* Subscription breakdown */}
+      {/* Billing — real numbers from actual invoices only */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 20 }}>Subscription Revenue (MRR)</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Billing</h3>
+          <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 20 }}>From actual invoices — manage in the Invoices tab</p>
           {[
-            { label: 'SNAP Core',     count: subCounts.BASIC || 0,        rev: subRev.BASIC || 0,        color: '#2563EB' },
-            { label: 'SNAP Staff IQ', count: subCounts.PROFESSIONAL || 0, rev: subRev.PROFESSIONAL || 0, color: '#1E3A8A' },
-            { label: 'SNAP Complete', count: subCounts.ENTERPRISE || 0,   rev: subRev.ENTERPRISE || 0,   color: '#0F172A' },
-          ].map(({ label, count, rev, color }) => (
-            <div key={label} style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{label}</span>
-                  <span style={{ fontSize: 12, color: '#94A3B8' }}>{count} facilities</span>
-                </div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{fmt(rev)}</span>
+            { label: 'Monthly recurring', value: fmt(billing.monthlyRecurring) + '/mo', sub: `${billing.monthlyInvoiceCount || 0} active monthly invoice${billing.monthlyInvoiceCount === 1 ? '' : 's'}`, color: '#2563EB' },
+            { label: 'Outstanding (sent, unpaid)', value: fmt(billing.outstanding), sub: `${billing.outstandingCount || 0} invoice${billing.outstandingCount === 1 ? '' : 's'}`, color: (billing.outstanding || 0) > 0 ? '#D97706' : '#0F172A' },
+            { label: 'Collected this year', value: fmt(billing.collectedYtd), sub: `${billing.collectedCount || 0} paid invoice${billing.collectedCount === 1 ? '' : 's'}`, color: '#15803D' },
+          ].map(({ label, value, sub, color }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{label}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>{sub}</div>
               </div>
-              <div style={{ height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: subRevTotal > 0 ? `${(rev / subRevTotal) * 100}%` : '0%', background: color, borderRadius: 3, transition: 'width 0.6s ease' }} />
-              </div>
+              <span style={{ fontSize: 18, fontWeight: 800, color }}>{value}</span>
             </div>
           ))}
-          <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 12, display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#64748B' }}>Total MRR</span>
-            <span style={{ fontSize: 18, fontWeight: 900, color: '#2563EB' }}>{fmt(subRevTotal)}</span>
-          </div>
         </div>
 
         {/* License expiring */}
@@ -146,23 +135,6 @@ export default function AdminOverviewPage() {
         </div>
       </div>
 
-      {/* Shift stats */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 20 }}>Shift Breakdown</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
-          {[
-            { label: 'Total Shifts',       value: o.totalShifts || 0,      color: '#0F172A' },
-            { label: 'Fill Rate',          value: `${o.fillRate || 0}%`,   color: '#10B981' },
-            { label: 'Disputed',           value: o.disputedShifts || 0,   color: '#EF4444' },
-            { label: 'Total Providers',    value: o.totalProviders || 0,   color: '#2563EB' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ textAlign: 'center', padding: '16px', background: '#F8FAFC', borderRadius: 12 }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color }}>{value}</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: 500 }}>{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
