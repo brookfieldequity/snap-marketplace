@@ -241,11 +241,20 @@ function CaseDetail({ caseId, onBack }) {
     try { await wcAPI.addRemittance(c.id, { paidAmount: amt }); setPayAmt(''); load() } catch (e) { alert(e.message) } finally { setBusy(false) }
   }
 
+  async function deleteCase() {
+    if (!window.confirm('Delete this case and all its documents, payments, and history? This cannot be undone.')) return
+    setBusy(true)
+    try { await wcAPI.deleteCase(c.id); onBack() } catch (e) { alert(e.message); setBusy(false) }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button style={btnGhost} onClick={onBack}>← Cases</button>
-        <Badge status={c.status} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Badge status={c.status} />
+          <button style={{ ...btnGhost, color: RED }} disabled={busy} onClick={deleteCase}>Delete</button>
+        </div>
       </div>
 
       {c.nextAction && (
