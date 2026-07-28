@@ -54,6 +54,15 @@ async function apiFetch(url, options = {}) {
 // ─── Shared auth API (forgot/reset password — OTP code flow, no auth header) ───
 
 export const authAPI = {
+  // Forced password change after an admin-issued temporary password. Token is
+  // passed explicitly — at this point it lives only in login-page state.
+  changePassword: (token, newPassword) =>
+    apiFetch(`${BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ newPassword }),
+    }),
+
   // Revoke the given token's server-side session. Best-effort — always
   // resolves, so client-side logout is never blocked.
   logout: (token) =>
@@ -86,6 +95,11 @@ export const facilityAPI = {
       headers: facilityHeaders(),
       body: JSON.stringify({ email, password }),
     }),
+
+  // Team access — facility-admin account recovery (temp password shown once).
+  getTeam: () => apiFetch(`${BASE}/facilities/team`, { headers: facilityHeaders() }),
+  issueTempPassword: (userId) =>
+    apiFetch(`${BASE}/facilities/team/${userId}/temp-password`, { method: 'POST', headers: facilityHeaders() }),
 
   register: (payload) =>
     apiFetch(`${BASE}/auth/facility/register`, {
@@ -797,6 +811,9 @@ export const credentialAPI = {
 // ─── Admin API ────────────────────────────────────────────────────────────────
 
 export const adminAPI = {
+  // Email-free account recovery: temp password for ANY user, shown once.
+  issueTempPassword: (email) =>
+    apiFetch(`${BASE}/admin/users/temp-password`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ email }) }),
   login: (email, password) =>
     apiFetch(`${BASE}/auth/admin/login`, {
       method: 'POST',

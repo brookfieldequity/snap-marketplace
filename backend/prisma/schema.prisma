@@ -220,6 +220,9 @@ model User {
   email     String   @unique
   password  String?
   role      UserRole @default(PROVIDER)
+  // Set when an admin issues a temporary password; login works but the
+  // portals force a password change before proceeding (email-free recovery).
+  mustChangePassword Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { adminAPI } from '../api.js'
+import { adminAPI, authAPI } from '../api.js'
 
 // Admin panel sign-in is intentionally LOGIN-ONLY: no self-service password
 // reset. The admin account is the highest-privilege entry point, so password
@@ -10,6 +10,11 @@ export default function AdminLoginPage({ onLogin, onBack }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  // Forced change after an owner-issued temporary password.
+  const [pendingToken, setPendingToken] = useState(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [notice, setNotice] = useState('')
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -17,9 +22,33 @@ export default function AdminLoginPage({ onLogin, onBack }) {
     setLoading(true)
     try {
       const data = await adminAPI.login(email, password)
+      if (data.mustChangePassword) {
+        setPendingToken(data.token)
+        setPassword('')
+        return
+      }
       onLogin(data.token)
     } catch (err) {
       setError(err.message || 'Login failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleForcedChange(e) {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < 8) return setError('Password must be at least 8 characters.')
+    if (newPassword !== confirmPassword) return setError('Passwords do not match.')
+    setLoading(true)
+    try {
+      await authAPI.changePassword(pendingToken, newPassword)
+      setPendingToken(null)
+      setNewPassword('')
+      setConfirmPassword('')
+      setNotice('Password updated. Sign in with your new password.')
+    } catch (err) {
+      setError(err.message || 'Could not set the new password.')
     } finally {
       setLoading(false)
     }
@@ -87,6 +116,33 @@ export default function AdminLoginPage({ onLogin, onBack }) {
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Restricted access — SNAP staff only</p>
         </div>
 
+        {notice && !pendingToken && (
+          <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#16A34A', marginBottom: 16 }}>
+            {notice}
+          </div>
+        )}
+
+        {pendingToken ? (
+          <form onSubmit={handleForcedChange}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ fontSize: 13, color: '#64748B', margin: 0 }}>
+                Your temporary password worked — now choose your own.
+              </p>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} style={inputStyle} />
+              </div>
+              {error && <div style={{ color: '#DC2626', fontSize: 13 }}>{error}</div>}
+              <button type="submit" disabled={loading} style={{ width: '100%', padding: 13, background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Saving…' : 'Set Password & Continue'}
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
@@ -142,7 +198,8 @@ export default function AdminLoginPage({ onLogin, onBack }) {
             </button>
           </div>
         </form>
-      </div>
+
+        )}      </div>
     </div>
   )
 }

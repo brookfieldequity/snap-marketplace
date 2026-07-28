@@ -442,4 +442,61 @@ router.get('/:id/public', async (req, res) => {
   }
 });
 
+
+// ── Team access (facility-admin account recovery) ───────────────────────────
+// A facility ADMIN can see their team and issue a temporary password to one
+// of their own users — shown ONCE on screen, never emailed (works even when
+// the email provider is down). Forces a password change at next login.
+router.get('/team', facilityAuth, async (req, res) => {
+  try {
+    const members = await prisma.facilityUser.findMany({
+      where: { facilityId: req.facility.id },
+      include: { user: { select: { id: true, email: true, mustChangePassword: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({
+      myRole: req.facilityRole,
+      members: members.map((m) => ({
+        userId: m.user.id,
+        email: m.user.email,
+        facilityRole: m.facilityRole,
+        pendingTempPassword: m.user.mustChangePassword,
+      })),
+    });
+  } catch (err) {
+    console.error('team list error:', err);
+    res.status(500).json({ error: 'Failed to load team' });
+  }
+});
+
+router.post('/team/:userId/temp-password', facilityAuth, async (req, res) => {
+  try {
+    if (req.facilityRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only facility admins can issue temporary passwords' });
+    }
+    const membership = await prisma.facilityUser.findFirst({
+      where: { facilityId: req.facility.id, userId: req.params.userId },
+      include: { user: true },
+    });
+    if (!membership) return res.status(404).json({ error: 'User not found in this facility' });
+    if (membership.user.role !== 'FACILITY_USER') {
+      return res.status(403).json({ error: 'This account cannot be reset from the facility portal' });
+    }
+    const bcrypt = require('bcryptjs');
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})(?=.)/g, '$1-');
+    const hash = await bcrypt.hash(tempPassword, 10);
+    await prisma.user.update({
+      where: { id: membership.user.id },
+      data: { password: hash, mustChangePassword: true },
+    });
+    const { revokeAllForUser } = require('../services/authSessions');
+    const revoked = await revokeAllForUser(membership.user.id);
+    console.log(`[facility] temp password issued for ${membership.user.email} by ${req.user.userId} (facility ${req.facility.id}); ${revoked} session(s) revoked`);
+    res.json({ email: membership.user.email, tempPassword });
+  } catch (err) {
+    console.error('facility temp-password error:', err);
+    res.status(500).json({ error: 'Failed to issue temporary password' });
+  }
+});
+
 module.exports = router;

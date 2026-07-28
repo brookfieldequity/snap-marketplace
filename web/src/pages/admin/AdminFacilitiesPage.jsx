@@ -1,6 +1,52 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { adminAPI } from '../../api.js'
 
+// ── Account recovery — issue a temporary password for ANY user by email ─────
+// Email-free: the temp password is shown once here (never sent), the user's
+// sessions are revoked, and they must set a new password at next sign-in.
+function AdminAccountRecoveryCard() {
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [issued, setIssued] = useState(null)
+  const [err, setErr] = useState('')
+
+  async function issue(e) {
+    e.preventDefault()
+    setErr(''); setIssued(null)
+    if (!email) return
+    if (!window.confirm(`Issue a temporary password for ${email}? Their current password and sessions stop working immediately.`)) return
+    setBusy(true)
+    try {
+      setIssued(await adminAPI.issueTempPassword(email.trim()))
+      setEmail('')
+    } catch (ex) { setErr(ex.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '18px 22px', marginBottom: 28 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Account recovery</div>
+      <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 10px' }}>
+        Issue a temporary password for any user (provider, facility user, or admin) — shown once, never emailed.
+      </p>
+      <form onSubmit={issue} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" type="email" required
+          style={{ flex: '1 1 260px', padding: '9px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14 }} />
+        <button type="submit" disabled={busy} style={{ background: '#2563EB', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.7 : 1 }}>
+          {busy ? 'Issuing…' : 'Issue temp password'}
+        </button>
+      </form>
+      {err && <div style={{ color: '#DC2626', fontSize: 13, marginTop: 8 }}>{err}</div>}
+      {issued && (
+        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', marginTop: 12 }}>
+          <div style={{ fontSize: 13, color: '#16A34A', fontWeight: 700 }}>Temporary password for {issued.email} ({issued.role})</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#0F172A', margin: '6px 0' }}>{issued.tempPassword}</div>
+          <div style={{ fontSize: 12, color: '#64748B' }}>Shown only once — share it directly. They must set a new password at next sign-in.</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TIER_COLORS = {
   BASIC:        { bg: '#EFF6FF', text: '#1D4ED8', border: '#A5B4FC' },
   PROFESSIONAL: { bg: '#F3E8FF', text: '#1E3A8A', border: '#DDD6FE' },
@@ -131,6 +177,8 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
           + New Facility
         </button>
       </div>
+
+      <AdminAccountRecoveryCard />
 
       {/* Summary row */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>

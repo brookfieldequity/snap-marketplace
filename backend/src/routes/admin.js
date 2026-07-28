@@ -2720,6 +2720,31 @@ router.post('/review-demo/teardown', adminAuth, async (req, res) => {
 });
 
 // ── Revoke a user's sessions (support kill switch) ──────────────────────────────
+// POST /admin/users/temp-password — email-free account recovery. Generates a
+// temporary password, shows it ONCE in the response (never emailed, never
+// logged), forces a change at next login, and kills existing sessions.
+router.post('/users/temp-password', adminAuth, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email is required' });
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'No user with that email' });
+    const tempPassword = require('crypto').randomBytes(6).toString('hex').toUpperCase().replace(/(.{4})(?=.)/g, '$1-');
+    const hash = await bcrypt.hash(tempPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hash, mustChangePassword: true },
+    });
+    const { revokeAllForUser } = require('../services/authSessions');
+    const revoked = await revokeAllForUser(user.id);
+    console.log(`[admin] temp password issued for ${user.email} (${user.role}) by admin ${req.user.userId}; ${revoked} session(s) revoked`);
+    res.json({ email: user.email, role: user.role, tempPassword });
+  } catch (err) {
+    console.error('temp-password error:', err);
+    res.status(500).json({ error: 'Failed to issue temporary password' });
+  }
+});
+
 // POST /admin/users/:id/revoke-sessions — signs the user out everywhere
 // (all portals + mobile). Use when offboarding a coordinator or responding to
 // a suspected credential compromise.

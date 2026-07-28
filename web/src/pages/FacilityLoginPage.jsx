@@ -7,8 +7,9 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  // 'login' | 'forgot' | 'reset'
+  // 'login' | 'forgot' | 'reset' | 'change' (forced change after temp password)
   const [view, setView]               = useState('login')
+  const [pendingToken, setPendingToken] = useState(null)
   const [notice, setNotice]           = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
   const [forgotEmail, setForgotEmail] = useState('')
@@ -22,6 +23,13 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
     setLoading(true)
     try {
       const data = await facilityAPI.login(email, password)
+      if (data.user?.mustChangePassword) {
+        // Temp password accepted — force a real one before the session proceeds.
+        setPendingToken(data.token)
+        setPassword('')
+        setView('change')
+        return
+      }
       onLogin(data.token, data.facility?.facilityName || data.facilityName || '')
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.')
@@ -70,6 +78,26 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
       setResetSuccess('Password reset successfully. Please sign in.')
     } catch (err) {
       setError(err.message || 'Could not reset password. Check your code and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleForcedChange(e) {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < 8) return setError('Password must be at least 8 characters.')
+    if (newPassword !== confirmPassword) return setError('Passwords do not match.')
+    setLoading(true)
+    try {
+      await authAPI.changePassword(pendingToken, newPassword)
+      setPendingToken(null)
+      setNewPassword('')
+      setConfirmPassword('')
+      setView('login')
+      setResetSuccess('Password updated. Sign in with your new password.')
+    } catch (err) {
+      setError(err.message || 'Could not set the new password.')
     } finally {
       setLoading(false)
     }
@@ -138,16 +166,38 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
             SNAP
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
-            {view === 'login' ? 'Facility Sign In' : 'Reset Password'}
+            {view === 'login' ? 'Facility Sign In' : view === 'change' ? 'Set a New Password' : 'Reset Password'}
           </h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
             {view === 'login'
               ? 'Access your staffing portal'
-              : view === 'forgot'
-                ? "Enter your email and we'll send a 6-digit code."
-                : 'Enter the code we sent and choose a new password.'}
+              : view === 'change'
+                ? 'Your temporary password worked — now choose your own.'
+                : view === 'forgot'
+                  ? "Enter your email and we'll send a 6-digit code."
+                  : 'Enter the code we sent and choose a new password.'}
           </p>
         </div>
+
+        {/* ── Forced change (temp password) ── */}
+        {view === 'change' && (
+          <form onSubmit={handleForcedChange}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} style={inputStyle} />
+              </div>
+              {error && <div style={{ color: '#DC2626', fontSize: 13 }}>{error}</div>}
+              <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Saving…' : 'Set Password & Continue'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* ── Login ── */}
         {view === 'login' && (

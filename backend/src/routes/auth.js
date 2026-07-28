@@ -460,7 +460,7 @@ router.post('/facility/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, mustChangePassword: user.mustChangePassword },
       facility: membership ? { id: membership.facility.id, name: membership.facility.name } : null,
     });
   } catch (err) {
@@ -493,9 +493,35 @@ router.post('/admin/login', checkAdminLockout, async (req, res) => {
 
     clearAdminFailures(req.ip);
     const token = await issueToken('ADMIN', { userId: user.id, email: user.email, role: 'ADMIN' }, req);
-    res.json({ token });
+    res.json({ token, mustChangePassword: user.mustChangePassword });
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── Change password (any authenticated audience) ──────────────────────────────
+// The email-free half of account recovery: after an admin issues a temporary
+// password (which sets mustChangePassword), the portals call this before
+// letting the session proceed. Revokes every session — the user signs back in
+// with the new password.
+const authMiddleware = require('../middleware/auth');
+router.post('/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { newPassword } = req.body || {};
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { password: hash, mustChangePassword: false },
+    });
+    const revoked = await revokeAllForUser(req.user.userId);
+    console.log(`[auth] password changed for user ${req.user.userId}; ${revoked} session(s) revoked`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('change-password error:', err);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 

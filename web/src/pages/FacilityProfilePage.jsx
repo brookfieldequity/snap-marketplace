@@ -1,6 +1,63 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../api.js'
 
+// ── Team access — facility-admin account recovery ────────────────────────────
+// Lists the facility's portal users; a facility ADMIN can issue a temporary
+// password for a teammate (shown ONCE — never emailed, so it works even when
+// the email provider is down). The teammate must set a new password at login.
+function TeamAccessCard() {
+  const [team, setTeam] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [issued, setIssued] = useState(null) // { email, tempPassword }
+
+  useEffect(() => { facilityAPI.getTeam().then(setTeam).catch(() => {}) }, [])
+  if (!team) return null
+
+  async function issue(member) {
+    if (!window.confirm(`Issue a temporary password for ${member.email}? Their current password and sessions stop working immediately.`)) return
+    setBusy(true)
+    try {
+      const r = await facilityAPI.issueTempPassword(member.userId)
+      setIssued(r)
+      facilityAPI.getTeam().then(setTeam).catch(() => {})
+    } catch (e) { alert(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Team access</div>
+      <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 12px' }}>
+        {team.myRole === 'ADMIN'
+          ? 'Locked-out teammate? Issue a temporary password — shown once, right here, no email needed.'
+          : 'Your facility portal accounts. Ask a facility admin if someone is locked out.'}
+      </p>
+      {issued && (
+        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: '#16A34A', fontWeight: 700 }}>Temporary password for {issued.email}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#0F172A', margin: '6px 0' }}>{issued.tempPassword}</div>
+          <div style={{ fontSize: 12, color: '#64748B' }}>
+            Shown only once — share it directly (phone/text is best). They'll be asked to set their own password at sign-in.
+          </div>
+        </div>
+      )}
+      {team.members.map((m) => (
+        <div key={m.userId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
+          <div style={{ fontSize: 13, color: '#0F172A' }}>
+            {m.email}
+            <span style={{ color: '#94A3B8', marginLeft: 8, fontSize: 12 }}>{m.facilityRole}</span>
+            {m.pendingTempPassword && <span style={{ color: '#D97706', marginLeft: 8, fontSize: 12 }}>temp password pending</span>}
+          </div>
+          {team.myRole === 'ADMIN' && (
+            <button disabled={busy} onClick={() => issue(m)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#2563EB', cursor: 'pointer' }}>
+              Issue temp password
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const FACILITY_TYPES = [
   'Ambulatory Surgery Center',
   'Hospital',
@@ -167,6 +224,8 @@ export default function FacilityProfilePage() {
           A complete profile helps providers choose your facility
         </p>
       </div>
+
+      <TeamAccessCard />
 
       {/* Completion bar */}
       <div
