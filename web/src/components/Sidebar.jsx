@@ -411,7 +411,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
             )}
             {featureFlags.wc_recovery && (
               <>
-                <SectionHeader label="WC Recovery" />
+                <SectionHeader label="Workers' Comp Recovery" />
                 {WC_ITEMS.map((item) => (
                   <NavItem
                     key={item.key}

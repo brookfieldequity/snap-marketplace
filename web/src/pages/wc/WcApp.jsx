@@ -484,8 +484,8 @@ export default function WcApp({ page, onNavigate }) {
   const openCase = (id) => { setOpenCaseId(id); onNavigate('wc-cases') }
 
   const TITLES = {
-    'wc-dashboard': 'WC Recovery',
-    'wc-cases': 'Cases',
+    'wc-dashboard': "Workers' Comp Recovery",
+    'wc-cases': "Workers' comp cases",
     'wc-ingest': 'Upload files',
     'wc-ledger': 'Recovery ledger',
   }
