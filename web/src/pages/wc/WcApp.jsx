@@ -99,7 +99,7 @@ function Dashboard({ onNavigate, onOpenCase }) {
 
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 16, color: DARK }}>Needs a human ({workItems.length})</h3>
+          <h3 style={{ margin: 0, fontSize: 16, color: DARK }}>Needs approval ({workItems.length})</h3>
           <button style={btnGhost} onClick={() => onNavigate('wc-cases')}>All cases →</button>
         </div>
         {workItems.length === 0 ? (
