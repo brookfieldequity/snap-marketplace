@@ -119,6 +119,72 @@ function Dashboard({ onNavigate, onOpenCase }) {
           ))
         )}
       </div>
+
+      <RateSettings />
+    </div>
+  )
+}
+
+// ─── Group rate setting ───────────────────────────────────────────────────────
+// Target rate per anesthesia unit. Default = the MA WC schedule ($39.00 under
+// 114.3 CMR 40.05(2)); a group-set rate recomputes open cases and is labeled
+// in documents as the group's established rate, never as the schedule.
+function RateSettings() {
+  const [s, setS] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const load = () => wcAPI.getSettings().then(setS).catch(() => {})
+  useEffect(() => { load() }, [])
+  if (!s) return null
+
+  const usingSchedule = s.ratePerUnit == null
+  const current = usingSchedule ? s.scheduleRate : s.ratePerUnit
+
+  async function save(rate) {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await wcAPI.updateSettings({ ratePerUnit: rate })
+      setMsg(`Saved — ${r.recomputed} open case${r.recomputed === 1 ? '' : 's'} recomputed at the new rate.`)
+      setEditing(false); load()
+    } catch (e) { alert(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 12, color: MID, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            Target rate per unit
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: DARK, marginTop: 2 }}>
+            {money(current)}
+            <span style={{ fontSize: 12, fontWeight: 600, color: MID, marginLeft: 8 }}>
+              {usingSchedule ? `MA schedule (${s.scheduleCitation})` : `your group's rate · schedule is ${money(s.scheduleRate)}`}
+            </span>
+          </div>
+        </div>
+        {!editing ? (
+          <button style={btnGhost} onClick={() => { setDraft(String(current)); setEditing(true); setMsg(null) }}>Change rate</button>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ color: MID }}>$</span>
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} style={{ width: 90, padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 14 }} />
+            <button style={btn()} disabled={busy} onClick={() => save(Number(draft))}>Save</button>
+            {!usingSchedule && (
+              <button style={btnGhost} disabled={busy} onClick={() => save(null)}>Reset to schedule</button>
+            )}
+            <button style={btnGhost} disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        )}
+      </div>
+      {msg && <p style={{ color: GREEN, fontSize: 13, margin: '10px 0 0' }}>{msg}</p>}
+      <p style={{ color: MID, fontSize: 12, margin: '10px 0 0' }}>
+        Entitlements and demand packets compute at this rate. A rate above the schedule is presented in
+        documents as your group's established rate — have counsel confirm your basis for rates above the schedule.
+      </p>
     </div>
   )
 }

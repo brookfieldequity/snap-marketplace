@@ -1135,6 +1135,8 @@ export const wcAPI = {
   addRemittance: (id, data) => wcFetch(`/cases/${id}/remittances`, { method: 'POST', body: JSON.stringify(data) }),
   markDocSent: (caseId, docId) => wcFetch(`/cases/${caseId}/documents/${docId}/mark-sent`, { method: 'POST' }),
   getLedger: () => wcFetch('/ledger'),
+  getSettings: () => wcFetch('/settings'),
+  updateSettings: (data) => wcFetch('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   getWorkItems: () => wcFetch('/workitems'),
   updateWorkItem: (id, data) => wcFetch(`/workitems/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   // Ingest uploads: FormData — no Content-Type so the browser sets the boundary.
