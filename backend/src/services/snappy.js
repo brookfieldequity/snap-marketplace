@@ -1,3 +1,13 @@
+// ── HIPAA/BAA GUARD (Anthropic BAA executed 2026-07-28 — see PHI-BAA-WALKTHROUGH.md §3.5)
+// This file calls the Anthropic API. Rules that keep SNAP compliant:
+//  1. Messages API ONLY (messages.create/stream, inline base64 docs). NEVER Files API,
+//     Batch API, code execution, web fetch, MCP, or beta headers on this path.
+//  2. Tool/JSON schemas must stay STATIC literals — never interpolate document/patient
+//     data into schema property names, enums, consts, or patterns (schemas are cached
+//     without PHI protections).
+//  3. Minimum necessary: extract identifiers only as needed (initials/last-4 pattern).
+//  4. API key must belong to the HIPAA-configured org. A 400 naming a feature is a
+//     compliance tripwire — fix the call, never work around it.
 // Snappy — SNAP's in-app AI support assistant (Task #17).
 //
 // Account-aware: Snappy can look up the asking facility's own operational
