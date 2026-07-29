@@ -40,6 +40,15 @@ function credTypeName(type) {
 // error; false if the key is unset (no-op) or SendGrid rejected it. Callers
 // that care about delivery (e.g. the facility invite) use this to report an
 // honest "sent" state instead of assuming success.
+// Compliance footer appended to every outbound email (legal entity + privacy
+// policy). Injected here so all templates in this file get it without each
+// carrying its own copy.
+const COMPLIANCE_FOOTER = `
+  <div style="max-width:560px;margin:0 auto;padding:16px 32px 32px;font-size:11px;color:#94A3B8;line-height:1.6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+    SNAP Medical · operated by Essential Anesthesia Partners LLC (d/b/a SNAP Medical Technologies) · Massachusetts<br>
+    Transactional notification — you received this because of your SNAP account or a facility you work with. · <a href="https://api.snapmedical.app/privacy" style="color:#94A3B8">Privacy Policy</a>
+  </div>`
+
 async function send(msg) {
   if (!process.env.SENDGRID_API_KEY) {
     console.log('[credentialEmail] SENDGRID_API_KEY not set — skipping:', msg.subject)
@@ -50,7 +59,8 @@ async function send(msg) {
     // tracking subdomain (url####.snapmedical.app) without a valid SSL cert,
     // causing "connection is not private" on invite links. Transactional email:
     // links must point straight to the real, valid-cert URL.
-    await sgMail.send({ ...msg, trackingSettings: { clickTracking: { enable: false, enableText: false } } })
+    const html = msg.html ? msg.html + COMPLIANCE_FOOTER : msg.html
+    await sgMail.send({ ...msg, html, trackingSettings: { clickTracking: { enable: false, enableText: false } } })
     return true
   } catch (err) {
     console.error('[credentialEmail] SendGrid error:', err.response?.body || err.message)

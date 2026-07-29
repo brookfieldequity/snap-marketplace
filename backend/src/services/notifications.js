@@ -80,8 +80,9 @@ function emailTemplate(heading, bodyHtml) {
 <tr><td style="padding:32px">
   <h2 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A">${heading}</h2>
   <div style="font-size:14px;color:#374151;line-height:1.6">${bodyHtml}</div>
-  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #F1F5F9;font-size:11px;color:#94A3B8">
-    SNAP Medical Marketplace · Massachusetts
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #F1F5F9;font-size:11px;color:#94A3B8;line-height:1.6">
+    SNAP Medical Marketplace · operated by Essential Anesthesia Partners LLC (d/b/a SNAP Medical Technologies) · Massachusetts<br>
+    Transactional notification — you received this because of your SNAP account or a facility you work with. · <a href="https://api.snapmedical.app/privacy" style="color:#94A3B8">Privacy Policy</a>
   </div>
 </td></tr>
 </table>
