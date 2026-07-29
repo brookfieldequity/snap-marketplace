@@ -205,17 +205,19 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     if (day.pattern === 'PROBLEM_MIX') {
       problemDayCount++;
       problemDayWaste += day.dailyWaste;
-      if (problemDays.length < 31) {
-        problemDays.push({
-          date: rec.date || null,
-          anesCount: rec.anesCount,
-          crnaCount: rec.crnaCount,
-          rooms: day.totalRooms,
-          supervisors: day.supervisors,
-          soloMDs: day.soloMDs,
-          dailyWaste: Math.round(day.dailyWaste),
-        });
-      }
+      // Collect every problem day here; the list is sorted by cost and capped
+      // at the end. (Capping during iteration silently dropped the most recent
+      // months once history exceeded 31 problem days — a July upload looked
+      // "not analyzed" because May/June filled the cap first.)
+      problemDays.push({
+        date: rec.date || null,
+        anesCount: rec.anesCount,
+        crnaCount: rec.crnaCount,
+        rooms: day.totalRooms,
+        supervisors: day.supervisors,
+        soloMDs: day.soloMDs,
+        dailyWaste: Math.round(day.dailyWaste),
+      });
     }
     const recoverableWPR = day.isPotentialClinicalOverride ? 0 : day.wastePerRoom;
 
@@ -305,12 +307,15 @@ function analyzeFacilitySchedule(records, facilityName = '', rates = {}) {
     totalCareTeamWaste: Math.round(totalCareTeamWaste),
     totalStructuralWaste: Math.round(totalStructuralWaste),
     annualStructuralOpportunity: Math.round(annualStructuralOpportunity),
-    // The low-hanging fruit, itemized (PROBLEM_MIX days).
+    // The low-hanging fruit, itemized (PROBLEM_MIX days) — most expensive
+    // first so "top N" views surface the worst days regardless of month.
     supervisionRatioUsed: supervisionRatio,
     problemDayCount,
     problemDayWaste: Math.round(problemDayWaste),
     annualProblemDayWaste: Math.round(problemDayWaste * (operatingDays / Math.max(totalDays, 1))),
-    problemDays,
+    problemDays: problemDays
+      .sort((a, b) => b.dailyWaste - a.dailyWaste || String(b.date).localeCompare(String(a.date)))
+      .slice(0, 31),
     weekdayRatios,
     fridayRatios,
   };
