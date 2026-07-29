@@ -218,6 +218,50 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
+// Schedule assignments that would be orphaned if these requests' spans become
+// time off — so the admin sees the hole BEFORE granting. Batched: one query
+// covering every pending span, bucketed per request in JS.
+async function attachAssignmentConflicts(facilityId, requests) {
+  const pending = requests.filter(
+    (r) => r.status === 'PENDING' && (r.type === 'PTO' || r.type === 'DAY_OFF')
+  );
+  if (pending.length === 0) return;
+  const spanEnd = (r) => r.endDate || r.date;
+  const minDate = new Date(Math.min(...pending.map((r) => r.date.getTime())));
+  const maxDate = new Date(Math.max(...pending.map((r) => spanEnd(r).getTime())));
+  const rows = await prisma.scheduleAssignment.findMany({
+    where: {
+      facilityId,
+      rosterId: { in: [...new Set(pending.map((r) => r.rosterEntryId))] },
+      scheduleDay: { date: { gte: minDate, lte: maxDate } },
+    },
+    select: {
+      rosterId: true,
+      scheduleDay: { select: { date: true, location: true, publishedAt: true } },
+    },
+  });
+  for (const r of pending) {
+    const startIso = r.date.toISOString().slice(0, 10);
+    const endIso = spanEnd(r).toISOString().slice(0, 10);
+    const hitDates = new Set();
+    const publishedDates = new Set();
+    for (const row of rows) {
+      if (row.rosterId !== r.rosterEntryId) continue;
+      const iso = row.scheduleDay.date.toISOString().slice(0, 10);
+      if (iso < startIso || iso > endIso) continue;
+      hitDates.add(iso);
+      if (row.scheduleDay.publishedAt) publishedDates.add(iso);
+    }
+    if (hitDates.size > 0) {
+      r.conflicts = {
+        count: hitDates.size,
+        published: publishedDates.size,
+        dates: [...hitDates].sort().slice(0, 14),
+      };
+    }
+  }
+}
+
 // ── Facility: list requests ───────────────────────────────────────────────────
 router.get('/', facilityAuth, async (req, res) => {
   try {
@@ -227,6 +271,9 @@ router.get('/', facilityAuth, async (req, res) => {
       orderBy: [{ status: 'asc' }, { date: 'asc' }],
       include: { rosterEntry: { select: { providerName: true, providerType: true, seniorityRank: true } } },
     });
+    // Pending PTO / DAY_OFF that overlaps existing schedule assignments gets a
+    // `conflicts` object — the UI warns the admin before they grant a hole.
+    await attachAssignmentConflicts(req.facility.id, requests);
     res.json({ requests });
   } catch (err) {
     console.error('[schedule-requests] facility list failed:', err);
@@ -273,7 +320,16 @@ router.post('/:id/decide', facilityAuth, async (req, res) => {
     });
 
     await notifyDecision(request, newStatus, req.facility.name);
-    res.json({ ok: true, status: newStatus, tier: newTier });
+
+    // If granting just orphaned schedule assignments, say so in the response —
+    // the UI surfaces "N spots now need coverage" instead of a silent hole.
+    let openedGaps = null;
+    if (newStatus === 'ACCEPTED' && (request.type === 'PTO' || (request.type === 'DAY_OFF' && newTier === 1))) {
+      const probe = [{ ...request, status: 'PENDING' }];
+      await attachAssignmentConflicts(req.facility.id, probe);
+      openedGaps = probe[0].conflicts || null;
+    }
+    res.json({ ok: true, status: newStatus, tier: newTier, openedGaps });
   } catch (err) {
     console.error('[schedule-requests] decide failed:', err);
     res.status(500).json({ error: 'Failed to decide request' });

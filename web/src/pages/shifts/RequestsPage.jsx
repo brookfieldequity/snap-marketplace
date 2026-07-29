@@ -259,15 +259,29 @@ export default function RequestsPage() {
     }
   }
 
-  async function decidePto(id, decision) {
-    setBusy((b) => ({ ...b, [id]: true }))
+  async function decidePto(r, decision) {
+    // Eyes-open grant: if the provider is already on the schedule in this
+    // span, say exactly which days open up before the admin approves.
+    if (decision === 'accept' && r.conflicts?.count > 0) {
+      const n = r.conflicts.count
+      const msg =
+        `${r.rosterEntry?.providerName || 'This provider'} is already scheduled on ${n} day${n > 1 ? 's' : ''} in this span` +
+        (r.conflicts.published > 0 ? ` (${r.conflicts.published} on the published schedule)` : '') +
+        `:\n\n${r.conflicts.dates.join(', ')}\n\n` +
+        `Approving opens ${n} spot${n > 1 ? 's' : ''} that will need coverage. Approve anyway?`
+      if (!window.confirm(msg)) return
+    }
+    setBusy((b) => ({ ...b, [r.id]: true }))
     try {
-      await facilityAPI.decideScheduleRequest(id, decision)
+      const res = await facilityAPI.decideScheduleRequest(r.id, decision)
+      if (res?.openedGaps?.count > 0) {
+        alert(`Approved. ${res.openedGaps.count} spot${res.openedGaps.count > 1 ? 's' : ''} on the schedule now need${res.openedGaps.count > 1 ? '' : 's'} coverage — flagged red on the Schedule Builder.`)
+      }
       load()
     } catch (e) {
       alert('Failed: ' + e.message)
     } finally {
-      setBusy((b) => ({ ...b, [id]: false }))
+      setBusy((b) => ({ ...b, [r.id]: false }))
     }
   }
 
@@ -680,9 +694,14 @@ export default function RequestsPage() {
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>{r.rosterEntry?.providerName || 'Provider'}</div>
                     <div style={{ fontSize: 11, color: '#4338CA', marginTop: 2 }}>{dateLabel(r)}</div>
                     {r.note && <div style={{ fontSize: 11, color: '#64748B', marginTop: 3, fontStyle: 'italic' }}>"{r.note}"</div>}
+                    {r.conflicts?.count > 0 && (
+                      <div title={r.conflicts.dates.join(', ')} style={{ marginTop: 5, background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 6, padding: '3px 8px', fontSize: 10.5, fontWeight: 700, color: '#B91C1C' }}>
+                        ⚠ Scheduled {r.conflicts.count} day{r.conflicts.count > 1 ? 's' : ''} in this span{r.conflicts.published > 0 ? ` (${r.conflicts.published} published)` : ''} — approving opens coverage gaps
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button onClick={() => decidePto(r.id, 'accept')} disabled={busy[r.id]} style={{ flex: 1, padding: '5px 0', background: '#10B981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Approve</button>
-                      <button onClick={() => decidePto(r.id, 'decline')} disabled={busy[r.id]} style={{ flex: 1, padding: '5px 0', background: '#fff', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Decline</button>
+                      <button onClick={() => decidePto(r, 'accept')} disabled={busy[r.id]} style={{ flex: 1, padding: '5px 0', background: '#10B981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Approve</button>
+                      <button onClick={() => decidePto(r, 'decline')} disabled={busy[r.id]} style={{ flex: 1, padding: '5px 0', background: '#fff', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Decline</button>
                     </div>
                   </div>
                 ))}

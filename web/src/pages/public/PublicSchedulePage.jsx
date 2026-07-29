@@ -105,7 +105,7 @@ export default function PublicSchedulePage({ token }) {
 
   const byDate = useMemo(() => {
     const m = {}
-    for (const d of data?.days || []) m[d.date] = d.providers || []
+    for (const d of data?.days || []) m[d.date] = d
     return m
   }, [data])
 
@@ -131,9 +131,17 @@ export default function PublicSchedulePage({ token }) {
   for (let i = 0; i < leading; i++) cells.push({ blank: true, key: `b${i}` })
   for (let d = 1; d <= daysInMonth; d++) {
     const ds = `${year}-${pad(month)}-${pad(d)}`
-    const providers = byDate[ds]
-    cells.push({ key: ds, d, ds, providers, operating: providers !== undefined })
+    const day = byDate[ds]
+    cells.push({ key: ds, d, ds, providers: day?.providers, needs: day?.needsCoverage || 0, operating: day !== undefined })
   }
+
+  // A spot whose provider dropped (PTO granted after publish) — shown as
+  // honest "coverage being arranged", never as a name that won't show up.
+  const TbdChip = ({ n }) => (
+    <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309', borderRadius: 6, padding: '2px 6px', fontSize: 10.5, fontWeight: 700, marginTop: 2, display: 'inline-block' }}>
+      ⏳ {n > 1 ? `${n} spots — ` : ''}coverage being arranged
+    </div>
+  )
 
   const updatedStr = updatedAt ? new Date(updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
 
@@ -169,12 +177,15 @@ export default function PublicSchedulePage({ token }) {
                 <div className="sw-grid">
                   {cells.map((c) => {
                     if (c.blank) return <div className="sw-cell blank" key={c.key}></div>
-                    const has = c.providers && c.providers.length > 0
+                    const has = (c.providers && c.providers.length > 0) || c.needs > 0
                     if (!has) return <div className="sw-cell closed" key={c.key}><span className="sw-date">{c.d}</span><div className="sw-closedlbl">{c.operating ? 'Unassigned' : '—'}</div></div>
                     return (
                       <div className="sw-cell" key={c.key}>
                         <span className="sw-date">{c.d}</span>
-                        <div className="sw-cwho">{c.providers.map((p, i) => <ProviderLine key={i} p={p} />)}</div>
+                        <div className="sw-cwho">
+                          {(c.providers || []).map((p, i) => <ProviderLine key={i} p={p} />)}
+                          {c.needs > 0 && <TbdChip n={c.needs} />}
+                        </div>
                       </div>
                     )
                   })}
@@ -183,16 +194,19 @@ export default function PublicSchedulePage({ token }) {
             </div>
           ) : (
             <div className="sw-agenda">
-              {(data.days || []).filter((d) => (d.providers || []).length > 0).map((d) => {
+              {(data.days || []).filter((d) => (d.providers || []).length > 0 || (d.needsCoverage || 0) > 0).map((d) => {
                 const dt = new Date(d.date + 'T00:00:00Z')
                 return (
                   <div className="sw-row" key={d.date}>
                     <div className="sw-dpill"><span className="dwd">{DOW[dt.getUTCDay()]}</span><span className="dnum">{dt.getUTCDate()}</span></div>
-                    <div className="sw-rwho">{d.providers.map((p, i) => <ProviderLine key={i} p={p} />)}</div>
+                    <div className="sw-rwho">
+                      {(d.providers || []).map((p, i) => <ProviderLine key={i} p={p} />)}
+                      {(d.needsCoverage || 0) > 0 && <TbdChip n={d.needsCoverage} />}
+                    </div>
                   </div>
                 )
               })}
-              {(data.days || []).filter((d) => (d.providers || []).length > 0).length === 0 && (
+              {(data.days || []).filter((d) => (d.providers || []).length > 0 || (d.needsCoverage || 0) > 0).length === 0 && (
                 <div className="sw-row"><div className="sw-rwho empty">No coverage published for {monthLabel} yet.</div></div>
               )}
             </div>

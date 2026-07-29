@@ -1356,6 +1356,20 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     return out
   }
 
+  // PTO-conflict check: is this assigned provider on granted time off that
+  // date? `timeOff` from /month unions RosterTimeOff AND approved PTO
+  // requests, so this covers every grant path. A conflicted assignment
+  // renders as needs-coverage, never as coverage.
+  function isHardOff(rosterId, dateStr) {
+    if (!rosterId) return false
+    for (const t of timeOff) {
+      const s = (typeof t.startDate === 'string' ? t.startDate : new Date(t.startDate).toISOString()).substring(0, 10)
+      const e = (typeof t.endDate === 'string' ? t.endDate : new Date(t.endDate).toISOString()).substring(0, 10)
+      if (dateStr >= s && dateStr <= e && t.rosterEntryId === rosterId) return true
+    }
+    return false
+  }
+
   // "Maybe" days a provider flagged via the tokenized availability link →
   // [{ name, note }]. Soft/conditional — never auto-scheduled; shown so the
   // coordinator can reach out and pull them in if they need the coverage.
@@ -1386,6 +1400,20 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       daysByDate[key].push(d)
     })
   }
+
+  // Assignments whose provider has since been granted PTO — the "spots that
+  // need to be filled". Drives the warning chip, cell badges, and modal rows.
+  const ptoConflicts = []
+  for (const [dateKey, rows] of Object.entries(daysByDate)) {
+    for (const row of rows) {
+      for (const a of (row.assignments || [])) {
+        if (a.rosterId && isHardOff(a.rosterId, dateKey)) {
+          ptoConflicts.push({ date: dateKey, name: a.rosterEntry?.providerName || 'Provider', location: row.location, roomNumber: a.roomNumber })
+        }
+      }
+    }
+  }
+  ptoConflicts.sort((x, y) => x.date.localeCompare(y.date))
 
   const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
   while (cells.length % 7 !== 0) cells.push(null)
@@ -1420,6 +1448,16 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             }
             color="#2563EB"
           />
+          {ptoConflicts.length > 0 && (
+            <button
+              onClick={() => setDayDetailModal(ptoConflicts[0].date)}
+              title={ptoConflicts.map(c => `${c.date.slice(5)} · ${c.name} (${c.location})`).join('\n')}
+              style={{ padding: '8px 16px', background: '#FEF2F2', border: '2px solid #EF4444', borderRadius: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}
+            >
+              <span style={{ fontSize: 17, fontWeight: 800, color: '#DC2626', lineHeight: 1 }}>⚠ {ptoConflicts.length}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Need coverage</span>
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
@@ -1768,6 +1806,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                       <div style={{ fontSize: 11, fontWeight: 700, color: sc ? sc.text : '#0F172A', marginBottom: 4 }}>
                         {filledRooms}/{totalRooms} rooms filled
                       </div>
+                      {(() => {
+                        const n = dayRows.reduce((s, row) => s + (row.assignments || []).filter(a => a.rosterId && isHardOff(a.rosterId, dateStr)).length, 0)
+                        return n > 0 ? (
+                          <div style={{ fontSize: 9.5, fontWeight: 800, color: '#fff', background: '#DC2626', borderRadius: 5, padding: '2px 6px', marginBottom: 4, display: 'inline-block' }}>
+                            ⚠ {n} PTO conflict{n > 1 ? 's' : ''} — needs coverage
+                          </div>
+                        ) : null
+                      })()}
                       {dayRows.map((row, ri) => {
                         const filled = (row.assignments || []).filter(a => a.rosterId).length
                         const required = row.roomsRequired || 1
@@ -1993,9 +2039,15 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                             </span>
                           )}
                           {assignedRosterId && assignment?.rosterEntry && (
-                            <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700, flexShrink: 0 }}>
-                              {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName}
-                            </div>
+                            isHardOff(assignedRosterId, dayDetailModal) ? (
+                              <div title="This provider was granted PTO after being scheduled — assign someone else or clear the room." style={{ fontSize: 11, color: '#DC2626', fontWeight: 800, flexShrink: 0, background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 6, padding: '2px 8px' }}>
+                                ⚠ {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName} — on PTO · needs coverage
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700, flexShrink: 0 }}>
+                                {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName}
+                              </div>
+                            )
                           )}
                           <select
                             value={assignedRosterId}

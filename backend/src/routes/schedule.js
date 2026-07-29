@@ -186,6 +186,22 @@ router.get('/month', facilityAuth, async (req, res) => {
       where: { facilityId: req.facility.id, startDate: { lt: end }, endDate: { gte: start } },
       select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
     });
+    // Approved PTO requests land in RosterAvailability (source 'PTO'), not
+    // RosterTimeOff — union them in as one-day ranges so everything that
+    // consumes `timeOff` (gray-outs, PTO-conflict flags) sees ALL granted PTO.
+    const ptoAvail = await prisma.rosterAvailability.findMany({
+      where: { facilityId: req.facility.id, source: 'PTO', available: false, date: { gte: start, lt: end } },
+      select: { id: true, rosterEntryId: true, date: true, note: true },
+    });
+    for (const p of ptoAvail) {
+      timeOff.push({
+        id: `pto-req-${p.id}`,
+        rosterEntryId: p.rosterEntryId,
+        startDate: p.date,
+        endDate: p.date,
+        reason: p.note || 'Approved PTO request',
+      });
+    }
 
     // "Maybe" days from the tokenized availability link — a provider left a
     // sticky note on an otherwise-unset day (soft/conditional). Surfaced in the
