@@ -346,6 +346,7 @@ export const facilityAPI = {
     return apiFetch(`${BASE}/roster/time-off${qs ? `?${qs}` : ''}`, { headers: facilityHeaders() })
   },
   addTimeOff: (rosterId, data) => apiFetch(`${BASE}/roster/${rosterId}/time-off`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  updateTimeOff: (timeOffId, data) => apiFetch(`${BASE}/roster/time-off/${timeOffId}`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify(data) }),
   deleteTimeOff: (timeOffId) => apiFetch(`${BASE}/roster/time-off/${timeOffId}`, { method: 'DELETE', headers: facilityHeaders() }),
   // PTO spreadsheet import — parse+match preview, then confirmed commit.
   uploadPtoSheet: async (file, year) => {

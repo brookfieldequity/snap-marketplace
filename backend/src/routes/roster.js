@@ -558,6 +558,41 @@ router.post('/:id/time-off', facilityAuth, async (req, res) => {
 });
 
 /**
+ * PUT /time-off/:timeOffId — edit a time-off entry's dates/reason. The entry
+ * stays attached to the same roster member; moving PTO between people is a
+ * delete + re-add.
+ */
+router.put('/time-off/:timeOffId', facilityAuth, async (req, res) => {
+  try {
+    const row = await prisma.rosterTimeOff.findUnique({ where: { id: req.params.timeOffId } });
+    if (!row || row.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Time-off entry not found.' });
+    }
+    const { startDate, endDate, reason } = req.body || {};
+    if (!startDate) return res.status(400).json({ error: 'startDate is required.' });
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : start;
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid date.' });
+    }
+    if (end < start) return res.status(400).json({ error: 'endDate must be on or after startDate.' });
+    const updated = await prisma.rosterTimeOff.update({
+      where: { id: row.id },
+      data: {
+        startDate: start,
+        endDate: end,
+        reason: reason === undefined ? row.reason : (String(reason || '').trim() || null),
+      },
+      select: { id: true, rosterEntryId: true, startDate: true, endDate: true, reason: true },
+    });
+    res.json({ timeOff: updated });
+  } catch (err) {
+    console.error('[roster] time-off update failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * DELETE /time-off/:timeOffId — remove a time-off entry.
  */
 router.delete('/time-off/:timeOffId', facilityAuth, async (req, res) => {

@@ -24,6 +24,7 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
   const [timeOff, setTimeOff] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  const [editing, setEditing] = useState(null)   // existing entry being edited, or null for add
   const [uploadOpen, setUploadOpen] = useState(false)
   const [form, setForm] = useState({ rosterId: '', start: '', end: '', reason: '' })
   const [saving, setSaving] = useState(false)
@@ -73,20 +74,46 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
     setMonth(m); setYear(y)
   }
   function openAdd(prefill = {}) {
+    setEditing(null)
     setForm({ rosterId: prefill.rosterId || '', start: prefill.start || monthStart, end: prefill.end || prefill.start || monthStart, reason: '' })
     setAddOpen(true)
+  }
+  // Open an existing entry for edit/delete (calendar cell or list chip click).
+  function openEdit(entry) {
+    setEditing(entry)
+    setForm({ rosterId: entry.rosterEntryId, start: entry.startDate, end: entry.endDate, reason: entry.reason || '' })
+    setAddOpen(true)
+  }
+  // Calendar cell click: an existing PTO day opens that entry; an empty day
+  // starts a new one prefilled to that person + date.
+  function onCalendarCell(rosterId, day) {
+    const clicked = iso(year, month, day)
+    const existing = (byMember[rosterId] || []).find(t => clicked >= t.startDate && clicked <= t.endDate)
+    if (existing) openEdit(existing)
+    else openAdd({ rosterId, start: clicked })
   }
   async function submitAdd() {
     if (!form.rosterId || !form.start) return alert('Pick a person and a start date.')
     setSaving(true)
     try {
-      await facilityAPI.addTimeOff(form.rosterId, { startDate: form.start, endDate: form.end || form.start, reason: form.reason || null })
-      setAddOpen(false); await load()
-    } catch (e) { alert(e.message || 'Could not add PTO') } finally { setSaving(false) }
+      const body = { startDate: form.start, endDate: form.end || form.start, reason: form.reason || null }
+      if (editing) await facilityAPI.updateTimeOff(editing.id, body)
+      else await facilityAPI.addTimeOff(form.rosterId, body)
+      setAddOpen(false); setEditing(null); await load()
+    } catch (e) { alert(e.message || (editing ? 'Could not update PTO' : 'Could not add PTO')) } finally { setSaving(false) }
   }
   async function removeRange(id) {
     if (!window.confirm('Remove this time-off range?')) return
     try { await facilityAPI.deleteTimeOff(id); await load() } catch (e) { alert(e.message) }
+  }
+  async function removeFromModal() {
+    if (!editing) return
+    if (!window.confirm('Remove this time-off range?')) return
+    setSaving(true)
+    try {
+      await facilityAPI.deleteTimeOff(editing.id)
+      setAddOpen(false); setEditing(null); await load()
+    } catch (e) { alert(e.message) } finally { setSaving(false) }
   }
 
   const showBuilder = !!featureFlags.pto_builder
@@ -134,27 +161,34 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
             />
           )}
 
-          {/* Add PTO — centered overlay so it's visible no matter where you scrolled */}
+          {/* Add / Edit PTO — centered overlay so it's visible no matter where you scrolled */}
           {addOpen && (
-            <div onClick={() => setAddOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div onClick={() => { setAddOpen(false); setEditing(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
               <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(15,23,42,0.28)' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 16 }}>Add PTO</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 16 }}>{editing ? `Edit PTO — ${nameById[form.rosterId] || ''}` : 'Add PTO'}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <Field label="Person">
-                    <select value={form.rosterId} onChange={e => setForm(f => ({ ...f, rosterId: e.target.value }))} style={{ ...ctrl, width: '100%' }}>
-                      <option value="">Select…</option>
-                      {roster.map(p => <option key={p.id} value={p.id}>{p.providerName}</option>)}
-                    </select>
-                  </Field>
+                  {!editing && (
+                    <Field label="Person">
+                      <select value={form.rosterId} onChange={e => setForm(f => ({ ...f, rosterId: e.target.value }))} style={{ ...ctrl, width: '100%' }}>
+                        <option value="">Select…</option>
+                        {roster.map(p => <option key={p.id} value={p.id}>{p.providerName}</option>)}
+                      </select>
+                    </Field>
+                  )}
                   <div style={{ display: 'flex', gap: 12 }}>
                     <Field label="First day"><input type="date" value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value, end: f.end && f.end >= e.target.value ? f.end : e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
                     <Field label="Last day"><input type="date" value={form.end} min={form.start} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
                   </div>
                   <Field label="Reason (optional)"><input value={form.reason} placeholder="Vacation, CME…" onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} style={{ ...ctrl, width: '100%' }} /></Field>
                 </div>
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 22 }}>
-                  <button onClick={() => setAddOpen(false)} style={ghostBtn}>Cancel</button>
-                  <button onClick={submitAdd} disabled={saving} style={primaryBtn}>{saving ? 'Adding…' : 'Add PTO'}</button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 22 }}>
+                  {editing && (
+                    <button onClick={removeFromModal} disabled={saving} style={{ ...ghostBtn, color: '#DC2626', borderColor: '#FECACA' }}>Remove</button>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+                    <button onClick={() => { setAddOpen(false); setEditing(null) }} style={ghostBtn}>Cancel</button>
+                    <button onClick={submitAdd} disabled={saving} style={primaryBtn}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add PTO'}</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -163,9 +197,9 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
           {loading ? (
             <div style={{ color: MUTED, textAlign: 'center', padding: '48px 0' }}>Loading…</div>
           ) : manageView === 'calendar' ? (
-            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={(rosterId, day) => openAdd({ rosterId, start: iso(year, month, day) })} />
+            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} />
           ) : (
-            <ListView members={membersWithPto} byMember={byMember} typeById={typeById} onAdd={(rosterId) => openAdd({ rosterId })} onRemove={removeRange} />
+            <ListView members={membersWithPto} byMember={byMember} typeById={typeById} onAdd={(rosterId) => openAdd({ rosterId })} onEdit={openEdit} onRemove={removeRange} />
           )}
         </>
       )}
@@ -381,7 +415,7 @@ function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, on
                 <div
                   key={d}
                   onClick={() => onCell(p.id, d)}
-                  title={off ? 'On PTO — click to add another range' : 'Click to add PTO'}
+                  title={off ? 'On PTO — click to edit or remove' : 'Click to add PTO'}
                   style={{ ...cellBase, cursor: 'pointer', borderBottom: `1px solid ${LINE}`, background: off ? AMBER : (wknd ? '#F8FAFC' : '#fff'), transition: 'background 0.1s' }}
                 >{off ? <span style={{ fontSize: 11 }}>🌴</span> : ''}</div>
               )
@@ -394,7 +428,7 @@ function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, on
 }
 
 // ── List: grouped by member, range entry ───────────────────────────────────────
-function ListView({ members, byMember, typeById, onAdd, onRemove }) {
+function ListView({ members, byMember, typeById, onAdd, onEdit, onRemove }) {
   if (members.length === 0) return <Empty>No PTO entered for this month yet. Use “+ Add PTO” to enter it.</Empty>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -410,7 +444,9 @@ function ListView({ members, byMember, typeById, onAdd, onRemove }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {(byMember[p.id] || []).sort((a, b) => a.startDate.localeCompare(b.startDate)).map(r => (
               <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: AMBER_BG, border: `1px solid ${AMBER}`, borderRadius: 8, padding: '6px 8px 6px 11px', fontSize: 13, color: AMBER_INK }}>
-                <strong>{fmtRange(r)}</strong>{r.reason ? <span style={{ color: '#92826A' }}>· {r.reason}</span> : null}
+                <span onClick={() => onEdit(r)} title="Click to edit" style={{ cursor: 'pointer' }}>
+                  <strong>{fmtRange(r)}</strong>{r.reason ? <span style={{ color: '#92826A' }}> · {r.reason}</span> : null}
+                </span>
                 <button onClick={() => onRemove(r.id)} aria-label="Remove" style={{ border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
               </span>
             ))}
