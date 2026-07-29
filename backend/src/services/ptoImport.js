@@ -4,13 +4,25 @@
 // into per-person date ranges, then fuzzy-matches the names against the
 // internal roster. Used by POST /api/roster/time-off/upload-preview.
 //
-// Two layouts are auto-detected, per sheet (a workbook may mix them across
+// Three layouts are auto-detected, per sheet (a workbook may mix them across
 // tabs, e.g. one tab per month):
-//   RANGE — one row per PTO entry: a name column + start (+ optional end,
-//           reason) columns, or a single "date" column for one-day rows.
-//   GRID  — names down the first column, dates across the header row (full
-//           dates, or day numbers 1–31 with the month/year read from the
-//           sheet name or a title cell). Any marked cell = a PTO day.
+//   RANGE       — one row per PTO entry: a name column + start (+ optional
+//                 end, reason) columns, or a single "date" column for
+//                 one-day rows.
+//   GRID        — names down the first column, dates across the header row
+//                 (full dates, or day numbers 1–31 with the month/year read
+//                 from the sheet name or a title cell). Any marked cell = a
+//                 PTO day.
+//   ROSTER-LIST — dates across the header row, and the people OFF each day
+//                 listed vertically inside that day's column (QGenda-style
+//                 "Assignments by Coverages" export). Section labels in the
+//                 leftmost column scope the rows: only PTO-ish sections
+//                 import; wait-list sections ("PTO WL") are skipped.
+//
+// When a workbook contains a ROSTER-LIST sheet, single-date+reason RANGE
+// sheets (e.g. a "Notes" tab: Staff / Date / Notes) become annotation-only:
+// they attach reasons to days the roster-list already established, but never
+// create days — those tabs mix confirmed PTO with mere requests.
 //
 // Everything lands as inclusive [startDate, endDate] ISO ranges — the same
 // shape RosterTimeOff stores — so the import writes the one table every
@@ -66,8 +78,17 @@ function parseDateCell(val, defaultYear) {
     const iso = isoFromExcelSerial(val);
     return iso ? { iso, assumedYear: false } : null;
   }
-  const s = String(val).trim();
+  let s = String(val).trim();
   if (!s || s.length > 40) return null;
+
+  // Strip a leading/trailing weekday name — "7/01 Wed", "Wed 7/01",
+  // "Friday, 7/10" — schedule exports commonly decorate dates this way.
+  const WEEKDAY = /(?:sun|mon|tue(?:s)?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?)(?:day)?\.?/;
+  s = s
+    .replace(new RegExp(`^${WEEKDAY.source}[,\\s]+`, 'i'), '')
+    .replace(new RegExp(`[,\\s]+${WEEKDAY.source}$`, 'i'), '')
+    .trim();
+  if (!s) return null;
 
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) {
@@ -176,8 +197,9 @@ function getPerson(people, rawName) {
   return people.get(key);
 }
 
-function parseRangeSheet(rows, headerRowIdx, cols, defaultYear, people, warnings, state, sheetName) {
+function parseRangeSheet(rows, headerRowIdx, cols, defaultYear, people, warnings, state, sheetName, annotateOnly = false) {
   let assumedYearRows = 0;
+  let annotateMisses = 0;
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r] || [];
     const rawName = String(row[cols.name] == null ? '' : row[cols.name]).trim();
@@ -208,6 +230,23 @@ function parseRangeSheet(rows, headerRowIdx, cols, defaultYear, people, warnings
       ? String(row[cols.reason]).trim().slice(0, 120)
       : null;
 
+    // Annotation mode: only decorate days another sheet already imported —
+    // never create people or days from a notes tab.
+    if (annotateOnly) {
+      const key = rawName.toLowerCase().replace(/\s+/g, ' ');
+      const person = people.get(key);
+      let hit = false;
+      const sD = new Date(start.iso + 'T00:00:00Z');
+      const eD = new Date(end.iso + 'T00:00:00Z');
+      for (let t = sD.getTime(); t <= eD.getTime() && person; t += 86400000) {
+        const iso = new Date(t).toISOString().slice(0, 10);
+        const day = person.days.get(iso);
+        if (day) { hit = true; if (!day.reason && reason) day.reason = reason; }
+      }
+      if (!hit) annotateMisses++;
+      continue;
+    }
+
     const person = getPerson(people, rawName);
     const startD = new Date(start.iso + 'T00:00:00Z');
     const endD = new Date(end.iso + 'T00:00:00Z');
@@ -222,6 +261,63 @@ function parseRangeSheet(rows, headerRowIdx, cols, defaultYear, people, warnings
   }
   if (assumedYearRows > 0) {
     warnings.push(`"${sheetName}": ${assumedYearRows} row(s) had dates without a year — assumed ${defaultYear}.`);
+  }
+  if (annotateMisses > 0) {
+    warnings.push(`"${sheetName}": ${annotateMisses} note row(s) referenced a person/day not on the PTO sheet — notes only annotate, so they were not imported as PTO.`);
+  }
+}
+
+// ROSTER-LIST layout: dates across the header, people listed vertically under
+// each date column. Section labels in `labelCol` scope what the rows mean —
+// only sections that look like PTO import; wait-list sections are skipped.
+const PTO_SECTION = /pto|time\s*off|vacation/i;
+const WAITLIST_SECTION = /\bw\.?l\b|wait/i;
+
+function parseRosterListSheet(rows, headerRowIdx, dateCols, labelCol, people, warnings, state, sheetName) {
+  let section = null;
+  let waitlisted = 0;
+  let otherSection = 0;
+  const skippedSections = new Set();
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const label = String(row[labelCol] == null ? '' : row[labelCol]).trim();
+    if (label) section = label;
+    const isPto = section == null || (PTO_SECTION.test(section) && !WAITLIST_SECTION.test(section));
+    const isWaitlist = section != null && PTO_SECTION.test(section) && WAITLIST_SECTION.test(section);
+
+    for (const { col, iso } of dateCols) {
+      const val = row[col];
+      if (val == null) continue;
+      const text = String(val).trim();
+      if (!text || !/[a-zA-Z]/.test(text)) continue;
+      const lower = text.toLowerCase();
+      if (GRID_IGNORE.has(lower) || GRID_MARKERS.has(lower)) continue;
+      let name = text.replace(/[*#†]+$/, '').trim();
+      // "BFerla (5)" / "JJackson (10hr)" — partial-day hour annotations.
+      // Same person; keep the parenthetical as the day's note.
+      let cellNote = null;
+      const suffix = name.match(/^(.*?)\s*\(([^)]{1,20})\)$/);
+      if (suffix && suffix[1].trim()) {
+        name = suffix[1].trim();
+        cellNote = suffix[2].trim();
+      }
+      if (!name || NON_PERSON_ROW.test(name)) continue;
+      if (isPto) {
+        addDay(getPerson(people, name), iso, cellNote, state);
+      } else if (isWaitlist) {
+        waitlisted++;
+        skippedSections.add(section);
+      } else {
+        otherSection++;
+        skippedSections.add(section);
+      }
+    }
+  }
+  if (waitlisted > 0) {
+    warnings.push(`"${sheetName}": ${waitlisted} wait-list entr${waitlisted === 1 ? 'y' : 'ies'} skipped (${[...skippedSections].filter((s) => WAITLIST_SECTION.test(s)).join(', ')}) — wait-listed days are not approved PTO.`);
+  }
+  if (otherSection > 0) {
+    warnings.push(`"${sheetName}": ${otherSection} entr${otherSection === 1 ? 'y' : 'ies'} in non-PTO section(s) skipped (${[...skippedSections].filter((s) => !WAITLIST_SECTION.test(s)).join(', ')}).`);
   }
 }
 
@@ -246,16 +342,18 @@ function parseGridSheet(rows, headerRowIdx, dateCols, nameCol, people, state) {
   }
 }
 
-// Analyze one sheet: find the header row and layout, then parse.
-function parseSheet(ws, sheetName, defaultYear, people, warnings, state) {
+// Analyze one sheet: find the header row and layout. Returns an execution
+// plan (or null) — plans run in two phases so roster-list sheets establish
+// days before annotation-only note sheets decorate them.
+function detectSheet(ws, sheetName, defaultYear, warnings) {
   const ref = ws && ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : null;
-  if (!ref) return;
+  if (!ref) return null;
   if (ref.e.r - ref.s.r + 1 > MAX_ROWS || ref.e.c - ref.s.c + 1 > MAX_COLS) {
     warnings.push(`Sheet "${sheetName}" is too large (${ref.e.r - ref.s.r + 1} rows × ${ref.e.c - ref.s.c + 1} cols) — skipped.`);
-    return;
+    return null;
   }
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-  if (rows.length === 0) return;
+  if (rows.length === 0) return null;
 
   const ctx = detectMonthContext(sheetName, rows, defaultYear);
 
@@ -269,26 +367,31 @@ function parseSheet(ws, sheetName, defaultYear, people, warnings, state) {
       const startCol = findCol(headers, START_PATTERNS);
       const dateCol = findCol(headers, DATE_PATTERNS);
       if (startCol !== -1 || dateCol !== -1) {
-        parseRangeSheet(rows, h, {
+        const cols = {
           name: nameCol,
           start: startCol,
           end: findCol(headers, END_PATTERNS),
           date: dateCol,
           reason: findCol(headers, REASON_PATTERNS),
-        }, defaultYear, people, warnings, state, sheetName);
-        return;
+        };
+        // Single-date + reason sheets ("Notes" tabs) can act as annotations
+        // when a roster-list sheet is present in the same workbook.
+        return { kind: 'range', rows, headerRow: h, cols, sheetName, annotatable: startCol === -1 && cols.reason !== -1 };
       }
     }
 
-    // GRID layout? — ≥3 header cells that are dates (or day numbers 1–31).
+    // Date-header layout (GRID or ROSTER-LIST)? — ≥3 header cells that are
+    // dates (or day numbers 1–31).
     const dateCols = [];
     let dayNumberCols = 0;
+    let assumedYearCols = 0;
     for (let c = 0; c < headers.length; c++) {
       const v = headers[c];
       if (v == null || v === '') continue;
       const asDate = parseDateCell(v, ctx.year);
       if (asDate && !(typeof v === 'number' && v <= 31)) {
         dateCols.push({ col: c, iso: asDate.iso });
+        if (asDate.assumedYear) assumedYearCols++;
         continue;
       }
       const n = typeof v === 'number' ? v : (String(v).trim().match(/^\d{1,2}$/) ? +String(v).trim() : NaN);
@@ -302,21 +405,66 @@ function parseSheet(ws, sheetName, defaultYear, people, warnings, state) {
       if (dayNumberCols > 0) {
         if (ctx.month == null) {
           warnings.push(`Sheet "${sheetName}" looks like a day-number grid but no month name was found on the tab or title — skipped. Rename the tab (e.g. "March ${defaultYear}") and re-upload.`);
-          return;
+          return null;
         }
         resolved = dateCols
           .map((dc) => dc.iso ? dc : { col: dc.col, iso: isoFromYmd(ctx.year, ctx.month, dc.day) })
           .filter((dc) => dc.iso);
       }
-      // Name column: leftmost column before the first date column.
       const firstDateCol = Math.min(...resolved.map((d) => d.col));
+      const labelCol = firstDateCol > 0 ? 0 : -1;
+
+      // GRID vs ROSTER-LIST: a grid has names down the label column on
+      // roughly every row and short markers (x / 1 / 8) under the dates; a
+      // roster-list has a mostly-empty label column (a few section labels
+      // like "PTO" / "PTO WL") and name-like text under the dates.
+      let nameLike = 0;
+      let markLike = 0;
+      let labelFilled = 0;
+      let bodyRows = 0;
+      for (let r = h + 1; r < Math.min(rows.length, h + 1 + 300); r++) {
+        const row = rows[r] || [];
+        let any = false;
+        for (const { col } of resolved) {
+          const val = row[col];
+          if (val == null) continue;
+          const text = String(val).trim();
+          if (!text) continue;
+          any = true;
+          const lower = text.toLowerCase();
+          if (!GRID_IGNORE.has(lower) && !GRID_MARKERS.has(lower) && /[a-zA-Z]/.test(text) && text.length >= 2 && !/^\d+$/.test(text)) nameLike++;
+          else markLike++;
+        }
+        const hasLabel = labelCol !== -1 && row[labelCol] != null && String(row[labelCol]).trim() !== '';
+        if (hasLabel) labelFilled++;
+        if (any || hasLabel) bodyRows++;
+      }
+      const isRosterList = labelCol !== -1 && nameLike >= 3 && nameLike > markLike && labelFilled <= Math.max(2, bodyRows * 0.5);
+      if (isRosterList) {
+        if (assumedYearCols > 0) {
+          warnings.push(`"${sheetName}": column dates had no year — assumed ${ctx.year}.`);
+        }
+        return { kind: 'rosterlist', rows, headerRow: h, dateCols: resolved, labelCol, sheetName };
+      }
+
+      // Name column: leftmost column before the first date column.
       const gridNameCol = nameCol !== -1 && nameCol < firstDateCol ? nameCol : (firstDateCol > 0 ? 0 : -1);
       if (gridNameCol === -1) continue;
-      parseGridSheet(rows, h, resolved, gridNameCol, people, state);
-      return;
+      return { kind: 'grid', rows, headerRow: h, dateCols: resolved, nameCol: gridNameCol, sheetName };
     }
   }
   warnings.push(`Sheet "${sheetName}": couldn't find a name + date layout — skipped.`);
+  return null;
+}
+
+function executePlan(plan, defaultYear, people, warnings, state, annotateOnly = false) {
+  if (plan.kind === 'range') {
+    parseRangeSheet(plan.rows, plan.headerRow, plan.cols, defaultYear, people, warnings, state, plan.sheetName, annotateOnly);
+  } else if (plan.kind === 'grid') {
+    parseGridSheet(plan.rows, plan.headerRow, plan.dateCols, plan.nameCol, people, state);
+  } else if (plan.kind === 'rosterlist') {
+    parseRosterListSheet(plan.rows, plan.headerRow, plan.dateCols, plan.labelCol, people, warnings, state, plan.sheetName);
+  }
 }
 
 // ── workbook entry point ─────────────────────────────────────────────────────
@@ -353,8 +501,21 @@ function parsePtoWorkbook(buffer, { defaultYear } = {}) {
   if (wb.SheetNames.length > MAX_SHEETS) {
     warnings.push(`Workbook has ${wb.SheetNames.length} tabs — only the first ${MAX_SHEETS} were read.`);
   }
+  const plans = [];
   for (const name of sheetNames) {
-    parseSheet(wb.Sheets[name], name, year, people, warnings, state);
+    const plan = detectSheet(wb.Sheets[name], name, year, warnings);
+    if (plan) plans.push(plan);
+  }
+  // With a roster-list sheet present, single-date+reason "Notes" tabs only
+  // annotate — they mix confirmed PTO with requests, so they must not create
+  // days on their own. Without one, they import as ordinary range sheets.
+  const hasRosterList = plans.some((p) => p.kind === 'rosterlist');
+  const annotations = plans.filter((p) => hasRosterList && p.kind === 'range' && p.annotatable);
+  for (const plan of plans) {
+    if (!annotations.includes(plan)) executePlan(plan, year, people, warnings, state);
+  }
+  for (const plan of annotations) {
+    executePlan(plan, year, people, warnings, state, true);
   }
   if (state.overflow) {
     warnings.push(`Workbook contains more than ${MAX_DATES_PER_WORKBOOK.toLocaleString()} PTO days — extra entries were dropped.`);
@@ -404,6 +565,37 @@ function scoreNames(aTokens, bTokens) {
   return overlap > 0 ? 0.5 * (overlap / Math.max(aSet.size, bSet.size)) : 0;
 }
 
+// Score a compressed single-word code — "HKhan", "MHaver", "RG", "Pesce" —
+// against a roster entry's [first..., last] tokens. Schedule exports often
+// compact names to first-initial + last-name(-prefix), bare last names, or
+// bare initials. 0 when the code doesn't plausibly abbreviate this person.
+function scoreCode(rawSource, entryTokens) {
+  if (entryTokens.length === 0) return 0;
+  const s = String(rawSource || '').trim();
+  if (!/^[A-Za-z.'-]+$/.test(s)) return 0;
+  const firstTok = entryTokens[0];
+  const lastTok = entryTokens[entryTokens.length - 1];
+  const lower = s.toLowerCase().replace(/[.'-]/g, '');
+
+  // Bare last name: "Pesce", "McMurray"
+  if (lower === lastTok) return 0.75;
+  // Last-name prefix (≥4 chars): "Haver" → Haverkamp
+  if (lower.length >= 4 && lastTok.startsWith(lower)) return 0.7;
+
+  // First-initial + last-name(-prefix): "HKhan", "MHaver", "JEpst"
+  const m = s.match(/^([A-Za-z])[.']?([A-Za-z'-]{2,})$/);
+  if (m && firstTok[0] === m[1].toLowerCase()) {
+    const rest = m[2].toLowerCase().replace(/['-]/g, '');
+    if (rest === lastTok) return 0.9;
+    if (rest.length >= 3 && lastTok.startsWith(rest)) return 0.85;
+  }
+
+  // Bare initials: "RG" — deliberately below the auto-match threshold so the
+  // coordinator confirms; two-letter codes are too ambiguous to trust.
+  if (/^[A-Za-z]{2}$/.test(s) && firstTok[0] === lower[0] && lastTok[0] === lower[1]) return 0.65;
+  return 0;
+}
+
 /**
  * matchToRoster(sourceName, rosterEntries) — rosterEntries: [{id, providerName}].
  * Returns { rosterId|null, confidence, candidates: [{id, name, score}] }.
@@ -411,8 +603,14 @@ function scoreNames(aTokens, bTokens) {
  */
 function matchToRoster(sourceName, rosterEntries) {
   const src = nameTokens(sourceName);
+  const singleWord = /^\S+$/.test(String(sourceName || '').trim());
   const scored = rosterEntries
-    .map((e) => ({ id: e.id, name: e.providerName, score: scoreNames(src, e._tokens || nameTokens(e.providerName)) }))
+    .map((e) => {
+      const tokens = e._tokens || nameTokens(e.providerName);
+      let score = scoreNames(src, tokens);
+      if (singleWord) score = Math.max(score, scoreCode(sourceName, tokens));
+      return { id: e.id, name: e.providerName, score };
+    })
     .filter((c) => c.score >= 0.5)
     .sort((x, y) => y.score - x.score)
     .slice(0, 5);

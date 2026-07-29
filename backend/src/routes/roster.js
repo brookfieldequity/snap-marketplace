@@ -591,7 +591,7 @@ router.post('/time-off/upload-preview', facilityAuth, (req, res) => {
       const { people, warnings } = ptoImportService.parsePtoWorkbook(req.file.buffer, { defaultYear });
       if (people.length === 0) {
         return res.status(422).json({
-          error: 'No PTO entries found. Supported layouts: one row per PTO range (Name / Start / End columns), or a grid with names down the side and dates across the top.',
+          error: 'No PTO entries found. Supported layouts: one row per PTO range (Name / Start / End columns), a grid with names down the side and dates across the top, or a coverage export with dates across the top and the people off each day listed in that day\'s column.',
           warnings,
         });
       }
