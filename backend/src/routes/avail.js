@@ -132,6 +132,10 @@ router.get('/:token', async (req, res) => {
 // Body: { dates: [{ date: "YYYY-MM-DD", available: bool, note?: string }] }
 // Returns 410 Gone if past deadline.
 router.post('/:token/submit', async (req, res) => {
+  // The public reviewer demo page never accepts submissions.
+  if (req.params.token === 'demo') {
+    return res.status(400).json({ error: 'This is a demo page — submissions are disabled.' });
+  }
   try {
     const { token } = req.params;
     const { dates, consent } = req.body || {};
