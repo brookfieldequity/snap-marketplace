@@ -242,6 +242,8 @@ export const facilityAPI = {
   // Internal Roster
   getRoster: () => apiFetch(`${BASE}/roster`, { headers: facilityHeaders() }),
   getPtoSummary: (year) => apiFetch(`${BASE}/roster/pto-summary${year ? `?year=${year}` : ''}`, { headers: facilityHeaders() }),
+  getPtoReport: (year) => apiFetch(`${BASE}/roster/pto-report${year ? `?year=${year}` : ''}`, { headers: facilityHeaders() }),
+  updatePtoConfig: (rosterId, data) => apiFetch(`${BASE}/roster/${rosterId}/pto-config`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getRosterLocations: () => apiFetch(`${BASE}/roster/locations`, { headers: facilityHeaders() }),
   createRosterEntry: (data) => apiFetch(`${BASE}/roster`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   updateRosterEntry: (id, data) => apiFetch(`${BASE}/roster/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),

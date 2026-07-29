@@ -997,6 +997,12 @@ model InternalRosterEntry {
   // full-time); true/false = explicit admin override. Per the locked spec, all
   // full-time/W-2 staff are eligible by default; per-diems only when flagged.
   ptoEligible   Boolean?
+  // Hours docked per PTO day (payroll hours). null = 8. A CRNA on 4×10s takes
+  // 10-hour PTO days; their balance draws down faster. Set in PTO → Reports.
+  ptoHoursPerDay    Float?
+  // PTO hours carried into the current year (can be negative). Set in
+  // PTO → Reports; accrual + balance math lives in the pto-report endpoint.
+  ptoCarryOverHours Float?
   // Manual seniority rank for the future PTO Builder tie-break (1 = most
   // senior). Unused by Feature A; added now so the profile card holds it.
   seniorityRank Int?

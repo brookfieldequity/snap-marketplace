@@ -145,7 +145,7 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
               <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, minWidth: 150, textAlign: 'center' }}>{MONTHS[month]} {year}</div>
               <button onClick={() => shiftMonth(1)} style={navBtn}>›</button>
             </div>
-            <Segmented value={manageView} onChange={setManageView} options={[{ v: 'calendar', label: 'Calendar' }, { v: 'list', label: 'List' }]} />
+            <Segmented value={manageView} onChange={setManageView} options={[{ v: 'calendar', label: 'Calendar' }, { v: 'list', label: 'List' }, { v: 'reports', label: 'Reports' }]} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
               <button onClick={() => setUploadOpen(true)} style={{ ...ghostBtn, padding: '10px 16px', fontSize: 14 }}>⬆ Upload spreadsheet</button>
               <button onClick={() => openAdd()} style={primaryBtn}>+ Add PTO</button>
@@ -198,6 +198,8 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
             <div style={{ color: MUTED, textAlign: 'center', padding: '48px 0' }}>Loading…</div>
           ) : manageView === 'calendar' ? (
             <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} />
+          ) : manageView === 'reports' ? (
+            <PtoReportsView initialYear={year} />
           ) : (
             <ListView members={membersWithPto} byMember={byMember} typeById={typeById} onAdd={(rosterId) => openAdd({ rosterId })} onEdit={openEdit} onRemove={removeRange} />
           )}
@@ -453,6 +455,134 @@ function ListView({ members, byMember, typeById, onAdd, onEdit, onRemove }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Reports: per-provider PTO rules, accrual, and balances ─────────────────────
+// The calculation home: annual PTO days, hours docked per PTO day (a 4×10 CRNA
+// loses 10 hrs per PTO day, not 8), carryover hours, and live accrual/balance
+// math. Booked/used day counts come straight from the PTO source of truth —
+// never typed in. Replaces the group's "Off Assignment Totals" workbook
+// (minus sick / transfer / buy-in, per Matt).
+function PtoReportsView({ initialYear }) {
+  const [rptYear, setRptYear] = useState(initialYear)
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState(null)
+  const [drafts, setDrafts] = useState({}) // rosterId -> { annualDays, hoursPerDay, carryOverHours }
+  const [eligibleOnly, setEligibleOnly] = useState(true)
+
+  const loadReport = useCallback(async (y) => {
+    setLoading(true)
+    try { setReport(await facilityAPI.getPtoReport(y)) }
+    catch (e) { console.error(e); alert(e.message || 'Could not load the PTO report.') }
+    finally { setLoading(false) }
+  }, [])
+  useEffect(() => { loadReport(rptYear) }, [rptYear, loadReport])
+
+  async function saveConfig(rowId, patch) {
+    setSavingId(rowId)
+    try {
+      await facilityAPI.updatePtoConfig(rowId, patch)
+      setDrafts(d => { const n = { ...d }; delete n[rowId]; return n })
+      await loadReport(rptYear)
+    } catch (e) { alert(e.message || 'Could not save.') } finally { setSavingId(null) }
+  }
+
+  const rows = (report?.rows || []).filter(r => !eligibleOnly || r.eligible)
+  const fmtH = (n) => (n < 0 ? `−${Math.abs(n)}` : String(n))
+  const num = { width: 64, padding: '5px 7px', border: `1px solid ${LINE}`, borderRadius: 7, fontSize: 12.5, textAlign: 'right' }
+  const th = { padding: '9px 10px', fontSize: 10.5, fontWeight: 800, color: SLATE, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${LINE}`, background: '#F8FAFC', position: 'sticky', top: 0 }
+  const td = { padding: '7px 10px', fontSize: 12.5, color: '#334155', textAlign: 'right', borderBottom: `1px solid #F1F5F9`, whiteSpace: 'nowrap' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => setRptYear(y => y - 1)} style={navBtn}>‹</button>
+          <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, minWidth: 60, textAlign: 'center' }}>{rptYear}</div>
+          <button onClick={() => setRptYear(y => y + 1)} style={navBtn}>›</button>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: SLATE, cursor: 'pointer' }}>
+          <input type="checkbox" checked={eligibleOnly} onChange={e => setEligibleOnly(e.target.checked)} />
+          PTO-eligible only
+        </label>
+        {report && <div style={{ fontSize: 11.5, color: MUTED }}>Accrual through today ({Math.round((report.elapsed || 0) * 100)}% of {rptYear}) · booked days come live from the PTO calendar</div>}
+      </div>
+
+      {loading ? (
+        <div style={{ color: MUTED, textAlign: 'center', padding: '48px 0' }}>Loading…</div>
+      ) : rows.length === 0 ? (
+        <Empty>No {eligibleOnly ? 'PTO-eligible ' : ''}roster members.</Empty>
+      ) : (
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, overflow: 'auto', background: '#fff', maxHeight: 'calc(100vh - 280px)' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 980 }}>
+            <thead>
+              <tr>
+                <th style={{ ...th, textAlign: 'left', position: 'sticky', left: 0, zIndex: 2 }}>Provider</th>
+                <th style={th}>Annual days</th>
+                <th style={th} title="Hours docked per PTO day — 8 standard; 10 for a 4×10 schedule">Hrs / PTO day</th>
+                <th style={th} title="Hours carried into this year (can be negative)">Carryover hrs</th>
+                <th style={th} title="Annual days × hrs/day, accrued linearly through today">Accrued hrs</th>
+                <th style={th} title="Weekday PTO days booked this year (past + future) from the PTO calendar">Booked days</th>
+                <th style={th} title="Booked days on or before today">Used days</th>
+                <th style={th} title="Carryover + accrued − booked×hrs/day">Balance hrs</th>
+                <th style={th}>Balance days</th>
+                <th style={th} title="Where the year lands if nothing else is booked: carryover + full annual − booked">Year-end hrs</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const d = drafts[r.id] || {}
+                const dirty = d.annualDays !== undefined || d.hoursPerDay !== undefined || d.carryOverHours !== undefined
+                const negBal = r.balanceHours < 0
+                return (
+                  <tr key={r.id} style={{ opacity: r.eligible ? 1 : 0.55 }}>
+                    <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#fff', fontWeight: 700, color: NAVY }}>
+                      {r.providerName}
+                      <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 500 }}> · {r.providerType === 'ANESTHESIOLOGIST' ? 'MD' : r.providerType || ''}{r.eligible ? '' : ' · not eligible'}</span>
+                    </td>
+                    <td style={td}>
+                      <input type="number" min="0" max="366" value={d.annualDays !== undefined ? d.annualDays : r.annualDays} onChange={e => setDrafts(x => ({ ...x, [r.id]: { ...x[r.id], annualDays: e.target.value } }))} style={{ ...num, background: r.annualDaysIsDefault && d.annualDays === undefined ? '#F8FAFC' : '#fff' }} title={r.annualDaysIsDefault ? 'System default — type to override' : 'Per-provider override'} />
+                    </td>
+                    <td style={td}>
+                      <input type="number" min="1" max="24" step="0.5" value={d.hoursPerDay !== undefined ? d.hoursPerDay : r.hoursPerDay} onChange={e => setDrafts(x => ({ ...x, [r.id]: { ...x[r.id], hoursPerDay: e.target.value } }))} style={num} />
+                    </td>
+                    <td style={td}>
+                      <input type="number" step="0.1" value={d.carryOverHours !== undefined ? d.carryOverHours : r.carryOverHours} onChange={e => setDrafts(x => ({ ...x, [r.id]: { ...x[r.id], carryOverHours: e.target.value } }))} style={{ ...num, width: 72 }} />
+                    </td>
+                    <td style={td}>{fmtH(r.accruedHours)}</td>
+                    <td style={td}>{r.bookedDays}</td>
+                    <td style={td}>{r.usedDays}</td>
+                    <td style={{ ...td, fontWeight: 800, color: negBal ? '#DC2626' : '#047857' }}>{fmtH(r.balanceHours)}</td>
+                    <td style={{ ...td, fontWeight: 700, color: negBal ? '#DC2626' : '#047857' }}>{fmtH(r.balanceDays)}</td>
+                    <td style={{ ...td, color: r.yearEndHours < 0 ? '#DC2626' : '#334155' }}>{fmtH(r.yearEndHours)}</td>
+                    <td style={td}>
+                      {dirty && (
+                        <button
+                          disabled={savingId === r.id}
+                          onClick={() => saveConfig(r.id, {
+                            ...(d.annualDays !== undefined ? { ptoDaysAnnual: d.annualDays === '' ? null : parseInt(d.annualDays, 10) } : {}),
+                            ...(d.hoursPerDay !== undefined ? { ptoHoursPerDay: d.hoursPerDay === '' ? null : Number(d.hoursPerDay) } : {}),
+                            ...(d.carryOverHours !== undefined ? { ptoCarryOverHours: d.carryOverHours === '' ? null : Number(d.carryOverHours) } : {}),
+                          })}
+                          style={{ ...primaryBtn, padding: '5px 12px', fontSize: 11.5 }}
+                        >{savingId === r.id ? 'Saving…' : 'Save'}</button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ marginTop: 10, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+        Balance = carryover + accrued-to-date − (booked days × hrs/PTO day). Negative (red) means booked ahead of accrual.
+        Year-end shows where the provider lands if nothing else is booked. Weekends never consume PTO.
+      </div>
     </div>
   )
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { facilityAPI } from '../../api.js'
 import NpiReviewModal from './NpiReviewModal.jsx'
-import TimeOffModal from './TimeOffModal.jsx'
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
@@ -202,8 +201,6 @@ export default function InternalRosterPage({ onNavigate }) {
   // NPI review queue (from multi-sheet imports)
   const [npiReviewRows, setNpiReviewRows] = useState([])
   const [showNpiReview, setShowNpiReview] = useState(false)
-  const [timeOffMember, setTimeOffMember] = useState(null) // roster member whose PTO modal is open
-  const [ptoSummary, setPtoSummary] = useState({}) // { [rosterEntryId]: { annual, granted, used, eligible } }
   // Credentialing-invite modal
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteSel, setInviteSel] = useState({}) // { [rosterId]: true }
@@ -222,14 +219,12 @@ export default function InternalRosterPage({ onNavigate }) {
   async function load() {
     setLoading(true)
     try {
-      const [data, sites, pto] = await Promise.all([
+      const [data, sites] = await Promise.all([
         facilityAPI.getRoster(),
         facilityAPI.getRosterLocations().catch(() => ({ locations: [] })),
-        facilityAPI.getPtoSummary().catch(() => ({ summary: {} })),
       ])
       setRoster(Array.isArray(data) ? data : data.roster || [])
       setSiteList(sites.locations || [])
-      setPtoSummary(pto.summary || {})
     } catch (e) {
       setError(e.message)
     } finally {
@@ -1153,34 +1148,12 @@ export default function InternalRosterPage({ onNavigate }) {
                   </div>
                 )}
 
-                {(() => {
-                  // PTO counter — only for PTO-eligible members (W-2 / full-time
-                  // by default). Three figures: annual allotment, granted
-                  // (booked this year), used so far (elapsed). Days are weekdays.
-                  const pto = ptoSummary[p.id]
-                  if (!pto || !pto.eligible) return null
-                  const remaining = pto.annual - pto.granted
-                  return (
-                    <div style={{ fontSize: 11, color: '#475569', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 10px' }}>
-                      <div style={{ fontWeight: 700, color: '#334155', marginBottom: 2 }}>🌴 PTO ({new Date().getUTCFullYear()})</div>
-                      <span><strong>{pto.annual}</strong> annual</span>
-                      <span style={{ color: '#CBD5E1' }}> · </span>
-                      <span><strong>{pto.granted}</strong> granted</span>
-                      <span style={{ color: '#CBD5E1' }}> · </span>
-                      <span><strong>{pto.used}</strong> used</span>
-                      <span style={{ color: '#CBD5E1' }}> · </span>
-                      <span style={{ color: remaining < 0 ? '#DC2626' : '#059669', fontWeight: 600 }}>{remaining} left</span>
-                    </div>
-                  )
-                })()}
-
+                {/* PTO moved off the roster card — enter/adjust days on the PTO
+                    tab, rules + balances in PTO → Reports. */}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                     ✏️ Edit
-                  </button>
-                  <button onClick={() => setTimeOffMember(p)} style={{ padding: '6px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#B45309' }}>
-                    🌴 Time Off
                   </button>
                   {!p.snapAccountLinked && (
                     <button
@@ -1346,18 +1319,8 @@ export default function InternalRosterPage({ onNavigate }) {
               <input style={inputStyle} type="date" value={form.licenseExpiration} onChange={(e) => setF('licenseExpiration', e.target.value)} />
             </Field>
 
-            {/* PTO — eligibility + annual allotment (counter is shown on the card). */}
-            <div style={{ gridColumn: '1 / -1', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: 0.4 }}>🌴 PTO</div>
-            <Field label="PTO Eligible">
-              <select style={inputStyle} value={form.ptoEligible} onChange={(e) => setF('ptoEligible', e.target.value)}>
-                <option value="">— Auto (W-2 / full-time) —</option>
-                <option value="YES">Eligible</option>
-                <option value="NO">Not eligible</option>
-              </select>
-            </Field>
-            <Field label="Annual PTO Days">
-              <input style={inputStyle} type="number" min="0" value={form.ptoDaysAnnual} onChange={(e) => setF('ptoDaysAnnual', e.target.value)} placeholder="Default 20" />
-            </Field>
+            {/* PTO config moved to PTO → Reports (rules, allotments, balances).
+                The form still passes existing values through untouched. */}
             <Field label="Seniority Rank">
               <input style={inputStyle} type="number" min="1" value={form.seniorityRank} onChange={(e) => setF('seniorityRank', e.target.value)} placeholder="1 = most senior (optional)" />
             </Field>
@@ -1664,10 +1627,6 @@ export default function InternalRosterPage({ onNavigate }) {
           onClose={() => { setShowNpiReview(false); loadNpiReview() }}
           onAllResolved={() => { setShowNpiReview(false); loadNpiReview() }}
         />
-      )}
-
-      {timeOffMember && (
-        <TimeOffModal member={timeOffMember} onClose={() => setTimeOffMember(null)} />
       )}
 
       {claimCodeModal && (

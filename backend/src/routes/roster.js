@@ -302,6 +302,124 @@ router.get('/pto-summary', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /pto-report?year=YYYY — the PTO Reports tab: per-provider allotment,
+// accrual, usage, and balances in payroll HOURS, honoring each provider's
+// hours-per-PTO-day rule (a 4×10 CRNA is docked 10 hrs per PTO day, not 8).
+//
+// Math (mirrors the group's existing "Off Assignment Totals" workbook, minus
+// sick/transfer/buy-in):
+//   annualHours   = annual PTO days × hoursPerDay
+//   accruedHours  = annualHours × (fraction of year elapsed)   — linear /365
+//   bookedHours   = booked weekday PTO days this year × hoursPerDay
+//   balanceHours  = carryOver + accruedHours − bookedHours      (accrual basis)
+//   yearEndHours  = carryOver + annualHours  − bookedHours      (projection)
+// Booked/used day counts come from the live PTO source of truth (see
+// services/pto.js summarizeYear) — never hand-entered.
+router.get('/pto-report', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getUTCFullYear();
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id },
+      orderBy: { providerName: 'asc' },
+      select: {
+        id: true, providerName: true, providerType: true, employmentCategory: true,
+        ptoDaysAnnual: true, ptoEligible: true, ptoHoursPerDay: true, ptoCarryOverHours: true,
+        is1099: true, isFullTime: true,
+      },
+    });
+    const asOf = new Date();
+    const map = await ptoService.summarizeYear({ facilityId: req.facility.id, entries, year, asOf });
+
+    const yearStart = Date.UTC(year, 0, 1);
+    const yearEnd = Date.UTC(year + 1, 0, 1);
+    const elapsed = Math.min(Math.max((asOf.getTime() - yearStart) / (yearEnd - yearStart), 0), 1);
+
+    const round1 = (n) => Math.round(n * 10) / 10;
+    const rows = entries.map((e) => {
+      const s = map.get(e.id) || { granted: 0, used: 0 };
+      const hoursPerDay = e.ptoHoursPerDay || 8;
+      const annualDays = ptoService.annualAllotment(e);
+      const annualHours = annualDays * hoursPerDay;
+      const accruedHours = annualHours * elapsed;
+      const carryOver = e.ptoCarryOverHours || 0;
+      const bookedHours = s.granted * hoursPerDay;
+      return {
+        id: e.id,
+        providerName: e.providerName,
+        providerType: e.providerType,
+        employmentCategory: e.employmentCategory,
+        eligible: ptoService.isPtoEligible(e),
+        // config (editable in the Reports tab)
+        annualDays,
+        annualDaysIsDefault: e.ptoDaysAnnual == null,
+        hoursPerDay,
+        carryOverHours: carryOver,
+        ptoEligibleOverride: e.ptoEligible,
+        // derived
+        annualHours: round1(annualHours),
+        accruedHours: round1(accruedHours),
+        bookedDays: s.granted,
+        usedDays: s.used,
+        bookedHours: round1(bookedHours),
+        balanceHours: round1(carryOver + accruedHours - bookedHours),
+        balanceDays: round1((carryOver + accruedHours - bookedHours) / hoursPerDay),
+        yearEndHours: round1(carryOver + annualHours - bookedHours),
+        yearEndDays: round1((carryOver + annualHours - bookedHours) / hoursPerDay),
+      };
+    });
+    res.json({ year, asOf: asOf.toISOString(), elapsed: Math.round(elapsed * 1000) / 1000, rows });
+  } catch (err) {
+    console.error('[roster/pto-report] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /:id/pto-config — the Reports tab's per-provider PTO rules: annual days,
+// hours docked per PTO day, carryover hours, and the eligibility override.
+router.put('/:id/pto-config', facilityAuth, async (req, res) => {
+  try {
+    const entry = await prisma.internalRosterEntry.findUnique({ where: { id: req.params.id } });
+    if (!entry || entry.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Roster member not found.' });
+    }
+    const { ptoDaysAnnual, ptoHoursPerDay, ptoCarryOverHours, ptoEligible } = req.body || {};
+    const data = {};
+    if (ptoDaysAnnual !== undefined) {
+      const v = ptoDaysAnnual === null || ptoDaysAnnual === '' ? null : parseInt(ptoDaysAnnual, 10);
+      if (v !== null && (!Number.isInteger(v) || v < 0 || v > 366)) {
+        return res.status(400).json({ error: 'Annual PTO days must be 0–366.' });
+      }
+      data.ptoDaysAnnual = v;
+    }
+    if (ptoHoursPerDay !== undefined) {
+      const v = ptoHoursPerDay === null || ptoHoursPerDay === '' ? null : Number(ptoHoursPerDay);
+      if (v !== null && (!isFinite(v) || v <= 0 || v > 24)) {
+        return res.status(400).json({ error: 'Hours per PTO day must be between 0 and 24.' });
+      }
+      data.ptoHoursPerDay = v;
+    }
+    if (ptoCarryOverHours !== undefined) {
+      const v = ptoCarryOverHours === null || ptoCarryOverHours === '' ? null : Number(ptoCarryOverHours);
+      if (v !== null && (!isFinite(v) || Math.abs(v) > 2000)) {
+        return res.status(400).json({ error: 'Carryover hours out of range.' });
+      }
+      data.ptoCarryOverHours = v;
+    }
+    if (ptoEligible !== undefined) {
+      data.ptoEligible = ptoEligible === null ? null : !!ptoEligible;
+    }
+    const updated = await prisma.internalRosterEntry.update({
+      where: { id: entry.id },
+      data,
+      select: { id: true, ptoDaysAnnual: true, ptoHoursPerDay: true, ptoCarryOverHours: true, ptoEligible: true },
+    });
+    res.json({ entry: updated });
+  } catch (err) {
+    console.error('[roster/pto-config] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /locations — the sites this facility covers, taken from the COVERAGE
 // TEMPLATES only (the coordinator's curated, canonical site list). Powers the
 // credentialed-sites checklist on the provider form. Deliberately excludes
