@@ -1105,6 +1105,13 @@ export const credMapAPI = {
   getFieldMap: (mapId, npi) => apiFetch(`${BASE}/credmap/${mapId}/fields${npi ? `?npi=${npi}` : ''}`, { headers: credHeaders() }),
   saveFieldMap: (mapId, fieldMap) => apiFetch(`${BASE}/credmap/${mapId}/fields`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fieldMap }) }),
   getFlatPlan: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan`, { headers: credHeaders() }),
+  // Raw PDF bytes for the pin editor — same-origin stream (the /doc/:token
+  // route redirects to S3, which fetch() can't follow cross-origin).
+  fetchSourcePdf: async (mapId) => {
+    const r = await fetch(`${BASE}/credmap/${mapId}/source-pdf`, { headers: credHeaders() })
+    if (!r.ok) throw new Error('Could not load the facility form PDF')
+    return r.arrayBuffer()
+  },
   saveFlatPlan: (mapId, fills) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fills }) }),
   detectFlatPlan: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan/detect`, { method: 'POST', headers: credHeaders() }),
   rebuildFieldMap: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/fields/rebuild`, { method: 'POST', headers: credHeaders() }),

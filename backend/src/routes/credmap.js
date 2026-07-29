@@ -945,6 +945,26 @@ router.get('/:id/flat-plan', async (req, res) => {
   }
 })
 
+// GET /:id/source-pdf — stream the facility form's bytes THROUGH the backend
+// for the pin editor. The /doc/:token route 302-redirects to a presigned S3
+// URL, which a browser fetch() can't follow cross-origin (S3 sends no CORS
+// headers — Safari reports it as just "Load failed"); same-origin streaming
+// sidesteps that entirely.
+router.get('/:id/source-pdf', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath) return res.status(400).json({ error: 'No facility form is uploaded to this template.' })
+    const buffer = await getSourceBuffer(map.sourceDocPath)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Cache-Control', 'private, max-age=300')
+    res.send(buffer)
+  } catch (err) {
+    console.error('[credmap/source-pdf] error:', err)
+    res.status(500).json({ error: 'Failed to load the form PDF' })
+  }
+})
+
 // POST /:id/flat-plan/detect — (re)run the AI pre-mapping and cache it. The
 // editor's "AI pre-map" button; takes ~30-60s on long packets.
 router.post('/:id/flat-plan/detect', async (req, res) => {

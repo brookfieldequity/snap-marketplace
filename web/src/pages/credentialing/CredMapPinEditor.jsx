@@ -79,9 +79,7 @@ export default function CredMapPinEditor({ mapId, mapName, onClose, onSaved }) {
         const data = await credMapAPI.getFlatPlan(mapId)
         if (!alive) return
         setFills((data.plan.fills || []).map((f) => ({ ...f })))
-        const resp = await fetch(credMapAPI.docUrl(data.sourceDocToken))
-        if (!resp.ok) throw new Error('Could not load the facility form PDF')
-        const buf = await resp.arrayBuffer()
+        const buf = await credMapAPI.fetchSourcePdf(mapId)
         const doc = await pdfjsLib.getDocument({ data: buf }).promise
         if (!alive) return
         setPdfDoc(doc)
