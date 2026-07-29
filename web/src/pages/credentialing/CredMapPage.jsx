@@ -1,5 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { credMapAPI, credentialAPI } from '../../api.js'
+
+// Visual click-to-map pin editor — lazy so pdfjs (~400KB) loads only when a
+// coordinator actually opens the mapping screen.
+const CredMapPinEditor = lazy(() => import('./CredMapPinEditor.jsx'))
 
 // Facility Applications — set up a facility's application template once; every
 // provider's packet populates from the passport. Hub (template cards +
@@ -1434,6 +1438,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
   const [packets, setPackets] = useState([])
   const [showGen, setShowGen] = useState(false)
   const [showFieldMap, setShowFieldMap] = useState(false)
+  const [showPinEditor, setShowPinEditor] = useState(false)
   const [roster, setRoster] = useState([])
   const [error, setError] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -1573,6 +1578,11 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
           {map.sourceDocName && (
             <button onClick={buildNative} disabled={building} title="Rebuild SNAP's own clean digital form from the facility's application — normally built automatically when you confirm the template" style={{ padding: '9px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 10, color: '#475569', fontSize: 13, fontWeight: 700, cursor: building ? 'wait' : 'pointer' }}>
               {building ? 'Reading their form…' : hasNativeForm ? '📋 Rebuild SNAP’s digital form' : '📋 Build SNAP’s digital form'}
+            </button>
+          )}
+          {map.sourceDocName && (
+            <button onClick={() => setShowPinEditor(true)} title="See the facility's actual form with the AI's suggested pins already placed — click any blank to map it, save, and it fills automatically for every provider" style={{ padding: '9px 16px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              🎯 Map their form
             </button>
           )}
           {map.sourceDocName && (
@@ -1750,6 +1760,17 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
 
       {showFieldMap && (
         <FieldMappingPanel mapId={mapId} map={map} roster={roster} onClose={() => setShowFieldMap(false)} />
+      )}
+
+      {showPinEditor && (
+        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14 }}>Opening the mapping editor…</div>}>
+          <CredMapPinEditor
+            mapId={mapId}
+            mapName={map?.name || 'Facility form'}
+            onClose={() => setShowPinEditor(false)}
+            onSaved={() => { /* pins are the fill template — nothing else to refresh */ }}
+          />
+        </Suspense>
       )}
     </div>
   )

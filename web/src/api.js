@@ -1104,6 +1104,9 @@ export const credMapAPI = {
   saveFormStructure: (mapId, structure) => apiFetch(`${BASE}/credmap/${mapId}/form-structure`, { method: 'PATCH', headers: credHeaders(), body: JSON.stringify({ structure }) }),
   getFieldMap: (mapId, npi) => apiFetch(`${BASE}/credmap/${mapId}/fields${npi ? `?npi=${npi}` : ''}`, { headers: credHeaders() }),
   saveFieldMap: (mapId, fieldMap) => apiFetch(`${BASE}/credmap/${mapId}/fields`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fieldMap }) }),
+  getFlatPlan: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan`, { headers: credHeaders() }),
+  saveFlatPlan: (mapId, fills) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ fills }) }),
+  detectFlatPlan: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/flat-plan/detect`, { method: 'POST', headers: credHeaders() }),
   rebuildFieldMap: (mapId) => apiFetch(`${BASE}/credmap/${mapId}/fields/rebuild`, { method: 'POST', headers: credHeaders() }),
   saveAnvil: (mapId, castEid, aliasMap) => apiFetch(`${BASE}/credmap/${mapId}/anvil`, { method: 'PUT', headers: credHeaders(), body: JSON.stringify({ castEid, aliasMap }) }),
 

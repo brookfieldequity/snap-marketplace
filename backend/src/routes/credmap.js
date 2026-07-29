@@ -910,6 +910,99 @@ router.put('/:id/fields', async (req, res) => {
   }
 })
 
+// ── Visual pin editor (click-to-map templates) ────────────────────────────────
+// The coordinator sees the facility's actual PDF, the AI's suggested pins
+// already placed, and clicks any blank to pin a passport value there. Saved
+// pins ARE the flatFillPlan — the same plan the fill renderer consumes — so a
+// mapped template fills automatically for every provider, forever.
+
+// A pin's value key: the AI vocabulary, or an indexed repeating-section key
+// (edu1..edu9 / work1..work9 — see passportFields.resolveValue).
+function isValidPinKey(key, VALUE_KEYS) {
+  if (typeof key !== 'string' || key.length > 60) return false
+  if (key === 'LEAVE_BLANK' || key.startsWith('list.')) return false
+  if (VALUE_KEYS.includes(key)) return true
+  return /^edu[1-9]\.(institution|level|graduationDate)$/.test(key)
+    || /^work[1-9]\.(employer|role|startDate|endDate|dates)$/.test(key)
+}
+
+// GET /:id/flat-plan — the editor's payload: a viewable token for the source
+// PDF plus the current pin plan (empty if none yet; use /flat-plan/detect for
+// AI suggestions).
+router.get('/:id/flat-plan', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath) return res.status(400).json({ error: 'No facility form is uploaded to this template.' })
+    res.json({
+      sourceDocToken: signDocToken(map.sourceDocPath),
+      sourceDocName: map.sourceDocName,
+      plan: (map.flatFillPlan && Array.isArray(map.flatFillPlan.fills)) ? map.flatFillPlan : { confidence: null, fills: [] },
+    })
+  } catch (err) {
+    console.error('[credmap/flat-plan] error:', err)
+    res.status(500).json({ error: 'Failed to load the pin plan' })
+  }
+})
+
+// POST /:id/flat-plan/detect — (re)run the AI pre-mapping and cache it. The
+// editor's "AI pre-map" button; takes ~30-60s on long packets.
+router.post('/:id/flat-plan/detect', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    if (!map.sourceDocPath) return res.status(400).json({ error: 'No facility form is uploaded to this template.' })
+    const { detectFlatFills } = require('../services/credMapPdf')
+    const buffer = await getSourceBuffer(map.sourceDocPath)
+    const plan = await detectFlatFills(buffer)
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { flatFillPlan: plan } })
+    await logMapAccess(req, map.id, 'CREDMAP_FLATPLAN_DETECT', `${plan.fills.length} pins, ${plan.confidence}`)
+    res.json({ ok: true, plan })
+  } catch (err) {
+    console.error('[credmap/flat-plan-detect] error:', err)
+    res.status(500).json({ error: 'AI pre-mapping failed' })
+  }
+})
+
+// PUT /:id/flat-plan — save the coordinator's pins (full plan with
+// coordinates). This is the template: reused for every provider on this form.
+router.put('/:id/flat-plan', async (req, res) => {
+  try {
+    const map = await scopedMap(req, req.params.id)
+    if (!map) return res.status(404).json({ error: 'Map not found' })
+    const { fills } = req.body || {}
+    if (!Array.isArray(fills) || fills.length > 800) {
+      return res.status(400).json({ error: 'fills array required (max 800)' })
+    }
+    const { VALUE_KEYS } = require('../services/credMapPdf')
+    const clean = []
+    for (const f of fills) {
+      if (!f || typeof f !== 'object') continue
+      if (!isValidPinKey(f.valueKey, VALUE_KEYS)) continue
+      const page = Math.trunc(Number(f.page))
+      const x = Number(f.x)
+      const y = Number(f.y)
+      if (!Number.isInteger(page) || page < 1 || page > 500) continue
+      if (!isFinite(x) || !isFinite(y) || x < 0 || y < 0 || x > 5000 || y > 5000) continue
+      clean.push({
+        label: String(f.label || 'pin').slice(0, 200),
+        valueKey: f.valueKey,
+        page,
+        x: Math.round(x * 100) / 100,
+        y: Math.round(y * 100) / 100,
+        placement: f.placement === 'below' ? 'below' : 'right',
+      })
+    }
+    const plan = { confidence: map.flatFillPlan?.confidence || 'MEDIUM', fills: clean, pinned: true }
+    await prisma.credProgramMap.update({ where: { id: map.id }, data: { flatFillPlan: plan } })
+    await logMapAccess(req, map.id, 'CREDMAP_FLATPLAN_PIN_SAVE', `${clean.length} pins`)
+    res.json({ ok: true, saved: clean.length })
+  } catch (err) {
+    console.error('[credmap/flat-plan-save] error:', err)
+    res.status(500).json({ error: 'Failed to save pins' })
+  }
+})
+
 // ── Native form structure (the scalable path) ────────────────────────────────
 // POST /:id/form-structure/build — read the uploaded facility packet and
 // extract its FULL structure (sections + typed fields), so SNAP can render its

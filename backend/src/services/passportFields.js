@@ -127,6 +127,25 @@ function resolveValue(source, passport) {
   if (!source || source === 'LEAVE_BLANK') return ''
   if (source === 'today') return fmtDate(new Date())
 
+  // Indexed repeating-section keys (the visual pin editor's answer to
+  // repeated form blocks — Education #1/#2/#3, Work history #1/#2/#3):
+  // eduN.institution / eduN.level / eduN.graduationDate,
+  // workN.employer / workN.role / workN.dates. N is 1-based, passport order.
+  let m = String(source).match(/^edu([1-9])\.(institution|level|graduationDate)$/)
+  if (m) {
+    const e = (passport?.sections?.education || [])[+m[1] - 1]
+    if (!e) return ''
+    if (m[2] === 'level') return eduLevel(e.level)
+    return String(e[m[2]] || '')
+  }
+  m = String(source).match(/^work([1-9])\.(employer|role|startDate|endDate|dates)$/)
+  if (m) {
+    const w = (passport?.sections?.workHistory || [])[+m[1] - 1]
+    if (!w) return ''
+    if (m[2] === 'dates') return `${w.startDate || '?'} – ${w.currentlyEmployed ? 'present' : (w.endDate || '?')}`
+    return String(w[m[2]] || '')
+  }
+
   const prov = passport?.provider || {}
   const creds = passport?.credentials || []
   const credByType = Object.fromEntries(creds.map((c) => [c.type, c]))
