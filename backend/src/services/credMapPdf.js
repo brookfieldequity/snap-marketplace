@@ -297,14 +297,17 @@ const FLAT_FILL_TOOL = {
   },
 }
 
-const FLAT_FILL_PROMPT = (runs) => `This is every printed text run on a facility's blank credentialing application (anesthesia providers), each with an index. Blank spaces/underlines where an applicant writes are NOT listed — only printed text is.
+const FLAT_FILL_PROMPT = (runs, pageNote) => `This is every printed text run on ${pageNote} of a facility's blank credentialing application (anesthesia providers), each with an index. Blank spaces/underlines where an applicant writes are NOT listed — only printed text is.
 
 ${runs.map((r) => `${r.idx}: "${r.str}"`).join('\n')}
 
-Identify the runs that are FIELD LABELS expecting the provider's data (e.g. "Name", "NPI", "DEA #", "License Number", "Expiration Date", "Date of Birth"), and for each: which passport value fills the blank, and whether the blank is to the right of the label (same line) or below it.
+Identify the runs that are FIELD LABELS expecting the provider's data (e.g. "Name", "NPI", "DEA #", "License Number", "Expiration Date", "Date of Birth", "Specialty", "Email", "Middle Name", "Suffix", "Home Address", "Phone"), and for each: which passport value fills the blank, and whether the blank is to the right of the label (same line) or below it.
 
 Rules:
-- Only map labels a provider's own data answers. Skip facility-internal fields, references, attestations, yes/no questions, signature/date-signed lines, section headers, and instructions.
+- Be EXHAUSTIVE: map every label whose blank a provider's own profile data can fill. A missed label means an empty field the provider must hand-write.
+- Skip only what genuinely isn't the provider's own data: facility-internal fields, references, attestations, yes/no questions, signature/date-signed lines, section headers, and instructions.
+- Office/practice blocks ("Office/Practice Name", "Practice Manager", office street/city/phone) are NOT the provider's home data — leave them unmapped. Home address/phone values only fill labels in a personal/home context.
+- Map only the FIRST instance of a repeated block (e.g. additional office or reference sections) and only when it wants the provider's own data.
 - If a date label clearly belongs to a specific credential (e.g. "DEA Expiration"), use that credential's expirationDate.
 - Prefer "right" placement unless the label clearly sits above its blank.
 - Lower confidence if the form is dense/tabular or the text is garbled. Call record_flat_fills exactly once.`
@@ -331,6 +334,14 @@ async function extractRuns(buffer) {
 // Build the overlay plan for a flat form: AI maps labels → values + placement,
 // resolved to page coordinates. Returns { confidence, fills:[{label, valueKey,
 // page, x, y, placement}] }.
+//
+// Mapping runs PAGE BY PAGE: one call over a long packet dilutes attention and
+// returns only the obvious labels (a 31-page packet came back with 30 fills
+// total — "almost like it wasn't mapped at all"). Small per-page calls keep
+// the model exhaustive; results merge into one plan, cached on the map.
+const FLAT_FILL_PAGE_CONCURRENCY = 5
+const FLAT_FILL_MIN_PAGE_RUNS = 4
+
 async function detectFlatFills(buffer) {
   const client = getClient()
   if (!client) throw new Error('ANTHROPIC_API_KEY not configured')
@@ -338,26 +349,85 @@ async function detectFlatFills(buffer) {
   if (runs.length === 0) return { confidence: 'LOW', fills: [] }
   const byIdx = new Map(runs.map((r) => [r.idx, r]))
 
-  const resp = await withApiRetries(() => client.messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    tools: [FLAT_FILL_TOOL],
-    tool_choice: { type: 'tool', name: 'record_flat_fills' },
-    messages: [{ role: 'user', content: FLAT_FILL_PROMPT(runs) }],
-  }))
-  const call = resp.content.find((b) => b.type === 'tool_use')
-  if (!call) return { confidence: 'LOW', fills: [] }
+  const byPage = new Map()
+  for (const r of runs) {
+    if (!byPage.has(r.page)) byPage.set(r.page, [])
+    byPage.get(r.page).push(r)
+  }
+  const pages = [...byPage.entries()].filter(([, rs]) => rs.length >= FLAT_FILL_MIN_PAGE_RUNS)
+
+  const pageResults = []
+  for (let i = 0; i < pages.length; i += FLAT_FILL_PAGE_CONCURRENCY) {
+    const batch = pages.slice(i, i + FLAT_FILL_PAGE_CONCURRENCY)
+    const settled = await Promise.all(batch.map(async ([pageNum, pageRuns]) => {
+      try {
+        const resp = await withApiRetries(() => client.messages.create({
+          model: MODEL,
+          max_tokens: 8000,
+          tools: [FLAT_FILL_TOOL],
+          tool_choice: { type: 'tool', name: 'record_flat_fills' },
+          messages: [{ role: 'user', content: FLAT_FILL_PROMPT(pageRuns, `page ${pageNum} (of a ${byPage.size}-page packet)`) }],
+        }))
+        const call = resp.content.find((b) => b.type === 'tool_use')
+        return call ? call.input : null
+      } catch (err) {
+        console.error(`[credMapPdf] flat-fill mapping failed on page ${pageNum}:`, err.message)
+        return null
+      }
+    }))
+    pageResults.push(...settled)
+  }
 
   const fills = []
-  for (const f of call.input.fills || []) {
-    const run = byIdx.get(f.runIndex)
-    if (!run || !VALUE_KEYS.includes(f.valueKey) || f.valueKey === 'LEAVE_BLANK') continue
-    const placement = f.placement === 'below' ? 'below' : 'right'
-    const x = placement === 'right' ? run.x + run.w + 6 : run.x
-    const y = placement === 'right' ? run.y : run.y - (run.h + 4)
-    fills.push({ label: run.str, valueKey: f.valueKey, page: run.page, x, y, placement })
+  const seen = new Set()
+  const confCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 }
+  let answered = 0
+  for (const input of pageResults) {
+    if (!input) continue
+    answered++
+    confCounts[['HIGH', 'MEDIUM', 'LOW'].includes(input.confidence) ? input.confidence : 'LOW']++
+    for (const f of input.fills || []) {
+      const run = byIdx.get(f.runIndex)
+      if (!run || !VALUE_KEYS.includes(f.valueKey) || f.valueKey === 'LEAVE_BLANK') continue
+      const placement = f.placement === 'below' ? 'below' : 'right'
+      // If the label run itself contains the write-in blanks ("Date of Birth:
+      // __ __ / __ __"), the value belongs ON the blanks — not after the whole
+      // run, where it would collide with the next printed label.
+      let x = placement === 'right' ? run.x + run.w + 6 : run.x
+      const usIdx = run.str.search(/_{2,}/)
+      if (placement === 'right' && usIdx > 0) x = run.x + run.w * (usIdx / run.str.length) + 2
+      const y = placement === 'right' ? run.y : run.y - (run.h + 4)
+      // Occupied-blank check: forms often arrive PARTIALLY PRE-FILLED (the
+      // facility types their own blocks in). If real writing already sits
+      // where the value would land, skip — never draw over existing text.
+      // A following printed LABEL (ends with ':') or a blank affordance
+      // (underscores, "(   )") does not count as writing.
+      const occupied = (byPage.get(run.page) || []).some((n) => {
+        if (n === run) return false
+        if (Math.abs(n.y - y) > 4) return false
+        const overlaps = (n.x >= x - 4 && n.x <= x + 90) || (n.x < x && n.x + n.w > x + 4)
+        if (!overlaps) return false
+        const t = n.str.trim()
+        if (/[:：]$/.test(t)) return false // a following label, not writing
+        if (/^[(□☐▢✓✔]/.test(t)) return false // instructions "(...)" / checkboxes
+        if (t.replace(/[\s_()\-–—./|]+/g, '') === '') return false // blank affordance
+        return true
+      })
+      if (occupied) continue
+      const key = `${run.page}|${Math.round(x)}|${Math.round(y)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      fills.push({ label: run.str, valueKey: f.valueKey, page: run.page, x, y, placement })
+    }
   }
-  const confidence = ['HIGH', 'MEDIUM', 'LOW'].includes(call.input.confidence) ? call.input.confidence : 'LOW'
+
+  // Overall confidence: LOW only when the packet as a whole failed (nothing
+  // answered, or most pages low) — one hard page must not throw away hundreds
+  // of good fills by dropping the render to the clean-packet fallback.
+  let confidence
+  if (answered === 0 || fills.length === 0 || confCounts.LOW > answered / 2) confidence = 'LOW'
+  else if (confCounts.HIGH === answered) confidence = 'HIGH'
+  else confidence = 'MEDIUM'
   return { confidence, fills }
 }
 
