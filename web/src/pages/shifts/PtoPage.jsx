@@ -472,6 +472,7 @@ function PtoReportsView({ initialYear }) {
   const [savingId, setSavingId] = useState(null)
   const [drafts, setDrafts] = useState({}) // rosterId -> { annualDays, hoursPerDay, carryOverHours }
   const [eligibleOnly, setEligibleOnly] = useState(true)
+  const [detailRow, setDetailRow] = useState(null) // provider whose PTO-days drill-down is open
 
   const loadReport = useCallback(async (y) => {
     setLoading(true)
@@ -540,8 +541,10 @@ function PtoReportsView({ initialYear }) {
                 const negBal = r.balanceHours < 0
                 return (
                   <tr key={r.id} style={{ opacity: r.eligible ? 1 : 0.55 }}>
-                    <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#fff', fontWeight: 700, color: NAVY }}>
-                      {r.providerName}
+                    <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#fff', fontWeight: 700 }}>
+                      <span onClick={() => setDetailRow(r)} title="See all of this provider's PTO days" style={{ color: ROYAL, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#BFDBFE', textUnderlineOffset: 3 }}>
+                        {r.providerName}
+                      </span>
                       <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 500 }}> · {r.providerType === 'ANESTHESIOLOGIST' ? 'MD' : r.providerType || ''}{r.eligible ? '' : ' · not eligible'}</span>
                     </td>
                     <td style={td}>
@@ -582,6 +585,105 @@ function PtoReportsView({ initialYear }) {
       <div style={{ marginTop: 10, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
         Balance = carryover + accrued-to-date − (booked days × hrs/PTO day). Negative (red) means booked ahead of accrual.
         Year-end shows where the provider lands if nothing else is booked. Weekends never consume PTO.
+      </div>
+
+      {detailRow && (
+        <PtoDaysModal
+          row={detailRow}
+          year={rptYear}
+          onClose={() => setDetailRow(null)}
+          onChanged={() => loadReport(rptYear)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Drill-down: one provider's PTO days, whole year or month at a time ─────────
+function PtoDaysModal({ row, year, onClose, onChanged }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [monthFilter, setMonthFilter] = useState(0) // 0 = entire year, 1–12 = month
+  const [removingId, setRemovingId] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try { setData(await facilityAPI.getPtoDays(row.id, year)) }
+    catch (e) { alert(e.message || 'Could not load PTO days.'); onClose() }
+    finally { setLoading(false) }
+  }, [row.id, year, onClose])
+  useEffect(() => { load() }, [load])
+
+  async function removeRange(id) {
+    if (!window.confirm('Remove this time-off range?')) return
+    setRemovingId(id)
+    try { await facilityAPI.deleteTimeOff(id); await load(); onChanged() }
+    catch (e) { alert(e.message) } finally { setRemovingId(null) }
+  }
+
+  const mm = (n) => String(n).padStart(2, '0')
+  const inMonth = (e) => monthFilter === 0
+    || (e.kind === 'range'
+      ? (e.startDate <= `${year}-${mm(monthFilter)}-31` && e.endDate >= `${year}-${mm(monthFilter)}-01`)
+      : e.date.slice(5, 7) === mm(monthFilter))
+  const entries = data ? [...data.ranges, ...data.requestDays].filter(inMonth)
+    .sort((a, b) => (a.startDate || a.date).localeCompare(b.startDate || b.date)) : []
+  const shownWeekdays = entries.reduce((s, e) => s + (e.weekdays || 0), 0)
+  const hoursPerDay = data?.hoursPerDay || 8
+
+  const fmtD = (isoStr) => new Date(isoStr + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 560, maxHeight: '84vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(15,23,42,0.28)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>🌴 {row.providerName} — PTO {year}</div>
+            <div style={{ fontSize: 12, color: SLATE, marginTop: 3 }}>
+              {loading ? '…' : `${shownWeekdays} weekday PTO day${shownWeekdays === 1 ? '' : 's'}${monthFilter ? ` in ${MONTHS[monthFilter]}` : ' this year'} · ${shownWeekdays * hoursPerDay} hrs at ${hoursPerDay} hrs/day`}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 20, color: MUTED, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <select value={monthFilter} onChange={e => setMonthFilter(Number(e.target.value))} style={{ ...ctrl, width: 'auto', padding: '7px 10px' }}>
+            <option value={0}>Entire year</option>
+            {MONTHS.slice(1).map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+          {monthFilter > 0 && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setMonthFilter(f => (f <= 1 ? 12 : f - 1))} style={navBtn}>‹</button>
+              <button onClick={() => setMonthFilter(f => (f >= 12 ? 1 : f + 1))} style={navBtn}>›</button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loading ? (
+            <div style={{ color: MUTED, textAlign: 'center', padding: '32px 0' }}>Loading…</div>
+          ) : entries.length === 0 ? (
+            <div style={{ color: MUTED, textAlign: 'center', padding: '32px 0' }}>
+              No PTO {monthFilter ? `in ${MONTHS[monthFilter]}` : 'booked'} {year}.
+            </div>
+          ) : entries.map((e) => (
+            <div key={e.kind === 'range' ? e.id : `req-${e.date}`} style={{ display: 'flex', alignItems: 'center', gap: 10, background: AMBER_BG, border: `1px solid ${AMBER}`, borderRadius: 9, padding: '9px 12px' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: AMBER_INK }}>
+                  {e.kind === 'range'
+                    ? (e.startDate === e.endDate ? fmtD(e.startDate) : `${fmtD(e.startDate)} → ${fmtD(e.endDate)}`)
+                    : fmtD(e.date)}
+                  <span style={{ fontWeight: 500, color: '#92826A' }}> · {e.weekdays} wkday{e.weekdays === 1 ? '' : 's'} · {e.weekdays * hoursPerDay}h</span>
+                </div>
+                {(e.reason || e.note) && <div style={{ fontSize: 11.5, color: '#92826A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.reason || e.note}</div>}
+                {e.kind === 'request' && <div style={{ fontSize: 10, color: MUTED }}>via approved PTO request</div>}
+              </div>
+              {e.kind === 'range' && (
+                <button onClick={() => removeRange(e.id)} disabled={removingId === e.id} title="Remove this range" style={{ border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2 }}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

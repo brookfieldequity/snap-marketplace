@@ -374,6 +374,67 @@ router.get('/pto-report', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /:id/pto-days?year=YYYY — every PTO day for one provider in a year, in
+// list form (the Reports drill-down). Two sources, same as the balances:
+// coordinator/import ranges (RosterTimeOff, clipped to the year) and
+// approved-request days (RosterAvailability source 'PTO'); request days that
+// fall inside a range are dropped so nothing double-lists.
+router.get('/:id/pto-days', facilityAuth, async (req, res) => {
+  try {
+    const entry = await prisma.internalRosterEntry.findUnique({ where: { id: req.params.id } });
+    if (!entry || entry.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Roster member not found.' });
+    }
+    const year = parseInt(req.query.year) || new Date().getUTCFullYear();
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 1));
+    const DAY_MS = 86400000;
+    const iso = (d) => new Date(d).toISOString().slice(0, 10);
+    const isWeekday = (t) => { const dw = new Date(t).getUTCDay(); return dw >= 1 && dw <= 5; };
+
+    const [rangesRaw, reqDaysRaw] = await Promise.all([
+      prisma.rosterTimeOff.findMany({
+        where: { rosterEntryId: entry.id, startDate: { lt: end }, endDate: { gte: start } },
+        orderBy: { startDate: 'asc' },
+        select: { id: true, startDate: true, endDate: true, reason: true },
+      }),
+      prisma.rosterAvailability.findMany({
+        where: { rosterEntryId: entry.id, source: 'PTO', available: false, date: { gte: start, lt: end } },
+        orderBy: { date: 'asc' },
+        select: { date: true, note: true },
+      }),
+    ]);
+
+    const inRange = new Set();
+    const ranges = rangesRaw.map((r) => {
+      const from = Math.max(r.startDate.getTime(), start.getTime());
+      const to = Math.min(r.endDate.getTime(), end.getTime() - DAY_MS);
+      let weekdays = 0;
+      for (let t = from; t <= to; t += DAY_MS) {
+        inRange.add(iso(t));
+        if (isWeekday(t)) weekdays++;
+      }
+      return { kind: 'range', id: r.id, startDate: iso(from), endDate: iso(to), reason: r.reason, weekdays };
+    });
+    const requestDays = reqDaysRaw
+      .filter((d) => !inRange.has(iso(d.date)))
+      .map((d) => ({ kind: 'request', date: iso(d.date), note: d.note, weekdays: isWeekday(d.date) ? 1 : 0 }));
+
+    const totalWeekdays = ranges.reduce((s, r) => s + r.weekdays, 0) + requestDays.reduce((s, d) => s + d.weekdays, 0);
+    res.json({
+      year,
+      providerName: entry.providerName,
+      hoursPerDay: entry.ptoHoursPerDay || 8,
+      ranges,
+      requestDays,
+      totalWeekdays,
+    });
+  } catch (err) {
+    console.error('[roster/pto-days] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PUT /:id/pto-config — the Reports tab's per-provider PTO rules: annual days,
 // hours docked per PTO day, carryover hours, and the eligibility override.
 router.put('/:id/pto-config', facilityAuth, async (req, res) => {
