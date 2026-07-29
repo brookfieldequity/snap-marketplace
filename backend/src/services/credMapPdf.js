@@ -389,6 +389,11 @@ async function detectFlatFills(buffer) {
     for (const f of input.fills || []) {
       const run = byIdx.get(f.runIndex)
       if (!run || !VALUE_KEYS.includes(f.valueKey) || f.valueKey === 'LEAVE_BLANK') continue
+      // Multi-entry list values (education, work history) can NEVER fill a
+      // single label's blank — repeated-block sections (per-entry Street /
+      // City / Degree fields) need real per-entry mapping, not a stamped
+      // dump of the whole list over every sub-label. Blank beats garbage.
+      if (f.valueKey.startsWith('list.')) continue
       const placement = f.placement === 'below' ? 'below' : 'right'
       // If the label run itself contains the write-in blanks ("Date of Birth:
       // __ __ / __ __"), the value belongs ON the blanks — not after the whole
@@ -446,11 +451,15 @@ async function renderViaFlatOverlay({ packet, map, passport, sourceBuffer }) {
   const pages = pdfDoc.getPages()
   let filledCount = 0
   for (const fill of plan.fills) {
+    // Belt-and-braces for plans cached before the list.* exclusion: never
+    // stamp a multi-entry list into a single blank, and never draw more than
+    // one line — a label's blank is one line of space.
+    if (String(fill.valueKey || '').startsWith('list.')) continue
     const value = resolveValue(fill.valueKey, passport)
     if (!value) continue
     const page = pages[fill.page - 1]
     if (!page) continue
-    page.drawText(String(value), { x: fill.x, y: fill.y, size: 9.5, font, color: rgb(0.07, 0.09, 0.15) })
+    page.drawText(String(value).split('\n')[0], { x: fill.x, y: fill.y, size: 9.5, font, color: rgb(0.07, 0.09, 0.15) })
     filledCount++
   }
 
