@@ -1461,6 +1461,36 @@ export default function ScheduleBuilderPage({ onNavigate }) {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
+            onClick={async () => {
+              // Materialize the REAL schedule uploaded to StaffIQ into builder
+              // days + assignments for the month on screen.
+              if (!window.confirm(`Populate ${monthName} ${year} from the schedule uploaded to StaffIQ → Data Upload?`)) return
+              const hasDays = Object.keys(daysByDate).length > 0
+              const replace = hasDays && window.confirm(`${monthName} already has schedule days.\n\nOK = replace overlapping location-days with the uploaded schedule\nCancel = keep existing days, only add missing ones`)
+              try {
+                const r = await facilityAPI.materializeFromStaffiq(year, month, replace)
+                const unmatchedNote = r.unmatchedNames?.length
+                  ? `\n\nNames not on the roster (rooms created unassigned):\n${r.unmatchedNames.map(u => `· ${u.name} (${u.count})`).join('\n')}`
+                  : ''
+                alert(`Done: ${r.daysCreated} location-day(s), ${r.assignmentsCreated} assignment(s) (${r.matchedAssignments} matched to roster)${r.skippedExisting ? `, ${r.skippedExisting} existing kept` : ''}${r.replaced ? `, ${r.replaced} replaced` : ''}.${unmatchedNote}`)
+                load()
+              } catch (e) { alert(e.message || 'Import failed.') }
+            }}
+            title="Turn the real schedule uploaded to StaffIQ into actual builder days + assignments for this month"
+            style={{
+              padding: '10px 20px',
+              background: '#F8FAFC',
+              color: '#374151',
+              border: '1px solid #E2E8F0',
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ⬇ Pull from StaffIQ
+          </button>
+          <button
             onClick={() => setShowBuildFlow(true)}
             style={{
               padding: '10px 20px',

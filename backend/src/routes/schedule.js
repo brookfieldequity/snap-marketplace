@@ -267,6 +267,116 @@ router.post('/days', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /materialize-from-staffiq — turn an uploaded real schedule (StaffIQ
+// SchedulingRecords, roster-matched at upload) into actual Schedule Builder
+// days + assignments for one month. Groups records by date + location; each
+// provider-shift becomes a room assignment (rosterId from the upload's
+// fingerprint match; unmatched names are reported back, not silently dropped
+// into anonymous slots). Existing location-days are skipped unless
+// { replace: true }, which deletes and recreates them.
+router.post('/materialize-from-staffiq', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.body?.year, 10);
+    const month = parseInt(req.body?.month, 10);
+    const replace = !!req.body?.replace;
+    if (!year || !month || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+    }
+    const { start, end } = monthRange(year, month);
+
+    const recs = await prisma.schedulingRecord.findMany({
+      where: { facilityId: req.facility.id, shiftDate: { gte: start, lt: end }, providerName: { not: null } },
+      select: { providerName: true, shiftDate: true, facilityLocation: true, matchedRosterId: true },
+    });
+    if (recs.length === 0) {
+      return res.status(404).json({ error: `No uploaded schedule records found for ${month}/${year}. Upload the schedule in StaffIQ → Data Upload first.` });
+    }
+
+    // Group by date|location. Dedupe same provider appearing twice in one
+    // location-day (double room rows in exports).
+    const groups = new Map();
+    for (const r of recs) {
+      const dateIso = r.shiftDate.toISOString().slice(0, 10);
+      const location = (r.facilityLocation || 'Main').trim() || 'Main';
+      const key = `${dateIso}|${location}`;
+      if (!groups.has(key)) groups.set(key, { dateIso, location, seen: new Set(), providers: [] });
+      const g = groups.get(key);
+      const pKey = (r.matchedRosterId || r.providerName).toLowerCase();
+      if (g.seen.has(pKey)) continue;
+      g.seen.add(pKey);
+      g.providers.push({ rosterId: r.matchedRosterId, name: r.providerName });
+    }
+
+    const existing = await prisma.scheduleDay.findMany({
+      where: { facilityId: req.facility.id, date: { gte: start, lt: end } },
+      select: { id: true, date: true, location: true },
+    });
+    const existingByKey = new Map(existing.map((d) => [`${d.date.toISOString().slice(0, 10)}|${d.location}`, d]));
+
+    let daysCreated = 0;
+    let assignmentsCreated = 0;
+    let matchedAssignments = 0;
+    let skippedExisting = 0;
+    let replaced = 0;
+    const unmatched = new Map(); // name -> count
+
+    for (const g of groups.values()) {
+      const key = `${g.dateIso}|${g.location}`;
+      const already = existingByKey.get(key);
+      if (already && !replace) { skippedExisting++; continue; }
+
+      await prisma.$transaction(async (tx) => {
+        if (already) {
+          await tx.scheduleAssignment.deleteMany({ where: { scheduleDayId: already.id } });
+          await tx.scheduleDay.delete({ where: { id: already.id } });
+          replaced++;
+        }
+        const day = await tx.scheduleDay.create({
+          data: {
+            facilityId: req.facility.id,
+            date: new Date(`${g.dateIso}T00:00:00.000Z`),
+            location: g.location,
+            roomsRequired: g.providers.length,
+            // Real uploaded coverage — a later re-generate must not clobber it.
+            roomsAdminSet: true,
+          },
+        });
+        let room = 0;
+        for (const p of g.providers) {
+          room++;
+          if (!p.rosterId) unmatched.set(p.name, (unmatched.get(p.name) || 0) + 1);
+          else matchedAssignments++;
+          await tx.scheduleAssignment.create({
+            data: {
+              scheduleDayId: day.id,
+              facilityId: req.facility.id,
+              roomNumber: room,
+              rosterId: p.rosterId || null,
+            },
+          });
+          assignmentsCreated++;
+        }
+        daysCreated++;
+      });
+    }
+
+    res.json({
+      ok: true,
+      month: `${year}-${String(month).padStart(2, '0')}`,
+      recordsRead: recs.length,
+      daysCreated,
+      assignmentsCreated,
+      matchedAssignments,
+      skippedExisting,
+      replaced,
+      unmatchedNames: [...unmatched.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 30),
+    });
+  } catch (err) {
+    console.error('[schedule] materialize-from-staffiq failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /rooms-bulk — admin sets ONE room count across every day of a site in a
 // month, for a site that never returned a room-count card. Updates the month's
 // existing ScheduleDay rows for that site (generate the month first if none

@@ -310,6 +310,7 @@ export const facilityAPI = {
   // Schedule Builder
   scheduleExists: () => apiFetch(`${BASE}/schedule/exists`, { headers: facilityHeaders() }),
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
+  materializeFromStaffiq: (year, month, replace) => apiFetch(`${BASE}/schedule/materialize-from-staffiq`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, replace }) }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   setRoomsForSite: (location, roomsRequired, year, month) => apiFetch(`${BASE}/schedule/rooms-bulk`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, roomsRequired, year, month }) }),
   createScheduleShare: (location, year, month) => apiFetch(`${BASE}/schedule/share`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, year, month }) }),
