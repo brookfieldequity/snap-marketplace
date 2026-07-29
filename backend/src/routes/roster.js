@@ -772,6 +772,54 @@ router.put('/time-off/:timeOffId', facilityAuth, async (req, res) => {
 });
 
 /**
+ * POST /time-off/:timeOffId/remove-day — carve ONE day out of a range (the
+ * provider ended up working it). Splits the range into up to two remnants
+ * with the same reason; a single-day range just gets deleted.
+ */
+router.post('/time-off/:timeOffId/remove-day', facilityAuth, async (req, res) => {
+  try {
+    const row = await prisma.rosterTimeOff.findUnique({ where: { id: req.params.timeOffId } });
+    if (!row || row.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Time-off entry not found.' });
+    }
+    const dateStr = String(req.body?.date || '').slice(0, 10);
+    const day = new Date(`${dateStr}T00:00:00.000Z`);
+    if (isNaN(day.getTime())) return res.status(400).json({ error: 'Valid date is required.' });
+    if (day < row.startDate || day > row.endDate) {
+      return res.status(400).json({ error: 'That date is not inside this time-off range.' });
+    }
+    const DAY_MS = 86400000;
+    const remnants = [];
+    if (row.startDate < day) {
+      remnants.push({ startDate: row.startDate, endDate: new Date(day.getTime() - DAY_MS) });
+    }
+    if (row.endDate > day) {
+      remnants.push({ startDate: new Date(day.getTime() + DAY_MS), endDate: row.endDate });
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.rosterTimeOff.delete({ where: { id: row.id } });
+      // Remnants intentionally drop any scheduleRequestId link — once a range
+      // is hand-split it's coordinator-managed, not request-managed.
+      for (const r of remnants) {
+        await tx.rosterTimeOff.create({
+          data: {
+            rosterEntryId: row.rosterEntryId,
+            facilityId: row.facilityId,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            reason: row.reason,
+          },
+        });
+      }
+    });
+    res.json({ ok: true, removedDate: dateStr, remnants: remnants.length });
+  } catch (err) {
+    console.error('[roster] time-off remove-day failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * DELETE /time-off/:timeOffId — remove a time-off entry.
  */
 router.delete('/time-off/:timeOffId', facilityAuth, async (req, res) => {

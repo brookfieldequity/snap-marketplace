@@ -79,8 +79,10 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
     setAddOpen(true)
   }
   // Open an existing entry for edit/delete (calendar cell or list chip click).
-  function openEdit(entry) {
-    setEditing(entry)
+  // clickedDate (calendar only) lets the modal offer "just this day" actions
+  // on a multi-day range.
+  function openEdit(entry, clickedDate = null) {
+    setEditing({ ...entry, clickedDate })
     setForm({ rosterId: entry.rosterEntryId, start: entry.startDate, end: entry.endDate, reason: entry.reason || '' })
     setAddOpen(true)
   }
@@ -89,8 +91,24 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
   function onCalendarCell(rosterId, day) {
     const clicked = iso(year, month, day)
     const existing = (byMember[rosterId] || []).find(t => clicked >= t.startDate && clicked <= t.endDate)
-    if (existing) openEdit(existing)
+    if (existing) openEdit(existing, clicked)
     else openAdd({ rosterId, start: clicked })
+  }
+  // Click-hold-drag across a provider's row paints a range; release opens the
+  // Add modal prefilled with those start/stop days to confirm.
+  function onCalendarRange(rosterId, fromDay, toDay) {
+    openAdd({ rosterId, start: iso(year, month, fromDay), end: iso(year, month, toDay) })
+  }
+  // Remove ONE day from a multi-day range (the provider ended up working it) —
+  // backend splits the range into remnants.
+  async function removeSingleDay() {
+    if (!editing?.clickedDate) return
+    if (!window.confirm(`Remove just ${editing.clickedDate} from this range?`)) return
+    setSaving(true)
+    try {
+      await facilityAPI.removeTimeOffDay(editing.id, editing.clickedDate)
+      setAddOpen(false); setEditing(null); await load()
+    } catch (e) { alert(e.message) } finally { setSaving(false) }
   }
   async function submitAdd() {
     if (!form.rosterId || !form.start) return alert('Pick a person and a start date.')
@@ -166,6 +184,17 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
             <div onClick={() => { setAddOpen(false); setEditing(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
               <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(15,23,42,0.28)' }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 16 }}>{editing ? `Edit PTO — ${nameById[form.rosterId] || ''}` : 'Add PTO'}</div>
+                {editing?.clickedDate && editing.startDate !== editing.endDate && (
+                  <div style={{ background: '#FFFBEB', border: `1px solid ${AMBER}`, borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 12.5, color: AMBER_INK, lineHeight: 1.5 }}>
+                    You clicked <strong>{editing.clickedDate}</strong>, which is part of <strong>{editing.startDate} → {editing.endDate}</strong>.
+                    <div style={{ marginTop: 8 }}>
+                      <button onClick={removeSingleDay} disabled={saving} style={{ padding: '6px 12px', background: '#fff', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        Remove just this day
+                      </button>
+                      <span style={{ marginLeft: 8, color: '#92826A', fontSize: 11.5 }}>splits the range — the other days stay PTO. Or edit the whole range below.</span>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {!editing && (
                     <Field label="Person">
@@ -197,7 +226,7 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
           {loading ? (
             <div style={{ color: MUTED, textAlign: 'center', padding: '48px 0' }}>Loading…</div>
           ) : manageView === 'calendar' ? (
-            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} />
+            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} onRange={onCalendarRange} />
           ) : manageView === 'reports' ? (
             <PtoReportsView initialYear={year} />
           ) : (
@@ -385,10 +414,33 @@ const th = { textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 8
 const td = { padding: '9px 12px', verticalAlign: 'top' }
 
 // ── Calendar: roster (rows) × days (cols) ──────────────────────────────────────
-function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, onCell }) {
+// Click a day = edit/add for that person+day. Click-hold-drag across a row =
+// paint a range (e.g. Jul 4 → Jul 10); release opens Add prefilled with those
+// start/stop days to confirm.
+function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, onCell, onRange }) {
+  const [drag, setDrag] = useState(null) // { rosterId, start, end } in day numbers
+  const dragRef = React.useRef(null)
+  React.useEffect(() => { dragRef.current = drag }, [drag])
+
+  // Finish on mouseup anywhere — even off the grid.
+  React.useEffect(() => {
+    function finish() {
+      const d = dragRef.current
+      if (!d) return
+      setDrag(null)
+      const from = Math.min(d.start, d.end)
+      const to = Math.max(d.start, d.end)
+      if (from === to) onCell(d.rosterId, from)
+      else onRange(d.rosterId, from, to)
+    }
+    window.addEventListener('mouseup', finish)
+    return () => window.removeEventListener('mouseup', finish)
+  }, [onCell, onRange])
+
   if (roster.length === 0) return <Empty>No roster members yet.</Empty>
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const dowOf = (d) => new Date(Date.UTC(year, month - 1, d)).getUTCDay()
+  const inDrag = (rosterId, d) => drag && drag.rosterId === rosterId && d >= Math.min(drag.start, drag.end) && d <= Math.max(drag.start, drag.end)
   return (
     <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, overflow: 'auto', background: '#fff', maxHeight: 'calc(100vh - 250px)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: `180px repeat(${daysInMonth}, 30px)`, minWidth: 180 + daysInMonth * 30 }}>
@@ -413,13 +465,15 @@ function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, on
             {days.map(d => {
               const off = offCells.has(`${p.id}|${d}`)
               const wknd = dowOf(d) === 0 || dowOf(d) === 6
+              const painting = inDrag(p.id, d)
               return (
                 <div
                   key={d}
-                  onClick={() => onCell(p.id, d)}
-                  title={off ? 'On PTO — click to edit or remove' : 'Click to add PTO'}
-                  style={{ ...cellBase, cursor: 'pointer', borderBottom: `1px solid ${LINE}`, background: off ? AMBER : (wknd ? '#F8FAFC' : '#fff'), transition: 'background 0.1s' }}
-                >{off ? <span style={{ fontSize: 11 }}>🌴</span> : ''}</div>
+                  onMouseDown={(e) => { e.preventDefault(); setDrag({ rosterId: p.id, start: d, end: d }) }}
+                  onMouseEnter={() => setDrag(prev => (prev && prev.rosterId === p.id ? { ...prev, end: d } : prev))}
+                  title={off ? 'On PTO — click to edit or remove' : 'Click to add PTO · click-hold and drag to paint a range'}
+                  style={{ ...cellBase, cursor: 'pointer', userSelect: 'none', borderBottom: `1px solid ${LINE}`, background: painting ? '#BFDBFE' : off ? AMBER : (wknd ? '#F8FAFC' : '#fff'), transition: 'background 0.1s' }}
+                >{painting ? <span style={{ fontSize: 11 }}>＋</span> : off ? <span style={{ fontSize: 11 }}>🌴</span> : ''}</div>
               )
             })}
           </React.Fragment>
