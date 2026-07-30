@@ -308,14 +308,14 @@ async function sendRenewalAlertToFacility(toEmail, items) {
 // links to specific credential documents. Links live 7 days and re-check the
 // passport grant on every open.
 async function sendDocShare(toEmail, { providerName, senderName, facilityName, note, items }) {
+  // Single-column stacked rows — a side-by-side button cell wraps into a
+  // broken pill on phone-width email clients.
   const rows = items.map((it) => `
     <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #F1F5F9">
+      <td style="padding:12px 14px;border-bottom:1px solid #F1F5F9">
         <div style="font-weight:700;color:#0F172A;font-size:14px">${it.label}</div>
-        <div style="font-size:12px;color:#64748B">${it.filename}${it.expirationDate ? ` · expires ${new Date(it.expirationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</div>
-      </td>
-      <td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;text-align:right">
-        <a href="${it.link}" style="background:#2563EB;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">View document</a>
+        <div style="font-size:12px;color:#64748B;margin:2px 0 10px">${it.filename}${it.expirationDate ? ` · expires ${new Date(it.expirationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</div>
+        <a href="${it.link}" style="display:inline-block;white-space:nowrap;background:#2563EB;color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">View document&nbsp;→</a>
       </td>
     </tr>`).join('')
   return send({
