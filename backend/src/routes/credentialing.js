@@ -1021,7 +1021,9 @@ router.get('/roster/:rosterId/documents/:type/token', credentialAuth, requireCoo
 
     await logAccess(req.facilityId, req.credUser.id, rosterId, 'VIEW_DOCUMENT', type, cred.documentName, req)
     const token = signDocToken(cred.documentPath)
-    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    // API origin, NOT APP_URL — APP_URL is the web app (ai.snapmedical.app),
+    // whose SPA answers unknown paths with the portal login page.
+    const apiBase = process.env.API_PUBLIC_URL || 'https://api.snapmedical.app'
     res.json({ token, url: `${apiBase}/api/credentialing/doc/${token}` })
   } catch (err) {
     console.error(err)
@@ -1118,7 +1120,9 @@ router.get('/providers/:providerId/documents/:type/token', credentialAuth, requi
     await logAccess(req.facilityId, req.credUser.id, providerId, 'VIEW_DOCUMENT', type, cred.documentName, req)
 
     const token = signDocToken(cred.documentPath)
-    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    // API origin, NOT APP_URL — APP_URL is the web app (ai.snapmedical.app),
+    // whose SPA answers unknown paths with the portal login page.
+    const apiBase = process.env.API_PUBLIC_URL || 'https://api.snapmedical.app'
     res.json({ token, url: `${apiBase}/api/credentialing/doc/${token}` })
   } catch (err) {
     console.error(err)
@@ -1442,7 +1446,9 @@ router.post('/passport/:npi/share-docs', credentialAuth, requireCoordinator, asy
 
     // Resolve each requested doc against the live passport — never trust ids
     // from the client beyond "does this doc really exist on this passport".
-    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    // API origin, NOT APP_URL — APP_URL is the web app (ai.snapmedical.app),
+    // whose SPA answers unknown paths with the portal login page.
+    const apiBase = process.env.API_PUBLIC_URL || 'https://api.snapmedical.app'
     const resolved = []
     for (const it of items) {
       const cred = (passport?.credentials || []).find((c) => c.type === it.credentialType)
