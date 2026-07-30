@@ -304,6 +304,35 @@ async function sendRenewalAlertToFacility(toEmail, items) {
   })
 }
 
+// One-click doc send (Diana, 7/30): a coordinator emails a facility secure
+// links to specific credential documents. Links live 7 days and re-check the
+// passport grant on every open.
+async function sendDocShare(toEmail, { providerName, senderName, facilityName, note, items }) {
+  const rows = items.map((it) => `
+    <tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #F1F5F9">
+        <div style="font-weight:700;color:#0F172A;font-size:14px">${it.label}</div>
+        <div style="font-size:12px;color:#64748B">${it.filename}${it.expirationDate ? ` · expires ${new Date(it.expirationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</div>
+      </td>
+      <td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;text-align:right">
+        <a href="${it.link}" style="background:#2563EB;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">View document</a>
+      </td>
+    </tr>`).join('')
+  return send({
+    to: toEmail,
+    from: FROM,
+    subject: `Credential document${items.length > 1 ? 's' : ''} for ${providerName}`,
+    html: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#0F172A">
+        <p>${senderName}${facilityName ? ` (${facilityName})` : ''} has shared ${items.length > 1 ? `${items.length} credential documents` : 'a credential document'} for <strong>${providerName}</strong> with you:</p>
+        ${note ? `<p style="background:#F8FAFC;border-left:3px solid #2563EB;padding:10px 14px;border-radius:6px;color:#374151;font-size:14px">${note}</p>` : ''}
+        <table style="width:100%;border-collapse:collapse;border:1px solid #E2E8F0;border-radius:10px;margin:14px 0">${rows}</table>
+        <p style="font-size:12px;color:#64748B">These secure links expire in 7 days. Access is verified on every open and logged for audit purposes.</p>
+      </div>
+    `,
+  })
+}
+
 module.exports = {
   sendExpirationAlertToFacility,
   sendExpirationReminderToProvider,
@@ -315,5 +344,6 @@ module.exports = {
   sendCredentialReminder,
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  sendDocShare,
   credTypeName,
 }

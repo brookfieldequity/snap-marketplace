@@ -1433,12 +1433,20 @@ function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, d
   )
 }
 
-function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket }) {
+function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpenMapper = false, onMapperOpened }) {
   const [map, setMap] = useState(null)
   const [packets, setPackets] = useState([])
   const [showGen, setShowGen] = useState(false)
   const [showFieldMap, setShowFieldMap] = useState(false)
   const [showPinEditor, setShowPinEditor] = useState(false)
+  // Hub chip → land with the visual mapper already open (once the map loads
+  // and we know a source PDF exists to map).
+  useEffect(() => {
+    if (autoOpenMapper && map?.sourceDocName) {
+      setShowPinEditor(true)
+      onMapperOpened?.()
+    }
+  }, [autoOpenMapper, map]) // eslint-disable-line react-hooks/exhaustive-deps
   const [roster, setRoster] = useState([])
   const [error, setError] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -1785,6 +1793,9 @@ export default function CredMapPage() {
   const [taxonomy, setTaxonomy] = useState([])
   const [notes, setNotes] = useState([])
   const [openMapId, setOpenMapId] = useState(null)
+  // Hub "🎯 Map PDF" chip: open the template WITH the visual pin editor up —
+  // Diana feedback (7/30): the mapper must be findable from the hub card.
+  const [autoOpenMapper, setAutoOpenMapper] = useState(false)
   const [openPacketId, setOpenPacketId] = useState(null)
   const [showNew, setShowNew] = useState(false)
   const [tab, setTab] = useState('maps') // 'maps' | 'renewals'
@@ -1821,7 +1832,9 @@ export default function CredMapPage() {
       <MapBuilder
         mapId={openMapId}
         taxonomy={taxonomy}
-        onBack={() => { setOpenMapId(null); loadMaps() }}
+        autoOpenMapper={autoOpenMapper}
+        onMapperOpened={() => setAutoOpenMapper(false)}
+        onBack={() => { setOpenMapId(null); setAutoOpenMapper(false); loadMaps() }}
         onChanged={() => {}}
         onOpenPacket={(id) => setOpenPacketId(id)}
       />
@@ -1913,6 +1926,15 @@ export default function CredMapPage() {
               <div style={{ marginTop: 14 }}>
                 <AutoFillBar stats={m.stats} />
               </div>
+              {m.sourceDocName && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAutoOpenMapper(true); setOpenMapId(m.id) }}
+                  title="Open the facility's PDF with the AI's suggested pins placed — click any blank to map it"
+                  style={{ marginTop: 12, padding: '7px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#1D4ED8', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  🎯 Map their PDF
+                </button>
+              )}
             </div>
           ))}
         </div>

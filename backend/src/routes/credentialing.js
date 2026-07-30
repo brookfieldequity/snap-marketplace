@@ -6,8 +6,8 @@ const fs = require('fs')
 const crypto = require('crypto')
 const prisma = require('../config/db')
 const credentialAuth = require('../middleware/credentialAuth')
-const { sign, signDocToken, verifyDocToken } = require('../middleware/credentialAuth')
-const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sendWelcomeEmail, sendPasswordResetEmail, credTypeName } = require('../services/credentialEmail')
+const { sign, signDocToken, verifyDocToken, signDocShareToken, verifyDocShareToken } = require('../middleware/credentialAuth')
+const { sendProviderInvitation, sendDocumentRequest, sendCredentialReminder, sendWelcomeEmail, sendPasswordResetEmail, sendDocShare, credTypeName } = require('../services/credentialEmail')
 const { overallStatusColor, passportCompletion, nextExpiration, daysUntil } = require('../utils/credentialStatus')
 const { getSavings: getAutomationSavings } = require('../services/automationEvents')
 const { searchByName: nppesSearchByName } = require('../services/nppesLookup')
@@ -1416,6 +1416,89 @@ router.get('/passport/:npi', credentialAuth, async (req, res) => {
     }
     console.error('[credentialing/passport] error:', err)
     res.status(500).json({ error: 'Failed to load passport' })
+  }
+})
+
+// ── One-click doc send (Diana, 7/30) ─────────────────────────────────────────
+// A facility asks for one item from a provider's file ("send me his license")
+// → the coordinator clicks ✉️ on the item → the facility gets a branded email
+// with secure 7-day links. Links re-check the passport grant at OPEN time and
+// resolve a fresh signed URL — revoking the grant kills outstanding links.
+// Every send and every open lands in the access log.
+
+// POST /passport/:npi/share-docs — { toEmail, note?, items: [{ credentialType, docId }] }
+router.post('/passport/:npi/share-docs', credentialAuth, requireCoordinator, async (req, res) => {
+  try {
+    if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured' })
+    const npi = String(req.params.npi).replace(/\D/g, '')
+    const toEmail = String(req.body?.toEmail || '').trim().toLowerCase()
+    const note = String(req.body?.note || '').trim().slice(0, 500) || null
+    const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 10) : []
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(toEmail)) return res.status(400).json({ error: 'A valid recipient email is required.' })
+    if (items.length === 0) return res.status(400).json({ error: 'Pick at least one document to send.' })
+
+    const passport = await passportClient.getPassport(npi, req.facilityId)
+    const providerName = [passport?.provider?.firstName, passport?.provider?.lastName].filter(Boolean).join(' ') || `NPI ${npi}`
+
+    // Resolve each requested doc against the live passport — never trust ids
+    // from the client beyond "does this doc really exist on this passport".
+    const apiBase = process.env.APP_URL || 'https://api.snapmedical.app'
+    const resolved = []
+    for (const it of items) {
+      const cred = (passport?.credentials || []).find((c) => c.type === it.credentialType)
+      const doc = (cred?.documents || []).find((d) => String(d.id) === String(it.docId))
+      if (!cred || !doc) continue
+      const token = signDocShareToken({ npi, docId: doc.id, credentialType: cred.type, facilityId: req.facilityId, senderId: req.credUser.id })
+      resolved.push({
+        credentialType: cred.type,
+        label: credTypeName(cred.type),
+        filename: doc.filename || 'document.pdf',
+        expirationDate: cred.expirationDate || null,
+        link: `${apiBase}/api/credentialing/shared-doc/${token}`,
+      })
+    }
+    if (resolved.length === 0) return res.status(404).json({ error: 'None of the selected documents exist on this passport.' })
+
+    const emailed = await sendDocShare(toEmail, {
+      providerName,
+      senderName: req.credUser.name || 'Your credentialing coordinator',
+      facilityName: req.credUser.facility?.name || null,
+      note,
+      items: resolved,
+    })
+    for (const r of resolved) {
+      await logAccess(req.facilityId, req.credUser.id, npi, 'DOC_EMAILED', r.credentialType, `${r.filename} → ${toEmail}`, req)
+    }
+    res.json({ ok: true, emailed, sent: resolved.length, toEmail })
+  } catch (err) {
+    if (err.status === 403 || err.status === 404) return res.status(err.status).json({ error: err.message })
+    console.error('[credentialing/share-docs] error:', err)
+    res.status(500).json({ error: 'Failed to send documents' })
+  }
+})
+
+// GET /shared-doc/:token — the public open. Re-verifies the grant, resolves a
+// FRESH passport download URL, logs the open (attributed to the sender's
+// share), and redirects. Expired/revoked → honest message, not a broken PDF.
+router.get('/shared-doc/:token', async (req, res) => {
+  try {
+    let payload
+    try { payload = verifyDocShareToken(req.params.token) }
+    catch { return res.status(410).send('This document link has expired. Please ask the credentialing coordinator to resend it.') }
+
+    const passport = await passportClient.getPassport(payload.npi, payload.facilityId)
+    const cred = (passport?.credentials || []).find((c) => c.type === payload.credentialType)
+    const doc = (cred?.documents || []).find((d) => String(d.id) === String(payload.docId))
+    if (!doc?.downloadUrl) return res.status(410).send('This document is no longer available. Please ask the credentialing coordinator to resend it.')
+
+    await logAccess(payload.facilityId, payload.senderId, payload.npi, 'SHARED_DOC_OPENED', payload.credentialType, doc.filename || null, req)
+    res.redirect(doc.downloadUrl)
+  } catch (err) {
+    if (err.status === 403 || err.status === 404) {
+      return res.status(410).send('Access to this document has been revoked. Please contact the credentialing coordinator.')
+    }
+    console.error('[credentialing/shared-doc] error:', err)
+    res.status(500).send('Something went wrong opening this document.')
   }
 })
 

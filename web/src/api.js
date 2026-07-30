@@ -806,6 +806,8 @@ export const credentialAPI = {
   commitIntake: (batchId) => apiFetch(`${BASE}/credentialing/portal/intake/${batchId}/commit`, { method: 'POST', headers: credHeaders() }),
   invitePortalRoster: (rosterId) => apiFetch(`${BASE}/credentialing/portal/roster/${rosterId}/invite`, { method: 'POST', headers: credHeaders() }),
   updatePassportCredential: (npi, type, fields) => apiFetch(`${BASE}/credentialing/passport/${npi}/credentials/${type}`, { method: 'PUT', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
+  // One-click doc send: email a facility secure 7-day links to specific docs.
+  shareDocs: (npi, payload) => apiFetch(`${BASE}/credentialing/passport/${npi}/share-docs`, { method: 'POST', headers: { ...credHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
   uploadPassportDocument: (npi, file, { type, credentialType } = {}) => {
     const form = new FormData()
     form.append('document', file)

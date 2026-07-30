@@ -115,10 +115,39 @@ export default function SignPage({ token }) {
   const selectedIds = Object.entries(checked).filter(([, v]) => v).map(([k]) => k)
   const questions = data?.questions || []
   const attestations = questions.filter((q) => q.source === 'ATTESTATION')
-  const providerFields = questions.filter((q) => q.source === 'PROVIDER')
   const unanswered = attestations.filter((q) => !answers[q.questionKey])
   const hasDocs = (data?.items || []).length > 0
   const setAnswer = (k, v) => setAnswers((a) => ({ ...a, [k]: v }))
+
+  // Diana (7/30): one long list feels onerous — bucket questions by the form's
+  // own section headings, with progress per bucket and an N/A fast-path for
+  // sections that often don't apply (foreign med grad, military, visa).
+  const [openBucket, setOpenBucket] = useState(0)
+  const NA_SECTION_RE = /international|foreign|military|visa|ecfmg|armed/i
+  const buckets = (() => {
+    const list = []
+    const idx = new Map()
+    for (const q of questions) {
+      const heading = q.section || 'A few questions'
+      if (!idx.has(heading)) { idx.set(heading, list.length); list.push({ heading, qs: [], naable: NA_SECTION_RE.test(heading) }) }
+      list[idx.get(heading)].qs.push(q)
+    }
+    return list
+  })()
+  const answeredIn = (b) => b.qs.filter((q) => (answers[q.questionKey] || '').trim() !== '').length
+  const totalAnswered = questions.filter((q) => (answers[q.questionKey] || '').trim() !== '').length
+  // Honest time estimate: ~8s per open question + ~10s per doc, min 1 minute.
+  const estMinutes = Math.max(1, Math.ceil(((questions.length - totalAnswered) * 8 + (data?.items?.length || 0) * 10) / 60))
+  // N/A fast-path: one tap answers a whole doesn't-apply section — text fields
+  // record "N/A" (what the form legally wants: an affirmative N/A, not blanks),
+  // yes/no attestations record NO.
+  function markSectionNa(b) {
+    setAnswers((a) => {
+      const next = { ...a }
+      for (const q of b.qs) next[q.questionKey] = q.source === 'ATTESTATION' ? 'NO' : 'N/A'
+      return next
+    })
+  }
 
   async function submit() {
     if (!name.trim()) { setError('Please type your full legal name.'); return }
@@ -207,9 +236,19 @@ export default function SignPage({ token }) {
       <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
         {data.facilityName}
       </div>
-      <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 16 }}>
-        Hi {data.providerName || 'there'} — confirm your information, answer a few questions, and sign. It takes a minute, and your answers carry over to your next application.
+      <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 10 }}>
+        Hi {data.providerName || 'there'} — confirm your information, answer a few questions, and sign. Your answers carry over to your next application.
       </div>
+      {questions.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ flex: 1, height: 7, background: '#F1F5F9', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round((totalAnswered / Math.max(questions.length, 1)) * 100)}%`, height: '100%', background: '#2563EB', borderRadius: 99, transition: 'width 0.25s' }} />
+          </div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', whiteSpace: 'nowrap' }}>
+            {totalAnswered}/{questions.length} · about {estMinutes} min{estMinutes === 1 ? '' : 's'} left
+          </div>
+        </div>
+      )}
 
       {/* What SNAP already has, verified — read-only. */}
       {(data.review || []).length > 0 && (
@@ -229,66 +268,100 @@ export default function SignPage({ token }) {
         </div>
       )}
 
-      {/* The gaps: yes/no attestations + provider-only fields, answered once. */}
-      {attestations.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>
-            A few questions {unanswered.length > 0 && <span style={{ color: '#DC2626' }}>· {unanswered.length} left</span>}
-          </div>
-          {attestations.map((q) => {
-            const v = answers[q.questionKey]
-            return (
-              <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
-                <div style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{q.label}</div>
-                {q.explain && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{q.explain}</div>}
-                {q.fromPassport && <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 3 }}>✓ Answered on a previous application — confirm or change</div>}
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  {['NO', 'YES'].map((opt) => (
-                    <button
-                      key={opt}
-                      onClick={() => setAnswer(q.questionKey, opt)}
-                      style={{
-                        flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-                        border: v === opt ? '1.5px solid #2563EB' : '1.5px solid #E2E8F0',
-                        background: v === opt ? (opt === 'YES' ? '#FEF3C7' : '#EFF6FF') : '#fff',
-                        color: v === opt ? '#0F172A' : '#64748B',
-                      }}
-                    >
-                      {opt === 'YES' ? 'Yes' : 'No'}
-                    </button>
-                  ))}
-                </div>
+      {/* The gaps, bucketed by the form's own sections — each bucket opens on
+          tap, shows its progress, and doesn't-apply sections resolve with ONE
+          tap instead of ten blank fields. */}
+      {buckets.map((b, bi) => {
+        const done = answeredIn(b)
+        const complete = done === b.qs.length
+        const allNa = complete && b.qs.every((q) => ['N/A', 'NO'].includes(answers[q.questionKey]))
+        const open = openBucket === bi
+        return (
+          <div key={b.heading} style={{ border: `1px solid ${complete ? '#BBF7D0' : '#E2E8F0'}`, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+            <button
+              onClick={() => setOpenBucket(open ? -1 : bi)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: complete ? '#F0FDF4' : '#FAFBFC', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', flex: 1 }}>{b.heading}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: complete ? '#15803D' : '#94A3B8' }}>
+                {complete ? (b.naable && allNa ? '✓ N/A' : '✓ Done') : `${done}/${b.qs.length}`}
+              </span>
+              <span style={{ color: '#94A3B8', fontSize: 12 }}>{open ? '▾' : '▸'}</span>
+            </button>
+            {b.naable && !complete && (
+              <div style={{ padding: '0 14px 10px', background: '#FAFBFC', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: '#64748B' }}>Does this section apply to you?</span>
+                <button onClick={() => { markSectionNa(b); if (open) setOpenBucket(-1) }} style={{ padding: '5px 12px', background: '#fff', border: '1.5px solid #CBD5E1', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                  No — mark all N/A
+                </button>
+                {!open && (
+                  <button onClick={() => setOpenBucket(bi)} style={{ padding: '5px 12px', background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}>
+                    Yes, open it
+                  </button>
+                )}
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {providerFields.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          {providerFields.map((q) => (
-            <div key={q.questionKey} style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>{q.label}</label>
-              {q.type === 'longtext' ? (
-                <textarea
-                  value={answers[q.questionKey] || ''}
-                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
-                  rows={3}
-                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
-                />
-              ) : (
-                <input
-                  value={answers[q.questionKey] || ''}
-                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
-                  type={q.type === 'date' ? 'text' : 'text'}
-                  placeholder={q.type === 'date' ? 'MM/DD/YYYY' : ''}
-                  style={{ width: '100%', padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+            {open && (
+              <div style={{ padding: '10px 14px 6px' }}>
+                {b.qs.map((q) => {
+                  if (q.source === 'ATTESTATION') {
+                    const v = answers[q.questionKey]
+                    return (
+                      <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{q.label}</div>
+                        {q.explain && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{q.explain}</div>}
+                        {q.fromPassport && <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 3 }}>✓ Answered on a previous application — confirm or change</div>}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          {['NO', 'YES'].map((opt) => (
+                            <button
+                              key={opt}
+                              onClick={() => setAnswer(q.questionKey, opt)}
+                              style={{
+                                flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                                border: v === opt ? '1.5px solid #2563EB' : '1.5px solid #E2E8F0',
+                                background: v === opt ? (opt === 'YES' ? '#FEF3C7' : '#EFF6FF') : '#fff',
+                                color: v === opt ? '#0F172A' : '#64748B',
+                              }}
+                            >
+                              {opt === 'YES' ? 'Yes' : 'No'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={q.questionKey} style={{ marginBottom: 10 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>{q.label}</label>
+                      {q.type === 'longtext' ? (
+                        <textarea
+                          value={answers[q.questionKey] || ''}
+                          onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                          rows={3}
+                          style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+                      ) : (
+                        <input
+                          value={answers[q.questionKey] || ''}
+                          onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                          type="text"
+                          placeholder={q.type === 'date' ? 'MM/DD/YYYY' : ''}
+                          style={{ width: '100%', padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+                {bi < buckets.length - 1 && (
+                  <button onClick={() => setOpenBucket(bi + 1)} style={{ width: '100%', padding: '9px 0', background: '#EFF6FF', border: 'none', borderRadius: 9, fontSize: 12.5, fontWeight: 800, color: '#1D4ED8', cursor: 'pointer', marginBottom: 8 }}>
+                    Next section →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       {/* Documents to sign, if any. */}
       {hasDocs && (

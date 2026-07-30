@@ -60,3 +60,17 @@ module.exports.verifyDocToken = function verifyDocToken(token) {
   if (payload.type !== 'doc') throw new Error('Invalid token type')
   return payload.filePath
 }
+
+// One-click doc send (Diana, 7/30): a 7-day share token a coordinator emails
+// to a facility. Carries WHICH doc + WHO sent it — the open re-checks the
+// passport grant and resolves a fresh signed URL, so revoking the grant kills
+// every outstanding link.
+module.exports.signDocShareToken = function signDocShareToken(payload) {
+  return jwt.sign({ ...payload, type: 'doc-share' }, JWT_SECRET, { expiresIn: '7d' })
+}
+
+module.exports.verifyDocShareToken = function verifyDocShareToken(token) {
+  const payload = jwt.verify(token, JWT_SECRET)
+  if (payload.type !== 'doc-share') throw new Error('Invalid token type')
+  return payload
+}

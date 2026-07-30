@@ -109,6 +109,13 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
   const [saving, setSaving] = useState(false)
   const [uploadingType, setUploadingType] = useState(null)
   const [cme, setCme] = useState(null)
+  // One-click doc send (Diana 7/30): click ✉️ on an item → email the facility
+  // secure 7-day links. Opens preselected to the clicked credential's docs.
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareSel, setShareSel] = useState({}) // `${credType}|${docId}` -> bool
+  const [shareEmail, setShareEmail] = useState('')
+  const [shareNote, setShareNote] = useState('')
+  const [sharing, setSharing] = useState(false)
   const fileInputRef = useRef(null)
   const pendingUploadRef = useRef(null) // { credentialType, docType }
 
@@ -139,6 +146,31 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
     } finally {
       setSaving(false)
     }
+  }
+
+  function openShare(credentialType) {
+    const sel = {}
+    for (const c of passport?.credentials || []) {
+      for (const d of c.documents || []) sel[`${c.type}|${d.id}`] = c.type === credentialType
+    }
+    setShareSel(sel)
+    setShareOpen(true)
+  }
+
+  async function sendShare() {
+    const items = Object.entries(shareSel)
+      .filter(([, on]) => on)
+      .map(([k]) => { const [credentialType, docId] = k.split('|'); return { credentialType, docId } })
+    if (items.length === 0) return alert('Pick at least one document.')
+    if (!shareEmail.trim()) return alert('Enter the recipient email.')
+    setSharing(true)
+    try {
+      const r = await credentialAPI.shareDocs(npi, { toEmail: shareEmail.trim(), note: shareNote.trim() || undefined, items })
+      alert(r.emailed
+        ? `Sent ${r.sent} document link${r.sent === 1 ? '' : 's'} to ${r.toEmail}. Links expire in 7 days; every open is logged.`
+        : 'The email could not be sent — check the address and try again.')
+      setShareOpen(false); setShareEmail(''); setShareNote('')
+    } catch (e) { alert(e.message || 'Send failed') } finally { setSharing(false) }
   }
 
   function startUpload(credentialType) {
@@ -263,6 +295,15 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
                     )}
                   </td>
                   <td style={{ padding: '13px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {isCoordinator && (c?.documents || []).length > 0 && (
+                      <button
+                        onClick={() => openShare(type)}
+                        title="Email this document to a facility — secure 7-day link, every open logged"
+                        style={{ padding: '6px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#1D4ED8', cursor: 'pointer', marginRight: 6 }}
+                      >
+                        ✉️ Send
+                      </button>
+                    )}
                     {isCoordinator && (
                       <button
                         onClick={() => startUpload(type)}
@@ -394,6 +435,54 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
           </>
         )}
       </div>
+
+      {/* One-click doc send modal (Diana 7/30) */}
+      {shareOpen && (
+        <div onClick={() => setShareOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, maxHeight: '86vh', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+              ✉️ Send documents — {passport?.provider?.firstName} {passport?.provider?.lastName}
+            </div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
+              The facility receives secure links that expire in 7 days. Every send and every open is logged.
+            </div>
+            <input
+              value={shareEmail}
+              onChange={(e) => setShareEmail(e.target.value)}
+              placeholder="facility-contact@email.com"
+              style={{ padding: '10px 13px', border: '1.5px solid #C7D2FE', borderRadius: 9, fontSize: 13.5, outline: 'none', marginBottom: 10 }}
+            />
+            <input
+              value={shareNote}
+              onChange={(e) => setShareNote(e.target.value)}
+              placeholder="Optional note (e.g. 'License you requested for privileges')"
+              style={{ padding: '10px 13px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', marginBottom: 12 }}
+            />
+            <div style={{ overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: 10, padding: '6px 10px', marginBottom: 14 }}>
+              {(passport?.credentials || []).filter((c) => (c.documents || []).length > 0).map((c) => (
+                <div key={c.type} style={{ padding: '6px 0', borderBottom: '1px solid #F8FAFC' }}>
+                  {(c.documents || []).map((d) => {
+                    const k = `${c.type}|${d.id}`
+                    return (
+                      <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#0F172A', cursor: 'pointer', padding: '3px 0' }}>
+                        <input type="checkbox" checked={!!shareSel[k]} onChange={(e) => setShareSel((s) => ({ ...s, [k]: e.target.checked }))} style={{ width: 15, height: 15 }} />
+                        <span style={{ fontWeight: 700 }}>{CRED_META[c.type]?.label || c.type}</span>
+                        <span style={{ color: '#94A3B8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShareOpen(false)} style={{ padding: '9px 16px', background: '#F1F5F9', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={sendShare} disabled={sharing} style={{ padding: '9px 18px', background: '#2563EB', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 800, color: '#fff', cursor: 'pointer' }}>
+                {sharing ? 'Sending…' : `Send ${Object.values(shareSel).filter(Boolean).length} link${Object.values(shareSel).filter(Boolean).length === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
