@@ -500,7 +500,9 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
       return res.status(400).json({ error: 'roomNumber must be a valid integer' });
     }
 
-    const VALID_ROLES = ['CRNA_ROOM', 'SOLO_MD_ROOM', 'SUPERVISING_MD'];
+    // NON_CLINICAL (Ryan 7/29): a surplus provider working a non-clinical day
+    // (admin, meetings) — stored at roomNumber >= 950, never counts as a room.
+    const VALID_ROLES = ['CRNA_ROOM', 'SOLO_MD_ROOM', 'SUPERVISING_MD', 'NON_CLINICAL'];
     if (role !== undefined && role !== null && !VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }

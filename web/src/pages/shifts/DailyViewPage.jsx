@@ -63,41 +63,76 @@ function Stat({ label, value, color = '#0F172A' }) {
   )
 }
 
+// Ryan (7/29): list anesthesiologists and CRNAs SEPARATELY — no "Room 1/2/3"
+// labels — so how many rooms are running reads at a glance regardless of
+// coverage model. Dot colors are STRICTLY MD vs CRNA, no other differentiation.
+const MD_DOT = '#6D28D9'
+const CRNA_DOT = '#2563EB'
+
+function ProviderLine({ a, dot, note }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+        {EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName || 'Provider'}
+      </span>
+      {note && <span style={{ fontSize: 10.5, color: '#94A3B8' }}>{note}</span>}
+    </div>
+  )
+}
+
 function LocationCard({ row }) {
-  const assignments = row.assignments || []
-  const byRoom = Object.fromEntries(assignments.map((a) => [a.roomNumber, a]))
-  const supervisors = assignments.filter((a) => a.role === 'SUPERVISING_MD' && a.rosterId)
+  const assignments = (row.assignments || []).filter((a) => a.rosterId)
   const cov = coverageLabel(row.supervisionRatio)
   const roomCount = row.roomsRequired || 0
-  let filled = 0
-  for (let r = 1; r <= roomCount; r++) { if (byRoom[r]?.rosterId) filled += 1 }
+  const roomAssignments = assignments.filter((a) => a.role !== 'SUPERVISING_MD' && a.role !== 'NON_CLINICAL' && a.roomNumber < 900)
+  const filled = roomAssignments.length
+  const unfilled = Math.max(0, roomCount - filled)
+
+  // Split strictly by provider type. Supervising MDs fold into the MD list
+  // (with a note) — one list per discipline, not per role.
+  const isMd = (a) => a.rosterEntry?.providerType === 'ANESTHESIOLOGIST' || a.role === 'SUPERVISING_MD' || a.role === 'SOLO_MD_ROOM'
+  const mds = assignments.filter((a) => a.role !== 'NON_CLINICAL' && isMd(a))
+  const crnas = assignments.filter((a) => a.role !== 'NON_CLINICAL' && !isMd(a))
+  const nonClinical = assignments.filter((a) => a.role === 'NON_CLINICAL')
 
   return (
     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1 }}>{row.location}</div>
         {cov && <Badge {...cov} />}
-        <span style={{ fontSize: 11, fontWeight: 700, color: filled === roomCount ? '#16A34A' : '#DC2626' }}>{filled}/{roomCount}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: filled >= roomCount ? '#16A34A' : '#DC2626' }}>{filled}/{roomCount} rooms</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {Array.from({ length: roomCount }, (_, i) => i + 1).map((rn) => {
-          const a = byRoom[rn]
-          const isFilled = a && a.rosterId
-          const tag = a && ROLE_TAG[a.role]
-          return (
-            <div key={rn} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #F1F5F9' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', minWidth: 56 }}>Room {rn}</span>
-              {tag && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: tag.bg, color: tag.color }}>{tag.text}</span>}
-              {isFilled ? (
-                <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName}</span>
-              ) : (
-                <span style={{ fontSize: 12, color: '#EF4444', fontWeight: 700 }}>⬜ Unfilled</span>
-              )}
-            </div>
-          )
-        })}
+      <div style={{ display: 'flex', gap: 18 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: MD_DOT, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+            Anesthesiologists ({mds.length})
+          </div>
+          {mds.length === 0 ? <div style={{ fontSize: 12, color: '#CBD5E1' }}>—</div>
+            : mds.map((a) => <ProviderLine key={a.id || a.roomNumber} a={a} dot={MD_DOT} note={a.role === 'SUPERVISING_MD' ? 'supervising' : null} />)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: CRNA_DOT, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+            CRNAs ({crnas.length})
+          </div>
+          {crnas.length === 0 ? <div style={{ fontSize: 12, color: '#CBD5E1' }}>—</div>
+            : crnas.map((a) => <ProviderLine key={a.id || a.roomNumber} a={a} dot={CRNA_DOT} />)}
+        </div>
       </div>
+
+      {unfilled > 0 && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#EF4444', fontWeight: 700 }}>⬜ {unfilled} room{unfilled === 1 ? '' : 's'} unfilled</div>
+      )}
+
+      {nonClinical.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #E2E8F0' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+            Non-clinical ({nonClinical.length})
+          </div>
+          {nonClinical.map((a) => <ProviderLine key={a.id || a.roomNumber} a={a} dot="#94A3B8" />)}
+        </div>
+      )}
 
       {row.outListPublishedAt && (() => {
         const release = orderForRelease(assignments.filter((a) => a.rosterId))
@@ -117,7 +152,7 @@ function LocationCard({ row }) {
                     <span style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 600 }}>
                       {EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName || 'Provider'}
                     </span>
-                    <span style={{ fontSize: 10.5, color: '#94A3B8' }}>{isSup ? 'Supervisor' : `Room ${a.roomNumber}`}</span>
+                    {isSup && <span style={{ fontSize: 10.5, color: '#94A3B8' }}>Supervisor</span>}
                     {isLast && <span style={{ fontSize: 10, fontWeight: 700, color: '#0F172A' }}>closes 🔒</span>}
                   </div>
                 )
@@ -127,24 +162,6 @@ function LocationCard({ row }) {
         )
       })()}
 
-      {(supervisors.length > 0 || row.supervisionRatio === 3 || row.supervisionRatio === 4) && (
-        <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px dashed #CBD5E1' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
-            Supervising anesthesiologists ({supervisors.length}){row.supervisionRatio ? ` · 1:${row.supervisionRatio}` : ''}
-          </div>
-          {supervisors.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 600 }}>⬜ None assigned</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {supervisors.map((s) => (
-                <span key={s.id || s.roomNumber} style={{ fontSize: 11, fontWeight: 600, color: '#1E3A8A', background: '#F5F3FF', padding: '4px 10px', borderRadius: 20 }}>
-                  {EMP_PREFIX[s.rosterEntry?.employmentCategory] || ''} {s.rosterEntry?.providerName || 'MD'}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

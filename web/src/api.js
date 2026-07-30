@@ -246,6 +246,7 @@ export const facilityAPI = {
   updatePtoConfig: (rosterId, data) => apiFetch(`${BASE}/roster/${rosterId}/pto-config`, { method: 'PUT', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getPtoDays: (rosterId, year) => apiFetch(`${BASE}/roster/${rosterId}/pto-days${year ? `?year=${year}` : ''}`, { headers: facilityHeaders() }),
   removeTimeOffDay: (timeOffId, date) => apiFetch(`${BASE}/roster/time-off/${timeOffId}/remove-day`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ date }) }),
+  markHolidayPto: (year) => apiFetch(`${BASE}/roster/time-off/mark-holidays`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year }) }),
   getRosterLocations: () => apiFetch(`${BASE}/roster/locations`, { headers: facilityHeaders() }),
   createRosterEntry: (data) => apiFetch(`${BASE}/roster`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   updateRosterEntry: (id, data) => apiFetch(`${BASE}/roster/${id}`, { method: 'PATCH', headers: facilityHeaders(), body: JSON.stringify(data) }),

@@ -765,13 +765,14 @@ function getDayStats(dayRows) {
     filledRooms = 0
   })
 
-  // Recalculate cleanly
+  // Recalculate cleanly. Non-clinical slots (role NON_CLINICAL, room >= 950)
+  // are people working NON-room days — they never count toward rooms filled.
   filledRooms = 0
   assignedProviders = 0
   dayRows.forEach(row => {
     const assignments = row.assignments || []
     assignments.forEach(a => {
-      if (a.rosterId) { filledRooms++; assignedProviders++ }
+      if (a.rosterId && a.role !== 'NON_CLINICAL') { filledRooms++; assignedProviders++ }
     })
   })
 
@@ -1987,7 +1988,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               // SUPERVISING_MD); they're not OR rooms, so exclude them from
               // the fill count and surface them in their own section.
               const supervisors = assignments.filter(a => a.role === 'SUPERVISING_MD' && a.rosterId)
-              const filled = assignments.filter(a => a.rosterId && a.role !== 'SUPERVISING_MD').length
+              const filled = assignments.filter(a => a.rosterId && a.role !== 'SUPERVISING_MD' && a.role !== 'NON_CLINICAL').length
               const gap = required - filled
               const colorKey = gap === 0 ? 'green' : gap === 1 ? 'yellow' : 'red'
               const sc = STATUS_COLORS[colorKey]
@@ -2190,6 +2191,57 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         })()}
                       </div>
                     )}
+
+                    {/* Non-clinical (Ryan 7/29): a surplus provider working a
+                        non-room day (admin, meetings). Added after the build
+                        when there's an extra provider; never counts as a room.
+                        Slots live at roomNumber >= 950, role NON_CLINICAL. */}
+                    {(() => {
+                      const filledNc = assignments.filter(a => a.role === 'NON_CLINICAL' && a.rosterId)
+                      const allNcRooms = assignments.filter(a => a.role === 'NON_CLINICAL').map(a => a.roomNumber)
+                      const emptyNc = assignments.find(a => a.role === 'NON_CLINICAL' && !a.rosterId)
+                      const addRoom = emptyNc ? emptyNc.roomNumber : (allNcRooms.length ? Math.max(...allNcRooms) + 1 : 950)
+                      const pool = rankedRoster(dayDetailModal, row.location)
+                      const slots = [
+                        ...filledNc.map(s => ({ roomNumber: s.roomNumber, currentId: s.rosterId, existing: true })),
+                        { roomNumber: addRoom, currentId: '', existing: false },
+                      ]
+                      return (
+                        <div style={{ marginTop: 6, paddingTop: 10, borderTop: '1px dashed #E2E8F0' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>
+                            🛠 Non-clinical ({filledNc.length}) <span style={{ fontWeight: 500, color: '#94A3B8' }}>· admin / meetings — doesn't count as a room</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {slots.map((slot) => {
+                              const key = `${row.id}-${slot.roomNumber}`
+                              const isLoading = assignLoading[key]
+                              return (
+                                <select
+                                  key={slot.roomNumber}
+                                  value={slot.currentId}
+                                  disabled={isLoading}
+                                  onChange={(e) => handleAssign(row.id, slot.roomNumber, e.target.value, 'NON_CLINICAL')}
+                                  style={{ ...inputStyle, fontSize: 13, padding: '7px 10px', borderColor: '#E2E8F0' }}
+                                >
+                                  <option value="">{slot.existing ? '— Remove non-clinical slot —' : '+ Add non-clinical provider'}</option>
+                                  {pool.map((p) => {
+                                    const elsewhere = _assignedToday[p.id] && p.id !== slot.currentId
+                                    const offReason = _unavailToday.get(p.id)
+                                    const blocked = elsewhere || !!offReason
+                                    const reason = elsewhere ? ` — at ${_assignedToday[p.id]}` : offReason ? ` — ${offReason}` : ''
+                                    return (
+                                      <option key={p.id} value={p.id} disabled={blocked}>
+                                        {blocked ? '🚫 ' : ''}{EMP_PREFIX[p.employmentCategory] || ''} {p.providerName}{reason}
+                                      </option>
+                                    )
+                                  })}
+                                </select>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )

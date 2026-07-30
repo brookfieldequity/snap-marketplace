@@ -210,9 +210,12 @@ export default function App() {
 
   // Portal selection state (when not yet logged in)
   // null | 'facility' | 'admin' | 'credential'
-  const [portalChoice, setPortalChoice] = useState(
-    () => localStorage.getItem('snapCredToken') ? 'credential' : null
-  )
+  // Ryan (7/29): SNAP Admin is off the front page — reach it directly at
+  // /admin instead. The front-page card became Workers' Comp Recovery.
+  const [portalChoice, setPortalChoice] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/admin') return 'admin'
+    return localStorage.getItem('snapCredToken') ? 'credential' : null
+  })
 
   // Load snapMode whenever facilityToken is present
   useEffect(() => {
@@ -259,6 +262,16 @@ export default function App() {
   // capsLoaded avoids locking in the MARKETPLACE placeholder before /me answers.
   useEffect(() => {
     if (!facilityToken || !capsLoaded || availableTabs.length === 0) return
+    // Front-page "Workers' Comp Recovery" card: after login, land straight on
+    // the WC dashboard when this facility has the wc_recovery capability.
+    if (sessionStorage.getItem('snapLandWc')) {
+      sessionStorage.removeItem('snapLandWc')
+      if (featureFlags.wc_recovery && availableTabs.includes('ops')) {
+        setActiveTab('ops')
+        setFacilityPage('wc-dashboard')
+        return
+      }
+    }
     if (!activeTab || !availableTabs.includes(activeTab)) {
       const t = availableTabs[0]
       setActiveTab(t)
@@ -843,12 +856,12 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => setPortalChoice('admin')}
+          onClick={() => { sessionStorage.setItem('snapLandWc', '1'); setPortalChoice('facility') }}
           style={{
             width: 280,
             padding: '40px 32px',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(245,158,11,0.3)',
             borderRadius: 20,
             cursor: 'pointer',
             textAlign: 'left',
@@ -856,22 +869,22 @@ export default function App() {
             backdropFilter: 'blur(12px)',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
+            e.currentTarget.style.background = 'rgba(245,158,11,0.08)'
+            e.currentTarget.style.borderColor = 'rgba(245,158,11,0.6)'
             e.currentTarget.style.transform = 'translateY(-4px)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+            e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+            e.currentTarget.style.borderColor = 'rgba(245,158,11,0.3)'
             e.currentTarget.style.transform = 'translateY(0)'
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>⚖️</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: '#F1F5F9', marginBottom: 8 }}>
-            SNAP Admin
+            Workers' Comp Recovery
           </div>
           <div style={{ fontSize: 14, color: '#64748B', lineHeight: 1.6 }}>
-            Platform administration, credentialing, analytics, and dispute resolution.
+            Find and recover underpaid workers' comp claims — entitlement checks, demand letters, and a recovery ledger.
           </div>
           <div
             style={{
@@ -879,12 +892,12 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              color: '#94A3B8',
+              color: '#F59E0B',
               fontWeight: 600,
               fontSize: 14,
             }}
           >
-            Admin Panel →
+            WC Recovery →
           </div>
         </button>
       </div>

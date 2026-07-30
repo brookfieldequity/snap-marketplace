@@ -269,6 +269,9 @@ router.get('/', facilityAuth, async (req, res) => {
         location,
         requestId: r.id,
         status: r.submittedAt ? 'RETURNED' : (locked ? 'LOCKED_NO_RESPONSE' : 'SENT'),
+        // The tokenized site link — so the coordinator can copy/paste it to a
+        // contact directly (text, chat) in addition to the email send.
+        link: `${webBaseUrl()}/rooms/${r.token}`,
         sentAt: r.sentAt?.toISOString() || null,
         submittedAt: r.submittedAt?.toISOString() || null,   // the timestamp shown in the builder
         deadline: r.deadline.toISOString(),

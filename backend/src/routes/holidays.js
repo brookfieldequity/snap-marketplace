@@ -220,5 +220,6 @@ router.delete('/:id/holidays/:date', facilityAuth, async (req, res) => {
 });
 
 module.exports = router;
-// Expose the helper for the schedule generator to use.
+// Expose the helpers for the schedule generator + holiday-PTO marking to use.
 module.exports.getActiveHolidayDates = getActiveHolidayDates;
+module.exports.buildEffectiveList = buildEffectiveList;

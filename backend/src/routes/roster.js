@@ -772,6 +772,60 @@ router.put('/time-off/:timeOffId', facilityAuth, async (req, res) => {
 });
 
 /**
+ * POST /time-off/mark-holidays — Ryan (7/29): auto-mark the year's holidays
+ * as PTO for every PTO-eligible FULL-TIME roster member. Uses the facility's
+ * EFFECTIVE holiday list (federal ± practice overrides). Days count against
+ * the PTO allotment (Matt's call, 7/30). Idempotent: a provider already off
+ * on a holiday (any overlapping time-off) is skipped for that date.
+ */
+router.post('/time-off/mark-holidays', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.body?.year, 10) || new Date().getUTCFullYear();
+    const { buildEffectiveList } = require('./holidays');
+    const holidays = (await buildEffectiveList(req.facility.id, year))
+      .filter((h) => h.source !== 'PRACTICE_EXCLUDED');
+    if (holidays.length === 0) return res.json({ ok: true, created: 0, skipped: 0, holidays: 0 });
+
+    const entries = await prisma.internalRosterEntry.findMany({
+      where: { facilityId: req.facility.id, employmentCategory: 'FULL_TIME' },
+      select: { id: true, providerName: true, ptoEligible: true, is1099: true, isFullTime: true, employmentCategory: true },
+    });
+    const eligible = entries.filter((e) => ptoService.isPtoEligible(e));
+
+    // Existing time off overlapping the year, per entry — for the skip check.
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+    const existing = await prisma.rosterTimeOff.findMany({
+      where: { facilityId: req.facility.id, rosterEntryId: { in: eligible.map((e) => e.id) }, startDate: { lt: yearEnd }, endDate: { gte: yearStart } },
+      select: { rosterEntryId: true, startDate: true, endDate: true },
+    });
+    const covered = (entryId, iso) => existing.some((t) =>
+      t.rosterEntryId === entryId && iso >= t.startDate.toISOString().slice(0, 10) && iso <= t.endDate.toISOString().slice(0, 10));
+
+    const toCreate = [];
+    let skipped = 0;
+    for (const e of eligible) {
+      for (const h of holidays) {
+        if (covered(e.id, h.date)) { skipped++; continue; }
+        toCreate.push({
+          rosterEntryId: e.id,
+          facilityId: req.facility.id,
+          startDate: new Date(`${h.date}T00:00:00.000Z`),
+          endDate: new Date(`${h.date}T00:00:00.000Z`),
+          reason: `Holiday — ${h.label}`,
+        });
+      }
+    }
+    if (toCreate.length > 0) await prisma.rosterTimeOff.createMany({ data: toCreate });
+    console.log(`[roster] mark-holidays: facility=${req.facility.id} year=${year} created=${toCreate.length} skipped=${skipped} providers=${eligible.length}`);
+    res.json({ ok: true, year, holidays: holidays.length, providers: eligible.length, created: toCreate.length, skipped });
+  } catch (err) {
+    console.error('[roster] mark-holidays failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * POST /time-off/:timeOffId/remove-day — carve ONE day out of a range (the
  * provider ended up working it). Splits the range into up to two remnants
  * with the same reason; a single-day range just gets deleted.

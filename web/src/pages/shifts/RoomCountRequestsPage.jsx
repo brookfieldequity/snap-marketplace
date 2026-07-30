@@ -178,6 +178,16 @@ export default function RoomCountRequestsPage() {
                     {(st.status === 'SENT' || st.status === 'LOCKED_NO_RESPONSE') && st.requestId && (
                       <button onClick={() => remind(st.requestId)} style={ghostBtn}>Remind</button>
                     )}
+                    {st.link && (
+                      <button
+                        onClick={async () => {
+                          try { await navigator.clipboard.writeText(st.link); alert('Link copied — paste it to the site contact.') }
+                          catch { window.prompt('Copy the room-count link:', st.link) }
+                        }}
+                        title="Copy this site's room-count link to send by text or chat"
+                        style={ghostBtn}
+                      >📋 Copy link</button>
+                    )}
                   </div>
                 </div>
 

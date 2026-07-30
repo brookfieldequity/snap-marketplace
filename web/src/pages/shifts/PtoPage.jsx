@@ -46,6 +46,29 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
   }, [monthStart, monthEnd])
   useEffect(() => { load() }, [load])
 
+  // Facility's effective holiday list for the year — marks calendar columns
+  // and powers the "mark holidays as PTO" action (Ryan 7/29).
+  const [holidays, setHolidays] = useState([]) // [{ date, label, source }]
+  useEffect(() => {
+    let alive = true
+    facilityAPI.getMe()
+      .then((me) => facilityAPI.getHolidays(me.id, year))
+      .then((res) => { if (alive) setHolidays((res.holidays || []).filter(h => h.source !== 'PRACTICE_EXCLUDED')) })
+      .catch(() => { if (alive) setHolidays([]) })
+    return () => { alive = false }
+  }, [year])
+  const holidayByDate = useMemo(() => Object.fromEntries(holidays.map(h => [h.date, h.label])), [holidays])
+
+  async function markHolidays() {
+    const names = holidays.map(h => h.label).join(', ')
+    if (!window.confirm(`Mark ${year}'s ${holidays.length} holidays (${names}) as PTO for every PTO-eligible full-time provider? Days already off are skipped. Holiday days count against the PTO allotment.`)) return
+    try {
+      const r = await facilityAPI.markHolidayPto(year)
+      alert(`Done: ${r.created} holiday PTO day${r.created === 1 ? '' : 's'} added across ${r.providers} full-time provider${r.providers === 1 ? '' : 's'}${r.skipped ? ` (${r.skipped} already covered — skipped)` : ''}.`)
+      await load()
+    } catch (e) { alert(e.message || 'Failed to mark holidays.') }
+  }
+
   const nameById = useMemo(() => Object.fromEntries(roster.map(p => [p.id, p.providerName])), [roster])
   const typeById = useMemo(() => Object.fromEntries(roster.map(p => [p.id, p.providerType])), [roster])
 
@@ -165,6 +188,9 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
             </div>
             <Segmented value={manageView} onChange={setManageView} options={[{ v: 'calendar', label: 'Calendar' }, { v: 'list', label: 'List' }, { v: 'reports', label: 'Reports' }]} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+              {holidays.length > 0 && (
+                <button onClick={markHolidays} title={`Mark ${year}'s holidays as PTO for all PTO-eligible full-time providers (counts against the allotment)`} style={{ ...ghostBtn, padding: '10px 16px', fontSize: 14 }}>🎌 Holidays → PTO</button>
+              )}
               <button onClick={() => setUploadOpen(true)} style={{ ...ghostBtn, padding: '10px 16px', fontSize: 14 }}>⬆ Upload spreadsheet</button>
               <button onClick={() => openAdd()} style={primaryBtn}>+ Add PTO</button>
             </div>
@@ -226,7 +252,7 @@ export default function PtoPage({ onNavigate, featureFlags = {} }) {
           {loading ? (
             <div style={{ color: MUTED, textAlign: 'center', padding: '48px 0' }}>Loading…</div>
           ) : manageView === 'calendar' ? (
-            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} onRange={onCalendarRange} />
+            <CalendarView roster={roster} year={year} month={month} daysInMonth={daysInMonth} offCells={offCells} byMember={byMember} onCell={onCalendarCell} onRange={onCalendarRange} holidayByDate={holidayByDate} />
           ) : manageView === 'reports' ? (
             <PtoReportsView initialYear={year} />
           ) : (
@@ -417,7 +443,7 @@ const td = { padding: '9px 12px', verticalAlign: 'top' }
 // Click a day = edit/add for that person+day. Click-hold-drag across a row =
 // paint a range (e.g. Jul 4 → Jul 10); release opens Add prefilled with those
 // start/stop days to confirm.
-function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, onCell, onRange }) {
+function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, onCell, onRange, holidayByDate = {} }) {
   const [drag, setDrag] = useState(null) // { rosterId, start, end } in day numbers
   const dragRef = React.useRef(null)
   React.useEffect(() => { dragRef.current = drag }, [drag])
@@ -448,10 +474,11 @@ function CalendarView({ roster, year, month, daysInMonth, offCells, byMember, on
         <div style={{ ...cellBase, position: 'sticky', top: 0, left: 0, zIndex: 3, background: '#F8FAFC', fontWeight: 800, color: SLATE, justifyContent: 'flex-start', paddingLeft: 14, borderBottom: `1px solid ${LINE}` }}>Provider</div>
         {days.map(d => {
           const wknd = dowOf(d) === 0 || dowOf(d) === 6
+          const holiday = holidayByDate[iso(year, month, d)]
           return (
-            <div key={d} style={{ ...cellBase, position: 'sticky', top: 0, zIndex: 2, flexDirection: 'column', gap: 0, background: wknd ? '#F1F5F9' : '#F8FAFC', color: wknd ? MUTED : SLATE, borderBottom: `1px solid ${LINE}`, fontSize: 10 }}>
-              <span style={{ fontWeight: 700 }}>{d}</span>
-              <span style={{ fontSize: 8, color: MUTED }}>{DOW[dowOf(d)]}</span>
+            <div key={d} title={holiday || undefined} style={{ ...cellBase, position: 'sticky', top: 0, zIndex: 2, flexDirection: 'column', gap: 0, background: holiday ? '#FEF2F2' : wknd ? '#F1F5F9' : '#F8FAFC', color: holiday ? '#B91C1C' : wknd ? MUTED : SLATE, borderBottom: `1px solid ${LINE}`, fontSize: 10 }}>
+              <span style={{ fontWeight: 700 }}>{holiday ? '🎌' : ''}{d}</span>
+              <span style={{ fontSize: 8, color: holiday ? '#DC2626' : MUTED }}>{DOW[dowOf(d)]}</span>
             </div>
           )
         })}

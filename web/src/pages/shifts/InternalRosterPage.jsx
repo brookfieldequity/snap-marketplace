@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { facilityAPI } from '../../api.js'
 import NpiReviewModal from './NpiReviewModal.jsx'
+
+const filterSel = { padding: '9px 11px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13, color: '#334155', background: '#fff', cursor: 'pointer' }
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
@@ -177,6 +179,21 @@ const linkBtnStyle = { background: 'none', border: 'none', color: '#2563EB', fon
 export default function InternalRosterPage({ onNavigate }) {
   const [roster, setRoster] = useState([])
   const [loading, setLoading] = useState(true)
+  // Search + filters (Ryan 7/29): name search; type / employment / employer.
+  const [searchQ, setSearchQ] = useState('')
+  const [fType, setFType] = useState('')     // '' | CRNA | ANESTHESIOLOGIST | ANESTHESIA_ASSISTANT | NONCLINICAL
+  const [fEmp, setFEmp] = useState('')       // '' | FULL_TIME | PER_DIEM | LOCUMS
+  const [fEmployer, setFEmployer] = useState('') // '' | employer string
+  const visibleRoster = useMemo(() => {
+    const q = searchQ.trim().toLowerCase()
+    return roster.filter((p) => {
+      if (q && !String(p.providerName || '').toLowerCase().includes(q)) return false
+      if (fType === 'NONCLINICAL' ? !p.isNonClinical : (fType && (p.isNonClinical || p.providerType !== fType))) return false
+      if (fEmp && p.employmentCategory !== fEmp) return false
+      if (fEmployer && p.employer !== fEmployer) return false
+      return true
+    })
+  }, [roster, searchQ, fType, fEmp, fEmployer])
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -1015,9 +1032,51 @@ export default function InternalRosterPage({ onNavigate }) {
         </div>
       )}
 
+      {/* Search + filters (Ryan 7/29) */}
+      {!loading && roster.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
+          <input
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            placeholder="🔍 Search providers…"
+            style={{ flex: '1 1 220px', maxWidth: 320, padding: '9px 13px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13.5, outline: 'none', background: '#fff' }}
+          />
+          <select value={fType} onChange={(e) => setFType(e.target.value)} style={filterSel}>
+            <option value="">All types</option>
+            <option value="ANESTHESIOLOGIST">MD</option>
+            <option value="CRNA">CRNA</option>
+            <option value="ANESTHESIA_ASSISTANT">AA</option>
+            <option value="NONCLINICAL">Non-clinical staff</option>
+          </select>
+          <select value={fEmp} onChange={(e) => setFEmp(e.target.value)} style={filterSel}>
+            <option value="">All employment</option>
+            <option value="FULL_TIME">Full-time</option>
+            <option value="PER_DIEM">Per diem</option>
+            <option value="LOCUMS">Locums</option>
+          </select>
+          <select value={fEmployer} onChange={(e) => setFEmployer(e.target.value)} style={filterSel}>
+            <option value="">All employers</option>
+            {[...new Set(roster.map((p) => p.employer).filter(Boolean))].sort().map((e) => (
+              <option key={e} value={e}>{e}</option>
+            ))}
+          </select>
+          {(searchQ || fType || fEmp || fEmployer) && (
+            <button onClick={() => { setSearchQ(''); setFType(''); setFEmp(''); setFEmployer('') }} style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+              Clear ({visibleRoster.length}/{roster.length})
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && roster.length > 0 && visibleRoster.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#94A3B8', fontSize: 14 }}>
+          No providers match your search/filters.
+        </div>
+      )}
+
       {!loading && roster.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-          {roster.map((p) => {
+          {visibleRoster.map((p) => {
             const typeBadge = p.isNonClinical ? TYPE_BADGE.STAFF : (TYPE_BADGE[p.providerType] || TYPE_BADGE.CRNA)
             const empBadge = EMPLOY_BADGE[p.employmentCategory] || EMPLOY_BADGE.FULL_TIME
             const linked = !!p.snapAccountLinked
