@@ -76,8 +76,17 @@ export default function CredCvReader() {
   }, [])
 
   function pick(list) {
-    const f = Array.from(list || []).find((x) => ['application/pdf', 'image/jpeg', 'image/png'].includes(x.type))
-    if (f) { setFile(f); read(f) }
+    const files = Array.from(list || [])
+    const f = files.find((x) => ['application/pdf', 'image/jpeg', 'image/png'].includes(x.type))
+    if (f) { setFile(f); read(f); return }
+    // Never fail silently — a Word-doc CV dragged here used to just do nothing.
+    if (files.length > 0) {
+      const name = files[0].name || 'that file'
+      const isWord = /\.(docx?|rtf|pages|odt)$/i.test(name)
+      setError(isWord
+        ? `"${name}" is a Word document — SNAP reads CVs as PDF, JPG, or PNG. Open it and use File → Save As / Export → PDF, then drop the PDF here.`
+        : `"${name}" isn't a supported type — drop the CV as a PDF, JPG, or PNG.`)
+    }
   }
 
   async function read(f) {
