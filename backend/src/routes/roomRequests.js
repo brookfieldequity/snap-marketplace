@@ -290,6 +290,93 @@ router.get('/', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /grid?location&year&month — the month behind a card (Foundation phase):
+// per day, what the coverage template assumes, what the site RETURNED, and
+// what the admin has set — with the effective count under the same precedence
+// the generator uses (admin-set > returned card > template default). This is
+// the click-through Matt asked for ("you can't see what they returned") and
+// the admin's post-return editing surface (edits go through the existing
+// ScheduleDay upsert, which marks roomsAdminSet).
+router.get('/grid', facilityAuth, async (req, res) => {
+  try {
+    const location = String(req.query.location || '').trim();
+    const yr = Number(req.query.year);
+    const mo = Number(req.query.month);
+    if (!location || !Number.isInteger(yr) || !Number.isInteger(mo) || mo < 1 || mo > 12) {
+      return res.status(400).json({ error: 'location, year and month are required' });
+    }
+    const monthStart = new Date(Date.UTC(yr, mo - 1, 1));
+    const monthEnd = new Date(Date.UTC(yr, mo, 1));
+
+    const [tmplDays, card, schedDays] = await Promise.all([
+      prisma.coverageTemplateDay.findMany({
+        where: { template: { facilityId: req.facility.id, isDefault: true }, location },
+        select: { dayOfWeek: true, roomsRequired: true },
+      }),
+      prisma.roomCountRequest.findFirst({
+        where: { facilityId: req.facility.id, location, year: yr, month: mo },
+        include: { dayCounts: true },
+      }),
+      prisma.scheduleDay.findMany({
+        where: { facilityId: req.facility.id, location, date: { gte: monthStart, lt: monthEnd } },
+        select: { id: true, date: true, roomsRequired: true, roomsAdminSet: true },
+      }),
+    ]);
+
+    const tmplByDow = {};
+    for (const t of tmplDays) tmplByDow[t.dayOfWeek] = t.roomsRequired;
+    const cardByDate = {};
+    const noteByDate = {};
+    if (card?.submittedAt) {
+      for (const d of card.dayCounts) {
+        const isoD = d.date.toISOString().slice(0, 10);
+        cardByDate[isoD] = d.roomsRequired;
+        if (d.note) noteByDate[isoD] = d.note;
+      }
+    }
+    const schedByDate = {};
+    for (const s of schedDays) schedByDate[s.date.toISOString().slice(0, 10)] = s;
+
+    const daysInMonth = new Date(yr, mo, 0).getDate();
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const isoD = `${yr}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dow = new Date(isoD + 'T12:00:00Z').getUTCDay();
+      const sched = schedByDate[isoD];
+      const adminSet = sched?.roomsAdminSet ? sched.roomsRequired : null;
+      const cardCount = cardByDate[isoD] ?? null;
+      const template = tmplByDow[dow] ?? null;
+      const effective = adminSet ?? cardCount ?? template;
+      days.push({
+        date: isoD,
+        dow,
+        template,
+        card: cardCount,
+        adminSet,
+        scheduled: sched ? sched.roomsRequired : null,
+        effective,
+        source: adminSet != null ? 'ADMIN' : cardCount != null ? 'CARD' : template != null ? 'TEMPLATE' : null,
+        note: noteByDate[isoD] || null,
+      });
+    }
+    res.json({
+      location,
+      year: yr,
+      month: mo,
+      card: card ? {
+        status: card.submittedAt ? 'RETURNED' : (new Date() > card.deadline ? 'LOCKED_NO_RESPONSE' : 'SENT'),
+        sentAt: card.sentAt?.toISOString() || null,
+        submittedAt: card.submittedAt?.toISOString() || null,
+        lastUpdatedAt: card.lastUpdatedAt?.toISOString() || null,
+      } : null,
+      days,
+    });
+  } catch (err) {
+    console.error('[roomRequests] grid failed:', err);
+    res.status(500).json({ error: 'Failed to load the month grid' });
+  }
+});
+
 router.post('/:id/remind', facilityAuth, async (req, res) => {
   try {
     const request = await prisma.roomCountRequest.findFirst({

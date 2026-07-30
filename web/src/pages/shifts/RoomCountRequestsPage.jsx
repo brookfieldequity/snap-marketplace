@@ -30,6 +30,7 @@ function defaultDeadline(year, month) {
 
 export default function RoomCountRequestsPage() {
   const init = defaultTarget()
+  const [gridFor, setGridFor] = useState(null) // location whose month grid is open
   const [year, setYear] = useState(init.year)
   const [month, setMonth] = useState(init.month)
   const [deadline, setDeadline] = useState(defaultDeadline(init.year, init.month))
@@ -188,6 +189,11 @@ export default function RoomCountRequestsPage() {
                         style={ghostBtn}
                       >📋 Copy link</button>
                     )}
+                    <button
+                      onClick={() => setGridFor(location)}
+                      title="See the whole month: what the site returned, the template default, and your overrides — click any day to change its count"
+                      style={{ ...ghostBtn, color: ROYAL, borderColor: '#BFDBFE', background: '#EFF6FF' }}
+                    >📅 Month view</button>
                   </div>
                 </div>
 
@@ -228,6 +234,142 @@ export default function RoomCountRequestsPage() {
           })}
         </div>
       )}
+
+      {gridFor && (
+        <MonthGridModal location={gridFor} year={year} month={month} onClose={() => setGridFor(null)} />
+      )}
+    </div>
+  )
+}
+
+// ── Month grid: what the site returned, day by day, with admin overrides ──────
+// Provenance colors: gray = template default, blue = site-returned card,
+// purple = admin-set. Click any day to change its count — the edit writes a
+// roomsAdminSet ScheduleDay, which the generator preserves (the ruling
+// outranks the testimony; nothing overwrites what the site said).
+const SRC_STYLE = {
+  ADMIN:    { bg: '#F5F3FF', bd: '#DDD6FE', fg: '#6D28D9', label: 'admin-set' },
+  CARD:     { bg: '#EFF6FF', bd: '#BFDBFE', fg: '#1D4ED8', label: 'site returned' },
+  TEMPLATE: { bg: '#F8FAFC', bd: '#E2E8F0', fg: '#64748B', label: 'template default' },
+}
+
+function MonthGridModal({ location, year, month, onClose }) {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState('')
+  const [editing, setEditing] = useState(null) // { date, value }
+  const [saving, setSaving] = useState(false)
+
+  const load = () => {
+    facilityAPI.getRoomCountGrid(location, year, month).then(setData).catch((e) => setErr(e.message))
+  }
+  useEffect(load, [location, year, month]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveDay() {
+    const rooms = parseInt(editing.value, 10)
+    if (!Number.isInteger(rooms) || rooms < 0 || rooms > 50) return alert('Room count must be 0–50.')
+    setSaving(true)
+    try {
+      await facilityAPI.upsertScheduleDay({ date: editing.date, location, roomsRequired: rooms })
+      setEditing(null)
+      load()
+    } catch (e) { alert(e.message) } finally { setSaving(false) }
+  }
+
+  const days = data?.days || []
+  const leading = days.length ? days[0].dow : 0
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, maxHeight: '88vh', overflowY: 'auto', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: NAVY }}>📅 {location} — {MONTHS[month]} {year}</div>
+            <div style={{ fontSize: 12, color: SLATE, marginTop: 3 }}>
+              {data?.card?.submittedAt
+                ? `Site returned counts ${new Date(data.card.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${data.card.lastUpdatedAt && data.card.lastUpdatedAt !== data.card.submittedAt ? ` · updated ${new Date(data.card.lastUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}`
+                : data?.card ? 'Card sent — not returned yet (showing template defaults)' : 'No card sent this month (showing template defaults)'}
+              {' · click any day to set its count'}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 20, color: MUTED, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ display: 'flex', gap: 12, margin: '8px 0 14px', flexWrap: 'wrap' }}>
+          {Object.entries(SRC_STYLE).map(([k, s]) => (
+            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: SLATE }}>
+              <span style={{ width: 12, height: 12, borderRadius: 4, background: s.bg, border: `1.5px solid ${s.bd}` }} /> {s.label}
+            </span>
+          ))}
+        </div>
+        {err && <div style={{ color: '#DC2626', fontSize: 13, marginBottom: 10 }}>{err}</div>}
+        {!data ? (
+          <div style={{ color: MUTED, textAlign: 'center', padding: '40px 0' }}>Loading…</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 4 }}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                <div key={d} style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: MUTED, textTransform: 'uppercase' }}>{d}</div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              {Array.from({ length: leading }, (_, i) => <div key={`b${i}`} />)}
+              {days.map((d) => {
+                const s = d.source ? SRC_STYLE[d.source] : { bg: '#fff', bd: '#F1F5F9', fg: '#CBD5E1' }
+                const wknd = d.dow === 0 || d.dow === 6
+                return (
+                  <div
+                    key={d.date}
+                    onClick={() => setEditing({ date: d.date, value: d.effective ?? '' })}
+                    title={[
+                      d.note ? `Site note: ${d.note}` : null,
+                      d.card != null ? `Site returned: ${d.card}` : null,
+                      d.template != null ? `Template: ${d.template}` : null,
+                      d.adminSet != null ? `Admin set: ${d.adminSet}` : null,
+                    ].filter(Boolean).join(' · ') || 'Click to set the room count'}
+                    style={{
+                      minHeight: 58, borderRadius: 10, padding: '6px 8px', cursor: 'pointer',
+                      background: wknd && !d.source ? '#FAFAFA' : s.bg, border: `1.5px solid ${s.bd}`,
+                      opacity: wknd && d.effective == null ? 0.55 : 1,
+                    }}
+                  >
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED }}>{Number(d.date.slice(8, 10))}{d.note ? ' ✎' : ''}</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: s.fg, lineHeight: 1.2 }}>
+                      {d.effective != null ? d.effective : '—'}
+                    </div>
+                    {d.adminSet != null && d.card != null && d.adminSet !== d.card && (
+                      <div style={{ fontSize: 9, color: '#B45309', fontWeight: 700 }}>site said {d.card}</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {editing && (
+          <div onClick={() => setEditing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 650, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: 280, boxShadow: '0 16px 48px rgba(0,0,0,0.3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 10 }}>
+                {location} · {new Date(editing.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginBottom: 14 }}>
+                <button onClick={() => setEditing((e) => ({ ...e, value: Math.max(0, (parseInt(e.value, 10) || 0) - 1) }))} style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${LINE}`, background: '#fff', fontSize: 18, cursor: 'pointer' }}>−</button>
+                <input
+                  value={editing.value}
+                  onChange={(e) => setEditing((ed) => ({ ...ed, value: e.target.value.replace(/\D/g, '') }))}
+                  style={{ width: 56, textAlign: 'center', fontSize: 20, fontWeight: 800, color: NAVY, border: `1.5px solid ${LINE}`, borderRadius: 8, padding: '6px 0' }}
+                />
+                <button onClick={() => setEditing((e) => ({ ...e, value: (parseInt(e.value, 10) || 0) + 1 }))} style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${LINE}`, background: '#fff', fontSize: 18, cursor: 'pointer' }}>+</button>
+                <span style={{ fontSize: 12, color: MUTED }}>rooms</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setEditing(null)} style={{ padding: '8px 14px', background: '#F1F5F9', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: SLATE, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={saveDay} disabled={saving} style={{ padding: '8px 16px', background: '#6D28D9', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 800, color: '#fff', cursor: 'pointer' }}>
+                  {saving ? 'Saving…' : 'Set count'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
