@@ -27,6 +27,48 @@ function Skeleton({ width = '100%', height = 20, radius = 6 }) {
   )
 }
 
+// ─── "What changed" — the coordinator activity feed (Foundation phase) ────────
+// Card returns, availability submissions/changes, new + decided requests,
+// fresh PTO — derived live server-side; Paula's answer to "how do I know?"
+function ActivityFeed({ onNavigate }) {
+  const [feed, setFeed] = useState(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    facilityAPI.getScheduleActivity(7).then(setFeed).catch(() => setFeed({ events: [] }))
+  }, [])
+  const events = feed?.events || []
+  if (!feed || events.length === 0) return null
+  const ago = (ts) => {
+    const m = Math.round((Date.now() - new Date(ts)) / 60000)
+    if (m < 60) return `${m}m ago`
+    if (m < 1440) return `${Math.round(m / 60)}h ago`
+    return `${Math.round(m / 1440)}d ago`
+  }
+  const shown = open ? events : events.slice(0, 4)
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: shown.length ? 8 : 0 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>🔔 What changed</span>
+        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>last {feed.windowDays} days · {events.length} update{events.length === 1 ? '' : 's'}</span>
+        <div style={{ flex: 1 }} />
+        {events.length > 4 && (
+          <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            {open ? 'Show less' : `Show all ${events.length}`}
+          </button>
+        )}
+      </div>
+      {shown.map((e, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderTop: i > 0 ? '1px solid #F8FAFC' : 'none' }}>
+          <span style={{ fontSize: 13 }}>{e.icon}</span>
+          <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{e.title}</span>
+          <span style={{ fontSize: 12, color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.detail}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap' }}>{ago(e.ts)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── StaffIQ Efficiency Gauge ─────────────────────────────────────────────────
 // Score = 100 − wasteRatioPct. Gap from 100 = waste% = lever-1 $/spend.
 // Positioned below the dollar hero as the efficiency-and-benchmark explanation.
@@ -388,6 +430,8 @@ export default function SnapShiftsDashboard({ onNavigate }) {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1300, margin: '0 auto' }}>
+
+      <ActivityFeed onNavigate={onNavigate} />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div

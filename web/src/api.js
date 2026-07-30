@@ -314,6 +314,7 @@ export const facilityAPI = {
   materializeFromStaffiq: (year, month, replace) => apiFetch(`${BASE}/schedule/materialize-from-staffiq`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, replace }) }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getRoomCountGrid: (location, year, month) => apiFetch(`${BASE}/room-requests/grid?location=${encodeURIComponent(location)}&year=${year}&month=${month}`, { headers: facilityHeaders() }),
+  getScheduleActivity: (days) => apiFetch(`${BASE}/schedule/activity${days ? `?days=${days}` : ''}`, { headers: facilityHeaders() }),
   setRoomsForSite: (location, roomsRequired, year, month) => apiFetch(`${BASE}/schedule/rooms-bulk`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, roomsRequired, year, month }) }),
   createScheduleShare: (location, year, month) => apiFetch(`${BASE}/schedule/share`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ location, year, month }) }),
   deleteScheduleDay: (dayId) => apiFetch(`${BASE}/schedule/days/${dayId}`, { method: 'DELETE', headers: facilityHeaders() }),

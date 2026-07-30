@@ -228,6 +228,83 @@ router.get('/month', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /activity?days=7 — the coordinator's "what changed" feed (Foundation
+// phase; Paula's question). DERIVED live from existing tables — card returns,
+// availability submissions/updates, new + decided requests, fresh PTO — no
+// event table, nothing to keep in sync. Newest first, capped.
+router.get('/activity', facilityAuth, async (req, res) => {
+  try {
+    const windowDays = Math.min(30, Math.max(1, parseInt(req.query.days, 10) || 7));
+    const since = new Date(Date.now() - windowDays * 86400000);
+    const fid = req.facility.id;
+
+    const [cards, avails, requests, timeOff] = await Promise.all([
+      prisma.roomCountRequest.findMany({
+        where: { facilityId: fid, OR: [{ submittedAt: { gte: since } }, { lastUpdatedAt: { gte: since } }] },
+        select: { location: true, year: true, month: true, submittedAt: true, lastUpdatedAt: true },
+      }),
+      prisma.availabilityRequest.findMany({
+        where: { facilityId: fid, OR: [{ submittedAt: { gte: since } }, { lastUpdatedAt: { gte: since } }] },
+        select: { year: true, month: true, submittedAt: true, lastUpdatedAt: true, rosterEntry: { select: { providerName: true } } },
+      }),
+      prisma.scheduleRequest.findMany({
+        where: { facilityId: fid, OR: [{ createdAt: { gte: since } }, { decidedAt: { gte: since } }] },
+        select: { type: true, status: true, date: true, endDate: true, createdAt: true, decidedAt: true, rosterEntry: { select: { providerName: true } } },
+      }),
+      prisma.rosterTimeOff.findMany({
+        where: { facilityId: fid, createdAt: { gte: since } },
+        select: { startDate: true, endDate: true, reason: true, createdAt: true, scheduleRequestId: true, rosterEntry: { select: { providerName: true } } },
+        take: 200,
+      }),
+    ]);
+
+    const fmtD = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const span = (s, e) => (e && new Date(e).getTime() !== new Date(s).getTime() ? `${fmtD(s)}–${fmtD(e)}` : fmtD(s));
+    const events = [];
+
+    for (const c of cards) {
+      const monthLabel = `${c.location} · ${c.month}/${String(c.year).slice(2)}`;
+      if (c.submittedAt && c.submittedAt >= since) {
+        events.push({ ts: c.submittedAt, icon: '🏥', kind: 'CARD_RETURNED', title: `${c.location} returned room counts`, detail: monthLabel });
+      }
+      if (c.lastUpdatedAt && c.submittedAt && c.lastUpdatedAt > c.submittedAt && c.lastUpdatedAt >= since) {
+        events.push({ ts: c.lastUpdatedAt, icon: '🏥', kind: 'CARD_UPDATED', title: `${c.location} UPDATED room counts`, detail: `${monthLabel} — re-check days you've already built` });
+      }
+    }
+    for (const a of avails) {
+      const who = a.rosterEntry?.providerName || 'A provider';
+      if (a.submittedAt && a.submittedAt >= since) {
+        events.push({ ts: a.submittedAt, icon: '🗓️', kind: 'AVAIL_SUBMITTED', title: `${who} submitted availability`, detail: `${a.month}/${String(a.year).slice(2)}` });
+      }
+      if (a.lastUpdatedAt && a.submittedAt && a.lastUpdatedAt > a.submittedAt && a.lastUpdatedAt >= since) {
+        events.push({ ts: a.lastUpdatedAt, icon: '🗓️', kind: 'AVAIL_UPDATED', title: `${who} CHANGED their availability`, detail: `${a.month}/${String(a.year).slice(2)} — may affect placed days` });
+      }
+    }
+    for (const r of requests) {
+      const who = r.rosterEntry?.providerName || 'A provider';
+      const label = r.type === 'PTO' ? 'PTO' : r.type === 'DAY_OFF' ? 'day off' : 'work day';
+      if (r.createdAt >= since && r.status === 'PENDING') {
+        events.push({ ts: r.createdAt, icon: '🙋', kind: 'REQUEST_NEW', title: `${who} requested ${label}`, detail: span(r.date, r.endDate) });
+      }
+      if (r.decidedAt && r.decidedAt >= since) {
+        events.push({ ts: r.decidedAt, icon: r.status === 'ACCEPTED' ? '✅' : '❌', kind: 'REQUEST_DECIDED', title: `${who}'s ${label} ${r.status === 'ACCEPTED' ? 'approved' : 'declined'}`, detail: span(r.date, r.endDate) });
+      }
+    }
+    // PTO rows created by request approval are already covered by
+    // REQUEST_DECIDED — only surface coordinator/import/holiday entries.
+    for (const t of timeOff) {
+      if (t.scheduleRequestId) continue;
+      events.push({ ts: t.createdAt, icon: '🌴', kind: 'PTO_ADDED', title: `PTO added — ${t.rosterEntry?.providerName || 'provider'}`, detail: `${span(t.startDate, t.endDate)}${t.reason ? ` · ${t.reason.slice(0, 40)}` : ''}` });
+    }
+
+    events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    res.json({ windowDays, events: events.slice(0, 100) });
+  } catch (err) {
+    console.error('[schedule/activity] error:', err);
+    res.status(500).json({ error: 'Failed to load activity' });
+  }
+});
+
 // POST /days — create or upsert a schedule day
 router.post('/days', facilityAuth, async (req, res) => {
   try {
