@@ -1689,7 +1689,13 @@ router.post('/portal/cv/commit', credentialAuth, requireCoordinator, async (req,
     if (!passportClient.isConfigured()) return res.status(503).json({ error: 'Passport bridge is not configured', bridgeUnconfigured: true })
     const { profile, npi } = req.body || {}
     if (!profile) return res.status(400).json({ error: 'profile required' })
-    const result = await passportClient.commitCv(profile, String(npi || '').replace(/\D/g, '') || undefined)
+    const facility = await prisma.facility.findUnique({ where: { id: req.facilityId }, select: { name: true } })
+    const result = await passportClient.commitCv(
+      profile,
+      String(npi || '').replace(/\D/g, '') || undefined,
+      req.facilityId,
+      facility?.name,
+    )
     if (result.committed) {
       await logAccess(req.facilityId, req.credUser.id, npi || 'cv', 'CV_PROFILE_COMMIT', null, null, req)
     }

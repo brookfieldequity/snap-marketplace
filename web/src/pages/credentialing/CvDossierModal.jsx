@@ -47,6 +47,8 @@ export default function CvDossierModal({ item, onClose, onSaved }) {
         setSaving(false)
         return
       }
+      // Facility-first: committing for an unclaimed NPI now starts their
+      // passport on the spot (result.facilityFirst) instead of discarding.
       await onSaved(item) // marks the intake item CONFIRMED so the CV file files to this provider too
     } catch (e) { setError(e.message); setSaving(false) }
   }

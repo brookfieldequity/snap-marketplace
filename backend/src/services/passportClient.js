@@ -414,10 +414,13 @@ async function extractCv(fileBuffer, filename, mimeType) {
   return body.profile
 }
 
-async function commitCv(profile, npi) {
+async function commitCv(profile, npi, facilityId, facilityName) {
+  // facilityId/facilityName enable the facility-first fallback on the cred
+  // backend: a commit for an unclaimed NPI mints a placeholder passport +
+  // facility grant instead of discarding the extraction.
   const { status, body, ok } = await callPassportApi('/api/service/cv/commit', {
     method: 'POST',
-    body: JSON.stringify({ profile, npi }),
+    body: JSON.stringify({ profile, npi, granteeRef: facilityId, granteeLabel: facilityName }),
   })
   if (ok) return body
   const err = new Error(body?.error || `CV commit failed (HTTP ${status})`)

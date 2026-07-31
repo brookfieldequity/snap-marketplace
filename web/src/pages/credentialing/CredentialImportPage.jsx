@@ -73,7 +73,7 @@ export default function CredentialImportPage() {
     setCommitting(true)
     try {
       const r = await credentialAPI.commitIntake(batch.id)
-      setNotice(`Done: ${r.committed} filed to passports, ${r.archived || 0} filed to archive, ${r.staged} held for providers who haven't joined yet (they'll attach automatically).`)
+      setNotice(`Done: ${r.committed} filed to passports${r.passportsCreated ? ` (${r.passportsCreated} new passport${r.passportsCreated === 1 ? '' : 's'} started for providers who haven't joined — you already have access)` : ''}, ${r.archived || 0} filed to archive${r.staged ? `, ${r.staged} held (no NPI match yet — fix the NPI on the card to file them)` : ''}.`)
       openBatch(batch.id)
       loadList()
     } catch (e) {
@@ -276,7 +276,7 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
         {item.matchedProfileId
           ? '✅ Matched to an existing passport'
           : item.stagedForNpi
-            ? `🕓 No passport yet for NPI ${item.stagedForNpi} — will attach when they join`
+            ? `🆕 No passport yet for NPI ${item.stagedForNpi} — commit will start one (you keep access; they inherit it when they join)`
             : item.status !== 'PENDING' ? '⚠️ No provider match — set the NPI above' : null}
         {item.aiNotes && <span> · {item.aiNotes}</span>}
       </div>
