@@ -69,6 +69,118 @@ function ActivityFeed({ onNavigate }) {
   )
 }
 
+// ─── Conflict flags — the janitor worklist (Wave 3.3) ─────────────────────────
+// Every contradiction in the schedule (PTO vs assignment, double-bookings,
+// "said unavailable", card-vs-built room counts, holiday collisions) as a
+// flag + one-click suggested fix. Flag everything, fix nothing automatically:
+// every fix below routes through an existing mutation and is coordinator-
+// clicked. Covers the current AND next month — drafting happens ahead.
+const FLAG_SEV = {
+  HIGH: { bg: '#FEF2F2', border: '#FCA5A5', text: '#B91C1C', label: 'Fix now' },
+  MEDIUM: { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309', label: 'Check' },
+  INFO: { bg: '#F8FAFC', border: '#E2E8F0', text: '#64748B', label: 'FYI' },
+}
+
+function FlagsPanel() {
+  const [flags, setFlags] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [fixing, setFixing] = useState(null)
+
+  const load = () => {
+    const now = new Date()
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    Promise.all([
+      facilityAPI.getScheduleFlags(now.getFullYear(), now.getMonth() + 1),
+      facilityAPI.getScheduleFlags(next.getFullYear(), next.getMonth() + 1),
+    ])
+      .then(([cur, nxt]) => setFlags([
+        ...cur.flags.map((f) => ({ ...f, monthLabel: '' })),
+        ...nxt.flags.map((f) => ({ ...f, monthLabel: 'next month' })),
+      ]))
+      .catch(() => setFlags([]))
+  }
+  useEffect(load, [])
+
+  if (!flags || flags.length === 0) return null
+  const high = flags.filter((f) => f.severity === 'HIGH').length
+  const postPublish = flags.filter((f) => f.published).length
+  const shown = open ? flags : flags.slice(0, 5)
+
+  async function applyFix(flag) {
+    const fix = flag.fix
+    if (!fix) return
+    const needsConfirm = fix.action === 'DELETE_DAY' || (fix.action === 'UNASSIGN' && flag.published)
+    if (needsConfirm && !window.confirm(
+      fix.action === 'DELETE_DAY'
+        ? `Remove the ${flag.location} schedule day on ${flag.date}?`
+        : `${flag.providerName} is on a PUBLISHED day — unassigning will notify them. Continue?`
+    )) return
+    setFixing(flag.id)
+    try {
+      if (fix.action === 'UNASSIGN') await facilityAPI.assignProvider(fix.dayId, fix.roomNumber, '')
+      else if (fix.action === 'SET_ROOMS') await facilityAPI.upsertScheduleDay({ date: fix.date, location: fix.location, roomsRequired: fix.rooms })
+      else if (fix.action === 'CREATE_DAY') await facilityAPI.upsertScheduleDay({ date: fix.date, location: fix.location, roomsRequired: fix.rooms })
+      else if (fix.action === 'DELETE_DAY') await facilityAPI.deleteScheduleDay(fix.dayId)
+      load()
+    } catch (e) {
+      alert(`Fix failed: ${e.message}`)
+    } finally {
+      setFixing(null)
+    }
+  }
+
+  const fixLabel = (fix) => fix?.action === 'UNASSIGN' ? 'Unassign'
+    : fix?.action === 'SET_ROOMS' ? `Use site's ${fix.rooms}`
+    : fix?.action === 'CREATE_DAY' ? 'Build the day'
+    : fix?.action === 'DELETE_DAY' ? 'Remove day'
+    : null
+
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${high ? '#FCA5A5' : '#FDE68A'}`, borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>⚑ Schedule flags</span>
+        {high > 0 && (
+          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C' }}>{high} need coverage</span>
+        )}
+        {postPublish > 0 && (
+          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#FFF7ED', border: '1px solid #FDBA74', color: '#C2410C' }}>📣 {postPublish} on published days</span>
+        )}
+        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>{flags.length} total · nothing changes without you</span>
+        <div style={{ flex: 1 }} />
+        {flags.length > 5 && (
+          <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            {open ? 'Show less' : `Show all ${flags.length}`}
+          </button>
+        )}
+      </div>
+      {shown.map((f) => {
+        const sev = FLAG_SEV[f.severity] || FLAG_SEV.INFO
+        const label = fixLabel(f.fix)
+        return (
+          <div key={f.id + f.monthLabel} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid #F8FAFC' }}>
+            <span style={{ fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: sev.bg, border: `1px solid ${sev.border}`, color: sev.text, whiteSpace: 'nowrap' }}>
+              {f.published ? '📣 ' : ''}{sev.label}
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{f.title}</span>
+              <span style={{ fontSize: 12, color: '#64748B', marginLeft: 6 }}>{f.detail}{f.monthLabel ? ` · ${f.monthLabel}` : ''}</span>
+            </div>
+            {label && (
+              <button
+                onClick={() => applyFix(f)}
+                disabled={fixing === f.id}
+                style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: '#fff', border: `1px solid ${sev.border}`, color: sev.text, cursor: 'pointer', whiteSpace: 'nowrap', opacity: fixing === f.id ? 0.5 : 1 }}
+              >
+                {fixing === f.id ? 'Fixing…' : label}
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── StaffIQ Efficiency Gauge ─────────────────────────────────────────────────
 // Score = 100 − wasteRatioPct. Gap from 100 = waste% = lever-1 $/spend.
 // Positioned below the dollar hero as the efficiency-and-benchmark explanation.
@@ -431,6 +543,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1300, margin: '0 auto' }}>
 
+      <FlagsPanel />
       <ActivityFeed onNavigate={onNavigate} />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}

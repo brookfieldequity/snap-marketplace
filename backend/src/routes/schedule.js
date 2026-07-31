@@ -305,6 +305,23 @@ router.get('/activity', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /flags?year&month — universal conflict flags (Wave 3.3). Every
+// contradiction in the month as a typed flag + suggested fix; computed live,
+// stored nowhere, nothing auto-changed. See services/scheduleFlags.js.
+router.get('/flags', facilityAuth, async (req, res) => {
+  try {
+    const now = new Date();
+    const year = parseInt(req.query.year, 10) || now.getFullYear();
+    const month = parseInt(req.query.month, 10) || now.getMonth() + 1;
+    if (month < 1 || month > 12) return res.status(400).json({ error: 'Valid month (1-12) required' });
+    const { computeScheduleFlags } = require('../services/scheduleFlags');
+    res.json(await computeScheduleFlags(req.facility.id, year, month));
+  } catch (err) {
+    console.error('[schedule/flags] error:', err);
+    res.status(500).json({ error: 'Failed to compute flags' });
+  }
+});
+
 // POST /days — create or upsert a schedule day
 router.post('/days', facilityAuth, async (req, res) => {
   try {

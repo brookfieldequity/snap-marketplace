@@ -943,6 +943,10 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   const [availabilities, setAvailabilities] = useState([]) // from schedule month response
   const [timeOff, setTimeOff] = useState([]) // PTO ranges from schedule month response
   const [maybeNotes, setMaybeNotes] = useState([]) // "maybe" sticky notes from the tokenized availability link
+  // Universal conflict flags (Wave 3.3) — server-computed, quiet while
+  // drafting. PTO conflicts keep their own red chip; this holds the rest
+  // (said-unavailable, double-booked, room-count mismatch, holiday…).
+  const [flagsData, setFlagsData] = useState(null)
 
   // Coverage Templates for the "Generate from template" banner shown when
   // the current month is empty. Loaded once on mount; generation pulls the
@@ -976,17 +980,19 @@ export default function ScheduleBuilderPage({ onNavigate }) {
     setLoading(true)
     setError(null)
     try {
-      const [sched, summ, rosterData, intel, tmplRes, me] = await Promise.all([
+      const [sched, summ, rosterData, intel, tmplRes, me, flg] = await Promise.all([
         facilityAPI.getScheduleMonth(year, month),
         facilityAPI.getScheduleSummary(year, month).catch(() => null),
         facilityAPI.getRoster().catch(() => []),
         facilityAPI.getScheduleIntelligence().catch(() => null),
         facilityAPI.getCoverageTemplates().catch(() => ({ templates: [] })),
         facilityAPI.getMe().catch(() => null),
+        facilityAPI.getScheduleFlags(year, month).catch(() => null),
       ])
       setScheduleData(sched)
       setSummary(summ)
       if (me) setFacility(me)
+      setFlagsData(flg)
       const r = Array.isArray(rosterData) ? rosterData : rosterData.roster || []
       setRoster(r)
       setIntelligence(intel)
@@ -1416,6 +1422,16 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   }
   ptoConflicts.sort((x, y) => x.date.localeCompare(y.date))
 
+  // Server-computed universal flags (Wave 3.3), minus PTO conflicts (those
+  // keep the dedicated red chip above). Indexed by date for cell chips and
+  // the day cockpit; quiet while drafting per the locked design.
+  const otherFlags = (flagsData?.flags || []).filter((f) => f.type !== 'PTO_CONFLICT')
+  const flagsByDate = {}
+  for (const f of otherFlags) {
+    if (!flagsByDate[f.date]) flagsByDate[f.date] = []
+    flagsByDate[f.date].push(f)
+  }
+
   const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
   while (cells.length % 7 !== 0) cells.push(null)
 
@@ -1457,6 +1473,16 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             >
               <span style={{ fontSize: 17, fontWeight: 800, color: '#DC2626', lineHeight: 1 }}>⚠ {ptoConflicts.length}</span>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Need coverage</span>
+            </button>
+          )}
+          {otherFlags.length > 0 && (
+            <button
+              onClick={() => setDayDetailModal(otherFlags[0].date)}
+              title={otherFlags.map(f => `${f.date.slice(5)} · ${f.title}`).join('\n')}
+              style={{ padding: '8px 16px', background: '#FFFBEB', border: '2px solid #F59E0B', borderRadius: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}
+            >
+              <span style={{ fontSize: 17, fontWeight: 800, color: '#B45309', lineHeight: 1 }}>⚑ {otherFlags.length}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Flags</span>
             </button>
           )}
         </div>
@@ -1845,6 +1871,15 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                           </div>
                         ) : null
                       })()}
+                      {(() => {
+                        // Universal flags (non-PTO): quiet amber chip while drafting.
+                        const fl = flagsByDate[dateStr] || []
+                        return fl.length > 0 ? (
+                          <div title={fl.map(f => f.title).join('\n')} style={{ fontSize: 9.5, fontWeight: 800, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 5, padding: '1px 6px', marginBottom: 4, display: 'inline-block' }}>
+                            ⚑ {fl.length} flag{fl.length > 1 ? 's' : ''}
+                          </div>
+                        ) : null
+                      })()}
                       {dayRows.map((row, ri) => {
                         const filled = (row.assignments || []).filter(a => a.rosterId).length
                         const required = row.roomsRequired || 1
@@ -1973,6 +2008,46 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                       </div>
                     )}
                   </div>
+
+                  {/* Universal conflict flags for this day (Wave 3.3) */}
+                  {(flagsByDate[dayDetailModal] || []).length > 0 && (
+                    <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                        ⚑ Flags this day ({(flagsByDate[dayDetailModal] || []).length}) — nothing changes without you
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                        {(flagsByDate[dayDetailModal] || []).map((f) => (
+                          <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 700 }}>{f.published ? '📣 ' : ''}{f.title}</div>
+                              <div style={{ fontSize: 11.5, color: '#64748B' }}>{f.detail}</div>
+                            </div>
+                            {f.fix?.action === 'UNASSIGN' && (
+                              <button
+                                onClick={() => handleAssign(f.fix.dayId, f.fix.roomNumber, '')}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: '#fff', border: '1px solid #FDE68A', color: '#92400E', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                              >
+                                Unassign
+                              </button>
+                            )}
+                            {(f.fix?.action === 'SET_ROOMS' || f.fix?.action === 'CREATE_DAY') && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await facilityAPI.upsertScheduleDay({ date: f.fix.date, location: f.fix.location, roomsRequired: f.fix.rooms })
+                                    load()
+                                  } catch (e) { alert(`Failed: ${e.message}`) }
+                                }}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: '#fff', border: '1px solid #FDE68A', color: '#92400E', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                              >
+                                {f.fix.action === 'CREATE_DAY' ? 'Build the day' : `Use site's ${f.fix.rooms}`}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )
