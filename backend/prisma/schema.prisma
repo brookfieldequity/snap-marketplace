@@ -837,6 +837,12 @@ model InternalRosterEntry {
   // True for back-office / non-clinical staff who belong on the roster for
   // payroll purposes but are never scheduled into ORs and don't need an NPI.
   isNonClinical             Boolean             @default(false)
+  // Schedule classification, SPLIT from payroll classification (Matt, 7/31):
+  // "on the set schedule" = automatically drafted every month around PTO.
+  // null = auto from employmentCategory (FULL_TIME/PART_TIME yes, others no);
+  // true/false = explicit override — e.g. a full-time 1099 is PER_DIEM for
+  // payroll but onSetSchedule=true for the draft engine.
+  onSetSchedule             Boolean?
   // True when the coordinator has explicitly marked this person as not
   // needing an NPI (back-office staff, or a provider they'll handle out of
   // band). Exempt rows are excluded from the NPI review queue. Auto-set true

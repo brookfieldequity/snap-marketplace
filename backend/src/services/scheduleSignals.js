@@ -106,6 +106,7 @@ async function assembleMonthSignals({ facilityId, year, month, roster, scheduleD
       const key = `${r.id}::${dISO}`;
       const { available, source } = resolveDayAvailability({
         employmentCategory: r.employmentCategory,
+        onSetSchedule: r.onSetSchedule,
         adminAvailable: adminMap.has(key) ? adminMap.get(key) : null,
         ptoCovers: ptoSet.has(key),
         providerAvailable: providerMap.has(key) ? providerMap.get(key) : null,

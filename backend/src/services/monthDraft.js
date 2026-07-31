@@ -36,6 +36,7 @@ const {
   SUPERVISOR_ROOM_BASE,
 } = require('./scheduleBuilder');
 const { assembleMonthSignals } = require('./scheduleSignals');
+const { isSetSchedule } = require('./availability');
 
 const isoOf = (d) => new Date(d).toISOString().slice(0, 10);
 
@@ -211,7 +212,9 @@ async function runMonthDraft(facilityId, year, month) {
         entry: r,
         score:
           SHARE_WEIGHT * shareDeficit(r.id, day.location)
-          + (EMP_PREF[r.employmentCategory] || 0.2)
+          // Set-schedule people (incl. full-time 1099s with the override)
+          // carry full-timer preference regardless of payroll category.
+          + (isSetSchedule(r) ? (EMP_PREF[r.employmentCategory] >= 0.4 ? EMP_PREF[r.employmentCategory] : 0.6) : (EMP_PREF[r.employmentCategory] || 0.2))
           + 0.1 * placementTierScore(r)
           + workBonus(r.id, dISO, day.location)
           - offPenalty(r.id, dISO),

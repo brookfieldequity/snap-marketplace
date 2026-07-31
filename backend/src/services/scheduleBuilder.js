@@ -80,6 +80,11 @@ function placementTierOf(r) {
   if (r.placementTier != null && r.placementTier >= 1 && r.placementTier <= MAX_PLACEMENT_TIER) {
     return r.placementTier;
   }
+  // Schedule classification beats payroll classification: anyone explicitly
+  // on the set schedule (e.g. a full-time 1099 kept PER_DIEM for payroll)
+  // fills first, exactly like a full-timer.
+  const { isSetSchedule } = require('./availability');
+  if (isSetSchedule(r)) return 1;
   return PLACEMENT_TIER_FROM_CATEGORY[r.employmentCategory] ?? DEFAULT_PLACEMENT_TIER;
 }
 // Positive, monotonically-decreasing score contribution: tier 1 → +5000 … tier

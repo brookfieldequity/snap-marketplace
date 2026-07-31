@@ -56,6 +56,9 @@ const BLANK_FORM = {
   // Placement priority (Schedule Builder fill order). '' = auto (derive from
   // employment category). Otherwise 1–5 per PLACEMENT_TIERS.
   placementTier: '',
+  // Schedule classification, split from payroll: '' = auto from category,
+  // 'yes'/'no' = explicit override (e.g. a full-time 1099 → 'yes').
+  onSetSchedule: '',
   // Business name (1099s paid as an LLC/business). useBusinessNameForPayroll
   // makes payroll export the business name instead of the personal name —
   // payroll only; the person is addressed by their name everywhere else.
@@ -398,6 +401,7 @@ export default function InternalRosterPage({ onNavigate }) {
       taxStatus: p.is1099 == null ? '' : (p.is1099 ? '1099' : 'W2'),
       hoursStatus: p.isFullTime == null ? '' : (p.isFullTime ? 'FT' : 'PT'),
       placementTier: p.placementTier ?? '',
+      onSetSchedule: p.onSetSchedule === true ? 'yes' : p.onSetSchedule === false ? 'no' : '',
       businessName: p.businessName || '',
       useBusinessNameForPayroll: !!p.useBusinessNameForPayroll,
       payeeType: p.payeeType || '',
@@ -462,6 +466,7 @@ export default function InternalRosterPage({ onNavigate }) {
         is1099: form.taxStatus === '' ? null : form.taxStatus === '1099',
         isFullTime: form.hoursStatus === '' ? null : form.hoursStatus === 'FT',
         placementTier: form.placementTier !== '' ? parseInt(form.placementTier) : null,
+        onSetSchedule: form.onSetSchedule === 'yes' ? true : form.onSetSchedule === 'no' ? false : null,
         ptoDaysAnnual: form.ptoDaysAnnual !== '' ? parseInt(form.ptoDaysAnnual) : null,
         ptoEligible: form.ptoEligible === '' ? null : form.ptoEligible === 'YES',
         seniorityRank: form.seniorityRank !== '' ? parseInt(form.seniorityRank) : null,
@@ -1089,6 +1094,11 @@ export default function InternalRosterPage({ onNavigate }) {
           {visibleRoster.map((p) => {
             const typeBadge = p.isNonClinical ? TYPE_BADGE.STAFF : (TYPE_BADGE[p.providerType] || TYPE_BADGE.CRNA)
             const empBadge = EMPLOY_BADGE[p.employmentCategory] || EMPLOY_BADGE.FULL_TIME
+            // Schedule classification pill — distinct from the payroll pills so
+            // “who is automatically on the schedule” is readable at a glance.
+            const setSched = p.onSetSchedule === true || p.onSetSchedule === false
+              ? p.onSetSchedule
+              : (p.employmentCategory === 'FULL_TIME' || p.employmentCategory === 'PART_TIME')
             const linked = !!p.snapAccountLinked
             const expiringSoon = isExpiringSoon(p.licenseExpiration)
             const rateLabel = p.employmentCategory === 'FULL_TIME'
@@ -1110,6 +1120,11 @@ export default function InternalRosterPage({ onNavigate }) {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <Badge bg={typeBadge.bg} color={typeBadge.color} label={typeBadge.label} />
                     <Badge bg={empBadge.bg} color={empBadge.color} label={empBadge.label} />
+                    {!p.isNonClinical && (
+                      setSched
+                        ? <Badge bg="#EEF2FF" color="#4338CA" label="📌 Set schedule" />
+                        : <Badge bg="#F8FAFC" color="#64748B" label="🙋 Opt-in" />
+                    )}
                     {p.placementTier != null && PLACEMENT_TIER_BY_VALUE[p.placementTier] && (
                       <Badge
                         bg={PLACEMENT_TIER_BY_VALUE[p.placementTier].badge.bg}
@@ -1310,8 +1325,28 @@ export default function InternalRosterPage({ onNavigate }) {
                   <option value="LOCUMS">Locums</option>
                 </select>
                 <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
-                  Full-time and part-time W2 = set schedules: on every month unless on PTO. SNAP flags anyone missing.
+                  How they're paid. Whether they're automatically scheduled is the next field — the two are separate.
                 </div>
+              </Field>
+              <Field label="📌 On the set schedule?">
+                {(() => {
+                  const autoOn = form.employmentCategory === 'FULL_TIME' || form.employmentCategory === 'PART_TIME'
+                  const resolved = form.onSetSchedule === 'yes' ? true : form.onSetSchedule === 'no' ? false : autoOn
+                  return (
+                    <>
+                      <select style={{ ...inputStyle, borderColor: resolved ? '#86EFAC' : '#E2E8F0', background: resolved ? '#F0FDF4' : '#fff' }} value={form.onSetSchedule} onChange={(e) => setF('onSetSchedule', e.target.value)}>
+                        <option value="">Auto — {autoOn ? 'Yes' : 'No'} (from employment category)</option>
+                        <option value="yes">Yes — automatically on every schedule</option>
+                        <option value="no">No — opt-in only (submits availability)</option>
+                      </select>
+                      <div style={{ fontSize: 11, color: resolved ? '#15803D' : '#94A3B8', marginTop: 4, lineHeight: 1.4, fontWeight: resolved ? 600 : 400 }}>
+                        {resolved
+                          ? '✓ Drafted onto every month around their PTO — SNAP flags them if a month is missing them.'
+                          : 'Not auto-drafted — they get on the schedule via availability they submit. Set “Yes” for full-time 1099s who work a set schedule.'}
+                      </div>
+                    </>
+                  )
+                })()}
               </Field>
               {(cat === 'FULL_TIME' || cat === 'PART_TIME') && (
                 <Field label="FTE Hours / Week" required>

@@ -64,7 +64,7 @@ async function computeScheduleFlags(facilityId, year, month) {
     }),
     prisma.internalRosterEntry.findMany({
       where: { facilityId },
-      select: { id: true, providerName: true, employmentCategory: true, linkedProviderId: true, fteHours: true, isNonClinical: true },
+      select: { id: true, providerName: true, employmentCategory: true, onSetSchedule: true, linkedProviderId: true, fteHours: true, isNonClinical: true },
     }),
     prisma.rosterTimeOff.findMany({
       where: { facilityId, startDate: { lt: end }, endDate: { gte: start } },
@@ -321,20 +321,30 @@ async function computeScheduleFlags(facilityId, year, month) {
     }
     const fillRatio = totalRooms > 0 ? filledRooms / totalRooms : 0;
 
+    const { isSetSchedule } = require('./availability');
     for (const r of roster) {
       if (r.isNonClinical) continue;
-      if (!['FULL_TIME', 'PART_TIME'].includes(r.employmentCategory)) continue;
+      // Schedule classification, not payroll: anyone on the set schedule
+      // (FT/PT by default, or the explicit onSetSchedule override — e.g.
+      // CAPA's full-time 1099s) must appear on every month unless PTO
+      // covers it.
+      if (!isSetSchedule(r)) continue;
       // fteHours is canonically hours/WEEK (40 = full-time). Legacy rows from
       // the payroll import stored PAY-PERIOD hours (80 biweekly) — treat
-      // anything > 60 as biweekly so 64 reads as 80%, not 160%.
+      // anything > 60 as biweekly so 64 reads as 80%, not 160%. A set-schedule
+      // person with no fteHours is expected full-time.
       const fteBasis = r.fteHours > 60 ? 80 : 40;
-      const fteFraction = r.fteHours ? Math.min(1, r.fteHours / fteBasis) : (r.employmentCategory === 'FULL_TIME' ? 1 : null);
+      const fteFraction = r.fteHours
+        ? Math.min(1, r.fteHours / fteBasis)
+        : (r.employmentCategory === 'PART_TIME' ? null : 1);
       const ptoBizDays = [...bizDays].filter((dIso) => ptoByKey.has(`${r.id}|${dIso}`)).length;
       const workableDays = Math.max(0, bizDays.size - ptoBizDays);
       const expected = fteFraction != null ? Math.round(workableDays * fteFraction) : null;
       const actual = scheduledDays.get(r.id)?.size || 0;
       const pctLabel = fteFraction != null && fteFraction < 1 ? ` (${Math.round(fteFraction * 100)}%)` : '';
-      const catLabel = r.employmentCategory === 'FULL_TIME' ? 'full-time' : 'part-time W2';
+      const catLabel = r.employmentCategory === 'FULL_TIME' ? 'full-time'
+        : r.employmentCategory === 'PART_TIME' ? 'part-time W2'
+        : 'set-schedule';
 
       if (actual === 0 && workableDays > 0 && (expected == null || expected > 0)) {
         push({

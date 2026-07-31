@@ -511,7 +511,7 @@ router.post('/', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
-      employer, is1099, isFullTime, placementTier,
+      employer, is1099, isFullTime, placementTier, onSetSchedule,
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
     } = req.body;
@@ -530,6 +530,9 @@ router.post('/', facilityAuth, async (req, res) => {
         isNonClinical: isStaff,
         npiExempt: isStaff,
         employmentCategory,
+        // Schedule classification vs payroll: explicit true/false, or null =
+        // auto from category (see services/availability.isSetSchedule).
+        onSetSchedule: onSetSchedule === true || onSetSchedule === false ? onSetSchedule : null,
         npi: npi ? String(npi).replace(/\D/g, '') || null : null,
         snapAccountEmail: snapAccountEmail || null,
         phoneNumber: phoneNumber || null,
@@ -591,7 +594,7 @@ router.patch('/:id', facilityAuth, async (req, res) => {
       fteHours, annualRate, hourlyRate, allInCostPerHour, preferredShiftLength,
       preferredDays, locationRankings, maxShiftsPerMonth,
       contractStart, contractEnd, locations,
-      employer, is1099, isFullTime, placementTier,
+      employer, is1099, isFullTime, placementTier, onSetSchedule,
       businessName, useBusinessNameForPayroll, payeeType, ein,
       dualEmployment, w2Employer, contractorEmployer, contractorPayRate,
       scheduleAccessRevoked,
@@ -640,6 +643,8 @@ router.patch('/:id', facilityAuth, async (req, res) => {
         ...(req.body.employerId !== undefined && { employerId: req.body.employerId || null }),
         ...(is1099 !== undefined && { is1099: typeof is1099 === 'boolean' ? is1099 : null }),
         ...(isFullTime !== undefined && { isFullTime: typeof isFullTime === 'boolean' ? isFullTime : null }),
+        // Schedule classification vs payroll: true/false override, null = auto.
+        ...(onSetSchedule !== undefined && { onSetSchedule: typeof onSetSchedule === 'boolean' ? onSetSchedule : null }),
         ...(placementTier !== undefined && { placementTier: placementTier != null && placementTier !== '' ? parseInt(placementTier) : null }),
         ...(businessName !== undefined && { businessName: businessName || null }),
         ...(useBusinessNameForPayroll !== undefined && { useBusinessNameForPayroll: useBusinessNameForPayroll === true }),

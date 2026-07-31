@@ -1,7 +1,7 @@
 const express = require('express');
 const prisma = require('../config/db');
 const facilityAuth = require('../middleware/facilityAuth');
-const { resolveDayAvailability } = require('../services/availability');
+const { resolveDayAvailability, isSetSchedule } = require('../services/availability');
 
 const router = express.Router();
 
@@ -38,7 +38,7 @@ router.get('/', facilityAuth, async (req, res) => {
 
     const roster = await prisma.internalRosterEntry.findMany({
       where: { facilityId, providerType: { not: null }, isNonClinical: { not: true } },
-      select: { id: true, providerName: true, providerType: true, employmentCategory: true, linkedProviderId: true },
+      select: { id: true, providerName: true, providerType: true, employmentCategory: true, onSetSchedule: true, linkedProviderId: true },
       orderBy: { providerName: 'asc' },
     });
     const linkedProviderIds = roster.map((r) => r.linkedProviderId).filter(Boolean);
@@ -121,6 +121,7 @@ router.get('/', facilityAuth, async (req, res) => {
       const providerEntry = providerMap.get(key);
       const { available } = resolveDayAvailability({
         employmentCategory: member.employmentCategory,
+        onSetSchedule: member.onSetSchedule,
         adminAvailable: adminEntry ? adminEntry.available : null,
         ptoCovers: ptoSet.has(key),
         providerAvailable: providerEntry ? providerEntry.available : null,
@@ -141,7 +142,7 @@ router.get('/', facilityAuth, async (req, res) => {
       name: r.providerName,
       providerType: r.providerType,
       employmentCategory: r.employmentCategory,
-      defaultAvailable: r.employmentCategory === 'FULL_TIME',
+      defaultAvailable: isSetSchedule(r),
       linked: !!r.linkedProviderId,
     }));
 
