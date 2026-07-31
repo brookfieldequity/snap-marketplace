@@ -767,16 +767,22 @@ function getDayStats(dayRows) {
 
   // Recalculate cleanly. Non-clinical slots (role NON_CLINICAL, room >= 950)
   // are people working NON-room days — they never count toward rooms filled.
+  // Ghost/proposed slots (Wave 4 draft engine) count separately: they're the
+  // machine's suggestion, not coverage.
   filledRooms = 0
   assignedProviders = 0
+  let ghostRooms = 0
   dayRows.forEach(row => {
     const assignments = row.assignments || []
     assignments.forEach(a => {
-      if (a.rosterId && a.role !== 'NON_CLINICAL') { filledRooms++; assignedProviders++ }
+      if (a.rosterId && a.role !== 'NON_CLINICAL') {
+        if (a.ghost) { ghostRooms++ }
+        else { filledRooms++; assignedProviders++ }
+      }
     })
   })
 
-  return { totalRooms, filledRooms, assignedProviders }
+  return { totalRooms, filledRooms, assignedProviders, ghostRooms }
 }
 
 function getDayColor(dayRows) {
@@ -1210,15 +1216,49 @@ export default function ScheduleBuilderPage({ onNavigate }) {
 
   async function handlePublish() {
     const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
-    if (!window.confirm(`Publish the ${monthName} ${year} schedule? Providers will be notified.`)) return
+    // Ghost/proposed slots never publish — warn so the coordinator knows
+    // those rooms will read as open until confirmed.
+    const ghostCount = Object.values(daysByDate).flat().reduce(
+      (s, row) => s + (row.assignments || []).filter(a => a.ghost && a.rosterId).length, 0)
+    const ghostNote = ghostCount > 0
+      ? `\n\n${ghostCount} proposed slot(s) (🔮) will NOT be published — confirm them first if they're real.`
+      : ''
+    if (!window.confirm(`Publish the ${monthName} ${year} schedule? Providers will be notified.${ghostNote}`)) return
     setPublishing(true)
     try {
-      await facilityAPI.publishSchedule(year, month)
-      alert('Schedule published successfully!')
+      const r = await facilityAPI.publishSchedule(year, month)
+      alert(`Schedule published successfully!${r?.ghostsExcluded ? ` (${r.ghostsExcluded} proposed slot(s) held back.)` : ''}`)
     } catch (e) {
       alert('Publish failed: ' + e.message)
     } finally {
       setPublishing(false)
+    }
+  }
+
+  // ⚡ Living Month Draft (Wave 4): allocation-driven fill of every empty
+  // slot. Your placements are never touched (touch = lock); per-diems whose
+  // availability hasn't come back land as 🔮 proposed slots.
+  const [drafting, setDrafting] = useState(false)
+  const [lastDraft, setLastDraft] = useState(null)
+  useEffect(() => {
+    let alive = true
+    facilityAPI.getLatestDraft(year, month).then((r) => { if (alive) setLastDraft(r?.run || null) }).catch(() => {})
+    return () => { alive = false }
+  }, [year, month, loading])
+
+  async function handleDraft() {
+    if (!window.confirm(`Draft ${new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })} ${year}?\n\nThe machine fills EMPTY rooms only — everything you've placed stays exactly where it is. Per-diems without returned availability appear as 🔮 proposed (never published, never visible to sites or providers).`)) return
+    setDrafting(true)
+    try {
+      const r = await facilityAPI.draftMonth(year, month)
+      const lines = (r.entries || []).slice(0, 20).map((e) =>
+        `· ${e.kind === 'PROPOSED' ? '🔮' : e.kind === 'CONFIRMED' ? '✅' : e.kind === 'WITHDRAWN' ? '↩' : '＋'} ${e.date.slice(5)} ${e.location}${e.roomNumber >= 900 ? ' (supervisor)' : ` room ${e.roomNumber}`} — ${e.providerName}${e.detail ? ` (${e.detail})` : ''}`)
+      alert(`${r.summary}${lines.length ? `\n\n${lines.join('\n')}${(r.entries || []).length > 20 ? `\n…and ${r.entries.length - 20} more` : ''}` : ''}`)
+      await load()
+    } catch (e) {
+      alert('Draft failed: ' + e.message)
+    } finally {
+      setDrafting(false)
     }
   }
 
@@ -1532,6 +1572,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           >
             🚀 Build the Schedule
           </button>
+          <button
+            onClick={handleDraft}
+            disabled={drafting}
+            title={lastDraft ? `Last draft: ${lastDraft.receipt?.summary || ''} · ${new Date(lastDraft.createdAt).toLocaleString()}` : 'Fill every empty room by roster allocation — your placements never move'}
+            style={{ padding: '10px 20px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: drafting ? 'not-allowed' : 'pointer', opacity: drafting ? 0.7 : 1 }}
+          >
+            {drafting ? 'Drafting…' : '⚡ Draft Month'}
+          </button>
           <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
             {publishing ? 'Publishing...' : '📢 Publish Schedule'}
           </button>
@@ -1792,7 +1840,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                 .map(([k, note]) => ({ location: k.slice(dateStr.length + 2), note }))
               const colorKey = getDayColor(dayRows)
               const sc = colorKey ? STATUS_COLORS[colorKey] : null
-              const { totalRooms, filledRooms } = hasSchedule ? getDayStats(dayRows) : { totalRooms: 0, filledRooms: 0 }
+              const { totalRooms, filledRooms, ghostRooms } = hasSchedule ? getDayStats(dayRows) : { totalRooms: 0, filledRooms: 0, ghostRooms: 0 }
               const isToday = day === today.getDate() && month === today.getMonth() + 1 && year === today.getFullYear()
 
               const borderColor = isToday ? '#2563EB' : (sc ? sc.border : '#E2E8F0')
@@ -1861,7 +1909,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                   {hasSchedule ? (
                     <>
                       <div style={{ fontSize: 11, fontWeight: 700, color: sc ? sc.text : '#0F172A', marginBottom: 4 }}>
-                        {filledRooms}/{totalRooms} rooms filled
+                        {filledRooms}/{totalRooms} rooms filled{ghostRooms > 0 ? <span style={{ color: '#7C3AED', fontWeight: 800 }}> · 🔮 {ghostRooms} proposed</span> : null}
                       </div>
                       {(() => {
                         const n = dayRows.reduce((s, row) => s + (row.assignments || []).filter(a => a.rosterId && isHardOff(a.rosterId, dateStr)).length, 0)
@@ -2063,7 +2111,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               // SUPERVISING_MD); they're not OR rooms, so exclude them from
               // the fill count and surface them in their own section.
               const supervisors = assignments.filter(a => a.role === 'SUPERVISING_MD' && a.rosterId)
-              const filled = assignments.filter(a => a.rosterId && a.role !== 'SUPERVISING_MD' && a.role !== 'NON_CLINICAL').length
+              const filled = assignments.filter(a => a.rosterId && !a.ghost && a.role !== 'SUPERVISING_MD' && a.role !== 'NON_CLINICAL').length
+              const proposedCount = assignments.filter(a => a.rosterId && a.ghost && a.role !== 'NON_CLINICAL').length
               const gap = required - filled
               const colorKey = gap === 0 ? 'green' : gap === 1 ? 'yellow' : 'red'
               const sc = STATUS_COLORS[colorKey]
@@ -2099,7 +2148,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         >+</button>
                         <span style={{ fontSize: 11, color: '#64748B', marginLeft: 2 }}>rooms</span>
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled{proposedCount > 0 ? <span style={{ color: '#7C3AED' }}> · 🔮 {proposedCount}</span> : null}</div>
                       {/* Out-List Builder: post-publish release order for this
                           site/day. Available once anyone is staffed. */}
                       {(filled > 0 || supervisors.length > 0) && (
@@ -2149,8 +2198,23 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                               <div title="This provider was granted PTO after being scheduled — assign someone else or clear the room." style={{ fontSize: 11, color: '#DC2626', fontWeight: 800, flexShrink: 0, background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 6, padding: '2px 8px' }}>
                                 ⚠ {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName} — on PTO · needs coverage
                               </div>
+                            ) : assignment.ghost ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <div title="Proposed by the draft engine — this per-diem's availability hasn't come back yet. Never published or shown to sites/providers until you confirm." style={{ fontSize: 11, color: '#6D28D9', fontWeight: 800, background: '#F5F3FF', border: '1px dashed #A78BFA', borderRadius: 6, padding: '2px 8px' }}>
+                                  🔮 {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName} — proposed
+                                </div>
+                                <button
+                                  onClick={() => handleAssign(row.id, roomNum, assignedRosterId)}
+                                  disabled={isLoading}
+                                  title="Confirm: make this a real assignment (locks it as yours)"
+                                  style={{ fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 6, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}
+                                >
+                                  ✓ Confirm
+                                </button>
+                              </div>
                             ) : (
                               <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700, flexShrink: 0 }}>
+                                {assignment.placedBy === 'MACHINE' ? <span title="Placed by the draft engine — editing it makes it yours (locked)">🤖 </span> : null}
                                 {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName}
                               </div>
                             )
@@ -2227,7 +2291,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                             : (allSupRooms.length ? Math.max(...allSupRooms) + 1 : SUPERVISOR_ROOM_BASE)
                           const mds = rankedRoster(dayDetailModal, row.location).filter(p => p.providerType === 'ANESTHESIOLOGIST')
                           const slots = [
-                            ...filledSups.map(s => ({ roomNumber: s.roomNumber, currentId: s.rosterId, existing: true })),
+                            ...filledSups.map(s => ({ roomNumber: s.roomNumber, currentId: s.rosterId, existing: true, ghost: s.ghost, name: s.rosterEntry?.providerName })),
                             { roomNumber: addRoom, currentId: '', existing: false },
                           ]
                           if (mds.length === 0) {
@@ -2238,6 +2302,26 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                               {slots.map((slot) => {
                                 const key = `${row.id}-${slot.roomNumber}`
                                 const isLoading = assignLoading[key]
+                                if (slot.ghost) {
+                                  return (
+                                    <div key={slot.roomNumber} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <div style={{ flex: 1, fontSize: 11.5, color: '#6D28D9', fontWeight: 800, background: '#F5F3FF', border: '1px dashed #A78BFA', borderRadius: 6, padding: '5px 10px' }}>
+                                        🔮 {slot.name || mds.find(p => p.id === slot.currentId)?.providerName || 'Proposed MD'} — proposed supervisor
+                                      </div>
+                                      <button
+                                        onClick={() => handleAssign(row.id, slot.roomNumber, slot.currentId, 'SUPERVISING_MD')}
+                                        disabled={isLoading}
+                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
+                                      >✓ Confirm</button>
+                                      <button
+                                        onClick={() => handleAssign(row.id, slot.roomNumber, '')}
+                                        disabled={isLoading}
+                                        title="Dismiss this proposal"
+                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#fff', color: '#6D28D9', border: '1px solid #A78BFA', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
+                                      >✕</button>
+                                    </div>
+                                  )
+                                }
                                 return (
                                   <select
                                     key={slot.roomNumber}

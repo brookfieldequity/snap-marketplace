@@ -121,6 +121,29 @@ export default function PublicSchedulePage({ token }) {
     return (<><style>{CSS}</style><div className="sw-wrap"><div className="sw-sub" style={{ textAlign: 'center', paddingTop: 40 }}>Loading…</div></div></>)
   }
 
+  // Publish gate (Wave 4): the month is a working draft the practice hasn't
+  // published yet — show an honest "being finalized" page, never a half-draft.
+  if (data.finalizing) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <div className="sw-wrap">
+          <div className="sw-sheet">
+            <div className="sw-head">
+              <div className="sw-eyebrow">{data.orgName || 'SNAP Medical'}</div>
+              <div className="sw-h1">{data.siteName} — {data.monthLabel} {data.year}</div>
+              <div className="sw-sub">🛠 This month's schedule is being finalized.</div>
+            </div>
+            <div style={{ padding: '26px 30px', fontSize: 14.5, color: 'var(--sw-ink-soft)', lineHeight: 1.6 }}>
+              The scheduling team is still working on this month. This page will show the full
+              schedule the moment it's published — check back soon, no new link needed.
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   const { year, month, monthLabel, siteName, orgName, updatedAt } = data
   const pad = (n) => String(n).padStart(2, '0')
   const daysInMonth = new Date(year, month, 0).getDate()

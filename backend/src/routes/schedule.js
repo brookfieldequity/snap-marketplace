@@ -238,7 +238,7 @@ router.get('/activity', facilityAuth, async (req, res) => {
     const since = new Date(Date.now() - windowDays * 86400000);
     const fid = req.facility.id;
 
-    const [cards, avails, requests, timeOff] = await Promise.all([
+    const [cards, avails, requests, timeOff, draftRuns] = await Promise.all([
       prisma.roomCountRequest.findMany({
         where: { facilityId: fid, OR: [{ submittedAt: { gte: since } }, { lastUpdatedAt: { gte: since } }] },
         select: { location: true, year: true, month: true, submittedAt: true, lastUpdatedAt: true },
@@ -256,11 +256,20 @@ router.get('/activity', facilityAuth, async (req, res) => {
         select: { startDate: true, endDate: true, reason: true, createdAt: true, scheduleRequestId: true, rosterEntry: { select: { providerName: true } } },
         take: 200,
       }),
+      prisma.monthDraftRun.findMany({
+        where: { facilityId: fid, createdAt: { gte: since } },
+        select: { year: true, month: true, receipt: true, filled: true, ghosts: true, confirmed: true, withdrawn: true, createdAt: true },
+        take: 50,
+      }).catch(() => []),
     ]);
 
     const fmtD = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const span = (s, e) => (e && new Date(e).getTime() !== new Date(s).getTime() ? `${fmtD(s)}–${fmtD(e)}` : fmtD(s));
     const events = [];
+
+    for (const r of draftRuns) {
+      events.push({ ts: r.createdAt, icon: '⚡', kind: 'DRAFT_RUN', title: `Draft updated — ${r.month}/${String(r.year).slice(2)}`, detail: r.receipt?.summary || `${r.filled} filled, ${r.ghosts} proposed` });
+    }
 
     for (const c of cards) {
       const monthLabel = `${c.location} · ${c.month}/${String(c.year).slice(2)}`;
@@ -319,6 +328,49 @@ router.get('/flags', facilityAuth, async (req, res) => {
   } catch (err) {
     console.error('[schedule/flags] error:', err);
     res.status(500).json({ error: 'Failed to compute flags' });
+  }
+});
+
+// POST /draft — run the Living Month Draft engine over a month (Wave 4).
+// Allocation-driven fill of EMPTY slots only: touch=lock rows are immovable,
+// per-diems without returned availability land as ghost/proposed slots.
+// Returns the diff receipt ("3 changes: filled Natick 12th…").
+router.post('/draft', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.body.year, 10);
+    const month = parseInt(req.body.month, 10);
+    if (!year || !month || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+    }
+    const { runMonthDraft } = require('../services/monthDraft');
+    const result = await runMonthDraft(req.facility.id, year, month);
+    if (result.error === 'NO_DAYS') {
+      return res.status(400).json({ error: 'No schedule days exist for that month yet. Generate from a Coverage Template first — the draft fills rooms, it doesn\'t create them.' });
+    }
+    if (result.error === 'NO_ROSTER') {
+      return res.status(400).json({ error: 'Roster is empty. Add providers before drafting.' });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[schedule/draft] error:', err);
+    res.status(500).json({ error: 'Draft run failed' });
+  }
+});
+
+// GET /draft/latest?year&month — the most recent draft run's receipt.
+router.get('/draft/latest', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    const month = parseInt(req.query.month, 10);
+    if (!year || !month) return res.status(400).json({ error: 'year and month required' });
+    const run = await prisma.monthDraftRun.findFirst({
+      where: { facilityId: req.facility.id, year, month },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ run });
+  } catch (err) {
+    console.error('[schedule/draft/latest] error:', err);
+    res.status(500).json({ error: 'Failed to load draft history' });
   }
 });
 
@@ -618,7 +670,10 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
     // Only touch `role` when the caller sends it (manual room edits omit it, so
     // an existing room keeps its CRNA/Solo-MD tag; supervisor slots send
     // role='SUPERVISING_MD').
-    const update = { rosterId: rosterId || null };
+    // Touch = lock (Wave 4): every write through this endpoint is a
+    // coordinator's hand — stamp HUMAN provenance and clear any ghost flag.
+    // The draft engine never moves HUMAN rows (including human-cleared seats).
+    const update = { rosterId: rosterId || null, placedBy: 'HUMAN', ghost: false };
     if (role !== undefined) update.role = role || null;
 
     const assignment = await prisma.scheduleAssignment.upsert({
@@ -632,6 +687,7 @@ router.put('/days/:dayId/assignments/:roomNumber', facilityAuth, async (req, res
         facilityId: req.facility.id,
         rosterId: rosterId || null,
         role: role || null,
+        placedBy: 'HUMAN',
       },
     });
 
@@ -758,9 +814,16 @@ router.post('/publish', facilityAuth, async (req, res) => {
       data: { publishedAt: new Date() },
     });
 
-    res.json({ success: true, daysPublished: count });
+    // Ghost/proposed slots (Wave 4) are never published — they stay
+    // coordinator-only until availability confirms them. Reported so the UI
+    // can say "N proposed slots not included".
+    const ghostCount = await prisma.scheduleAssignment.count({
+      where: { facilityId: req.facility.id, ghost: true, scheduleDay: { date: { gte: start, lt: end } } },
+    });
 
-    // Fire-and-forget push to all assigned providers
+    res.json({ success: true, daysPublished: count, ghostsExcluded: ghostCount });
+
+    // Fire-and-forget push to all assigned providers (never ghosts)
     (async () => {
       try {
         const days = await prisma.scheduleDay.findMany({
@@ -770,7 +833,7 @@ router.post('/publish', facilityAuth, async (req, res) => {
           },
           include: {
             assignments: {
-              where: { rosterId: { not: null } },
+              where: { rosterId: { not: null }, ghost: false },
               include: {
                 rosterEntry: { select: { linkedProviderId: true, phoneNumber: true, snapAccountEmail: true } },
               },
@@ -1099,6 +1162,9 @@ router.get('/export', facilityAuth, async (req, res) => {
       },
       include: {
         assignments: {
+          // Ghost/proposed slots never reach the export — payroll must only
+          // ever see real placements (Wave 4).
+          where: { ghost: false },
           include: {
             rosterEntry: {
               select: { providerName: true, providerType: true, employmentCategory: true },
@@ -1159,6 +1225,8 @@ router.get('/summary', facilityAuth, async (req, res) => {
         },
         include: {
           assignments: {
+            // Summary counts real placements; ghosts are proposals (Wave 4).
+            where: { ghost: false },
             include: {
               rosterEntry: { select: { providerType: true, employmentCategory: true, annualRate: true, hourlyRate: true } },
             },
@@ -1527,175 +1595,11 @@ router.post('/build', facilityAuth, async (req, res) => {
     }
     const staffiqWeights = await scheduleBuilder.resolveStaffIQWeights(req.facility.id);
 
-    // Unavailability: PTO/time-off (keyed on rosterEntryId) + any explicit
-    // "unavailable" availability rows (keyed on providerId). Build a Set of
-    // `${rosterId}::${YYYY-MM-DD}` keys the builder HARD-excludes — a built
-    // schedule must never place someone who's off.
-    const linkedProviderIds = roster.map((r) => r.linkedProviderId).filter(Boolean);
-    const providerIdToRosterId = Object.fromEntries(
-      roster.filter((r) => r.linkedProviderId).map((r) => [r.linkedProviderId, r.id])
-    );
-    // Effective availability per (roster entry, date), resolved with the shared
-    // policy (see services/availability.js): admin override > PTO > provider
-    // self-submit > default-by-employment (FULL_TIME available, PER_DIEM/LOCUMS
-    // unavailable unless explicitly opted in). Anyone not available is added to
-    // unavailableKeys, which the builder HARD-excludes.
-    const [timeOff, providerRows, adminRows] = await Promise.all([
-      prisma.rosterTimeOff.findMany({
-        where: {
-          facilityId: req.facility.id,
-          startDate: { lt: monthEnd },
-          endDate: { gte: monthStart },
-        },
-        select: { rosterEntryId: true, startDate: true, endDate: true },
-      }),
-      linkedProviderIds.length > 0
-        ? prisma.providerAvailability.findMany({
-            where: { date: { gte: monthStart, lt: monthEnd }, providerId: { in: linkedProviderIds } },
-            select: { providerId: true, date: true, available: true },
-          })
-        : Promise.resolve([]),
-      prisma.rosterAvailability.findMany({
-        where: { facilityId: req.facility.id, date: { gte: monthStart, lt: monthEnd } },
-        select: { rosterEntryId: true, date: true, available: true, source: true },
-      }),
-    ]);
-
-    const isoOf = (d) => new Date(d).toISOString().slice(0, 10);
-    const DAY_MS = 24 * 60 * 60 * 1000;
-
-    // PTO coverage: `${rid}::${date}`
-    const ptoSet = new Set();
-    for (const t of timeOff) {
-      let d = new Date(Math.max(new Date(t.startDate).getTime(), monthStart.getTime()));
-      const last = Math.min(new Date(t.endDate).getTime(), monthEnd.getTime() - DAY_MS);
-      while (d.getTime() <= last) {
-        ptoSet.add(`${t.rosterEntryId}::${isoOf(d)}`);
-        d = new Date(d.getTime() + DAY_MS);
-      }
-    }
-    // Admin overrides (authoritative) and provider/self-submitted signals.
-    const adminMap = new Map();
-    const providerMap = new Map();
-    for (const a of adminRows) {
-      // ADMIN and admin-set PTO are both authoritative (PTO rows are available:false).
-      if (a.source === 'ADMIN' || a.source === 'PTO') adminMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
-      else providerMap.set(`${a.rosterEntryId}::${isoOf(a.date)}`, a.available);
-    }
-    for (const p of providerRows) {
-      const rid = providerIdToRosterId[p.providerId];
-      if (rid) providerMap.set(`${rid}::${isoOf(p.date)}`, p.available);
-    }
-
-    // Provider self-submitted availability via the tokenized availability-request
-    // link. Merged at the provider layer so admin overrides still win. Only
-    // applies when there is a submitted AvailabilityRequest for this facility /
-    // month and the admin has NOT set an explicit override for that (entry, date).
-    const availSubmissions = await prisma.availDaySubmission.findMany({
-      where: {
-        request: { facilityId: req.facility.id, year: yr, month: mo },
-        date: { gte: monthStart, lt: monthEnd },
-      },
-      include: { request: { select: { rosterEntryId: true } } },
-    });
-    for (const sub of availSubmissions) {
-      const key = `${sub.request.rosterEntryId}::${isoOf(sub.date)}`;
-      if (!adminMap.has(key)) {
-        // Provider self-submit is a signal, not an override — write into
-        // providerMap unless already set (RosterAvailability PROVIDER rows win).
-        if (!providerMap.has(key)) {
-          providerMap.set(key, sub.available);
-        }
-      }
-    }
-
-    const unavailableKeys = new Set();
-    const uniqueDayISOs = [...new Set(scheduleDays.map((d) => isoOf(d.date)))];
-    for (const r of roster) {
-      for (const dISO of uniqueDayISOs) {
-        const key = `${r.id}::${dISO}`;
-        const { available } = resolveDayAvailability({
-          employmentCategory: r.employmentCategory,
-          adminAvailable: adminMap.has(key) ? adminMap.get(key) : null,
-          ptoCovers: ptoSet.has(key),
-          providerAvailable: providerMap.has(key) ? providerMap.get(key) : null,
-        });
-        if (!available) unavailableKeys.add(key);
-      }
-    }
-
-    // Cross-facility double-booking guard: a linked provider who's already
-    // assigned at ANOTHER facility on a date is hard-unavailable here (one
-    // provider, one master schedule). Single batched query for the month.
-    const conflictKeys = await scheduleBuilder.crossFacilityConflictKeys({
-      facilityId: req.facility.id,
-      roster,
-      monthStart,
-      monthEnd,
-    });
-    for (const k of conflictKeys) unavailableKeys.add(k);
-
-    // Tiered provider requests for the build month (admin-triaged). WORK biases
-    // the provider INTO the schedule; soft DAY_OFF (tiers 2–4) biases them OUT.
-    // Tier-1 DAY_OFFs are already materialized as RosterTimeOff → they arrive
-    // via unavailableKeys (hard exclude), so we only soft-weight tiers 2–4 here.
-    // Within a tier, `order` is seeded by seniority → first-come (then any admin
-    // manual override) so same-tier conflicts resolve deterministically.
-    const triagedRequests = await prisma.scheduleRequest.findMany({
-      where: {
-        facilityId: req.facility.id,
-        type: { in: ['WORK', 'DAY_OFF'] },
-        status: 'ACCEPTED',
-        date: { gte: monthStart, lt: monthEnd },
-      },
-      select: {
-        id: true,
-        rosterEntryId: true,
-        type: true,
-        date: true,
-        endDate: true,
-        siteName: true,
-        tier: true,
-        manualOrder: true,
-        createdAt: true,
-        rosterEntry: { select: { providerName: true, seniorityRank: true } },
-      },
-    });
-
-    // Seed a stable within-tier order: manual override first, else most-senior
-    // (lower seniorityRank), else earliest request. Assign a 0-based index per
-    // (type, tier) bucket — the builder uses it only as a tie-break nudge.
-    const orderByRequestId = new Map();
-    const buckets = new Map(); // `${type}:${tier}` → [requests]
-    for (const r of triagedRequests) {
-      const key = `${r.type}:${r.tier ?? 'X'}`;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(r);
-    }
-    for (const list of buckets.values()) {
-      list
-        .sort((a, b) => {
-          const am = a.manualOrder, bm = b.manualOrder;
-          if (am != null || bm != null) return (am ?? 1e9) - (bm ?? 1e9);
-          const as = a.rosterEntry?.seniorityRank, bs = b.rosterEntry?.seniorityRank;
-          if (as != null || bs != null) return (as ?? 1e9) - (bs ?? 1e9);
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        })
-        .forEach((r, i) => orderByRequestId.set(r.id, i));
-    }
-
-    const workRequestKeys = new Map(); // key → { siteName, tier, order }
-    const dayOffSoftKeys = new Map(); // key → { tier, order } (tiers 2–4 only)
-    for (const r of triagedRequests) {
-      const dISO = new Date(r.date).toISOString().slice(0, 10);
-      const key = `${r.rosterEntryId}::${dISO}`;
-      const order = orderByRequestId.get(r.id) ?? 0;
-      if (r.type === 'WORK') {
-        workRequestKeys.set(key, { siteName: r.siteName || null, tier: r.tier ?? null, order });
-      } else if (r.type === 'DAY_OFF' && (r.tier === 2 || r.tier === 3 || r.tier === 4)) {
-        dayOffSoftKeys.set(key, { tier: r.tier, order });
-      }
-    }
+    // Month signals (availability resolution + tiered request weightings) —
+    // shared with the Living Month Draft engine. See services/scheduleSignals.
+    const { assembleMonthSignals } = require('../services/scheduleSignals');
+    const { unavailableKeys, workRequestKeys, dayOffSoftKeys, triagedRequests } =
+      await assembleMonthSignals({ facilityId: req.facility.id, year: yr, month: mo, roster, scheduleDays });
 
     // Shared input snapshot — lets us reproduce and explain each run later.
     const inputSnapshot = {
@@ -2087,6 +1991,7 @@ router.get('/my-month', auth, async (req, res) => {
     const assignments = await prisma.scheduleAssignment.findMany({
       where: {
         rosterId: { in: rosterIds },
+        ghost: false, // proposed slots are coordinator-only (Wave 4)
         scheduleDay: { date: { gte: start, lt: end } },
       },
       include: {
@@ -2146,6 +2051,7 @@ router.get('/today-at/:facilityId', auth, async (req, res) => {
       },
       include: {
         assignments: {
+          where: { ghost: false }, // proposed slots are coordinator-only (Wave 4)
           include: {
             rosterEntry: { select: { id: true, providerName: true, providerType: true } },
           },
@@ -2297,6 +2203,7 @@ router.get('/ical/:rosterEntryId/:rest', async (req, res) => {
     const assignments = await prisma.scheduleAssignment.findMany({
       where: {
         rosterId: rosterEntryId,
+        ghost: false, // proposed slots are coordinator-only (Wave 4)
         scheduleDay: { date: { gte: windowStart, lt: windowEnd } },
       },
       include: {

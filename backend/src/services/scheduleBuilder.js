@@ -796,6 +796,11 @@ module.exports = {
   resolveStaffIQWeights,
   computeRequestOutcomes,
   crossFacilityConflictKeys,
+  // Shared with the Living Month Draft engine (services/monthDraft.js)
+  loadProviderLocations,
+  isEligibleForLocation,
+  placementTierScore,
+  SUPERVISOR_ROOM_BASE,
   // exposed for testing / re-scoring after edits
   computeInsights,
   computeStaffIQScore,

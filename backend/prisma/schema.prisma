@@ -1225,12 +1225,40 @@ model ScheduleAssignment {
   // per date). null = not yet ranked. Only staffed slots (rosterId != null)
   // are ranked. See GET/PUT /schedule/days/:dayId/out-list.
   outRank       Int?
+  // Living Month Draft (Wave 4): placement provenance. 'MACHINE' = placed by
+  // the draft engine (may be re-evaluated by later draft runs); 'HUMAN' = a
+  // coordinator touched it (touch = lock: the machine never moves it). null =
+  // pre-draft-engine rows — treated as HUMAN/locked, the conservative default.
+  placedBy      String?
+  // Ghost/proposed slot: a per-diem placed by the draft before their
+  // availability came back. Coordinator-only — NEVER shown on share links,
+  // provider views, or iCal; publish does not make ghosts real.
+  ghost         Boolean              @default(false)
   createdAt     DateTime             @default(now())
 
   costComponents AssignmentCostComponent[] // EOR one-off pass-throughs (Phase 0)
 
   @@unique([scheduleDayId, roomNumber])
   @@index([rosterId])
+}
+
+// One draft-engine run over a month (Wave 4). Stores the diff receipt shown
+// to the coordinator ("3 changes: filled Natick 12th…") and feeds the
+// activity feed. The draft itself lives in ScheduleAssignment rows
+// (placedBy/ghost) — this is just the run log.
+model MonthDraftRun {
+  id         String   @id @default(cuid())
+  facilityId String
+  year       Int
+  month      Int
+  receipt    Json
+  filled     Int      @default(0)
+  ghosts     Int      @default(0)
+  confirmed  Int      @default(0)
+  withdrawn  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([facilityId, year, month, createdAt])
 }
 
 model SchedulingUpload {

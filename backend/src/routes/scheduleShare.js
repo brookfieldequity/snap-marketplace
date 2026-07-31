@@ -31,7 +31,9 @@ router.get('/:token', async (req, res) => {
         where: { facilityId: share.facilityId, location: share.location, date: { gte: start, lt: end } },
         include: {
           assignments: {
-            where: { rosterId: { not: null } },
+            // Ghost/proposed slots (Wave 4) NEVER leak to the site — they're
+            // machine proposals awaiting the provider's availability.
+            where: { rosterId: { not: null }, ghost: false },
             include: { rosterEntry: { select: { providerName: true, providerType: true } } },
             orderBy: { roomNumber: 'asc' },
           },
@@ -61,6 +63,31 @@ router.get('/:token', async (req, res) => {
     }
     for (const p of ptoAvail) {
       offKeys.add(`${p.rosterEntryId}|${p.date.toISOString().slice(0, 10)}`);
+    }
+
+    // Publish gate (Wave 4, Q2): a month the draft engine is working on is
+    // "a working draft until it isn't" — before the coordinator publishes,
+    // the site sees "being finalized," never the half-draft. Months never
+    // touched by the engine keep today's behavior (legacy hand-built months
+    // stay live — the gate ships WITH the draft workflow, locked 7/30).
+    const anyPublished = days.some((d) => d.publishedAt);
+    if (!anyPublished) {
+      const draftRun = await prisma.monthDraftRun.findFirst({
+        where: { facilityId: share.facilityId, year: share.year, month: share.month },
+        select: { id: true },
+      }).catch(() => null);
+      if (draftRun) {
+        return res.json({
+          siteName: share.location,
+          orgName: share.facility?.name || null,
+          year: share.year,
+          month: share.month,
+          monthLabel: MONTH_NAMES[share.month - 1] || '',
+          updatedAt: null,
+          finalizing: true,
+          days: [],
+        });
+      }
     }
 
     let updatedAt = null;
