@@ -72,7 +72,9 @@ const PLACEMENT_TIER_WEIGHT = 1000;
 const MAX_PLACEMENT_TIER = 5;
 // Fallback when a card has no explicit tier set — derive from the coarse
 // employmentCategory so legacy rosters still order core staff ahead of fill-ins.
-const PLACEMENT_TIER_FROM_CATEGORY = { FULL_TIME: 1, PER_DIEM: 3, LOCUMS: 5 };
+// PART_TIME (W2 set-schedule, 80%/60%) places right behind full-timers —
+// they're on every month too, just fewer days (fteHours drives the count).
+const PLACEMENT_TIER_FROM_CATEGORY = { FULL_TIME: 1, PART_TIME: 1, PER_DIEM: 3, LOCUMS: 5 };
 const DEFAULT_PLACEMENT_TIER = 3;
 function placementTierOf(r) {
   if (r.placementTier != null && r.placementTier >= 1 && r.placementTier <= MAX_PLACEMENT_TIER) {

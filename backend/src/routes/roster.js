@@ -2254,7 +2254,10 @@ async function handleMultiSheetUpload(workbook, req, res) {
     const email = String(staff.email ?? '').trim().toLowerCase() || null;
     const phone = String(staff.mobile ?? '').trim() || null;
     const hourlyRate = parseNumber(payroll.hrRate);
-    const fteHours = parseNumber(payroll.baseHrs);
+    // baseHrs in payroll workbooks is per PAY PERIOD (80 = biweekly full-time);
+    // fteHours is canonically per WEEK (40 = full-time) — normalize on the way in.
+    const baseHrsRaw = parseNumber(payroll.baseHrs);
+    const fteHours = baseHrsRaw != null && baseHrsRaw > 60 ? baseHrsRaw / 2 : baseHrsRaw;
     const payrollSystemId = String(payroll.payrollId ?? '').trim() || null;
     let employer = String(payroll.employer ?? '').trim() || null;
     let is1099 = is1099Raw;
@@ -2686,7 +2689,10 @@ router.post('/upload', facilityAuth, rosterUpload.single('file'), async (req, re
       const licenseExp = parseDate(get('license_expiration'));
       const hourlyRate = parseNumber(get('hourly_rate'));
       const annualRate = parseNumber(get('annual_rate'));
-      const fteHours = parseNumber(get('fte_hours'));
+      // fteHours = hours/WEEK (40 = full-time). Pay-period values (80
+      // biweekly) pasted from payroll exports are normalized on the way in.
+      const fteHoursRaw = parseNumber(get('fte_hours'));
+      const fteHours = fteHoursRaw != null && fteHoursRaw > 60 ? fteHoursRaw / 2 : fteHoursRaw;
       const employer = String(get('employer') || '').trim() || null;
 
       // Try to match an existing provider profile by NPI first, then email.

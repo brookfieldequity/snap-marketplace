@@ -13,6 +13,7 @@ const TYPE_BADGE = {
 
 const EMPLOY_BADGE = {
   FULL_TIME: { bg: '#F0FDF4', color: '#15803D', label: 'Full Time' },
+  PART_TIME: { bg: '#F0FDF4', color: '#15803D', label: 'Part Time' },
   PER_DIEM: { bg: '#FEFCE8', color: '#A16207', label: 'Per Diem' },
   LOCUMS: { bg: '#FFF7ED', color: '#C2410C', label: 'Locums' },
 }
@@ -196,6 +197,9 @@ export default function InternalRosterPage({ onNavigate }) {
   }, [roster, searchQ, fType, fEmp, fEmployer])
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  // Roster-card tabs (Matt, 7/31): the card had everything in one wall —
+  // split into Schedule / Payroll / Profile so each read is simple.
+  const [modalTab, setModalTab] = useState('schedule')
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(BLANK_FORM)
   const [saving, setSaving] = useState(false)
@@ -264,6 +268,7 @@ export default function InternalRosterPage({ onNavigate }) {
     setForm(BLANK_FORM)
     setSiteCred({})
     setLocationInput('')
+    setModalTab('schedule')
     setShowModal(true)
   }
 
@@ -375,7 +380,10 @@ export default function InternalRosterPage({ onNavigate }) {
       phoneNumber: p.phoneNumber || '',
       licenseNumber: p.licenseNumber || '',
       licenseExpiration: p.licenseExpiration ? p.licenseExpiration.substring(0, 10) : '',
-      fteHours: p.fteHours ?? '',
+      // fteHours is hours/WEEK (40 = FT). Legacy payroll-import rows stored
+      // pay-period hours (80 biweekly) — show the weekly number; saving
+      // writes it back normalized, so old rows self-heal on edit.
+      fteHours: p.fteHours != null ? (p.fteHours > 60 ? p.fteHours / 2 : p.fteHours) : '',
       annualRate: p.annualRate ?? '',
       hourlyRate: p.hourlyRate ?? '',
       allInCostPerHour: p.allInCostPerHour ?? '',
@@ -405,13 +413,15 @@ export default function InternalRosterPage({ onNavigate }) {
       adminQualityScore: p.adminQualityScore ?? '',
     })
     setLocationInput('')
+    setModalTab('schedule')
     setShowModal(true)
   }
 
   async function handleSave() {
     if (!form.providerName.trim()) return alert('Provider name is required.')
-    if (form.employmentCategory === 'FULL_TIME' && !form.annualRate) return alert('Annual base rate is required for Full Time providers.')
-    if ((form.employmentCategory === 'PER_DIEM' || form.employmentCategory === 'LOCUMS') && !form.hourlyRate) return alert('Base hourly rate is required.')
+    if ((form.employmentCategory === 'FULL_TIME' || form.employmentCategory === 'PART_TIME') && !form.annualRate) return alert('Annual base rate is required for Full/Part Time providers (Payroll tab).')
+    if (form.employmentCategory === 'PART_TIME' && !form.fteHours) return alert('Set FTE Hours / Week for part-time providers (Schedule tab) — 32 = 80%, 24 = 60% — so SNAP knows how many days to expect them.')
+    if ((form.employmentCategory === 'PER_DIEM' || form.employmentCategory === 'LOCUMS') && !form.hourlyRate) return alert('Base hourly rate is required (Payroll tab).')
     setSaving(true)
     try {
       const payload = {
@@ -1228,10 +1238,10 @@ export default function InternalRosterPage({ onNavigate }) {
                     <button
                       onClick={() => handleGenerateClaimCode(p)}
                       disabled={generatingCode[p.id]}
-                      title="Generate an invite code the provider types into the SNAP app to link this roster spot"
+                      title="Same SNAP app as the invite — but instead of texting a link, you get a code to hand them (for providers with no contact info, or standing right next to you)"
                       style={{ padding: '6px 14px', background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1D4ED8' }}
                     >
-                      {generatingCode[p.id] ? '…' : '🔑 App invite'}
+                      {generatingCode[p.id] ? '…' : '🔑 App code instead'}
                     </button>
                   )}
                   {canCredential(p) && p.credentialingStatus !== 'CLAIMED' && p.credentialingStatus !== 'COMPLETED' && (
@@ -1256,287 +1266,301 @@ export default function InternalRosterPage({ onNavigate }) {
 
       {showModal && (
         <Modal title={editTarget ? 'Edit Provider' : 'Add Provider'} onClose={() => setShowModal(false)}>
-          {/* Core fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <Field label="Provider Name" required>
-                <input style={inputStyle} value={form.providerName} onChange={(e) => setF('providerName', e.target.value)} placeholder="Dr. Jane Smith" />
-              </Field>
-            </div>
-            <Field label="Provider Type">
-              <select style={inputStyle} value={form.providerType} onChange={(e) => setF('providerType', e.target.value)}>
-                <option value="CRNA">CRNA</option>
-                <option value="ANESTHESIOLOGIST">Anesthesiologist</option>
-                <option value="ANESTHESIA_ASSISTANT">Anesthesia Assistant</option>
-                <option value="STAFF">Staff (non-clinical)</option>
-              </select>
-            </Field>
-            <Field label="Employment Category">
-              <select style={inputStyle} value={form.employmentCategory} onChange={(e) => setF('employmentCategory', e.target.value)}>
-                <option value="FULL_TIME">Full Time</option>
-                <option value="PER_DIEM">Per Diem</option>
-                <option value="LOCUMS">Locums</option>
-              </select>
-            </Field>
-            <Field label="Placement Priority (Schedule Builder fill order)">
-              <select style={inputStyle} value={form.placementTier} onChange={(e) => setF('placementTier', e.target.value)}>
-                <option value="">Auto (from employment category)</option>
-                {PLACEMENT_TIERS.map((t) => (
-                  <option key={t.value} value={t.value}>{t.value}. {t.label}</option>
-                ))}
-              </select>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
-                Who the builder fills rooms with first. Full-time & part-time (set schedules) are placed first around their PTO, then Per Diem 1, Per Diem 2, then Locums.
-              </div>
-            </Field>
-            <Field label="Employer">
-              <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="Staffing group or practice" />
-            </Field>
-            <Field label="Tax Status">
-              <select style={inputStyle} value={form.taxStatus} onChange={(e) => setF('taxStatus', e.target.value)}>
-                <option value="">— Unknown —</option>
-                <option value="W2">W-2 (employee)</option>
-                <option value="1099">1099 (contractor)</option>
-              </select>
-            </Field>
-            <Field label="Hours">
-              <select style={inputStyle} value={form.hoursStatus} onChange={(e) => setF('hoursStatus', e.target.value)}>
-                <option value="">— Unknown —</option>
-                <option value="FT">Full-time</option>
-                <option value="PT">Part-time</option>
-              </select>
-            </Field>
-            <Field label="Payee Type (payroll)">
-              <select style={inputStyle} value={form.payeeType} onChange={(e) => setF('payeeType', e.target.value)}>
-                <option value="">— Not set —</option>
-                <option value="Individual">Individual</option>
-                <option value="Business">Business (LLC/PLLC)</option>
-              </select>
-            </Field>
-            <Field label="Business Name (for 1099s paid as an LLC)">
-              <input style={inputStyle} value={form.businessName} onChange={(e) => setF('businessName', e.target.value)} placeholder="e.g. Bailin Anesthesia LLC" />
-            </Field>
-            <Field label="EIN (business payees)">
-              <input style={inputStyle} value={form.ein} onChange={(e) => setF('ein', e.target.value)} placeholder="e.g. 92-0725051" />
-            </Field>
+          {/* Identity — always visible above the tabs */}
+          <Field label="Provider Name" required>
+            <input style={inputStyle} value={form.providerName} onChange={(e) => setF('providerName', e.target.value)} placeholder="Dr. Jane Smith" />
+          </Field>
 
-            {/* Dual employment — W-2 at one employer + 1099 at another. */}
-            <Field label="Dual employment">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
-                <input type="checkbox" checked={form.dualEmployment} onChange={(e) => setF('dualEmployment', e.target.checked)} />
-                W-2 at one employer AND 1099 at another (e.g. W-2 at the facility + 1099 via an agency)
-              </label>
-            </Field>
-            {form.dualEmployment && (
-              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
-                  W-2 salary uses the Annual Base Rate above. The Payee Type / Business Name / EIN / All-In Cost above describe the <strong>1099</strong> side.
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                  <Field label="W-2 paid by">
-                    <input style={inputStyle} value={form.w2Employer} onChange={(e) => setF('w2Employer', e.target.value)} placeholder="e.g. the facility" />
-                  </Field>
-                  <Field label="1099 paid by">
-                    <input style={inputStyle} value={form.contractorEmployer} onChange={(e) => setF('contractorEmployer', e.target.value)} placeholder="e.g. the agency" />
-                  </Field>
-                </div>
-                <Field label="1099 Pay Rate ($/hr)">
-                  <input style={inputStyle} type="number" min="0" step="0.01" value={form.contractorPayRate} onChange={(e) => setF('contractorPayRate', e.target.value)} placeholder="What the 1099 side pays this provider/hr" />
-                </Field>
-              </div>
-            )}
-            <Field label="Payroll Name">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: form.businessName.trim() ? '#374151' : '#94A3B8' }}>
-                <input
-                  type="checkbox"
-                  checked={form.useBusinessNameForPayroll}
-                  disabled={!form.businessName.trim()}
-                  onChange={(e) => setF('useBusinessNameForPayroll', e.target.checked)}
-                />
-                Pay under the business name (payroll only — used everywhere else by their name)
-              </label>
-            </Field>
-            <Field label="Schedule access">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
-                <input type="checkbox" checked={form.scheduleAccessRevoked} onChange={(e) => setF('scheduleAccessRevoked', e.target.checked)} />
-                Revoke this provider's access to the facility's daily schedule
-              </label>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                Linked providers can view this facility's daily board in their app by default. Check to revoke.
-              </div>
-            </Field>
-            <Field label="SNAP Account Email">
-              <input style={inputStyle} type="email" value={form.snapEmail} onChange={(e) => setF('snapEmail', e.target.value)} placeholder="provider@example.com" />
-            </Field>
-            <Field label="Phone Number">
-              <input style={inputStyle} type="tel" value={form.phoneNumber} onChange={(e) => setF('phoneNumber', e.target.value)} placeholder="(555) 000-0000" />
-            </Field>
-            <Field label="NPI Number">
-              <input style={inputStyle} value={form.npi} onChange={(e) => setF('npi', e.target.value)} placeholder="10-digit NPI" inputMode="numeric" />
-            </Field>
-            <Field label="License Expiration">
-              <input style={inputStyle} type="date" value={form.licenseExpiration} onChange={(e) => setF('licenseExpiration', e.target.value)} />
-            </Field>
-
-            {/* PTO config moved to PTO → Reports (rules, allotments, balances).
-                The form still passes existing values through untouched. */}
-            <Field label="Seniority Rank">
-              <input style={inputStyle} type="number" min="1" value={form.seniorityRank} onChange={(e) => setF('seniorityRank', e.target.value)} placeholder="1 = most senior (optional)" />
-            </Field>
-            <Field label="Quality Score">
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 6 }}>
-                {[1,2,3,4,5].map(n => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setF('adminQualityScore', form.adminQualityScore === n ? '' : n)}
-                    style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', color: form.adminQualityScore !== '' && n <= form.adminQualityScore ? '#F59E0B' : '#D1D5DB', padding: 0, lineHeight: 1 }}
-                  >★</button>
-                ))}
-                {form.adminQualityScore !== '' && (
-                  <button type="button" onClick={() => setF('adminQualityScore', '')} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }}>Clear</button>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Weights the schedule builder toward this provider in Quality mode</div>
-            </Field>
+          {/* Roster-card tabs (7/31): Schedule / Payroll / Profile. Purely
+              presentational — every field stays mounted (display toggling),
+              so form state and save behavior are unchanged. */}
+          <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #E2E8F0', marginBottom: 16 }}>
+            {[['schedule', '📅 Schedule'], ['payroll', '💵 Payroll'], ['profile', '👤 Profile']].map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setModalTab(k)}
+                style={{
+                  padding: '9px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                  background: 'none', border: 'none', borderBottom: modalTab === k ? '2px solid #2563EB' : '2px solid transparent',
+                  color: modalTab === k ? '#1D4ED8' : '#64748B', marginBottom: -2,
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {/* FULL_TIME fields */}
-          {cat === 'FULL_TIME' && (
-            <>
-              <SectionDivider label="Full Time Details" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          {/* ── 📅 Schedule — who they are to the schedule ─────────────── */}
+          <div style={{ display: modalTab === 'schedule' ? 'block' : 'none' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <Field label="Provider Type">
+                <select style={inputStyle} value={form.providerType} onChange={(e) => setF('providerType', e.target.value)}>
+                  <option value="CRNA">CRNA</option>
+                  <option value="ANESTHESIOLOGIST">Anesthesiologist</option>
+                  <option value="ANESTHESIA_ASSISTANT">Anesthesia Assistant</option>
+                  <option value="STAFF">Staff (non-clinical)</option>
+                </select>
+              </Field>
+              <Field label="Employment Category">
+                <select style={inputStyle} value={form.employmentCategory} onChange={(e) => setF('employmentCategory', e.target.value)}>
+                  <option value="FULL_TIME">Full Time</option>
+                  <option value="PART_TIME">Part Time (W2 set schedule — 80% / 60%)</option>
+                  <option value="PER_DIEM">Per Diem</option>
+                  <option value="LOCUMS">Locums</option>
+                </select>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
+                  Full-time and part-time W2 = set schedules: on every month unless on PTO. SNAP flags anyone missing.
+                </div>
+              </Field>
+              {(cat === 'FULL_TIME' || cat === 'PART_TIME') && (
                 <Field label="FTE Hours / Week" required>
                   <input style={inputStyle} type="number" min="1" max="60" value={form.fteHours} onChange={(e) => setF('fteHours', e.target.value)} placeholder="40" />
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
+                    40 = full-time · 32 = 80% · 24 = 60%. Sets how many days they're expected on each month's schedule.
+                  </div>
                 </Field>
-                <Field label="Annual Base Rate ($)" required>
-                  <input style={inputStyle} type="number" min="0" value={form.annualRate} onChange={(e) => setF('annualRate', e.target.value)} placeholder="e.g. 220000" />
-                </Field>
-              </div>
-            </>
-          )}
-
-          {/* PER_DIEM fields */}
-          {cat === 'PER_DIEM' && (
-            <>
-              <SectionDivider label="Per Diem Details" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                <Field label="Base Hourly Rate ($)" required>
-                  <input style={inputStyle} type="number" min="0" value={form.hourlyRate} onChange={(e) => setF('hourlyRate', e.target.value)} placeholder="e.g. 185" />
-                </Field>
+              )}
+              <Field label="Placement Priority (Schedule Builder fill order)">
+                <select style={inputStyle} value={form.placementTier} onChange={(e) => setF('placementTier', e.target.value)}>
+                  <option value="">Auto (from employment category)</option>
+                  {PLACEMENT_TIERS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.value}. {t.label}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
+                  Who the builder fills rooms with first. Full-time & part-time (set schedules) are placed first around their PTO, then Per Diem 1, Per Diem 2, then Locums.
+                </div>
+              </Field>
+              {cat === 'PER_DIEM' && (
                 <Field label="Max Shifts / Month">
                   <input style={inputStyle} type="number" min="1" value={form.maxShiftsPerMonth} onChange={(e) => setF('maxShiftsPerMonth', e.target.value)} placeholder="e.g. 12" />
                 </Field>
-              </div>
-            </>
-          )}
-
-          {/* LOCUMS fields */}
-          {cat === 'LOCUMS' && (
-            <>
-              <SectionDivider label="Locums Details" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                <Field label="Base Hourly Rate ($)" required>
-                  <input style={inputStyle} type="number" min="0" value={form.hourlyRate} onChange={(e) => setF('hourlyRate', e.target.value)} placeholder="e.g. 220" />
-                </Field>
-                <div />
-                <Field label="Contract Start">
-                  <input style={inputStyle} type="date" value={form.contractStart} onChange={(e) => setF('contractStart', e.target.value)} />
-                </Field>
-                <Field label="Contract End">
-                  <input style={inputStyle} type="date" value={form.contractEnd} onChange={(e) => setF('contractEnd', e.target.value)} />
-                </Field>
-              </div>
-            </>
-          )}
-
-          {/* All-in cost — generic, optional, applies to any category. The
-              facility's true loaded cost per hour: bill rate for agency 1099s,
-              loaded cost for W-2 staff. Powers the agency-invoice + savings calc. */}
-          <SectionDivider label="Cost Analysis (optional)" />
-          <Field label="All-In Cost ($/hr)">
-            <input style={inputStyle} type="number" min="0" step="0.01" value={form.allInCostPerHour} onChange={(e) => setF('allInCostPerHour', e.target.value)} placeholder="Fully-loaded cost to the facility — e.g. 240" />
-            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-              Leave blank unless you track it. For agency-staffed providers this is what you owe the agency all-in (pay + malpractice + margin).
-            </div>
-          </Field>
-
-          {/* Shared preference fields */}
-          <SectionDivider label="Scheduling Preferences" />
-
-          <Field label="Preferred Shift Length">
-            <select style={inputStyle} value={form.preferredShiftLength} onChange={(e) => setF('preferredShiftLength', e.target.value)}>
-              {SHIFT_LENGTHS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Preferred Days">
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-              {ALL_DAYS.map(day => {
-                const active = form.preferredDays.includes(day)
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    style={{
-                      padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: active ? '#2563EB' : '#F8FAFC',
-                      color: active ? '#fff' : '#64748B',
-                      border: `1px solid ${active ? '#2563EB' : '#E2E8F0'}`,
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
-            </div>
-          </Field>
-
-          <Field label="Credentialed Sites & Shift Share">
-            {(() => {
-              const sites = Array.from(new Set([...siteList, ...Object.keys(siteCred)])).sort((a, b) => a.localeCompare(b))
-              if (sites.length === 0) {
-                return <div style={{ fontSize: 13, color: '#94A3B8', padding: '8px 0' }}>No sites yet — they appear here once you have a coverage template or schedule.</div>
-              }
-              const total = Object.values(siteCred).filter((v) => v.on).reduce((s, v) => s + (parseFloat(v.pct) || 0), 0)
-              const anyOn = Object.values(siteCred).some((v) => v.on)
-              return (
+              )}
+              {cat === 'LOCUMS' && (
                 <>
-                  <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
-                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
-                    {sites.map((name, i) => {
-                      const v = siteCred[name] || {}
-                      return (
-                        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < sites.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
-                            <input type="checkbox" checked={!!v.on} onChange={() => toggleSite(name)} style={{ width: 16, height: 16 }} />
-                            <span style={{ fontSize: 13, color: '#0F172A' }}>{name}</span>
-                          </label>
-                          {v.on && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <input type="number" min="0" max="100" value={v.pct || ''} onChange={(e) => setSitePct(name, e.target.value)} placeholder="—" style={{ ...inputStyle, width: 62, padding: '6px 8px', textAlign: 'right' }} />
-                              <span style={{ fontSize: 12, color: '#64748B' }}>%</span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  {anyOn && (
-                    <div style={{ fontSize: 12, color: total === 100 ? '#059669' : '#94A3B8', marginTop: 6 }}>
-                      Shift share totals {total}%{total === 100 ? ' ✓' : ' — aim for 100% across sites (StaffIQ normalizes either way)'}
-                    </div>
-                  )}
+                  <Field label="Contract Start">
+                    <input style={inputStyle} type="date" value={form.contractStart} onChange={(e) => setF('contractStart', e.target.value)} />
+                  </Field>
+                  <Field label="Contract End">
+                    <input style={inputStyle} type="date" value={form.contractEnd} onChange={(e) => setF('contractEnd', e.target.value)} />
+                  </Field>
                 </>
-              )
-            })()}
-          </Field>
+              )}
+              <Field label="Seniority Rank">
+                <input style={inputStyle} type="number" min="1" value={form.seniorityRank} onChange={(e) => setF('seniorityRank', e.target.value)} placeholder="1 = most senior (optional)" />
+              </Field>
+              <Field label="Quality Score">
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 6 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setF('adminQualityScore', form.adminQualityScore === n ? '' : n)}
+                      style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', color: form.adminQualityScore !== '' && n <= form.adminQualityScore ? '#F59E0B' : '#D1D5DB', padding: 0, lineHeight: 1 }}
+                    >★</button>
+                  ))}
+                  {form.adminQualityScore !== '' && (
+                    <button type="button" onClick={() => setF('adminQualityScore', '')} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }}>Clear</button>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Weights the schedule builder toward this provider in Quality mode</div>
+              </Field>
+              <Field label="Schedule access">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
+                  <input type="checkbox" checked={form.scheduleAccessRevoked} onChange={(e) => setF('scheduleAccessRevoked', e.target.checked)} />
+                  Revoke this provider's access to the facility's daily schedule
+                </label>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                  Linked providers can view this facility's daily board in their app by default. Check to revoke.
+                </div>
+              </Field>
+            </div>
 
-          <Field label="Additional Notes">
-            <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }} value={form.notes} onChange={(e) => setF('notes', e.target.value)} placeholder="Any relevant notes..." />
-          </Field>
+            <Field label="Preferred Shift Length">
+              <select style={inputStyle} value={form.preferredShiftLength} onChange={(e) => setF('preferredShiftLength', e.target.value)}>
+                {SHIFT_LENGTHS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Preferred Days">
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                {ALL_DAYS.map(day => {
+                  const active = form.preferredDays.includes(day)
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleDay(day)}
+                      style={{
+                        padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        background: active ? '#2563EB' : '#F8FAFC',
+                        color: active ? '#fff' : '#64748B',
+                        border: `1px solid ${active ? '#2563EB' : '#E2E8F0'}`,
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      {day}
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+
+            <Field label="Credentialed Sites & Shift Share">
+              {(() => {
+                const sites = Array.from(new Set([...siteList, ...Object.keys(siteCred)])).sort((a, b) => a.localeCompare(b))
+                if (sites.length === 0) {
+                  return <div style={{ fontSize: 13, color: '#94A3B8', padding: '8px 0' }}>No sites yet — they appear here once you have a coverage template or schedule.</div>
+                }
+                const total = Object.values(siteCred).filter((v) => v.on).reduce((s, v) => s + (parseFloat(v.pct) || 0), 0)
+                const anyOn = Object.values(siteCred).some((v) => v.on)
+                return (
+                  <>
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
+                      {sites.map((name, i) => {
+                        const v = siteCred[name] || {}
+                        return (
+                          <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < sites.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={!!v.on} onChange={() => toggleSite(name)} style={{ width: 16, height: 16 }} />
+                              <span style={{ fontSize: 13, color: '#0F172A' }}>{name}</span>
+                            </label>
+                            {v.on && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input type="number" min="0" max="100" value={v.pct || ''} onChange={(e) => setSitePct(name, e.target.value)} placeholder="—" style={{ ...inputStyle, width: 62, padding: '6px 8px', textAlign: 'right' }} />
+                                <span style={{ fontSize: 12, color: '#64748B' }}>%</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {anyOn && (
+                      <div style={{ fontSize: 12, color: total === 100 ? '#059669' : '#94A3B8', marginTop: 6 }}>
+                        Shift share totals {total}%{total === 100 ? ' ✓' : ' — aim for 100% across sites (StaffIQ normalizes either way)'}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </Field>
+          </div>
+
+          {/* ── 💵 Payroll — money, employers, tax ─────────────────────── */}
+          <div style={{ display: modalTab === 'payroll' ? 'block' : 'none' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <Field label="Employer">
+                <input style={inputStyle} value={form.employer} onChange={(e) => setF('employer', e.target.value)} placeholder="Staffing group or practice" />
+              </Field>
+              <Field label="Tax Status">
+                <select style={inputStyle} value={form.taxStatus} onChange={(e) => setF('taxStatus', e.target.value)}>
+                  <option value="">— Unknown —</option>
+                  <option value="W2">W-2 (employee)</option>
+                  <option value="1099">1099 (contractor)</option>
+                </select>
+              </Field>
+              <Field label="Hours">
+                <select style={inputStyle} value={form.hoursStatus} onChange={(e) => setF('hoursStatus', e.target.value)}>
+                  <option value="">— Unknown —</option>
+                  <option value="FT">Full-time</option>
+                  <option value="PT">Part-time</option>
+                </select>
+              </Field>
+              {(cat === 'FULL_TIME' || cat === 'PART_TIME') && (
+                <Field label="Annual Base Rate ($)" required>
+                  <input style={inputStyle} type="number" min="0" value={form.annualRate} onChange={(e) => setF('annualRate', e.target.value)} placeholder="e.g. 220000" />
+                </Field>
+              )}
+              {(cat === 'PER_DIEM' || cat === 'LOCUMS') && (
+                <Field label="Base Hourly Rate ($)" required>
+                  <input style={inputStyle} type="number" min="0" value={form.hourlyRate} onChange={(e) => setF('hourlyRate', e.target.value)} placeholder={cat === 'LOCUMS' ? 'e.g. 220' : 'e.g. 185'} />
+                </Field>
+              )}
+              <Field label="Payee Type (payroll)">
+                <select style={inputStyle} value={form.payeeType} onChange={(e) => setF('payeeType', e.target.value)}>
+                  <option value="">— Not set —</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Business">Business (LLC/PLLC)</option>
+                </select>
+              </Field>
+              <Field label="Business Name (for 1099s paid as an LLC)">
+                <input style={inputStyle} value={form.businessName} onChange={(e) => setF('businessName', e.target.value)} placeholder="e.g. Bailin Anesthesia LLC" />
+              </Field>
+              <Field label="EIN (business payees)">
+                <input style={inputStyle} value={form.ein} onChange={(e) => setF('ein', e.target.value)} placeholder="e.g. 92-0725051" />
+              </Field>
+
+              {/* Dual employment — W-2 at one employer + 1099 at another. */}
+              <Field label="Dual employment">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
+                  <input type="checkbox" checked={form.dualEmployment} onChange={(e) => setF('dualEmployment', e.target.checked)} />
+                  W-2 at one employer AND 1099 at another (e.g. W-2 at the facility + 1099 via an agency)
+                </label>
+              </Field>
+              {form.dualEmployment && (
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                    W-2 salary uses the Annual Base Rate above. The Payee Type / Business Name / EIN / All-In Cost above describe the <strong>1099</strong> side.
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                    <Field label="W-2 paid by">
+                      <input style={inputStyle} value={form.w2Employer} onChange={(e) => setF('w2Employer', e.target.value)} placeholder="e.g. the facility" />
+                    </Field>
+                    <Field label="1099 paid by">
+                      <input style={inputStyle} value={form.contractorEmployer} onChange={(e) => setF('contractorEmployer', e.target.value)} placeholder="e.g. the agency" />
+                    </Field>
+                  </div>
+                  <Field label="1099 Pay Rate ($/hr)">
+                    <input style={inputStyle} type="number" min="0" step="0.01" value={form.contractorPayRate} onChange={(e) => setF('contractorPayRate', e.target.value)} placeholder="What the 1099 side pays this provider/hr" />
+                  </Field>
+                </div>
+              )}
+              <Field label="Payroll Name">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: form.businessName.trim() ? '#374151' : '#94A3B8' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.useBusinessNameForPayroll}
+                    disabled={!form.businessName.trim()}
+                    onChange={(e) => setF('useBusinessNameForPayroll', e.target.checked)}
+                  />
+                  Pay under the business name (payroll only — used everywhere else by their name)
+                </label>
+              </Field>
+            </div>
+
+            <Field label="All-In Cost ($/hr)">
+              <input style={inputStyle} type="number" min="0" step="0.01" value={form.allInCostPerHour} onChange={(e) => setF('allInCostPerHour', e.target.value)} placeholder="Fully-loaded cost to the facility — e.g. 240" />
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                Leave blank unless you track it. For agency-staffed providers this is what you owe the agency all-in (pay + malpractice + margin).
+              </div>
+            </Field>
+          </div>
+
+          {/* ── 👤 Profile — identity, contact, credentials ────────────── */}
+          <div style={{ display: modalTab === 'profile' ? 'block' : 'none' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <Field label="SNAP Account Email">
+                <input style={inputStyle} type="email" value={form.snapEmail} onChange={(e) => setF('snapEmail', e.target.value)} placeholder="provider@example.com" />
+              </Field>
+              <Field label="Phone Number">
+                <input style={inputStyle} type="tel" value={form.phoneNumber} onChange={(e) => setF('phoneNumber', e.target.value)} placeholder="(555) 000-0000" />
+              </Field>
+              <Field label="NPI Number">
+                <input style={inputStyle} value={form.npi} onChange={(e) => setF('npi', e.target.value)} placeholder="10-digit NPI" inputMode="numeric" />
+              </Field>
+              <Field label="License Expiration">
+                <input style={inputStyle} type="date" value={form.licenseExpiration} onChange={(e) => setF('licenseExpiration', e.target.value)} />
+              </Field>
+            </div>
+
+            {/* PTO config moved to PTO → Reports (rules, allotments, balances).
+                The form still passes existing values through untouched. */}
+            <Field label="Additional Notes">
+              <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }} value={form.notes} onChange={(e) => setF('notes', e.target.value)} placeholder="Any relevant notes..." />
+            </Field>
+          </div>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>

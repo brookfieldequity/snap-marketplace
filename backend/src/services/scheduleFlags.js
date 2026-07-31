@@ -16,6 +16,11 @@
  *                              (availability card, app calendar, or self-submit)
  *   ROOM_COUNT_MISMATCH MEDIUM site's returned card disagrees with the built day
  *   MISSING_DAY         MEDIUM site returned a count for a day that was never built
+ *   NOT_SCHEDULED       HIGH   FT / part-time-W2 provider absent from a month
+ *                              that's being built (set schedules work every
+ *                              month unless on PTO)
+ *   UNDER_SCHEDULED     MEDIUM set-schedule provider well below their
+ *                              fteHours-scaled expected days on a mostly-built month
  *   HOLIDAY_STAFFED     MEDIUM assignments on an active practice holiday
  *   HOLIDAY_OPEN        INFO   an (empty) schedule day sits on a holiday
  *   MAYBE_ONLY          INFO   assigned on a day the provider only said "maybe"
@@ -59,7 +64,7 @@ async function computeScheduleFlags(facilityId, year, month) {
     }),
     prisma.internalRosterEntry.findMany({
       where: { facilityId },
-      select: { id: true, providerName: true, employmentCategory: true, linkedProviderId: true },
+      select: { id: true, providerName: true, employmentCategory: true, linkedProviderId: true, fteHours: true, isNonClinical: true },
     }),
     prisma.rosterTimeOff.findMany({
       where: { facilityId, startDate: { lt: end }, endDate: { gte: start } },
@@ -276,6 +281,95 @@ async function computeScheduleFlags(facilityId, year, month) {
           severity: 'HIGH',
           title: `${name} is also scheduled at another practice on ${dIso}`,
           detail: `Assigned at ${day.location} here while another SNAP practice has them the same day.`,
+        });
+      }
+    }
+  }
+
+  // ── Set-schedule coverage: FT + part-time W2 must be ON the month ──────
+  // (Matt, 7/31): full-timers and the 80%/60% W2 folks work every month
+  // unless they're on PTO. Expected days = business days − PTO weekdays,
+  // scaled by fteHours/40 (32 → 80%, 24 → 60%). Zero days on a month that's
+  // being built = loud; meaningfully under expectation once the month is
+  // mostly filled = check.
+  const anyAssignments = days.some((d) => d.assignments.some((a) => a.rosterId && !a.ghost));
+  if (anyAssignments) {
+    // Business days in the month (Mon–Fri, active holidays excluded).
+    const bizDays = new Set();
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      const dIso = iso(d);
+      if (dow >= 1 && dow <= 5 && !holidaySet.has(dIso)) bizDays.add(dIso);
+    }
+    // Real scheduled days per provider (ghosts and empty seats never count).
+    const scheduledDays = new Map(); // rosterId → Set<iso>
+    for (const day of days) {
+      const dIso = iso(day.date);
+      for (const a of day.assignments) {
+        if (!a.rosterId || a.ghost) continue;
+        if (!scheduledDays.has(a.rosterId)) scheduledDays.set(a.rosterId, new Set());
+        scheduledDays.get(a.rosterId).add(dIso);
+      }
+    }
+    // Month fill ratio gates the "under-scheduled" check — a half-built
+    // month would flag everyone as under.
+    let totalRooms = 0;
+    let filledRooms = 0;
+    for (const day of days) {
+      totalRooms += day.roomsRequired || 1;
+      filledRooms += day.assignments.filter((a) => a.rosterId && !a.ghost && a.roomNumber < 900).length;
+    }
+    const fillRatio = totalRooms > 0 ? filledRooms / totalRooms : 0;
+
+    for (const r of roster) {
+      if (r.isNonClinical) continue;
+      if (!['FULL_TIME', 'PART_TIME'].includes(r.employmentCategory)) continue;
+      // fteHours is canonically hours/WEEK (40 = full-time). Legacy rows from
+      // the payroll import stored PAY-PERIOD hours (80 biweekly) — treat
+      // anything > 60 as biweekly so 64 reads as 80%, not 160%.
+      const fteBasis = r.fteHours > 60 ? 80 : 40;
+      const fteFraction = r.fteHours ? Math.min(1, r.fteHours / fteBasis) : (r.employmentCategory === 'FULL_TIME' ? 1 : null);
+      const ptoBizDays = [...bizDays].filter((dIso) => ptoByKey.has(`${r.id}|${dIso}`)).length;
+      const workableDays = Math.max(0, bizDays.size - ptoBizDays);
+      const expected = fteFraction != null ? Math.round(workableDays * fteFraction) : null;
+      const actual = scheduledDays.get(r.id)?.size || 0;
+      const pctLabel = fteFraction != null && fteFraction < 1 ? ` (${Math.round(fteFraction * 100)}%)` : '';
+      const catLabel = r.employmentCategory === 'FULL_TIME' ? 'full-time' : 'part-time W2';
+
+      if (actual === 0 && workableDays > 0 && (expected == null || expected > 0)) {
+        push({
+          id: `NOTSCHED:${r.id}`,
+          type: 'NOT_SCHEDULED',
+          severity: 'HIGH',
+          date: iso(start),
+          location: '',
+          rosterId: r.id,
+          providerName: r.providerName,
+          published: false,
+          title: `${r.providerName} (${catLabel}${pctLabel}) isn't on this month's schedule at all`,
+          detail: ptoBizDays > 0
+            ? `${workableDays} working day(s) after ${ptoBizDays} PTO day(s) — set-schedule staff work every month unless on PTO.`
+            : `${workableDays} working day(s) this month and no PTO on file — set-schedule staff work every month.`,
+          fix: { action: 'REVIEW_MONTH' },
+        });
+      } else if (
+        expected != null
+        && actual > 0
+        && fillRatio >= 0.8
+        && actual < Math.floor(expected * 0.75)
+      ) {
+        push({
+          id: `UNDERSCHED:${r.id}`,
+          type: 'UNDER_SCHEDULED',
+          severity: 'MEDIUM',
+          date: iso(start),
+          location: '',
+          rosterId: r.id,
+          providerName: r.providerName,
+          published: false,
+          title: `${r.providerName} (${catLabel}${pctLabel}) is light this month: ${actual} day(s) vs ~${expected} expected`,
+          detail: `Expected ≈${expected} of ${workableDays} working day(s)${ptoBizDays ? ` (after ${ptoBizDays} PTO day(s))` : ''} at ${Math.round((fteFraction || 1) * 100)}% — the schedule is mostly built, so this gap is probably real.`,
+          fix: { action: 'REVIEW_MONTH' },
         });
       }
     }
