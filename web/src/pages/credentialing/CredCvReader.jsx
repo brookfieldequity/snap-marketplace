@@ -77,15 +77,17 @@ export default function CredCvReader() {
 
   function pick(list) {
     const files = Array.from(list || [])
-    const f = files.find((x) => ['application/pdf', 'image/jpeg', 'image/png'].includes(x.type))
+    // .docx reads natively since 7/31 (server-side text extraction).
+    const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    const f = files.find((x) => ['application/pdf', 'image/jpeg', 'image/png', DOCX].includes(x.type) || /\.docx$/i.test(x.name || ''))
     if (f) { setFile(f); read(f); return }
-    // Never fail silently — a Word-doc CV dragged here used to just do nothing.
+    // Never fail silently — an unsupported file dragged here used to just do nothing.
     if (files.length > 0) {
       const name = files[0].name || 'that file'
-      const isWord = /\.(docx?|rtf|pages|odt)$/i.test(name)
-      setError(isWord
-        ? `"${name}" is a Word document — SNAP reads CVs as PDF, JPG, or PNG. Open it and use File → Save As / Export → PDF, then drop the PDF here.`
-        : `"${name}" isn't a supported type — drop the CV as a PDF, JPG, or PNG.`)
+      const isLegacyWord = /\.(doc|rtf|pages|odt)$/i.test(name)
+      setError(isLegacyWord
+        ? `"${name}" is an older word-processor format — SNAP reads CVs as PDF, Word (.docx), JPG, or PNG. Open it and use File → Save As → .docx or PDF, then drop it here.`
+        : `"${name}" isn't a supported type — drop the CV as a PDF, Word (.docx), JPG, or PNG.`)
     }
   }
 
@@ -157,8 +159,8 @@ export default function CredCvReader() {
           >
             <div style={{ fontSize: 34 }}>📄</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#334155', marginTop: 10 }}>Drop a provider's CV</div>
-            <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4 }}>PDF or scan · SNAP reads it in about 20 seconds</div>
-            <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => pick(e.target.files)} />
+            <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4 }}>PDF, Word (.docx), or scan · SNAP reads it in about 20 seconds</div>
+            <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" style={{ display: 'none' }} onChange={(e) => pick(e.target.files)} />
           </div>
           {error && <div style={{ marginTop: 14, padding: '9px 13px', background: '#FEE2E2', borderRadius: 8, color: '#DC2626', fontSize: 13 }}>{error}</div>}
         </>

@@ -92,7 +92,7 @@ export default function CredentialImportPage() {
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>Import Documents</h1>
       <p style={{ fontSize: 14, color: '#64748B', margin: '0 0 20px' }}>
-        Bring your existing credentialing files with you — drop PDFs, scans, or a ZIP of your current folders.
+        Bring your existing credentialing files with you — drop PDFs, scans, Word docs (.docx), or a ZIP of your current folders.
         SNAP reads each document and suggests where it goes; you verify before anything is filed.
       </p>
 
@@ -110,7 +110,7 @@ export default function CredentialImportPage() {
         onClick={() => fileRef.current?.click()}
         style={{ border: '2px dashed #94A3B8', borderRadius: 16, padding: '36px 20px', textAlign: 'center', background: '#fff', cursor: 'pointer', marginBottom: 24 }}
       >
-        <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.zip" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} />
+        <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx,.zip" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} />
         <div style={{ fontSize: 34, marginBottom: 6 }}>📥</div>
         <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
           {uploading ? 'Uploading…' : 'Drop credentialing files here, or click to choose'}
