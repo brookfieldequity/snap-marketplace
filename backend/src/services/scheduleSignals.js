@@ -97,6 +97,9 @@ async function assembleMonthSignals({ facilityId, year, month, roster, scheduleD
 
   const unavailableKeys = new Set();
   const defaultOffKeys = new Set();
+  // Why-off classification for Wave-5 rule enforcement: PTO-covered days vs
+  // explicit non-PTO "said no" days (admin-marked or provider-declared).
+  const explicitOffKeys = new Set();
   const uniqueDayISOs = [...new Set(scheduleDays.map((d) => isoOf(d.date)))];
   for (const r of roster) {
     for (const dISO of uniqueDayISOs) {
@@ -110,6 +113,7 @@ async function assembleMonthSignals({ facilityId, year, month, roster, scheduleD
       if (!available) {
         unavailableKeys.add(key);
         if (source === 'DEFAULT') defaultOffKeys.add(key);
+        else if (!ptoSet.has(key)) explicitOffKeys.add(key);
       }
     }
   }
@@ -178,7 +182,7 @@ async function assembleMonthSignals({ facilityId, year, month, roster, scheduleD
     }
   }
 
-  return { monthStart, monthEnd, unavailableKeys, defaultOffKeys, workRequestKeys, dayOffSoftKeys, triagedRequests };
+  return { monthStart, monthEnd, unavailableKeys, defaultOffKeys, explicitOffKeys, ptoSet, workRequestKeys, dayOffSoftKeys, triagedRequests };
 }
 
 module.exports = { assembleMonthSignals };

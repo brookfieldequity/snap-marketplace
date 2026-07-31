@@ -739,6 +739,105 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
 }
 
 // Given an array of scheduleDay rows for one date, compute fill stats
+// ─── 🎯 Allocation gauges + drift suggestions (Wave 5 learning) ──────────────
+// Roster card = TARGET (ProviderLocation.shiftSharePct); real placements =
+// ACTUAL. Live for the month on screen, drift judged over 3 months; when
+// reality persistently disagrees with the card, SNAP suggests amending the
+// target — one click, nothing automatic.
+function AllocationPanel({ year, month }) {
+  const [data, setData] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [applying, setApplying] = useState(null)
+
+  const load = () => {
+    facilityAPI.getAllocation(year, month).then(setData).catch(() => setData(null))
+  }
+  useEffect(load, [year, month])
+
+  const providers = data?.providers || []
+  const suggestions = data?.suggestions || []
+  if (providers.length === 0) return null
+
+  async function applySuggestion(s) {
+    if (!window.confirm(`Update ${s.providerName}'s ${s.location} target from ${s.targetPct}% to ${s.suggestPct}%?\n\n(Observed ${s.observedPct}% over the last ${s.windowMonths} months, ${s.windowDays} worked days.)`)) return
+    setApplying(`${s.rosterId}:${s.location}`)
+    try {
+      await facilityAPI.applyAllocationTarget(s.rosterId, s.location, s.suggestPct)
+      load()
+    } catch (e) {
+      alert(`Couldn't update the target: ${e.message}`)
+    } finally {
+      setApplying(null)
+    }
+  }
+
+  const Bar = ({ target, actual }) => (
+    <div style={{ position: 'relative', width: 120, height: 8, background: '#F1F5F9', borderRadius: 4, flexShrink: 0 }}>
+      {actual != null && (
+        <div style={{ position: 'absolute', left: 0, top: 0, height: 8, width: `${Math.min(100, actual)}%`, background: Math.abs((actual ?? 0) - target) >= 10 ? '#F59E0B' : '#7C3AED', borderRadius: 4, opacity: 0.85 }} />
+      )}
+      <div title={`target ${target}%`} style={{ position: 'absolute', left: `${Math.min(100, target)}%`, top: -2, width: 2, height: 12, background: '#0F172A', borderRadius: 1 }} />
+    </div>
+  )
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>🎯 Site allocation</span>
+        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>target (▮) vs actual this month · {providers.length} provider{providers.length === 1 ? '' : 's'} with targets</span>
+        {suggestions.length > 0 && (
+          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#F5F3FF', border: '1px solid #DDD6FE', color: '#5B21B6' }}>
+            📊 {suggestions.length} drift suggestion{suggestions.length === 1 ? '' : 's'}
+          </span>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          {open ? 'Hide' : 'Show'}
+        </button>
+      </div>
+
+      {/* Drift suggestions always visible — they're the actionable part. */}
+      {suggestions.map((s) => (
+        <div key={`${s.rosterId}:${s.location}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', borderRadius: 10, background: '#F5F3FF', border: '1px dashed #A78BFA' }}>
+          <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, color: '#0F172A' }}>
+            <b>{s.providerName}</b> has run <b>{s.observedPct}%</b> at {s.location} over {s.windowMonths} months — the card says <b>{s.targetPct}%</b>. Reality votes to amend it.
+          </div>
+          <button
+            onClick={() => applySuggestion(s)}
+            disabled={applying === `${s.rosterId}:${s.location}`}
+            style={{ fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: applying === `${s.rosterId}:${s.location}` ? 0.5 : 1 }}
+          >
+            Set target to {s.suggestPct}%
+          </button>
+        </div>
+      ))}
+
+      {open && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {providers.map((p) => (
+            <div key={p.rosterId} style={{ borderTop: '1px solid #F8FAFC', paddingTop: 8 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>
+                {p.providerName}
+                <span style={{ color: '#94A3B8', fontWeight: 500 }}> · {p.monthDays} day{p.monthDays === 1 ? '' : 's'} this month</span>
+              </div>
+              {p.targets.map((t) => (
+                <div key={t.location} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0 3px 12px' }}>
+                  <span style={{ fontSize: 11.5, color: '#475569', width: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.location}</span>
+                  <Bar target={t.targetPct} actual={t.monthActualPct} />
+                  <span style={{ fontSize: 11, color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                    {t.monthActualPct != null ? `${t.monthActualPct}%` : '—'} vs {t.targetPct}% target
+                    {t.windowActualPct != null ? ` · 3-mo ${t.windowActualPct}%` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getDayStats(dayRows) {
   let totalRooms = 0
   let filledRooms = 0
@@ -1608,6 +1707,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
         facilityId={facility?.id}
       />
 
+      <AllocationPanel year={year} month={month} />
+
       {facility && (
         <CostComparisonPanel
           rate={facility.industryRoomRatePerDay}
@@ -2072,7 +2173,10 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                             </div>
                             {f.fix?.action === 'UNASSIGN' && (
                               <button
-                                onClick={() => handleAssign(f.fix.dayId, f.fix.roomNumber, '')}
+                                onClick={() => {
+                                  handleAssign(f.fix.dayId, f.fix.roomNumber, '')
+                                  facilityAPI.logFlagResolution(f.type, 'UNASSIGN').catch(() => {})
+                                }}
                                 style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: '#fff', border: '1px solid #FDE68A', color: '#92400E', cursor: 'pointer', whiteSpace: 'nowrap' }}
                               >
                                 Unassign
@@ -2083,6 +2187,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                                 onClick={async () => {
                                   try {
                                     await facilityAPI.upsertScheduleDay({ date: f.fix.date, location: f.fix.location, roomsRequired: f.fix.rooms })
+                                    facilityAPI.logFlagResolution(f.type, f.fix.action).catch(() => {})
                                     load()
                                   } catch (e) { alert(`Failed: ${e.message}`) }
                                 }}

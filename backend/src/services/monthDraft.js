@@ -61,7 +61,78 @@ async function runMonthDraft(facilityId, year, month) {
   if (roster.length === 0) return { error: 'NO_ROSTER' };
 
   const signals = await assembleMonthSignals({ facilityId, year, month, roster, scheduleDays: days });
-  const { unavailableKeys, defaultOffKeys, workRequestKeys, dayOffSoftKeys } = signals;
+  const { unavailableKeys, defaultOffKeys, explicitOffKeys, ptoSet, workRequestKeys, dayOffSoftKeys } = signals;
+
+  // ── Wave 5: earned automation rules (per-type, facility opt-in) ────────
+  // Enforcement lives HERE and only here: at draft time, on MACHINE-placed
+  // rows only. A rule never touches a human placement. Every auto-action
+  // lands in the diff receipt so nothing happens silently.
+  const rules = await prisma.facilityFlagRule.findMany({
+    where: { facilityId, enabled: true },
+    select: { flagType: true, action: true },
+  }).catch(() => []);
+  const ruleSet = new Set(rules.map((r) => `${r.flagType}:${r.action}`));
+  const autoFixed = [];
+
+  // Rule: accept the site's returned card when it disagrees with a
+  // NON-admin-set built day (admin-set counts are the coordinator's explicit
+  // word — a rule never overrides them).
+  if (ruleSet.has('ROOM_COUNT_MISMATCH:SET_ROOMS')) {
+    const cards = await prisma.roomCountRequest.findMany({
+      where: { facilityId, year, month, submittedAt: { not: null } },
+      select: { location: true, dayCounts: { select: { date: true, roomsRequired: true } } },
+    });
+    const cardByKey = new Map();
+    for (const c of cards) {
+      for (const dc of c.dayCounts) cardByKey.set(`${isoOf(dc.date)}::${c.location}`, dc.roomsRequired);
+    }
+    for (const day of days) {
+      // Pre-publish only: published days are Paula's, loud-flag territory.
+      if (day.publishedAt) continue;
+      const key = `${isoOf(day.date)}::${day.location}`;
+      const cardRooms = cardByKey.get(key);
+      if (cardRooms != null && cardRooms > 0 && !day.roomsAdminSet && day.roomsRequired !== cardRooms) {
+        await prisma.scheduleDay.update({ where: { id: day.id }, data: { roomsRequired: cardRooms } });
+        autoFixed.push({
+          kind: 'AUTO_FIXED', date: isoOf(day.date), location: day.location,
+          providerName: '', roomNumber: 0,
+          detail: `room count ${day.roomsRequired} → ${cardRooms} (site's card; your rule)`,
+        });
+        day.roomsRequired = cardRooms;
+      }
+    }
+  }
+
+  // Rules: auto-unassign MACHINE-placed providers who are on PTO / said no.
+  // Freed seats refill in the normal pass below with someone available.
+  const unassignPto = ruleSet.has('PTO_CONFLICT:UNASSIGN');
+  const unassignSaidNo = ruleSet.has('SAID_UNAVAILABLE:UNASSIGN');
+  if (unassignPto || unassignSaidNo) {
+    for (const day of days) {
+      // Pre-publish only (locked pre/post split): a published day's conflict
+      // is a LOUD flag for the coordinator, never a silent auto-removal —
+      // notifications and judgment belong to a human there.
+      if (day.publishedAt) continue;
+      const dISO = isoOf(day.date);
+      for (const a of day.assignments) {
+        if (!a.rosterId || a.ghost || a.placedBy !== 'MACHINE') continue;
+        const key = `${a.rosterId}::${dISO}`;
+        const hitPto = unassignPto && ptoSet.has(key);
+        const hitSaidNo = unassignSaidNo && explicitOffKeys.has(key);
+        if (!hitPto && !hitSaidNo) continue;
+        await prisma.scheduleAssignment.update({
+          where: { id: a.id },
+          data: { rosterId: null }, // stays placedBy MACHINE → machine may refill
+        });
+        autoFixed.push({
+          kind: 'AUTO_FIXED', date: dISO, location: day.location,
+          providerName: a.rosterEntry?.providerName || 'Provider', roomNumber: a.roomNumber,
+          detail: hitPto ? 'removed — on PTO (your rule); refilling below' : 'removed — said unavailable (your rule); refilling below',
+        });
+        a.rosterId = null; // reflect in memory so the fill pass sees the free seat
+      }
+    }
+  }
   const locationData = await loadProviderLocations(roster.map((r) => r.id));
   const { shareByRoster } = locationData;
   const rosterById = new Map(roster.map((r) => [r.id, r]));
@@ -268,17 +339,23 @@ async function runMonthDraft(facilityId, year, month) {
     });
   }
 
+  // Auto-fixed rule actions lead the receipt — they happened first and the
+  // coordinator must see them before the fills that followed.
+  receipt.unshift(...autoFixed);
+
   const filled = receipt.filter((r) => r.kind === 'FILLED').length;
   const ghosts = receipt.filter((r) => r.kind === 'PROPOSED').length;
   const confirmed = receipt.filter((r) => r.kind === 'CONFIRMED').length;
   const withdrawn = receipt.filter((r) => r.kind === 'WITHDRAWN').length;
+  const auto = autoFixed.length;
   const parts = [];
+  if (auto) parts.push(`auto-fixed ${auto} (your rules)`);
   if (filled) parts.push(`filled ${filled}`);
   if (confirmed) parts.push(`confirmed ${confirmed}`);
   if (ghosts) parts.push(`proposed ${ghosts}`);
   if (withdrawn) parts.push(`withdrew ${withdrawn}`);
   const summary = parts.length
-    ? `${filled + confirmed + ghosts + withdrawn} change(s): ${parts.join(', ')}`
+    ? `${auto + filled + confirmed + ghosts + withdrawn} change(s): ${parts.join(', ')}`
     : 'No changes — the draft is already as good as the machine can make it.';
 
   const run = await prisma.monthDraftRun.create({

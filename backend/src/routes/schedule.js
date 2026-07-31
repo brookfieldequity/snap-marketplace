@@ -331,6 +331,87 @@ router.get('/flags', facilityAuth, async (req, res) => {
   }
 });
 
+// POST /flags/resolution — log that the coordinator applied a flag fix
+// (Wave 5 observation layer; feeds the automation graduation counters).
+// Fire-and-forget from the UI; never blocks the actual fix.
+router.post('/flags/resolution', facilityAuth, async (req, res) => {
+  try {
+    const { flagType, action } = req.body || {};
+    if (!flagType || !action) return res.status(400).json({ error: 'flagType and action required' });
+    await prisma.flagResolution.create({
+      data: { facilityId: req.facility.id, flagType: String(flagType).slice(0, 40), action: String(action).slice(0, 40) },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[schedule/flags/resolution] error:', err);
+    res.status(500).json({ error: 'Failed to log resolution' });
+  }
+});
+
+// POST /flags/rules — turn an earned automation rule on (accept an offer) or
+// off. Only the known automatable (flagType, action) pairs are accepted.
+router.post('/flags/rules', facilityAuth, async (req, res) => {
+  try {
+    const { flagType, enabled } = req.body || {};
+    const { AUTOMATABLE } = require('../services/scheduleFlags');
+    const def = AUTOMATABLE.find((a) => a.flagType === flagType);
+    if (!def) return res.status(400).json({ error: 'Unknown automation rule' });
+    const rule = await prisma.facilityFlagRule.upsert({
+      where: { facilityId_flagType: { facilityId: req.facility.id, flagType } },
+      update: { enabled: Boolean(enabled) },
+      create: { facilityId: req.facility.id, flagType, action: def.action, enabled: Boolean(enabled) },
+    });
+    res.json({ rule });
+  } catch (err) {
+    console.error('[schedule/flags/rules] error:', err);
+    res.status(500).json({ error: 'Failed to save rule' });
+  }
+});
+
+// GET /allocation?year&month — actuals-vs-target site-mix gauges + drift
+// suggestions (Wave 5). Targets come from the roster card
+// (ProviderLocation.shiftSharePct); actuals from real placements.
+router.get('/allocation', facilityAuth, async (req, res) => {
+  try {
+    const now = new Date();
+    const year = parseInt(req.query.year, 10) || now.getFullYear();
+    const month = parseInt(req.query.month, 10) || now.getMonth() + 1;
+    if (month < 1 || month > 12) return res.status(400).json({ error: 'Valid month (1-12) required' });
+    const { computeAllocation } = require('../services/allocationInsights');
+    res.json(await computeAllocation(req.facility.id, year, month));
+  } catch (err) {
+    console.error('[schedule/allocation] error:', err);
+    res.status(500).json({ error: 'Failed to compute allocation' });
+  }
+});
+
+// POST /allocation/apply — one-click accept of a drift suggestion: amend the
+// roster card's target share for one provider-site. Explicit coordinator
+// action; nothing changes on its own.
+router.post('/allocation/apply', facilityAuth, async (req, res) => {
+  try {
+    const { rosterEntryId, location, pct } = req.body || {};
+    const n = Number(pct);
+    if (!rosterEntryId || !location || !Number.isFinite(n) || n < 0 || n > 100) {
+      return res.status(400).json({ error: 'rosterEntryId, location, and pct (0-100) required' });
+    }
+    const entry = await prisma.internalRosterEntry.findFirst({
+      where: { id: rosterEntryId, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    if (!entry) return res.status(404).json({ error: 'Roster entry not found' });
+    const { count } = await prisma.providerLocation.updateMany({
+      where: { rosterEntryId, facilityName: location },
+      data: { shiftSharePct: n },
+    });
+    if (count === 0) return res.status(404).json({ error: 'No location row for that provider/site' });
+    res.json({ ok: true, rosterEntryId, location, pct: n });
+  } catch (err) {
+    console.error('[schedule/allocation/apply] error:', err);
+    res.status(500).json({ error: 'Failed to update target' });
+  }
+});
+
 // POST /draft — run the Living Month Draft engine over a month (Wave 4).
 // Allocation-driven fill of EMPTY slots only: touch=lock rows are immovable,
 // per-diems without returned availability land as ghost/proposed slots.

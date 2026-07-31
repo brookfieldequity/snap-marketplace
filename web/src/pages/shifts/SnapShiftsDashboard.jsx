@@ -83,8 +83,10 @@ const FLAG_SEV = {
 
 function FlagsPanel() {
   const [flags, setFlags] = useState(null)
+  const [automation, setAutomation] = useState(null)
   const [open, setOpen] = useState(false)
   const [fixing, setFixing] = useState(null)
+  const [savingRule, setSavingRule] = useState(null)
 
   const load = () => {
     const now = new Date()
@@ -93,18 +95,23 @@ function FlagsPanel() {
       facilityAPI.getScheduleFlags(now.getFullYear(), now.getMonth() + 1),
       facilityAPI.getScheduleFlags(next.getFullYear(), next.getMonth() + 1),
     ])
-      .then(([cur, nxt]) => setFlags([
-        ...cur.flags.map((f) => ({ ...f, monthLabel: '' })),
-        ...nxt.flags.map((f) => ({ ...f, monthLabel: 'next month' })),
-      ]))
+      .then(([cur, nxt]) => {
+        setFlags([
+          ...cur.flags.map((f) => ({ ...f, monthLabel: '' })),
+          ...nxt.flags.map((f) => ({ ...f, monthLabel: 'next month' })),
+        ])
+        setAutomation(cur.automation || null)
+      })
       .catch(() => setFlags([]))
   }
   useEffect(load, [])
 
-  if (!flags || flags.length === 0) return null
-  const high = flags.filter((f) => f.severity === 'HIGH').length
-  const postPublish = flags.filter((f) => f.published).length
-  const shown = open ? flags : flags.slice(0, 5)
+  const offers = automation?.offers || []
+  const activeRules = (automation?.rules || []).filter((r) => r.enabled)
+  if ((!flags || flags.length === 0) && offers.length === 0 && activeRules.length === 0) return null
+  const high = (flags || []).filter((f) => f.severity === 'HIGH').length
+  const postPublish = (flags || []).filter((f) => f.published).length
+  const shown = open ? (flags || []) : (flags || []).slice(0, 5)
 
   async function applyFix(flag) {
     const fix = flag.fix
@@ -121,11 +128,26 @@ function FlagsPanel() {
       else if (fix.action === 'SET_ROOMS') await facilityAPI.upsertScheduleDay({ date: fix.date, location: fix.location, roomsRequired: fix.rooms })
       else if (fix.action === 'CREATE_DAY') await facilityAPI.upsertScheduleDay({ date: fix.date, location: fix.location, roomsRequired: fix.rooms })
       else if (fix.action === 'DELETE_DAY') await facilityAPI.deleteScheduleDay(fix.dayId)
+      // Wave 5 observation: record how this flag type was resolved so the
+      // graduation engine can offer automating it later. Never blocks the fix.
+      facilityAPI.logFlagResolution(flag.type, fix.action).catch(() => {})
       load()
     } catch (e) {
       alert(`Fix failed: ${e.message}`)
     } finally {
       setFixing(null)
+    }
+  }
+
+  async function decideOffer(offer, enabled) {
+    setSavingRule(offer.flagType)
+    try {
+      await facilityAPI.setFlagRule(offer.flagType, enabled)
+      load()
+    } catch (e) {
+      alert(`Couldn't save the rule: ${e.message}`)
+    } finally {
+      setSavingRule(null)
     }
   }
 
@@ -145,11 +167,11 @@ function FlagsPanel() {
         {postPublish > 0 && (
           <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#FFF7ED', border: '1px solid #FDBA74', color: '#C2410C' }}>📣 {postPublish} on published days</span>
         )}
-        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>{flags.length} total · nothing changes without you</span>
+        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>{(flags || []).length} total · nothing changes without you</span>
         <div style={{ flex: 1 }} />
-        {flags.length > 5 && (
+        {(flags || []).length > 5 && (
           <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            {open ? 'Show less' : `Show all ${flags.length}`}
+            {open ? 'Show less' : `Show all ${(flags || []).length}`}
           </button>
         )}
       </div>
@@ -177,6 +199,54 @@ function FlagsPanel() {
           </div>
         )
       })}
+
+      {/* Wave 5 — automation graduation: earned offers ("you've fixed this
+          the same way N times — automate it?") + the rules already on.
+          Per-rule opt-in; rules run at draft time, machine placements only. */}
+      {offers.map((o) => (
+        <div key={o.flagType} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '9px 12px', borderRadius: 10, background: '#F5F3FF', border: '1px dashed #A78BFA' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#5B21B6' }}>
+              🎓 You've fixed this the same way {o.resolutionCount}× — automate it?
+            </div>
+            <div style={{ fontSize: 12, color: '#0F172A', fontWeight: 600 }}>{o.label}</div>
+            <div style={{ fontSize: 11, color: '#64748B' }}>{o.detail}</div>
+          </div>
+          <button
+            onClick={() => decideOffer(o, true)}
+            disabled={savingRule === o.flagType}
+            style={{ fontSize: 11.5, fontWeight: 800, padding: '6px 12px', borderRadius: 8, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: savingRule === o.flagType ? 0.5 : 1 }}
+          >
+            Turn on
+          </button>
+          <button
+            onClick={() => decideOffer(o, false)}
+            disabled={savingRule === o.flagType}
+            title="Don't automate — keep fixing by hand (won't be offered again)"
+            style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 10px', borderRadius: 8, background: '#fff', color: '#6D28D9', border: '1px solid #A78BFA', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            No thanks
+          </button>
+        </div>
+      ))}
+      {activeRules.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F8FAFC', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active rules</span>
+          {activeRules.map((r) => (
+            <span key={r.flagType} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: '#F5F3FF', border: '1px solid #DDD6FE', color: '#5B21B6' }}>
+              ⚙️ {r.label}
+              <button
+                onClick={() => decideOffer(r, false)}
+                disabled={savingRule === r.flagType}
+                title="Turn this rule off"
+                style={{ background: 'none', border: 'none', color: '#7C3AED', fontWeight: 800, cursor: 'pointer', fontSize: 11, padding: 0 }}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

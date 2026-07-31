@@ -335,7 +335,71 @@ async function computeScheduleFlags(facilityId, year, month) {
     postPublish: flags.filter((f) => f.published).length,
   };
 
-  return { year, month, flags, counts };
+  const automation = await computeAutomation(facilityId).catch(() => ({ offers: [], rules: [] }));
+
+  return { year, month, flags, counts, automation };
 }
 
-module.exports = { computeScheduleFlags };
+// ── Wave 5: flag-type automation graduation ────────────────────────────────
+// Observe → offer → earn. A rule is OFFERED only after the coordinator has
+// resolved the same flag type the same way GRADUATION_THRESHOLD times (last
+// 90 days). Turning it on creates a FacilityFlagRule; enforcement happens
+// only inside draft runs, machine-placed rows, pre-publish days (see
+// services/monthDraft.js). A rule the facility ever created (even later
+// disabled) is never re-offered.
+const GRADUATION_THRESHOLD = 5;
+const AUTOMATABLE = [
+  {
+    flagType: 'PTO_CONFLICT',
+    action: 'UNASSIGN',
+    label: 'Auto-remove machine-placed providers when PTO lands on their day',
+    detail: 'Draft runs will clear (and refill) machine placements that collide with granted PTO — pre-publish days only, your placements never touched.',
+  },
+  {
+    flagType: 'SAID_UNAVAILABLE',
+    action: 'UNASSIGN',
+    label: 'Auto-remove machine-placed providers who say they\'re unavailable',
+    detail: 'Draft runs will clear (and refill) machine placements the provider has since declined — pre-publish days only.',
+  },
+  {
+    flagType: 'ROOM_COUNT_MISMATCH',
+    action: 'SET_ROOMS',
+    label: 'Auto-accept the site\'s returned room counts',
+    detail: 'Draft runs will update non-admin-set days to the site\'s card when it changes — admin-set counts always win.',
+  },
+];
+
+async function computeAutomation(facilityId) {
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [resolutions, rules] = await Promise.all([
+    prisma.flagResolution.groupBy({
+      by: ['flagType', 'action'],
+      where: { facilityId, createdAt: { gte: since } },
+      _count: { _all: true },
+    }).catch(() => []),
+    prisma.facilityFlagRule.findMany({
+      where: { facilityId },
+      select: { flagType: true, action: true, enabled: true },
+    }).catch(() => []),
+  ]);
+  const ruleByType = new Map(rules.map((r) => [r.flagType, r]));
+  const countByKey = new Map(resolutions.map((r) => [`${r.flagType}:${r.action}`, r._count._all]));
+
+  const offers = [];
+  for (const a of AUTOMATABLE) {
+    if (ruleByType.has(a.flagType)) continue; // earned or declined already
+    const n = countByKey.get(`${a.flagType}:${a.action}`) || 0;
+    if (n >= GRADUATION_THRESHOLD) {
+      offers.push({ ...a, resolutionCount: n });
+    }
+  }
+  return {
+    offers,
+    rules: rules.map((r) => ({
+      ...r,
+      label: AUTOMATABLE.find((a) => a.flagType === r.flagType)?.label || `${r.flagType} → ${r.action}`,
+    })),
+  };
+}
+
+module.exports = { computeScheduleFlags, AUTOMATABLE };

@@ -1242,6 +1242,36 @@ model ScheduleAssignment {
   @@index([rosterId])
 }
 
+// Wave 5 learning: one row per coordinator flag-fix click ("resolved a
+// PTO_CONFLICT with UNASSIGN"). The graduation engine counts these to earn
+// per-type automation offers — observe first, offer later, never assume.
+model FlagResolution {
+  id         String   @id @default(cuid())
+  facilityId String
+  flagType   String
+  action     String
+  createdAt  DateTime @default(now())
+
+  @@index([facilityId, flagType, action, createdAt])
+}
+
+// Wave 5 learning: an EARNED, per-type automation rule the facility opted
+// into ("always auto-remove machine-placed on PTO conflict"). Enforcement
+// happens ONLY inside draft runs and ONLY on machine-placed rows — human
+// placements are never auto-touched, rule or no rule. One row per flag type;
+// enabled=false = turned off (and never re-offered).
+model FacilityFlagRule {
+  id         String   @id @default(cuid())
+  facilityId String
+  flagType   String
+  action     String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([facilityId, flagType])
+}
+
 // One draft-engine run over a month (Wave 4). Stores the diff receipt shown
 // to the coordinator ("3 changes: filled Natick 12th…") and feeds the
 // activity feed. The draft itself lives in ScheduleAssignment rows
