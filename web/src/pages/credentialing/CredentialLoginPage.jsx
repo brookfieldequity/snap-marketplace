@@ -54,7 +54,7 @@ export default function CredentialLoginPage({ onLogin, onBack }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 48, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.06em', lineHeight: 1 }}>SNAP</div>
+          <div className="snap-wordmark" style={{ fontSize: 48, color: '#2563EB', lineHeight: 1 }}>SNAP</div>
           <div style={{ fontSize: 16, color: '#64748B', marginTop: 6, fontWeight: 500 }}>Credentialing Dashboard</div>
         </div>
 

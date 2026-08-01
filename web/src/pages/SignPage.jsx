@@ -187,7 +187,7 @@ export default function SignPage({ token }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F8FAFC 0%, #EFF6FF 100%)', padding: '28px 16px 48px', display: 'flex', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: 480 }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <span style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.05em' }}>SNAP</span>
+          <span className="snap-wordmark" style={{ fontSize: 26, color: '#2563EB' }}>SNAP</span>
           <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600, marginLeft: 8 }}>Credentialing</span>
         </div>
         {children}

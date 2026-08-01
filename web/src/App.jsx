@@ -448,7 +448,7 @@ export default function App() {
                 ☰
               </button>
             )}
-            <span style={{ fontSize: 22, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em', lineHeight: 1 }}>SNAP</span>
+            <span className="snap-wordmark" style={{ fontSize: 22, color: '#2563EB', lineHeight: 1 }}>SNAP</span>
             {!narrow && <img src="/snappy-mascot.png" alt="" style={{ height: 42, width: 'auto', display: 'block' }} />}
           </div>
 
@@ -646,7 +646,7 @@ export default function App() {
             >
               ☰
             </button>
-            <span style={{ fontSize: 17, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</span>
+            <span className="snap-wordmark" style={{ fontSize: 17, color: '#2563EB' }}>SNAP</span>
             <span style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 700, letterSpacing: '0.05em' }}>ADMIN</span>
           </div>
         )}
@@ -747,10 +747,11 @@ export default function App() {
       <div style={{ textAlign: 'center', marginBottom: 56 }}>
         <div
           style={{
+            fontFamily: "'Nunito', 'Inter', sans-serif",
             fontSize: 64,
-            fontWeight: 900,
+            fontWeight: 800,
             color: '#2563EB',
-            letterSpacing: '-0.06em',
+            letterSpacing: '-0.02em',
             lineHeight: 1,
           }}
         >

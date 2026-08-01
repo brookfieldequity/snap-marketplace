@@ -95,7 +95,7 @@ export default function AdminLoginPage({ onLogin, onBack }) {
         </button>
 
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
+          <div className="snap-wordmark" style={{ fontSize: 26, color: '#2563EB' }}>SNAP</div>
           <div
             style={{
               display: 'inline-flex',

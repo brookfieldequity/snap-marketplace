@@ -71,3 +71,11 @@ input, select, textarea {
 .fade-in {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* SNAP brand wordmark — matches the apps (Nunito ExtraBold, Morning Light
+   identity). Body UI stays Inter; Nunito is the brand/display voice. */
+.snap-wordmark {
+  font-family: 'Nunito', 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}

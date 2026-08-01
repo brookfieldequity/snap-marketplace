@@ -25,7 +25,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div style={{ minHeight: '100vh', background: '#F8FAFC', padding: 24, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', boxSizing: 'border-box' }}>
           <div style={{ maxWidth: 520, margin: '40px auto', background: '#fff', borderRadius: 16, padding: 28, boxShadow: '0 8px 30px rgba(15,23,42,0.1)' }}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</div>
+            <div className="snap-wordmark" style={{ fontSize: 22, color: '#2563EB' }}>SNAP</div>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: '16px 0 8px' }}>Something went wrong</h1>
             <p style={{ fontSize: 14, color: '#64748B', lineHeight: 1.6, margin: '0 0 16px' }}>
               The page hit an error while loading. Please try reloading, or send this detail to your coordinator:

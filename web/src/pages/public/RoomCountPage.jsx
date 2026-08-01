@@ -279,7 +279,7 @@ function Shell({ children }) {
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
       <div style={{ background: '#fff', borderBottom: `1px solid ${LINE}`, padding: '14px 16px' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', fontSize: 20, fontWeight: 900, color: ROYAL, letterSpacing: '-0.01em' }}>SNAP</div>
+        <div className="snap-wordmark" style={{ maxWidth: 720, margin: '0 auto', fontSize: 20, color: ROYAL }}>SNAP</div>
       </div>
       {children}
     </div>

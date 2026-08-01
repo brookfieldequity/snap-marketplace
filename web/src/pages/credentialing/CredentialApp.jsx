@@ -28,7 +28,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 40, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.06em' }}>SNAP</div>
+          <div className="snap-wordmark" style={{ fontSize: 40, color: '#2563EB' }}>SNAP</div>
           <div style={{ fontSize: 15, color: '#64748B', marginTop: 4 }}>Credentialing Dashboard</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 20, padding: '36px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
@@ -264,7 +264,7 @@ export default function CredentialApp({ onBack }) {
           >
             ☰
           </button>
-          <span style={{ fontSize: 17, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>SNAP</span>
+          <span className="snap-wordmark" style={{ fontSize: 17, color: '#2563EB' }}>SNAP</span>
           <span style={{ fontSize: 11, color: '#60A5FA', fontWeight: 700 }}>Credentialing</span>
         </div>
       )}

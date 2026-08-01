@@ -81,7 +81,7 @@ const styles = {
   page: { minHeight: '100vh', background: '#F8FAFC', display: 'flex', justifyContent: 'center', padding: '40px 16px', boxSizing: 'border-box' },
   card: { maxWidth: 720, width: '100%', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '36px 40px', boxShadow: '0 4px 16px rgba(15,23,42,0.04)' },
   brandRow: { display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 24 },
-  brand: { fontSize: 24, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' },
+  brand: { fontFamily: "'Nunito', 'Inter', sans-serif", fontSize: 24, fontWeight: 800, color: '#2563EB', letterSpacing: '-0.02em' },
   brandSub: { fontSize: 14, fontWeight: 600, color: '#64748B' },
   h1: { fontSize: 26, fontWeight: 800, color: '#0F172A', margin: '0 0 4px', letterSpacing: '-0.01em' },
   meta: { fontSize: 13, color: '#94A3B8', margin: '0 0 24px' },
