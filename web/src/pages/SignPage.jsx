@@ -199,7 +199,7 @@ export default function SignPage({ token }) {
     return shell(
       <div style={{ background: '#fff', borderRadius: 20, padding: '32px 24px', boxShadow: '0 10px 40px rgba(15,23,42,0.08)', textAlign: 'center' }}>
         <div style={{ fontSize: 34 }}>⏳</div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>Link problem</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginTop: 10 }}>Link problem</div>
         <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 8 }}>{error}</div>
       </div>
     )
@@ -213,7 +213,7 @@ export default function SignPage({ token }) {
     return shell(
       <div style={{ background: '#fff', borderRadius: 20, padding: '40px 24px', boxShadow: '0 10px 40px rgba(15,23,42,0.08)', textAlign: 'center' }}>
         <div style={{ width: 64, height: 64, borderRadius: 999, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: 30 }}>✓</div>
-        <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', marginTop: 14 }}>Complete</div>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#10233F', marginTop: 14 }}>Complete</div>
         <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 8 }}>
           {done?.signed || done?.answersSaved
             ? `${[
@@ -233,7 +233,7 @@ export default function SignPage({ token }) {
 
   return shell(
     <div style={{ background: '#fff', borderRadius: 20, padding: '26px 22px', boxShadow: '0 10px 40px rgba(15,23,42,0.08)' }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
+      <div style={{ fontSize: 18, fontWeight: 800, color: '#10233F' }}>
         {data.facilityName}
       </div>
       <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 10 }}>
@@ -260,7 +260,7 @@ export default function SignPage({ token }) {
             {data.review.map((r) => (
               <div key={r.label} style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 10.5, color: '#64748B' }}>{r.label}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#10233F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</div>
               </div>
             ))}
           </div>
@@ -282,7 +282,7 @@ export default function SignPage({ token }) {
               onClick={() => setOpenBucket(open ? -1 : bi)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: complete ? '#F0FDF4' : '#FAFBFC', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', flex: 1 }}>{b.heading}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#10233F', flex: 1 }}>{b.heading}</span>
               <span style={{ fontSize: 11.5, fontWeight: 700, color: complete ? '#15803D' : '#94A3B8' }}>
                 {complete ? (b.naable && allNa ? '✓ N/A' : '✓ Done') : `${done}/${b.qs.length}`}
               </span>
@@ -307,8 +307,8 @@ export default function SignPage({ token }) {
                   if (q.source === 'ATTESTATION') {
                     const v = answers[q.questionKey]
                     return (
-                      <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{q.label}</div>
+                      <div key={q.questionKey} style={{ padding: '11px 13px', border: '1px solid #DCE8F7', borderRadius: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, color: '#10233F', lineHeight: 1.4 }}>{q.label}</div>
                         {q.explain && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>{q.explain}</div>}
                         {q.fromPassport && <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 3 }}>✓ Answered on a previous application — confirm or change</div>}
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -320,7 +320,7 @@ export default function SignPage({ token }) {
                                 flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
                                 border: v === opt ? '1.5px solid #2563EB' : '1.5px solid #E2E8F0',
                                 background: v === opt ? (opt === 'YES' ? '#FEF3C7' : '#EFF6FF') : '#fff',
-                                color: v === opt ? '#0F172A' : '#64748B',
+                                color: v === opt ? '#10233F' : '#64748B',
                               }}
                             >
                               {opt === 'YES' ? 'Yes' : 'No'}
@@ -338,7 +338,7 @@ export default function SignPage({ token }) {
                           value={answers[q.questionKey] || ''}
                           onChange={(e) => setAnswer(q.questionKey, e.target.value)}
                           rows={3}
-                          style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                          style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#10233F', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
                         />
                       ) : (
                         <input
@@ -346,7 +346,7 @@ export default function SignPage({ token }) {
                           onChange={(e) => setAnswer(q.questionKey, e.target.value)}
                           type="text"
                           placeholder={q.type === 'date' ? 'MM/DD/YYYY' : ''}
-                          style={{ width: '100%', padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+                          style={{ width: '100%', padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14.5, color: '#10233F', boxSizing: 'border-box', outline: 'none' }}
                         />
                       )}
                     </div>
@@ -390,7 +390,7 @@ export default function SignPage({ token }) {
             style={{ marginTop: 3, width: 17, height: 17, accentColor: '#2563EB' }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: checked[it.taskId] ? '#0F172A' : '#94A3B8' }}>{it.label}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: checked[it.taskId] ? '#10233F' : '#94A3B8' }}>{it.label}</div>
             {it.section && <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{it.section}</div>}
             {it.notes && <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>{it.notes}</div>}
             {data.sourceDoc && (
@@ -413,7 +413,7 @@ export default function SignPage({ token }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Your name as it should appear"
-          style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+          style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#10233F', boxSizing: 'border-box', outline: 'none' }}
         />
       </div>
 

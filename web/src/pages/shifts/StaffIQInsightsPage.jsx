@@ -61,7 +61,7 @@ function LateSchedulingPanel({ data }) {
         <thead>
           <tr style={{ background: '#F8FAFC' }}>
             {['Provider Type', 'Avg Lead Days', 'Affected Shifts', 'Annual Cost Premium'].map(h => (
-              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #DCE8F7' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -69,8 +69,8 @@ function LateSchedulingPanel({ data }) {
           {rows.length === 0 ? (
             <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No data available</td></tr>
           ) : rows.map((r, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <td style={{ padding: '10px 12px', fontWeight: 500, color: '#0F172A' }}>{r.providerType}</td>
+            <tr key={i} style={{ borderBottom: '1px solid #EAF1FA' }}>
+              <td style={{ padding: '10px 12px', fontWeight: 500, color: '#10233F' }}>{r.providerType}</td>
               <td style={{ padding: '10px 12px', color: r.avgLeadDays < 7 ? '#DC2626' : '#374151', fontWeight: r.avgLeadDays < 7 ? 700 : 400 }}>{r.avgLeadDays?.toFixed(1) ?? '—'} days</td>
               <td style={{ padding: '10px 12px', color: '#374151' }}>{r.affectedShifts ?? '—'}</td>
               <td style={{ padding: '10px 12px', fontWeight: 700, color: '#DC2626' }}>{fmt(r.annualCostPremium)}</td>
@@ -156,7 +156,7 @@ function UtilizationPanel({ data }) {
       {sorted.map((p, i) => (
         <div key={i}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-            <span style={{ fontWeight: 500, color: '#0F172A' }}>{p.providerName}</span>
+            <span style={{ fontWeight: 500, color: '#10233F' }}>{p.providerName}</span>
             <span style={{ fontWeight: 700, color: p.utilizationPct > 90 ? '#EF4444' : p.utilizationPct < 60 ? '#94A3B8' : '#10B981' }}>
               {p.utilizationPct ?? 0}%
             </span>
@@ -179,8 +179,8 @@ function TeamModelPanel({ data }) {
         Location: {data?.facilityName}
       </div>
       <div style={{ fontSize: 14, color: '#374151', marginBottom: 14, fontWeight: 500 }}>
-        <span style={{ fontWeight: 700, color: '#0F172A' }}>{data?.inefficientDays}</span> of{' '}
-        <span style={{ fontWeight: 700, color: '#0F172A' }}>{data?.totalDays}</span> working days had suboptimal coverage
+        <span style={{ fontWeight: 700, color: '#10233F' }}>{data?.inefficientDays}</span> of{' '}
+        <span style={{ fontWeight: 700, color: '#10233F' }}>{data?.totalDays}</span> working days had suboptimal coverage
       </div>
       {/* Progress bar */}
       <div style={{ marginBottom: 6 }}>
@@ -334,7 +334,7 @@ function UtilizationSummaryPanel({ data }) {
         <thead>
           <tr style={{ background: '#F8FAFC' }}>
             {['Facility', 'Avg Rooms/Day', 'Inefficient Days %', 'Recoverable (Scheduling)', 'Structural (All-MD)'].map(h => (
-              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #DCE8F7' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -342,8 +342,8 @@ function UtilizationSummaryPanel({ data }) {
           {rows.length === 0 ? (
             <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No data available</td></tr>
           ) : rows.map((r, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>{r.facilityName}</td>
+            <tr key={i} style={{ borderBottom: '1px solid #EAF1FA' }}>
+              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#10233F' }}>{r.facilityName}</td>
               <td style={{ padding: '10px 12px', color: '#374151' }}>{r.avgRooms}</td>
               <td style={{ padding: '10px 12px', fontWeight: 700, color: r.inefficiencyPct > 30 ? '#EF4444' : '#F59E0B' }}>{r.inefficiencyPct}%</td>
               <td style={{ padding: '10px 12px', fontWeight: 700, color: '#DC2626' }}>{fmt(r.annualWaste)}</td>
@@ -426,7 +426,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
             StaffIQ™ Insights
           </h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>AI-powered staffing intelligence for your facility</p>
@@ -434,7 +434,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
         <button
           onClick={handleRunAnalysis}
           disabled={running || loading}
-          style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
+          style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
         >
           {running ? (
             <>
@@ -459,7 +459,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
         <div style={{ background: 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)', border: '1px solid #A5B4FC', borderRadius: 16, padding: '32px 36px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 48 }}>📤</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F', marginBottom: 6 }}>
               Upload your scheduling data to unlock StaffIQ insights
             </div>
             <div style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
@@ -467,7 +467,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
             </div>
             <button
               onClick={() => onNavigate('data-upload')}
-              style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
             >
               Upload Scheduling Data →
             </button>
@@ -485,13 +485,13 @@ export default function StaffIQInsightsPage({ onNavigate }) {
             const lastAnalyzed = insight.generatedAt || insight.lastAnalyzedAt || insight.createdAt
 
             return (
-              <div key={i} style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '28px 32px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div key={i} style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '28px 32px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
                 {/* Panel header */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 24 }}>{meta.icon}</span>
                     <div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>{meta.title}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F' }}>{meta.title}</div>
                       {lastAnalyzed && (
                         <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
                           Last analyzed: {new Date(lastAnalyzed).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -517,7 +517,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
 
                 {/* SNAP Solution */}
                 {insight.snapSolution && (
-                  <div style={{ marginTop: 24, borderTop: '1px solid #E2E8F0', paddingTop: 20 }}>
+                  <div style={{ marginTop: 24, borderTop: '1px solid #DCE8F7', paddingTop: 20 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
                       SNAP Solution
                     </div>
@@ -535,7 +535,7 @@ export default function StaffIQInsightsPage({ onNavigate }) {
                           else if (action === 'post-shift') onNavigate('shifts-dashboard')
                           else onNavigate('windows')
                         }}
-                        style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(37,99,235,0.35)', flexShrink: 0 }}
+                        style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(37,99,235,0.35)', flexShrink: 0 }}
                       >
                         {insight.snapSolution.buttonLabel} →
                       </button>
@@ -550,11 +550,11 @@ export default function StaffIQInsightsPage({ onNavigate }) {
 
       {/* Empty state with uploads but no insights */}
       {!loading && hasUploads && !hasInsights && (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '60px 40px', textAlign: 'center' }}>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '60px 40px', textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No insights generated yet</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F', marginBottom: 8 }}>No insights generated yet</div>
           <div style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Click "Run Analysis" to generate StaffIQ insights from your scheduling data.</div>
-          <button onClick={handleRunAnalysis} disabled={running} style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={handleRunAnalysis} disabled={running} style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ Run Analysis Now
           </button>
         </div>

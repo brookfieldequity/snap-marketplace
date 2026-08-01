@@ -7,7 +7,7 @@ import { credentialAPI } from '../../api.js'
 
 function StatCard({ label, value, color, sub, onClick }) {
   return (
-    <div onClick={onClick} style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: onClick ? 'pointer' : 'default' }}>
+    <div onClick={onClick} style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '24px', boxShadow: '0 4px 18px rgba(15,43,91,0.06)', cursor: onClick ? 'pointer' : 'default' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{label}</div>
       <div style={{ fontSize: 40, fontWeight: 900, color, letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{sub}</div>}
@@ -56,7 +56,7 @@ export default function CredentialDashboard({ onNavigate }) {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>Credentialing Dashboard</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: '0 0 4px' }}>Credentialing Dashboard</h1>
       <p style={{ fontSize: 14, color: '#64748B', margin: '0 0 24px' }}>Live expiry view across your roster's credentialing passports.</p>
 
       {bridgeDown && (
@@ -73,8 +73,8 @@ export default function CredentialDashboard({ onNavigate }) {
         <StatCard label="Not yet linked" value={notLinked.length} color={notLinked.length ? '#64748B' : '#10B981'} sub="invite from Providers" onClick={() => onNavigate('providers')} />
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #E2E8F0', fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #DCE8F7', fontSize: 13, fontWeight: 800, color: '#10233F' }}>
           ⏰ Expiry watchlist {watchlist.length > 0 && <span style={{ color: '#94A3B8', fontWeight: 600 }}>· next {watchlist.length}</span>}
         </div>
         {watchlist.length === 0 ? (
@@ -89,12 +89,12 @@ export default function CredentialDashboard({ onNavigate }) {
               <div
                 key={`${c.npi}-${c.type}-${i}`}
                 onClick={() => onNavigate(`pfile:${c.rosterId}:${c.npi}`)}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 20px', borderTop: i > 0 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer' }}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 20px', borderTop: i > 0 ? '1px solid #EAF1FA' : 'none', cursor: 'pointer' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
               >
                 <div>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{c.providerName}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>{c.providerName}</span>
                   <span style={{ fontSize: 12.5, color: '#64748B', marginLeft: 8 }}>{TYPE_SHORT[c.type] || c.type}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

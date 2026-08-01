@@ -274,12 +274,12 @@ export default function AdminInvoicesPage() {
     <div style={{ padding: 32, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Invoices</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#10233F' }}>Invoices</h2>
           <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: 14 }}>Generate and send invoices to facilities before Stripe is live.</p>
         </div>
         <button
           onClick={() => setShowBuilder(true)}
-          style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, padding: '10px 20px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, padding: '10px 20px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
         >
           + New Invoice
         </button>
@@ -295,14 +295,14 @@ export default function AdminInvoicesPage() {
       {showBuilder && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
           <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 860, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '20px 28px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F172A' }}>New Invoice</h3>
+            <div style={{ padding: '20px 28px', borderBottom: '1px solid #DCE8F7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#10233F' }}>New Invoice</h3>
               <button onClick={() => setShowBuilder(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#64748B' }}>×</button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 0 }}>
               {/* Left: form */}
-              <div style={{ padding: '24px 28px', borderRight: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ padding: '24px 28px', borderRight: '1px solid #DCE8F7', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                 {/* Bill to */}
                 <div>
@@ -396,7 +396,7 @@ export default function AdminInvoicesPage() {
                                 textAlign: 'left',
                               }}
                             >
-                              <div style={{ fontSize: 12, fontWeight: 700, color: form.platformTier === t.value ? '#2563EB' : '#0F172A' }}>{t.label}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: form.platformTier === t.value ? '#2563EB' : '#10233F' }}>{t.label}</div>
                               <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{t.desc}</div>
                             </button>
                           ))}
@@ -559,7 +559,7 @@ export default function AdminInvoicesPage() {
                     {[{ value: 'ONCE', label: 'Full payment (one invoice)' }, { value: 'MONTHLY', label: 'Monthly installments (auto-sends 1st of each month)' }].map(opt => (
                       <label key={opt.value} style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', border: `1.5px solid ${form.billingCycle === opt.value ? '#2563EB' : '#E2E8F0'}`, borderRadius: 8, cursor: 'pointer', background: form.billingCycle === opt.value ? '#EFF6FF' : '#fff' }}>
                         <input type="radio" name="billingCycle" value={opt.value} checked={form.billingCycle === opt.value} onChange={() => setForm(f => ({ ...f, billingCycle: opt.value }))} style={{ marginTop: 2, accentColor: '#2563EB' }} />
-                        <span style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.4 }}>{opt.label}</span>
+                        <span style={{ fontSize: 13, color: '#10233F', lineHeight: 1.4 }}>{opt.label}</span>
                       </label>
                     ))}
                   </div>
@@ -595,8 +595,8 @@ export default function AdminInvoicesPage() {
                 ) : (
                   <>
                     {totals.lines.map((line, i) => (
-                      <div key={i} style={{ background: '#fff', borderRadius: 8, padding: '12px 14px', border: '1px solid #E2E8F0' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{line.label}</div>
+                      <div key={i} style={{ background: '#fff', borderRadius: 8, padding: '12px 14px', border: '1px solid #DCE8F7' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#10233F', marginBottom: 4 }}>{line.label}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           {line.discount > 0 ? (
                             <>
@@ -607,7 +607,7 @@ export default function AdminInvoicesPage() {
                               </div>
                             </>
                           ) : (
-                            <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', marginLeft: 'auto' }}>{fmt(line.amount)}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: '#10233F', marginLeft: 'auto' }}>{fmt(line.amount)}</span>
                           )}
                         </div>
                       </div>
@@ -646,7 +646,7 @@ export default function AdminInvoicesPage() {
               </div>
             </div>
 
-            <div style={{ padding: '16px 28px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ padding: '16px 28px', borderTop: '1px solid #DCE8F7', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               {msg && <span style={{ fontSize: 13, color: '#DC2626', alignSelf: 'center', marginRight: 'auto' }}>{msg}</span>}
               <button onClick={() => setShowBuilder(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '10px 18px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
                 Cancel
@@ -664,7 +664,7 @@ export default function AdminInvoicesPage() {
       )}
 
       {/* Invoice list */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
         {invoices.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
             No invoices yet. Click "New Invoice" to create the first one.
@@ -672,7 +672,7 @@ export default function AdminInvoicesPage() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
                 {['Invoice #', 'Bill To', 'List Price', 'Discount', 'Amount Due', 'Due Date', 'Status', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.05em' }}>{h}</th>
                 ))}
@@ -680,8 +680,8 @@ export default function AdminInvoicesPage() {
             </thead>
             <tbody>
               {invoices.map((inv, i) => (
-                <tr key={inv.id} style={{ borderBottom: i < invoices.length - 1 ? '1px solid #F1F5F9' : 'none', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0F172A', fontSize: 13 }}>
+                <tr key={inv.id} style={{ borderBottom: i < invoices.length - 1 ? '1px solid #EAF1FA' : 'none', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
+                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#10233F', fontSize: 13 }}>
                     {inv.invoiceNumber}
                     {inv.discountType === 'FOUNDER' && (
                       <span style={{ marginLeft: 6, fontSize: 10, color: '#D97706', fontWeight: 700 }}>★ FOUNDER</span>
@@ -698,14 +698,14 @@ export default function AdminInvoicesPage() {
                     )}
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{inv.billingName}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#10233F' }}>{inv.billingName}</div>
                     <div style={{ fontSize: 11, color: '#64748B' }}>{inv.billingEmail}</div>
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{fmt(inv.listTotal)}</td>
                   <td style={{ padding: '12px 16px', fontSize: 13, color: inv.discountTotal > 0 ? '#DC2626' : '#94A3B8' }}>
                     {inv.discountTotal > 0 ? `-${fmt(inv.discountTotal)}` : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{fmt(inv.amountDue)}</td>
+                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 800, color: '#10233F' }}>{fmt(inv.amountDue)}</td>
                   <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{fmtDate(inv.dueDate)}</td>
                   <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
                   <td style={{ padding: '12px 16px' }}>
@@ -724,7 +724,7 @@ export default function AdminInvoicesPage() {
                             alert('Could not load PDF: ' + e.message)
                           }
                         }}
-                        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#F1F5F9', color: '#374151', fontWeight: 600, border: '1px solid #E2E8F0', cursor: 'pointer' }}
+                        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: '#F1F5F9', color: '#374151', fontWeight: 600, border: '1px solid #DCE8F7', cursor: 'pointer' }}
                       >
                         PDF
                       </button>
@@ -775,7 +775,7 @@ export default function AdminInvoicesPage() {
       {sendModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#fff', borderRadius: 14, padding: '28px 30px', width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(15,23,42,0.22)' }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>
               Send Invoice {sendModal.invoice.invoiceNumber}
             </div>
             <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
@@ -819,7 +819,7 @@ export default function AdminInvoicesPage() {
                 value={sendModal.paymentLink || ''}
                 onChange={e => setSendModal(m => ({ ...m, paymentLink: e.target.value }))}
                 placeholder="https://buy.stripe.com/..."
-                style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#10233F', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -833,7 +833,7 @@ export default function AdminInvoicesPage() {
               </button>
               <button
                 onClick={() => setSendModal(null)}
-                style={{ padding: '10px 18px', borderRadius: 8, background: '#F1F5F9', color: '#374151', fontSize: 14, fontWeight: 600, border: '1px solid #E2E8F0', cursor: 'pointer' }}
+                style={{ padding: '10px 18px', borderRadius: 8, background: '#F1F5F9', color: '#374151', fontSize: 14, fontWeight: 600, border: '1px solid #DCE8F7', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -847,7 +847,7 @@ export default function AdminInvoicesPage() {
 
 function RecipientRow({ email, name, role, checked, locked, onChange }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #F1F5F9', cursor: locked ? 'default' : 'pointer' }}>
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #EAF1FA', cursor: locked ? 'default' : 'pointer' }}>
       <input
         type="checkbox"
         checked={checked}
@@ -856,7 +856,7 @@ function RecipientRow({ email, name, role, checked, locked, onChange }) {
         style={{ width: 16, height: 16, accentColor: '#2563EB', cursor: locked ? 'default' : 'pointer', flexShrink: 0 }}
       />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{name}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#10233F' }}>{name}</div>
         <div style={{ fontSize: 12, color: '#64748B' }}>{email} · {role}</div>
       </div>
       {locked && <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>ALWAYS</span>}
@@ -872,7 +872,7 @@ function Label({ children, style }) {
 
 const inputStyle = {
   width: '100%', padding: '8px 11px', borderRadius: 7, border: '1.5px solid #E2E8F0',
-  fontSize: 13, color: '#0F172A', background: '#fff', boxSizing: 'border-box',
+  fontSize: 13, color: '#10233F', background: '#fff', boxSizing: 'border-box',
   outline: 'none',
 }
 

@@ -104,7 +104,7 @@ export default function PtoBuilderPage() {
         <H1>PTO Builder</H1>
         <P>Open an annual PTO window. Eligible providers rank the weeks they want; at close you run allocation to award weeks by rank and seniority within each week's capacity.</P>
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 14, color: '#0F172A' }}>Create a window</div>
+          <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 14, color: '#10233F' }}>Create a window</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <Lbl t="Year"><input type="number" style={inp} value={createForm.year} onChange={(e) => setCreateForm((f) => ({ ...f, year: e.target.value }))} /></Lbl>
             <Lbl t="Default weekly capacity"><input type="number" min="1" style={inp} value={createForm.defaultWeeklyCapacity} onChange={(e) => setCreateForm((f) => ({ ...f, defaultWeeklyCapacity: e.target.value }))} /></Lbl>
@@ -147,7 +147,7 @@ export default function PtoBuilderPage() {
 
       {tab === 'setup' && (
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12, color: '#0F172A' }}>Window settings</div>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12, color: '#10233F' }}>Window settings</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, maxWidth: 520 }}>
             <Lbl t="Ranking opens"><input type="date" style={inp} value={win.openDate?.slice(0, 10) || ''} onChange={(e) => ptoBuilderAPI.updateWindow(win.id, { openDate: e.target.value }).then(refresh)} /></Lbl>
             <Lbl t="Ranking closes"><input type="date" style={inp} value={win.closeDate?.slice(0, 10) || ''} onChange={(e) => ptoBuilderAPI.updateWindow(win.id, { closeDate: e.target.value }).then(refresh)} /></Lbl>
@@ -161,16 +161,16 @@ export default function PtoBuilderPage() {
       {tab === 'weeks' && calendar && (
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: '#0F172A' }}>Weeks &amp; rankings</div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#10233F' }}>Weeks &amp; rankings</div>
             <button onClick={saveCapacity} disabled={busy} style={primaryBtnSm}>Save capacity</button>
           </div>
           <p style={{ fontSize: 12, color: '#64748B', marginTop: 0 }}>Showing weeks providers have ranked. Capacity = how many may have PTO that week (blank cells use the default {win.defaultWeeklyCapacity}).</p>
           {weeksWithBids.length === 0 && <div style={{ color: '#94A3B8', padding: '20px 0', fontSize: 14 }}>No rankings submitted yet.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {weeksWithBids.map((w) => (
-              <div key={w.weekStart} style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
+              <div key={w.weekStart} style={{ border: '1px solid #DCE8F7', borderRadius: 10, padding: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <strong style={{ fontSize: 14, color: '#0F172A', minWidth: 130 }}>{weekLabel(w.weekStart)}</strong>
+                  <strong style={{ fontSize: 14, color: '#10233F', minWidth: 130 }}>{weekLabel(w.weekStart)}</strong>
                   <label style={{ fontSize: 12, color: '#64748B' }}>Capacity{' '}
                     <input type="number" min="0" value={capDraft[w.weekStart] ?? ''} onChange={(e) => setCapDraft((c) => ({ ...c, [w.weekStart]: e.target.value }))}
                       style={{ width: 56, padding: '5px 8px', border: '1.5px solid #E2E8F0', borderRadius: 7, fontSize: 13 }} />
@@ -196,7 +196,7 @@ export default function PtoBuilderPage() {
 
       {tab === 'links' && (
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4, color: '#0F172A' }}>Per-provider ranking links</div>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4, color: '#10233F' }}>Per-provider ranking links</div>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 0 }}>Send each provider their private link. No login needed — they pick and rank their weeks. Open the window first so links are live.</p>
           {!links && <button onClick={loadLinks} style={primaryBtnSm}>Generate links</button>}
           {links && (
@@ -204,10 +204,10 @@ export default function PtoBuilderPage() {
               {links.map((l) => {
                 const url = `${window.location.origin}/pto-rank/${l.token}`
                 return (
-                  <div key={l.rosterEntryId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 9 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', minWidth: 160 }}>{l.name}</span>
+                  <div key={l.rosterEntryId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 9 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#10233F', minWidth: 160 }}>{l.name}</span>
                     {l.providerType && <span style={{ fontSize: 11, color: '#94A3B8' }}>{l.providerType}</span>}
-                    <input readOnly value={url} style={{ flex: 1, fontSize: 12, color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 7, padding: '5px 8px' }} onFocus={(e) => e.target.select()} />
+                    <input readOnly value={url} style={{ flex: 1, fontSize: 12, color: '#64748B', border: '1px solid #DCE8F7', borderRadius: 7, padding: '5px 8px' }} onFocus={(e) => e.target.select()} />
                     <button onClick={() => navigator.clipboard?.writeText(url)} style={primaryBtnSm}>Copy</button>
                   </div>
                 )
@@ -221,22 +221,22 @@ export default function PtoBuilderPage() {
       {tab === 'results' && results && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card>
-            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: '#0F172A' }}>Granted ({results.granted.length})</div>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: '#10233F' }}>Granted ({results.granted.length})</div>
             {results.granted.length === 0 && <div style={{ color: '#94A3B8', fontSize: 14 }}>Nothing granted yet — run allocation.</div>}
             {results.granted.map((a) => (
               <Row key={a.id}>
-                <span style={{ fontWeight: 600, color: '#0F172A' }}>{a.rosterEntry.providerName}</span>
+                <span style={{ fontWeight: 600, color: '#10233F' }}>{a.rosterEntry.providerName}</span>
                 <span style={{ color: '#64748B', fontSize: 13 }}>{weekLabel(a.weekStart.slice(0, 10))} · rank #{a.rank}</span>
                 <button onClick={() => cancelGrant(a.id)} disabled={busy} style={{ ...miniDanger, marginLeft: 'auto' }}>Cancel</button>
               </Row>
             ))}
           </Card>
           <Card>
-            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: '#0F172A' }}>Waitlist ({results.waitlisted.length})</div>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10, color: '#10233F' }}>Waitlist ({results.waitlisted.length})</div>
             {results.waitlisted.length === 0 && <div style={{ color: '#94A3B8', fontSize: 14 }}>No one waitlisted.</div>}
             {results.waitlisted.map((a) => (
               <Row key={a.id}>
-                <span style={{ fontWeight: 600, color: '#0F172A' }}>{a.rosterEntry.providerName}</span>
+                <span style={{ fontWeight: 600, color: '#10233F' }}>{a.rosterEntry.providerName}</span>
                 <span style={{ color: '#64748B', fontSize: 13 }}>{weekLabel(a.weekStart.slice(0, 10))} · rank #{a.rank} · waitlist #{a.waitlistPos}</span>
                 <button onClick={() => promote(a.id)} disabled={busy} style={{ ...primaryBtnSm, marginLeft: 'auto' }}>Grant anyway</button>
               </Row>
@@ -250,14 +250,14 @@ export default function PtoBuilderPage() {
 
 // ── tiny presentational helpers ───────────────────────────────────────────────
 const inp = { width: '100%', padding: '9px 11px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, boxSizing: 'border-box' }
-const primaryBtn = { marginTop: 16, padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
-const primaryBtnSm = { padding: '7px 14px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }
+const primaryBtn = { marginTop: 16, padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const primaryBtnSm = { padding: '7px 14px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const greenBtn = { padding: '8px 16px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const warnBtn = { padding: '8px 16px', background: '#fff', color: '#B45309', border: '1.5px solid #FDE68A', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const miniDanger = { padding: '6px 12px', background: '#FFF5F5', color: '#DC2626', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }
 const Pad = ({ children }) => <div style={{ padding: '32px 40px', maxWidth: 1000, margin: '0 auto' }}>{children}</div>
-const H1 = ({ children }) => <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>{children}</h1>
+const H1 = ({ children }) => <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>{children}</h1>
 const P = ({ children }) => <p style={{ fontSize: 14, color: '#64748B', marginTop: 6, maxWidth: 640 }}>{children}</p>
-const Card = ({ children }) => <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>{children}</div>
+const Card = ({ children }) => <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: 22, boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>{children}</div>
 const Lbl = ({ t, children }) => <label style={{ display: 'block' }}><div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>{t}</div>{children}</label>
-const Row = ({ children }) => <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: '1px solid #F1F5F9' }}>{children}</div>
+const Row = ({ children }) => <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: '1px solid #EAF1FA' }}>{children}</div>

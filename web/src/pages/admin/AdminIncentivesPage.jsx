@@ -40,7 +40,7 @@ export default function AdminIncentivesPage() {
     <div style={{ padding: '32px 40px' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
           Incentive Shifts
         </h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
@@ -61,8 +61,8 @@ export default function AdminIncentivesPage() {
               background: '#fff',
               borderRadius: 14,
               padding: '20px 24px',
-              border: '1px solid #E2E8F0',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              border: '1px solid #DCE8F7',
+              boxShadow: '0 4px 18px rgba(15,43,91,0.06)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -77,7 +77,7 @@ export default function AdminIncentivesPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
         {loading ? (
           <div style={{ padding: '60px 40px', textAlign: 'center', color: '#94A3B8', fontSize: 15 }}>Loading incentive shifts…</div>
         ) : shifts.length === 0 ? (
@@ -85,7 +85,7 @@ export default function AdminIncentivesPage() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
                 {['Facility', 'Date', 'Location', 'Provider Type', 'Rate', 'Status', 'Escalated', 'Responses'].map((h) => (
                   <th
                     key={h}
@@ -102,11 +102,11 @@ export default function AdminIncentivesPage() {
                 return (
                   <tr
                     key={s.id || idx}
-                    style={{ borderBottom: '1px solid #F1F5F9' }}
+                    style={{ borderBottom: '1px solid #EAF1FA' }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#10233F' }}>
                       {s.facility?.name || s.facilityName || '—'}
                     </td>
                     <td style={{ padding: '14px 16px', fontSize: 12, color: '#64748B' }}>

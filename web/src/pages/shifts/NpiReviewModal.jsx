@@ -30,7 +30,7 @@ function CandidateRow({ candidate, selected, onSelect }) {
     >
       <input type="radio" checked={selected} onChange={onSelect} style={{ marginTop: 3 }} />
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>
           {[candidate.firstName, candidate.middleName, candidate.lastName].filter(Boolean).join(' ')}
           {candidate.credential ? `, ${candidate.credential}` : ''}
         </div>
@@ -94,9 +94,9 @@ function ReviewCard({ row, onResolved }) {
   }
 
   return (
-    <div style={{ border: '1px solid #E2E8F0', borderRadius: 14, padding: 18, marginBottom: 16, background: '#fff' }}>
+    <div style={{ border: '1px solid #DCE8F7', borderRadius: 14, padding: 18, marginBottom: 16, background: '#fff' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{row.providerName}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#10233F' }}>{row.providerName}</div>
         {row.providerType && (
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>{row.providerType}</span>
         )}
@@ -143,7 +143,7 @@ function ReviewCard({ row, onResolved }) {
       )}
 
       {/* Manual NPI entry — always available */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: '1px solid #F1F5F9' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: '1px solid #EAF1FA' }}>
         <input
           value={manualNpi}
           onChange={(e) => setManualNpi(e.target.value.replace(/\D/g, '').slice(0, 10))}
@@ -164,7 +164,7 @@ function ReviewCard({ row, onResolved }) {
   )
 }
 
-const btnPrimary = { padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const btnPrimary = { padding: '10px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const btnSecondary = { padding: '9px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }
 
 export default function NpiReviewModal({ rows, onClose, onAllResolved }) {
@@ -180,7 +180,7 @@ export default function NpiReviewModal({ rows, onClose, onAllResolved }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 24 }}>
       <div style={{ background: '#F8FAFC', borderRadius: 16, padding: 28, width: '100%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0 }}>Review provider NPIs</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#10233F', margin: 0 }}>Review provider NPIs</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B', lineHeight: 1 }}>✕</button>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>

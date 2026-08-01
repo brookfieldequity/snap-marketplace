@@ -102,8 +102,8 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
   if (permission === 'BILLING') {
     return (
       <div style={{ padding: '32px 40px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', marginBottom: 24 }}>Providers</h1>
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', marginBottom: 24 }}>Providers</h1>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#F8FAFC' }}>
               <tr>
@@ -113,8 +113,8 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
             </thead>
             <tbody>
               {rows.map((p, i) => (
-                <tr key={p.id} style={{ borderTop: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{p.providerName}</td>
+                <tr key={p.id} style={{ borderTop: '1px solid #EAF1FA', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#10233F' }}>{p.providerName}</td>
                   <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B', fontFamily: 'monospace' }}>{p.npi || '—'}</td>
                 </tr>
               ))}
@@ -129,7 +129,7 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
     <div style={{ padding: '32px 40px', maxWidth: 1400, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>{filterExpiring ? 'Needs Attention' : 'Providers'}</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>{filterExpiring ? 'Needs Attention' : 'Providers'}</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
             {filtered.length} provider{filtered.length !== 1 ? 's' : ''} · live from your roster + each provider's credentialing passport
           </p>
@@ -149,13 +149,13 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
       )}
 
       <input
-        style={{ padding: '9px 14px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#fff', width: 260, marginBottom: 16 }}
+        style={{ padding: '9px 14px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, background: '#fff', width: 260, marginBottom: 16 }}
         placeholder="Search name or NPI…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8' }}>Loading roster + passports…</div>
         ) : filtered.length === 0 ? (
@@ -164,7 +164,7 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+            <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
               <tr>
                 {['Provider', 'Type', 'Passport Status', 'Completeness', 'Next Expiration', ''].map((h) => (
                   <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
@@ -179,12 +179,12 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
                   <tr
                     key={p.id}
                     onClick={() => clickable && onNavigate(`pfile:${p.id}:${p.npi}`)}
-                    style={{ borderTop: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#FAFAFA', cursor: clickable ? 'pointer' : 'default' }}
+                    style={{ borderTop: '1px solid #EAF1FA', background: i % 2 === 0 ? '#fff' : '#FAFAFA', cursor: clickable ? 'pointer' : 'default' }}
                     onMouseEnter={(e) => { if (clickable) e.currentTarget.style.background = '#F0F4FF' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#FAFAFA' }}
                   >
                     <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{p.providerName}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#10233F' }}>{p.providerName}</div>
                       <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace', marginTop: 2 }}>NPI: {p.npi || '—'}</div>
                     </td>
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{TYPE_LABELS[p.providerType] || p.providerType}</td>
@@ -200,7 +200,7 @@ export default function CredentialProviderList({ onNavigate, permission, filterE
                         <button
                           onClick={(e) => handleInvite(e, p)}
                           disabled={!!inviting[p.id]}
-                          style={{ padding: '7px 14px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: inviting[p.id] ? 0.6 : 1 }}
+                          style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: inviting[p.id] ? 0.6 : 1 }}
                         >
                           {inviting[p.id] ? 'Sending…' : r.state === 'NO_GRANT' ? 'Request access' : r.state === 'INVITED' ? 'Re-invite' : 'Invite'}
                         </button>

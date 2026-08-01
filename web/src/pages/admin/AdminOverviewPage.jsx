@@ -6,15 +6,15 @@ function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-function StatCard({ label, value, icon, color = '#0F172A', sub, danger }) {
+function StatCard({ label, value, icon, color = '#10233F', sub, danger }) {
   return (
     <div
       style={{
         background: '#fff',
         borderRadius: 14,
         padding: '20px 24px',
-        border: danger ? '1px solid #FCA5A5' : '1px solid #E2E8F0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        border: danger ? '1px solid #FCA5A5' : '1px solid #DCE8F7',
+        boxShadow: '0 4px 18px rgba(15,43,91,0.06)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -52,7 +52,7 @@ export default function AdminOverviewPage() {
     <div style={{ padding: '32px 40px' }}>
 
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Platform Overview</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Platform Overview</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Real-time SNAP marketplace metrics</p>
       </div>
 
@@ -75,15 +75,15 @@ export default function AdminOverviewPage() {
 
       {/* Billing — real numbers from actual invoices only */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Billing</h3>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '24px 28px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 4 }}>Billing</h3>
           <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 20 }}>From actual invoices — manage in the Invoices tab</p>
           {[
             { label: 'Monthly recurring', value: fmt(billing.monthlyRecurring) + '/mo', sub: `${billing.monthlyInvoiceCount || 0} active monthly invoice${billing.monthlyInvoiceCount === 1 ? '' : 's'}`, color: '#2563EB' },
-            { label: 'Outstanding (sent, unpaid)', value: fmt(billing.outstanding), sub: `${billing.outstandingCount || 0} invoice${billing.outstandingCount === 1 ? '' : 's'}`, color: (billing.outstanding || 0) > 0 ? '#D97706' : '#0F172A' },
+            { label: 'Outstanding (sent, unpaid)', value: fmt(billing.outstanding), sub: `${billing.outstandingCount || 0} invoice${billing.outstandingCount === 1 ? '' : 's'}`, color: (billing.outstanding || 0) > 0 ? '#D97706' : '#10233F' },
             { label: 'Collected this year', value: fmt(billing.collectedYtd), sub: `${billing.collectedCount || 0} paid invoice${billing.collectedCount === 1 ? '' : 's'}`, color: '#15803D' },
           ].map(({ label, value, sub, color }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '10px 0', borderBottom: '1px solid #EAF1FA' }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{label}</div>
                 <div style={{ fontSize: 11, color: '#94A3B8' }}>{sub}</div>
@@ -94,8 +94,8 @@ export default function AdminOverviewPage() {
         </div>
 
         {/* License expiring */}
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '24px 28px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 4 }}>
             MA License Expiring Soon
           </h3>
           <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 20 }}>Providers with licenses expiring within 90 days</p>
@@ -120,7 +120,7 @@ export default function AdminOverviewPage() {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{p.firstName} {p.lastName}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#10233F' }}>{p.firstName} {p.lastName}</div>
                   <div style={{ fontSize: 12, color: '#64748B' }}>{p.specialty}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

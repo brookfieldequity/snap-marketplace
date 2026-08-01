@@ -34,7 +34,7 @@ export default function AdminWindowsPage() {
     <div style={{ padding: '32px 40px' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
           Availability Windows
         </h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
@@ -43,7 +43,7 @@ export default function AdminWindowsPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
         {loading ? (
           <div style={{ padding: '60px 40px', textAlign: 'center', color: '#94A3B8', fontSize: 15 }}>Loading windows…</div>
         ) : windows.length === 0 ? (
@@ -51,7 +51,7 @@ export default function AdminWindowsPage() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
                 {['Facility', 'Window Name', 'Status', 'Open Date', 'Close Date', 'Submitted / Roster', 'Completion'].map((h) => (
                   <th
                     key={h}
@@ -71,11 +71,11 @@ export default function AdminWindowsPage() {
                 return (
                   <tr
                     key={w.id || idx}
-                    style={{ borderBottom: '1px solid #F1F5F9' }}
+                    style={{ borderBottom: '1px solid #EAF1FA' }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#10233F' }}>
                       {w.facility?.name || w.facilityName || '—'}
                     </td>
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>

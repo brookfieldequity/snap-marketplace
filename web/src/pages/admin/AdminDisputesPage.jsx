@@ -60,7 +60,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
               ⚖️ Resolve Dispute
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{dispute.providerName}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#10233F' }}>{dispute.providerName}</h2>
             <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{dispute.facilityName} · {dispute.date}</p>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94A3B8' }}>×</button>
@@ -81,7 +81,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
         </div>
 
         {dispute.notes && (
-          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '12px 14px', marginBottom: 20, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
+          <div style={{ background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 10, padding: '12px 14px', marginBottom: 20, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
             <strong>Context:</strong> {dispute.notes}
           </div>
         )}
@@ -99,7 +99,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
             placeholder={`Between ${dispute.facilityHours} and ${dispute.providerHours}`}
             style={{
               width: '100%', padding: '12px 14px', background: '#F8FAFC',
-              border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#0F172A', outline: 'none',
+              border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#10233F', outline: 'none',
             }}
             onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
             onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
@@ -122,7 +122,7 @@ function ResolveModal({ dispute, onClose, onResolved }) {
             rows={3}
             style={{
               width: '100%', padding: '12px 14px', background: '#F8FAFC',
-              border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A',
+              border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#10233F',
               outline: 'none', resize: 'vertical', lineHeight: 1.6,
             }}
             onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
@@ -186,7 +186,7 @@ export default function AdminDisputesPage() {
     <div style={{ padding: '32px 40px' }}>
 
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>
           Disputes
           {pending.length > 0 && (
             <span style={{ marginLeft: 12, background: '#FEF2F2', color: '#DC2626', fontSize: 14, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: '1px solid #FCA5A5' }}>
@@ -228,7 +228,7 @@ export default function AdminDisputesPage() {
                   </span>
                   <span style={{ fontSize: 12, color: '#94A3B8' }}>Opened {dispute.openedAt}</span>
                 </div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#10233F', marginBottom: 4 }}>
                   {dispute.providerName} — {dispute.facilityName}
                 </h3>
                 <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>

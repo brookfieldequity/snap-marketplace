@@ -218,7 +218,7 @@ export default function CredMapPinEditor({ mapId, mapName, onClose, onSaved }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 600, display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
-      <div style={{ background: '#0F172A', color: '#fff', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ background: '#10233F', color: '#fff', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 800, fontSize: 15 }}>🎯 Map this form — {mapName}</div>
         <div style={{ fontSize: 12, color: '#94A3B8' }}>Click any blank to pin a passport value there. Drag pins to nudge. Saved pins fill automatically for every provider.</div>
         <div style={{ flex: 1 }} />
@@ -286,7 +286,7 @@ export default function CredMapPinEditor({ mapId, mapName, onClose, onSaved }) {
                   left: Math.min(picker.cssX, PAGE_WIDTH - 280),
                   top: Math.min(picker.cssY + 8, (pageDims ? pageDims.h * scale : 800) - 340),
                   width: 270, maxHeight: 330, background: '#fff', borderRadius: 12,
-                  boxShadow: '0 12px 40px rgba(0,0,0,0.35)', border: '1px solid #E2E8F0',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.35)', border: '1px solid #DCE8F7',
                   display: 'flex', flexDirection: 'column', zIndex: 5, cursor: 'default',
                 }}
               >
@@ -305,7 +305,7 @@ export default function CredMapPinEditor({ mapId, mapName, onClose, onSaved }) {
                         <div
                           key={key}
                           onClick={() => addPin(key)}
-                          style={{ padding: '6px 10px', fontSize: 12.5, color: '#0F172A', borderRadius: 7, cursor: 'pointer' }}
+                          style={{ padding: '6px 10px', fontSize: 12.5, color: '#10233F', borderRadius: 7, cursor: 'pointer' }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = '#EEF2FF' }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                         >{lbl}</div>

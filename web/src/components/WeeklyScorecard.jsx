@@ -54,7 +54,7 @@ export default function WeeklyScorecard() {
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0 }}>Weekly Scorecard</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#10233F', margin: 0 }}>Weekly Scorecard</h2>
         <button onClick={openEditor}
           style={{ padding: '6px 12px', background: '#fff', color: '#2563EB', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           Update manual inputs
@@ -63,9 +63,9 @@ export default function WeeklyScorecard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         {metrics.map((m) => (
-          <div key={m.key} style={{ background: '#fff', border: '1px solid #E2E8F0', borderLeft: `4px solid ${RAG[m.status] || RAG.na}`, borderRadius: 12, padding: '14px 16px' }}>
+          <div key={m.key} style={{ background: '#fff', border: '1px solid #DCE8F7', borderLeft: `4px solid ${RAG[m.status] || RAG.na}`, borderRadius: 12, padding: '14px 16px' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', minHeight: 30 }}>{m.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em', marginTop: 4 }}>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#10233F', letterSpacing: '-0.02em', marginTop: 4 }}>
               {fmt(m.value, m.unit)}
             </div>
             <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
@@ -85,8 +85,8 @@ export default function WeeklyScorecard() {
       )}
 
       {editing && (
-        <div style={{ marginTop: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Manual inputs</div>
+        <div style={{ marginTop: 14, background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>Manual inputs</div>
           <div style={{ fontSize: 11, color: '#64748B', marginBottom: 12 }}>
             MRR (until billing exists), pipeline + days-to-close (from HubSpot), and Facility NPS (until a survey exists). Leave blank to use the auto estimate / show no data.
           </div>
@@ -106,7 +106,7 @@ export default function WeeklyScorecard() {
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <button onClick={save} disabled={saving}
-              style={{ padding: '8px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              style={{ padding: '8px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button onClick={() => setEditing(false)}

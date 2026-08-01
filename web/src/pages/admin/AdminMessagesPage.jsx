@@ -45,7 +45,7 @@ export default function AdminMessagesPage() {
     <div style={{ padding: '32px 40px' }}>
 
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>
           Flagged Messages
           {visible.length > 0 && (
             <span style={{ marginLeft: 12, background: '#FEF2F2', color: '#DC2626', fontSize: 14, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: '1px solid #FCA5A5' }}>
@@ -78,7 +78,7 @@ export default function AdminMessagesPage() {
               key={msg.id}
               style={{
                 background: '#fff',
-                border: '1px solid #E2E8F0',
+                border: '1px solid #DCE8F7',
                 borderLeft: '4px solid #EF4444',
                 borderRadius: 16,
                 padding: '24px 28px',
@@ -107,7 +107,7 @@ export default function AdminMessagesPage() {
                       {msg.senderName.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: '#10233F' }}>
                         {msg.senderName}
                       </div>
                       <div style={{ fontSize: 12, color: '#64748B' }}>
@@ -152,7 +152,7 @@ export default function AdminMessagesPage() {
                     style={{
                       padding: '6px 14px',
                       background: '#fff',
-                      border: '1px solid #E2E8F0',
+                      border: '1px solid #DCE8F7',
                       borderRadius: 8,
                       fontSize: 12,
                       fontWeight: 600,
@@ -204,7 +204,7 @@ export default function AdminMessagesPage() {
               <div
                 style={{
                   background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
+                  border: '1px solid #DCE8F7',
                   borderRadius: 10,
                   padding: '16px 18px',
                   fontSize: 14,

@@ -97,9 +97,9 @@ export default function AdminDemoPage() {
     }
   }
 
-  const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 28, marginBottom: 24 }
+  const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 28, marginBottom: 24 }
   const btnPrimary = {
-    background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8,
+    background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8,
     padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
   }
   const btnDanger = {
@@ -113,7 +113,7 @@ export default function AdminDemoPage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 720 }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Demo Mode</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>Demo Mode</h1>
       <p style={{ fontSize: 14, color: '#64748B', marginBottom: 32 }}>
         Seed a polished 10-minute sales demo — Maple Ridge ASC with real StaffIQ numbers,
         live marketplace shifts, a credentialed provider, and a gap-to-fill story.
@@ -142,7 +142,7 @@ export default function AdminDemoPage() {
               ].map(({ label, val }) => (
                 <div key={label} style={{ background: '#F8FAFC', borderRadius: 8, padding: '12px 16px' }}>
                   <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{val ?? '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#10233F' }}>{val ?? '—'}</div>
                 </div>
               ))}
             </div>
@@ -254,7 +254,7 @@ export default function AdminDemoPage() {
               {n}
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', marginBottom: 3 }}>{title}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#10233F', marginBottom: 3 }}>{title}</div>
               <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5 }}>{detail}</div>
             </div>
           </div>

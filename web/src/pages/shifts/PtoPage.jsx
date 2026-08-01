@@ -6,7 +6,7 @@ import PtoBuilderPage from './PtoBuilderPage.jsx'
 // the whole roster (Calendar overview + List entry), with the ranked PTO
 // Builder tucked inside as the occasional allocation view.
 
-const NAVY = '#0F172A', ROYAL = '#2563EB', SLATE = '#475569', MUTED = '#94A3B8', LINE = '#E2E8F0'
+const NAVY = '#10233F', ROYAL = '#2563EB', SLATE = '#475569', MUTED = '#94A3B8', LINE = '#E2E8F0'
 const AMBER = '#FDE68A', AMBER_BG = '#FFFBEB', AMBER_INK = '#B45309'
 const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -576,7 +576,7 @@ function PtoReportsView({ initialYear }) {
   const fmtH = (n) => (n < 0 ? `−${Math.abs(n)}` : String(n))
   const num = { width: 64, padding: '5px 7px', border: `1px solid ${LINE}`, borderRadius: 7, fontSize: 12.5, textAlign: 'right' }
   const th = { padding: '9px 10px', fontSize: 10.5, fontWeight: 800, color: SLATE, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${LINE}`, background: '#F8FAFC', position: 'sticky', top: 0 }
-  const td = { padding: '7px 10px', fontSize: 12.5, color: '#334155', textAlign: 'right', borderBottom: `1px solid #F1F5F9`, whiteSpace: 'nowrap' }
+  const td = { padding: '7px 10px', fontSize: 12.5, color: '#334155', textAlign: 'right', borderBottom: `1px solid #EAF1FA`, whiteSpace: 'nowrap' }
 
   return (
     <div>

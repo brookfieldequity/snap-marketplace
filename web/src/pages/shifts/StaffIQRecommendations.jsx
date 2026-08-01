@@ -128,7 +128,7 @@ const S = {
   tuneBox: { background: '#fff', border: '1px solid #A7F3D0', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 },
   tuneRow: { display: 'flex', gap: 12, flexWrap: 'wrap' },
   tuneLabel: { fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', flexDirection: 'column', gap: 3 },
-  tuneInput: { padding: '6px 8px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#0F172A', width: 80 },
+  tuneInput: { padding: '6px 8px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#10233F', width: 80 },
   tuneActions: { display: 'flex', gap: 8 },
   warn: { fontSize: 11, color: '#B45309', fontWeight: 600 },
   more: { fontSize: 11, color: '#047857', marginTop: 8, fontStyle: 'italic' },

@@ -5,7 +5,7 @@ import { roomCountAPI } from '../../api.js'
 // A site scheduler declares how many anesthetizing rooms run each day next
 // month; this feeds the schedule builder as the authoritative demand input.
 
-const NAVY = '#0F172A'
+const NAVY = '#10233F'
 const ROYAL = '#2563EB'
 const SLATE = '#475569'
 const MUTED = '#94A3B8'

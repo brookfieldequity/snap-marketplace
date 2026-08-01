@@ -87,7 +87,7 @@ export default function TimeOffModal({ member, onClose, onChanged }) {
           ) : (
             rows.map((t) => (
               <div key={t.id} style={S.item}>
-                <div style={{ fontSize: 13, color: '#0F172A' }}>
+                <div style={{ fontSize: 13, color: '#10233F' }}>
                   <strong>{fmt(t.startDate)}</strong>
                   {fmt(t.endDate) !== fmt(t.startDate) ? ` → ${fmt(t.endDate)}` : ''}
                   {t.reason ? <span style={{ color: '#64748B' }}> · {t.reason}</span> : ''}
@@ -106,14 +106,14 @@ const S = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 24 },
   modal: { background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  title: { fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0 },
+  title: { fontSize: 19, fontWeight: 800, color: '#10233F', margin: 0 },
   close: { background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B', lineHeight: 1 },
   addRow: { display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' },
   lbl: { fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', flexDirection: 'column', gap: 3 },
-  input: { padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: 7, fontSize: 13, color: '#0F172A' },
-  addBtn: { padding: '9px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+  input: { padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: 7, fontSize: 13, color: '#10233F' },
+  addBtn: { padding: '9px 16px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
   err: { color: '#DC2626', fontSize: 12, marginTop: 8 },
   muted: { color: '#94A3B8', fontSize: 13, padding: '8px 0' },
-  item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #F1F5F9' },
+  item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #EAF1FA' },
   del: { background: 'none', border: 'none', color: '#DC2626', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 }

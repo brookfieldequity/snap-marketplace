@@ -351,7 +351,7 @@ export default function AvailabilityPage({ token }) {
         <div style={{ background: '#fff', borderRadius: 20, padding: 40, maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(15,23,42,0.12)' }}>
           <SnapWordmark dark />
           <div style={{ fontSize: 48, margin: '24px 0 16px' }}>🔗</div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: '0 0 12px' }}>This link isn't valid</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#10233F', margin: '0 0 12px' }}>This link isn't valid</h1>
           <p style={{ fontSize: 14, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
             This availability link may have expired or been shared incorrectly. Please contact your coordinator for a fresh link.
           </p>
@@ -406,7 +406,7 @@ export default function AvailabilityPage({ token }) {
         }}>
           ✓
         </div>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: '0 0 8px', textAlign: 'center', animation: 'floatUp 0.4s ease 0.15s both' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', margin: '0 0 8px', textAlign: 'center', animation: 'floatUp 0.4s ease 0.15s both' }}>
           You're all set, {data.providerFirstName}!
         </h1>
         <p style={{ fontSize: 15, color: '#475569', margin: '0 0 8px', textAlign: 'center', maxWidth: 340, lineHeight: 1.5, animation: 'floatUp 0.4s ease 0.25s both' }}>
@@ -717,7 +717,7 @@ export default function AvailabilityPage({ token }) {
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(10px)',
-        borderTop: '1px solid #E2E8F0',
+        borderTop: '1px solid #DCE8F7',
         padding: '11px 20px calc(12px + env(safe-area-inset-bottom))',
         display: 'flex', flexDirection: 'column', gap: 9,
         boxShadow: '0 -6px 24px rgba(15,23,42,0.08)',

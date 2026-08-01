@@ -10,7 +10,7 @@ const PERM_COLORS = {
 }
 
 function inp(extra = {}) {
-  return { width: '100%', padding: '10px 14px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#fff', boxSizing: 'border-box', outline: 'none', ...extra }
+  return { width: '100%', padding: '10px 14px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#10233F', background: '#fff', boxSizing: 'border-box', outline: 'none', ...extra }
 }
 
 function formatDate(d) {
@@ -110,7 +110,7 @@ export default function AdminCredentialUsersPage() {
     <div style={{ padding: '32px 40px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Credential Users</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>Credential Users</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{users.length} facility portal accounts</p>
         </div>
         <button
@@ -124,7 +124,7 @@ export default function AdminCredentialUsersPage() {
       {/* Create user panel */}
       {showCreate && (
         <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14, padding: '28px 32px', marginBottom: 28 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', margin: '0 0 20px' }}>Create Facility User</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 800, color: '#10233F', margin: '0 0 20px' }}>Create Facility User</h2>
           <form onSubmit={handleCreate}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
@@ -154,7 +154,7 @@ export default function AdminCredentialUsersPage() {
             {createSuccess && <div style={{ padding: '10px 14px', background: '#F0FDF4', borderRadius: 8, color: '#15803D', fontSize: 13, marginBottom: 14 }}>✓ {createSuccess}</div>}
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', border: '1px solid #DCE8F7', borderRadius: 8, background: '#F8FAFC', color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
               <button type="submit" disabled={creating} style={{ padding: '10px 24px', background: creating ? '#A5B4FC' : '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: creating ? 'not-allowed' : 'pointer' }}>
                 {creating ? 'Creating & Sending Email…' : 'Create User & Send Welcome Email'}
               </button>
@@ -171,13 +171,13 @@ export default function AdminCredentialUsersPage() {
           placeholder="Search users or facilities..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: '100%', padding: '10px 14px 10px 36px', background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', outline: 'none', boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: '10px 14px 10px 36px', background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#10233F', outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1fr 160px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1fr 160px', background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
           {['Name', 'Email', 'Facility', 'Permission', 'Last Login', 'Status', 'Actions'].map(h => (
             <div key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
@@ -189,9 +189,9 @@ export default function AdminCredentialUsersPage() {
         {filtered.map((u, i) => {
           const pc = PERM_COLORS[u.permission] || PERM_COLORS.BILLING
           return (
-            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1fr 160px', borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none', alignItems: 'center', background: u.isActive ? (i % 2 === 0 ? '#fff' : '#FAFAFA') : '#FFF5F5' }}>
+            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1.2fr 1.2fr 1fr 160px', borderBottom: i < filtered.length - 1 ? '1px solid #EAF1FA' : 'none', alignItems: 'center', background: u.isActive ? (i % 2 === 0 ? '#fff' : '#FAFAFA') : '#FFF5F5' }}>
               <div style={{ padding: '14px 16px' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{u.name}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#10233F' }}>{u.name}</div>
                 {u.forcePasswordChange && <div style={{ fontSize: 11, color: '#D97706', fontWeight: 600, marginTop: 2 }}>Pending first login</div>}
               </div>
               <div style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>{u.email}</div>

@@ -84,7 +84,7 @@ function CmeExportRow({ entries, providerName }) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid #F1F5F9', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid #EAF1FA', flexWrap: 'wrap' }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Export range:</span>
       <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: '4px 6px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12 }} />
       <span style={{ fontSize: 12, color: '#94A3B8' }}>to</span>
@@ -217,7 +217,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>← Back to providers</button>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>
           {passport.provider.firstName} {passport.provider.lastName}
         </h1>
         <span style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'monospace' }}>NPI {passport.provider.npi}</span>
@@ -237,9 +237,9 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
       </div>
 
       {/* Credentials table */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden', marginBottom: 24 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+          <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
             <tr>
               {['Credential', 'Identifier', 'Expiration', 'Status', 'Documents', ''].map((h) => (
                 <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
@@ -253,14 +253,14 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
               const st = c ? (STATUS_STYLE[c.status] || STATUS_STYLE.PENDING) : null
               const isEditing = editing === type
               return (
-                <tr key={type} style={{ borderTop: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-                  <td style={{ padding: '13px 16px', fontSize: 13.5, fontWeight: 700, color: c ? '#0F172A' : '#94A3B8' }}>{meta.label}</td>
+                <tr key={type} style={{ borderTop: '1px solid #EAF1FA', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                  <td style={{ padding: '13px 16px', fontSize: 13.5, fontWeight: 700, color: c ? '#10233F' : '#94A3B8' }}>{meta.label}</td>
                   <td style={{ padding: '13px 16px', fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>{c?.identifier || '—'}</td>
                   <td style={{ padding: '13px 16px', fontSize: 13 }}>
                     {isEditing ? (
                       <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                         <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ padding: '5px 8px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12.5 }} />
-                        <button onClick={() => saveExpiry(type)} disabled={saving} style={{ padding: '5px 10px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{saving ? '…' : 'Save'}</button>
+                        <button onClick={() => saveExpiry(type)} disabled={saving} style={{ padding: '5px 10px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{saving ? '…' : 'Save'}</button>
                         <button onClick={() => setEditing(null)} style={{ padding: '5px 8px', background: 'none', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
                       </span>
                     ) : (
@@ -308,7 +308,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
                       <button
                         onClick={() => startUpload(type)}
                         disabled={uploadingType === type}
-                        style={{ padding: '6px 12px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
+                        style={{ padding: '6px 12px', background: '#F1F5F9', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
                       >
                         {uploadingType === type ? 'Uploading…' : '⬆ Upload doc'}
                       </button>
@@ -328,12 +328,12 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
         const S = passport.sections || {}
         const docs = passport.profileDocuments || []
         const LEVEL = { COLLEGE: 'College / Nursing', MED_SCHOOL: 'Medical / CRNA School', RESIDENCY: 'Residency', FELLOWSHIP: 'Fellowship' }
-        const card = { background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px', marginBottom: 24 }
-        const head = { fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }
+        const card = { background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '16px 20px', marginBottom: 24 }
+        const head = { fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 10 }
         const row = (label, val) => (
           <div style={{ display: 'flex', gap: 12, padding: '3px 0' }}>
             <div style={{ width: 90, flexShrink: 0, fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>{label}</div>
-            <div style={{ fontSize: 13.5, color: val ? '#0F172A' : '#CBD5E1' }}>{val || '—'}</div>
+            <div style={{ fontSize: 13.5, color: val ? '#10233F' : '#CBD5E1' }}>{val || '—'}</div>
           </div>
         )
         const addr = [p.addressStreet, p.addressCity, p.addressState, p.addressZip].filter(Boolean).join(', ')
@@ -354,7 +354,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
               <div style={card}>
                 <div style={head}>🎓 Education & Training</div>
                 {S.education.map((e, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '4px 0', borderTop: i ? '1px solid #EAF1FA' : 'none' }}>
                     <strong>{LEVEL[e.level] || e.level}</strong>{e.institution ? ` — ${e.institution}` : ''}
                     {e.graduationDate ? <span style={{ color: '#94A3B8' }}> · {e.graduationDate}</span> : null}
                   </div>
@@ -366,7 +366,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
               <div style={card}>
                 <div style={head}>💼 Work History</div>
                 {S.workHistory.map((w, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '4px 0', borderTop: i ? '1px solid #EAF1FA' : 'none' }}>
                     <strong>{w.role || 'Position'}</strong>{w.employer ? ` — ${w.employer}` : ''}
                     <span style={{ color: '#94A3B8' }}> · {w.startDate || '?'} – {w.currentlyEmployed ? 'present' : (w.endDate || '?')}</span>
                   </div>
@@ -378,7 +378,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
               <div style={card}>
                 <div style={head}>🏥 Hospital Affiliations</div>
                 {S.hospitalPrivileges.map((h, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '4px 0', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '4px 0', borderTop: i ? '1px solid #EAF1FA' : 'none' }}>
                     <strong>{h.hospitalName}</strong>
                     <span style={{ color: '#94A3B8' }}> · {h.startDate || '?'} – {h.currentlyActive ? 'present' : (h.endDate || '?')}</span>
                   </div>
@@ -402,10 +402,10 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
 
       {/* Signed documents (e-sign) */}
       {passport.signatures?.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>✍️ Signed documents</div>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 10 }}>✍️ Signed documents</div>
           {passport.signatures.map((s) => (
-            <div key={s.id} style={{ fontSize: 13, color: '#374151', padding: '6px 0', borderTop: '1px solid #F1F5F9' }}>
+            <div key={s.id} style={{ fontSize: 13, color: '#374151', padding: '6px 0', borderTop: '1px solid #EAF1FA' }}>
               {s.documentName} <span style={{ color: '#94A3B8', fontSize: 12 }}>· signed {fmtDate(s.signedAt)}</span>
             </div>
           ))}
@@ -413,8 +413,8 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
       )}
 
       {/* CME */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '16px 20px' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>🎓 CME credits</div>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '16px 20px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 10 }}>🎓 CME credits</div>
         {!cme || !cme.found || (cme.entries || []).length === 0 ? (
           <div style={{ fontSize: 13, color: '#94A3B8' }}>
             {!cme ? 'Couldn’t load CME history — try refreshing.'
@@ -427,7 +427,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
           <>
             <div style={{ fontSize: 13, color: '#374151', marginBottom: 8 }}><strong>{cme.totalHours}</strong> total hours</div>
             {(cme.entries || []).slice(0, 10).map((e2, i) => (
-              <div key={i} style={{ fontSize: 12.5, color: '#64748B', padding: '4px 0', borderTop: '1px solid #F1F5F9' }}>
+              <div key={i} style={{ fontSize: 12.5, color: '#64748B', padding: '4px 0', borderTop: '1px solid #EAF1FA' }}>
                 {e2.title || e2.activity || 'CME activity'} — {e2.hours} hr{e2.hours === 1 ? '' : 's'} {e2.date ? `· ${fmtDate(e2.date)}` : ''}
               </div>
             ))}
@@ -440,7 +440,7 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
       {shareOpen && (
         <div onClick={() => setShareOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, maxHeight: '86vh', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>
               ✉️ Send documents — {passport?.provider?.firstName} {passport?.provider?.lastName}
             </div>
             <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
@@ -456,15 +456,15 @@ export default function CredentialProviderFile({ rosterId, npi, permission, onBa
               value={shareNote}
               onChange={(e) => setShareNote(e.target.value)}
               placeholder="Optional note (e.g. 'License you requested for privileges')"
-              style={{ padding: '10px 13px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', marginBottom: 12 }}
+              style={{ padding: '10px 13px', border: '1px solid #DCE8F7', borderRadius: 9, fontSize: 13, outline: 'none', marginBottom: 12 }}
             />
-            <div style={{ overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: 10, padding: '6px 10px', marginBottom: 14 }}>
+            <div style={{ overflowY: 'auto', border: '1px solid #EAF1FA', borderRadius: 10, padding: '6px 10px', marginBottom: 14 }}>
               {(passport?.credentials || []).filter((c) => (c.documents || []).length > 0).map((c) => (
-                <div key={c.type} style={{ padding: '6px 0', borderBottom: '1px solid #F8FAFC' }}>
+                <div key={c.type} style={{ padding: '6px 0', borderBottom: '1px solid #F1F6FC' }}>
                   {(c.documents || []).map((d) => {
                     const k = `${c.type}|${d.id}`
                     return (
-                      <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#0F172A', cursor: 'pointer', padding: '3px 0' }}>
+                      <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#10233F', cursor: 'pointer', padding: '3px 0' }}>
                         <input type="checkbox" checked={!!shareSel[k]} onChange={(e) => setShareSel((s) => ({ ...s, [k]: e.target.checked }))} style={{ width: 15, height: 15 }} />
                         <span style={{ fontWeight: 700 }}>{CRED_META[c.type]?.label || c.type}</span>
                         <span style={{ color: '#94A3B8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>

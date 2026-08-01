@@ -15,7 +15,7 @@ function fmtRange(start, end) {
   return `${s.toLocaleDateString('en-US', md)} – ${e.toLocaleDateString('en-US', md)}, ${e.getFullYear()}`
 }
 
-const inputStyle = { padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', outline: 'none' }
+const inputStyle = { padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F', outline: 'none' }
 
 export default function PayrollPeriodPicker({ value, onChange }) {
   const [periods, setPeriods] = useState([])
@@ -104,7 +104,7 @@ export default function PayrollPeriodPicker({ value, onChange }) {
       </div>
 
       {showSchedule && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8 }}>
           <span style={{ fontSize: 12, color: '#64748B' }}>Set once — every pay period generates from it.</span>
           <label style={{ fontSize: 12, color: '#475569' }}>A pay period starts on</label>
           <input style={inputStyle} type="date" value={anchorDraft} onChange={(e) => setAnchorDraft(e.target.value)} />
@@ -112,7 +112,7 @@ export default function PayrollPeriodPicker({ value, onChange }) {
             <option value="BIWEEKLY">Every 2 weeks</option>
             <option value="WEEKLY">Weekly</option>
           </select>
-          <button onClick={saveSchedule} disabled={saving} style={{ ...inputStyle, cursor: saving ? 'default' : 'pointer', background: '#2563EB', color: '#fff', border: 'none', fontWeight: 700 }}>{saving ? 'Saving…' : 'Save schedule'}</button>
+          <button onClick={saveSchedule} disabled={saving} style={{ ...inputStyle, cursor: saving ? 'default' : 'pointer', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', fontWeight: 700 }}>{saving ? 'Saving…' : 'Save schedule'}</button>
         </div>
       )}
     </div>

@@ -729,11 +729,11 @@ function CalibrationSection() {
   const rows = cal?.facilities || []
 
   return (
-    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '28px 32px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 32 }}>
+    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '28px 32px', boxShadow: '0 4px 18px rgba(15,43,91,0.06)', marginBottom: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 24 }}>🎯</span>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
             Savings Calibration — Projected vs Realized
           </h2>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', padding: '3px 10px', borderRadius: 20, background: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D' }}>
@@ -777,7 +777,7 @@ function CalibrationSection() {
             {rows.map((r) => {
               const latest = r.snapshots[r.snapshots.length - 1] || {}
               return (
-                <tr key={r.facilityId} style={{ borderTop: '1px solid #F1F5F9', color: '#0F172A' }}>
+                <tr key={r.facilityId} style={{ borderTop: '1px solid #EAF1FA', color: '#10233F' }}>
                   <td style={{ padding: '10px 12px 10px 0', fontWeight: 600 }}>{r.facilityName}</td>
                   <td style={{ padding: '10px 12px' }}>{r.snapshots.length}</td>
                   <td style={{ padding: '10px 12px' }}>{r.matchedCycles}</td>
@@ -887,7 +887,7 @@ export default function AdminStaffIQPage({ autoPitch = false, onNavigate }) {
     <div style={{ padding: '32px 40px' }}>
       {/* Presentation overlay */}
       {pitchMode && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#0F172A', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#10233F', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
           {/* Close */}
           <button
             onClick={() => setPitchMode(false)}
@@ -981,7 +981,7 @@ export default function AdminStaffIQPage({ autoPitch = false, onNavigate }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
             StaffIQ Analytics
           </h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
@@ -1004,7 +1004,7 @@ export default function AdminStaffIQPage({ autoPitch = false, onNavigate }) {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
             {metrics.map(({ label, value, icon, color }) => (
-              <div key={label} style={{ background: '#fff', borderRadius: 16, padding: '24px 24px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div key={label} style={{ background: '#fff', borderRadius: 16, padding: '24px 24px', border: '1px solid #DCE8F7', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1.4 }}>
                     {label}
@@ -1020,10 +1020,10 @@ export default function AdminStaffIQPage({ autoPitch = false, onNavigate }) {
 
           <CalibrationSection />
 
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '28px 32px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '28px 32px', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <span style={{ fontSize: 28 }}>🧠</span>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
                 About StaffIQ™
               </h2>
             </div>

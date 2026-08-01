@@ -103,7 +103,7 @@ export default function AdminLeadsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
             Leads Management
           </h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
@@ -117,7 +117,7 @@ export default function AdminLeadsPage() {
             alignItems: 'center',
             gap: 8,
             padding: '10px 18px',
-            background: '#0F172A',
+            background: '#10233F',
             color: '#fff',
             border: 'none',
             borderRadius: 10,
@@ -144,8 +144,8 @@ export default function AdminLeadsPage() {
               background: '#fff',
               borderRadius: 14,
               padding: '20px 24px',
-              border: '1px solid #E2E8F0',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              border: '1px solid #DCE8F7',
+              boxShadow: '0 4px 18px rgba(15,43,91,0.06)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -171,7 +171,7 @@ export default function AdminLeadsPage() {
               style={{
                 padding: '7px 16px',
                 borderRadius: 20,
-                border: isActive ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                border: isActive ? '1px solid #2563EB' : '1px solid #DCE8F7',
                 background: isActive ? '#EFF6FF' : '#fff',
                 color: isActive ? '#1E40AF' : '#475569',
                 fontSize: 13,
@@ -186,7 +186,7 @@ export default function AdminLeadsPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
         {loading ? (
           <div style={{ padding: '60px 40px', textAlign: 'center', color: '#94A3B8', fontSize: 15 }}>Loading leads…</div>
         ) : filtered.length === 0 ? (
@@ -194,7 +194,7 @@ export default function AdminLeadsPage() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
                 {['Facility Name', 'Contact', 'Email', 'Calc Type', 'Savings Est.', 'Report Sent', 'Received', 'Follow Up Status'].map((h) => (
                   <th
                     key={h}
@@ -211,11 +211,11 @@ export default function AdminLeadsPage() {
                 return (
                   <tr
                     key={lead.id || idx}
-                    style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.1s' }}
+                    style={{ borderBottom: '1px solid #EAF1FA', transition: 'background 0.1s' }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: '#10233F' }}>
                       {lead.facilityName || '—'}
                     </td>
                     <td style={{ padding: '14px 16px', fontSize: 13, color: '#374151' }}>

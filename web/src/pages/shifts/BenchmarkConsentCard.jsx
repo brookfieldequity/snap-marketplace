@@ -51,11 +51,11 @@ function ConsentModal({ readOnly, consent, onConfirm, onRevoke, onCancel, loadin
         maxHeight: '90vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 25px 60px rgba(0,0,0,0.2)',
       }}>
-        <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid #DCE8F7' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
             Benchmark Cohort Consent
           </div>
-          <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A' }}>
+          <div style={{ fontSize: 19, fontWeight: 800, color: '#10233F' }}>
             StaffIQ Benchmark Participation & Publication Consent
           </div>
           {readOnly && consent && (
@@ -73,9 +73,9 @@ function ConsentModal({ readOnly, consent, onConfirm, onRevoke, onCancel, loadin
           {CONSENT_TEXT}
         </div>
 
-        <div style={{ padding: '16px 28px 22px', borderTop: '1px solid #E2E8F0' }}>
+        <div style={{ padding: '16px 28px 22px', borderTop: '1px solid #DCE8F7' }}>
           {!readOnly && (
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: scrolled ? '#0F172A' : '#94A3B8', cursor: scrolled ? 'pointer' : 'not-allowed', marginBottom: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: scrolled ? '#10233F' : '#94A3B8', cursor: scrolled ? 'pointer' : 'not-allowed', marginBottom: 14 }}>
               <input
                 type="checkbox"
                 checked={agreed}
@@ -187,7 +187,7 @@ export default function BenchmarkConsentCard() {
         <div style={{ background: 'linear-gradient(135deg, #EFF6FF 0%, #F0FDF4 100%)', border: '1px solid #93C5FD', borderRadius: 16, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 32 }}>🔬</div>
           <div style={{ flex: 1, minWidth: 260 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>
               Join the StaffIQ benchmark cohort
             </div>
             <div style={{ fontSize: 13, color: '#475569' }}>
@@ -198,7 +198,7 @@ export default function BenchmarkConsentCard() {
           </div>
           <button
             onClick={() => setModalOpen(true)}
-            style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
+            style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)' }}
           >
             Review & Consent
           </button>

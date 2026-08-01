@@ -46,9 +46,9 @@ function ActivityFeed({ onNavigate }) {
   }
   const shown = open ? events : events.slice(0, 4)
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: shown.length ? 8 : 0 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>🔔 What changed</span>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#10233F' }}>🔔 What changed</span>
         <span style={{ fontSize: 11.5, color: '#94A3B8' }}>last {feed.windowDays} days · {events.length} update{events.length === 1 ? '' : 's'}</span>
         <div style={{ flex: 1 }} />
         {events.length > 4 && (
@@ -58,9 +58,9 @@ function ActivityFeed({ onNavigate }) {
         )}
       </div>
       {shown.map((e, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderTop: i > 0 ? '1px solid #F8FAFC' : 'none' }}>
+        <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderTop: i > 0 ? '1px solid #F1F6FC' : 'none' }}>
           <span style={{ fontSize: 13 }}>{e.icon}</span>
-          <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{e.title}</span>
+          <span style={{ fontSize: 13, color: '#10233F', fontWeight: 600 }}>{e.title}</span>
           <span style={{ fontSize: 12, color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.detail}</span>
           <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap' }}>{ago(e.ts)}</span>
         </div>
@@ -158,9 +158,9 @@ function FlagsPanel() {
     : null
 
   return (
-    <div style={{ background: '#fff', border: `1px solid ${high ? '#FCA5A5' : '#FDE68A'}`, borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: '#fff', border: `1px solid ${high ? '#FCA5A5' : '#FDE68A'}`, borderRadius: 14, padding: '14px 18px', marginBottom: 24, boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>⚑ Schedule flags</span>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#10233F' }}>⚑ Schedule flags</span>
         {high > 0 && (
           <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C' }}>{high} need coverage</span>
         )}
@@ -179,12 +179,12 @@ function FlagsPanel() {
         const sev = FLAG_SEV[f.severity] || FLAG_SEV.INFO
         const label = fixLabel(f.fix)
         return (
-          <div key={f.id + f.monthLabel} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid #F8FAFC' }}>
+          <div key={f.id + f.monthLabel} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid #F1F6FC' }}>
             <span style={{ fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: sev.bg, border: `1px solid ${sev.border}`, color: sev.text, whiteSpace: 'nowrap' }}>
               {f.published ? '📣 ' : ''}{sev.label}
             </span>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{f.title}</span>
+              <span style={{ fontSize: 13, color: '#10233F', fontWeight: 600 }}>{f.title}</span>
               <span style={{ fontSize: 12, color: '#64748B', marginLeft: 6 }}>{f.detail}{f.monthLabel ? ` · ${f.monthLabel}` : ''}</span>
             </div>
             {label && (
@@ -209,7 +209,7 @@ function FlagsPanel() {
             <div style={{ fontSize: 12.5, fontWeight: 800, color: '#155E75' }}>
               🎓 You've fixed this the same way {o.resolutionCount}× — automate it?
             </div>
-            <div style={{ fontSize: 12, color: '#0F172A', fontWeight: 600 }}>{o.label}</div>
+            <div style={{ fontSize: 12, color: '#10233F', fontWeight: 600 }}>{o.label}</div>
             <div style={{ fontSize: 11, color: '#64748B' }}>{o.detail}</div>
           </div>
           <button
@@ -230,7 +230,7 @@ function FlagsPanel() {
         </div>
       ))}
       {activeRules.length > 0 && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F8FAFC', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F1F6FC', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active rules</span>
           {activeRules.map((r) => (
             <span key={r.flagType} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: '#ECFEFF', border: '1px solid #A5F3FC', color: '#155E75' }}>
@@ -300,7 +300,7 @@ function StaffIQGauge({ score, scoreBasis, networkMedianScore }) {
   const zoneColor = zoneColors[zone];
 
   return (
-    <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2E8F0', padding: '24px 28px', width: 340, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #DCE8F7', padding: '24px 28px', width: 340, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.04em', marginBottom: 4, textTransform: 'uppercase' }}>
         Efficiency score
       </div>
@@ -471,8 +471,8 @@ function StatCard({ label, value, icon, color = '#2563EB', sub, loading, accent 
         background: '#fff',
         borderRadius: 14,
         padding: '20px 24px',
-        border: accent ? `1px solid ${accent}40` : '1px solid #E2E8F0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        border: accent ? `1px solid ${accent}40` : '1px solid #DCE8F7',
+        boxShadow: '0 4px 18px rgba(15,43,91,0.06)',
       }}
     >
       <div
@@ -642,7 +642,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
             style={{
               fontSize: 28,
               fontWeight: 800,
-              color: '#0F172A',
+              color: '#10233F',
               letterSpacing: '-0.02em',
               marginBottom: 4,
             }}
@@ -776,7 +776,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
           }}
         >
           <span style={{ fontSize: 20 }}>💰</span>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F' }}>
             Savings Overview
           </h2>
           <div
@@ -811,7 +811,7 @@ export default function SnapShiftsDashboard({ onNavigate }) {
           style={{
             fontSize: 17,
             fontWeight: 700,
-            color: '#0F172A',
+            color: '#10233F',
             marginBottom: 16,
             display: 'flex',
             alignItems: 'center',

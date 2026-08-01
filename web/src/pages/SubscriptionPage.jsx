@@ -115,7 +115,7 @@ const TIERS = [
       { label: '26–75 providers',     price: '$65,000/yr' },
       { label: '76–150 providers',    price: '$105,000/yr' },
     ],
-    color: '#0F172A',
+    color: '#10233F',
     accent: '#F8FAFC',
     features: [
       { text: 'Everything in SNAP Staff IQ', included: true },
@@ -155,11 +155,11 @@ function AgreementModal({ tier, onConfirm, onCancel, loading }) {
         boxShadow: '0 25px 60px rgba(0,0,0,0.2)',
       }}>
         {/* Header */}
-        <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid #DCE8F7' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
             Subscription Agreement & BAA
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#10233F' }}>
             Confirm {tierConfig?.name} Plan
           </div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
@@ -187,7 +187,7 @@ function AgreementModal({ tier, onConfirm, onCancel, loading }) {
         )}
 
         {/* Footer */}
-        <div style={{ padding: '16px 28px 24px', borderTop: '1px solid #E2E8F0' }}>
+        <div style={{ padding: '16px 28px 24px', borderTop: '1px solid #DCE8F7' }}>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
             <input
               type="checkbox"
@@ -206,7 +206,7 @@ function AgreementModal({ tier, onConfirm, onCancel, loading }) {
               disabled={loading}
               style={{
                 flex: 1, padding: '12px', background: '#F8FAFC',
-                border: '1px solid #E2E8F0', borderRadius: 10,
+                border: '1px solid #DCE8F7', borderRadius: 10,
                 fontSize: 14, fontWeight: 600, color: '#64748B', cursor: 'pointer',
               }}
             >
@@ -285,7 +285,7 @@ export default function SubscriptionPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Subscription</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Subscription</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
           Manage your SNAP subscription plan
         </p>
@@ -311,7 +311,7 @@ export default function SubscriptionPage() {
 
       {/* Current plan badge */}
       <div style={{
-        background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16,
+        background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16,
         padding: '24px 28px', marginBottom: 32,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 16,
@@ -348,7 +348,7 @@ export default function SubscriptionPage() {
               key={tier.id}
               style={{
                 background: '#fff',
-                border: isCurrent ? `2px solid #2563EB` : '1px solid #E2E8F0',
+                border: isCurrent ? `2px solid #2563EB` : '1px solid #DCE8F7',
                 borderRadius: 20, padding: '28px 24px', position: 'relative',
                 boxShadow: isCurrent ? '0 0 0 4px rgba(37,99,235,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
                 transition: 'box-shadow 0.2s',
@@ -374,13 +374,13 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
-              <div style={{ fontWeight: 800, fontSize: 20, color: '#0F172A', marginBottom: 2 }}>
+              <div style={{ fontWeight: 800, fontSize: 20, color: '#10233F', marginBottom: 2 }}>
                 {tier.name}
               </div>
               <div style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>{tier.tagline}</div>
               <div style={{ marginBottom: 20 }}>
                 {tier.bands.map((b) => (
-                  <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+                  <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #EAF1FA', fontSize: 13 }}>
                     <span style={{ color: '#64748B' }}>{b.label}</span>
                     <span style={{ fontWeight: 700, color: tier.color }}>{b.price}</span>
                   </div>
@@ -401,7 +401,7 @@ export default function SubscriptionPage() {
               {isCurrent ? (
                 <div style={{
                   textAlign: 'center', padding: '11px', background: '#F8FAFC',
-                  border: '1px solid #E2E8F0', borderRadius: 10,
+                  border: '1px solid #DCE8F7', borderRadius: 10,
                   fontSize: 13, color: '#94A3B8', fontWeight: 600,
                 }}>
                   Current Plan
@@ -411,7 +411,7 @@ export default function SubscriptionPage() {
                   href="mailto:hello@snapmedical.app"
                   style={{
                     display: 'block', textAlign: 'center', padding: '11px',
-                    background: '#0F172A', color: '#fff', borderRadius: 10,
+                    background: '#10233F', color: '#fff', borderRadius: 10,
                     fontSize: 13, fontWeight: 700, textDecoration: 'none',
                   }}
                 >

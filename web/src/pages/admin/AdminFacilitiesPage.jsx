@@ -23,15 +23,15 @@ function AdminAccountRecoveryCard() {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '18px 22px', marginBottom: 28 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Account recovery</div>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '18px 22px', marginBottom: 28 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F' }}>Account recovery</div>
       <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 10px' }}>
         Issue a temporary password for any user (provider, facility user, or admin) — shown once, never emailed.
       </p>
       <form onSubmit={issue} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" type="email" required
           style={{ flex: '1 1 260px', padding: '9px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14 }} />
-        <button type="submit" disabled={busy} style={{ background: '#2563EB', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.7 : 1 }}>
+        <button type="submit" disabled={busy} style={{ background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.7 : 1 }}>
           {busy ? 'Issuing…' : 'Issue temp password'}
         </button>
       </form>
@@ -39,7 +39,7 @@ function AdminAccountRecoveryCard() {
       {issued && (
         <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', marginTop: 12 }}>
           <div style={{ fontSize: 13, color: '#16A34A', fontWeight: 700 }}>Temporary password for {issued.email} ({issued.role})</div>
-          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#0F172A', margin: '6px 0' }}>{issued.tempPassword}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#10233F', margin: '6px 0' }}>{issued.tempPassword}</div>
           <div style={{ fontSize: 12, color: '#64748B' }}>Shown only once — share it directly. They must set a new password at next sign-in.</div>
         </div>
       )}
@@ -50,7 +50,7 @@ function AdminAccountRecoveryCard() {
 const TIER_COLORS = {
   BASIC:        { bg: '#EFF6FF', text: '#1D4ED8', border: '#A5B4FC' },
   PROFESSIONAL: { bg: '#F3E8FF', text: '#1E3A8A', border: '#DDD6FE' },
-  ENTERPRISE:   { bg: '#0F172A', text: '#fff',    border: '#334155' },
+  ENTERPRISE:   { bg: '#10233F', text: '#fff',    border: '#334155' },
 }
 
 const TIER_LABELS = {
@@ -163,13 +163,13 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Facilities</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Facilities</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{facilities.length} registered facilities</p>
         </div>
         <button
           onClick={() => setShowNew(true)}
           style={{
-            background: '#2563EB', color: '#fff', border: 'none',
+            background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none',
             padding: '10px 18px', borderRadius: 10, fontSize: 14, fontWeight: 700,
             cursor: 'pointer', boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
           }}
@@ -206,16 +206,16 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
           style={{
             width: '100%', padding: '10px 14px 10px 36px',
             background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10,
-            fontSize: 14, color: '#0F172A', outline: 'none',
+            fontSize: 14, color: '#10233F', outline: 'none',
           }}
           onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
           onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
         />
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 1fr 60px 160px 220px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 1fr 60px 160px 220px', background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
           {['Facility', 'Location', 'Tier', 'Shifts', 'Update Tier', 'Actions'].map((h) => (
             <div key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
@@ -237,12 +237,12 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
             <div key={f.id} style={{
               display: 'grid',
               gridTemplateColumns: '2fr 1.4fr 1fr 60px 160px 220px',
-              borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
+              borderBottom: i < filtered.length - 1 ? '1px solid #EAF1FA' : 'none',
               background: i % 2 === 0 ? '#fff' : '#FAFAFA',
               alignItems: 'center',
             }}>
               <div style={{ padding: '14px 16px' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#10233F' }}>
                   {f._name || <span style={{ color: '#CBD5E1', fontStyle: 'italic' }}>Unnamed facility</span>}
                 </div>
                 <div style={{ fontSize: 12, color: '#94A3B8' }}>{f.facilityType || '—'}</div>
@@ -259,7 +259,7 @@ export default function AdminFacilitiesPage({ onOpenRoi } = {}) {
                 </span>
               </div>
 
-              <div style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+              <div style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#10233F' }}>
                 {f._shifts}
               </div>
 
@@ -373,9 +373,9 @@ function ModalShell({ title, subtitle, onClose, children, maxWidth = 520 }) {
         maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
       }}>
-        <div style={{ padding: '20px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ padding: '20px 28px', borderBottom: '1px solid #EAF1FA', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{title}</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#10233F' }}>{title}</h2>
             {subtitle && <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>{subtitle}</p>}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: '#94A3B8', cursor: 'pointer', padding: 4 }}>✕</button>
@@ -401,7 +401,7 @@ function Field({ label, hint, children }) {
 const inputStyle = {
   width: '100%', padding: '10px 12px',
   border: '1.5px solid #E2E8F0', borderRadius: 8,
-  fontSize: 14, color: '#0F172A', outline: 'none',
+  fontSize: 14, color: '#10233F', outline: 'none',
   boxSizing: 'border-box',
 }
 
@@ -516,7 +516,7 @@ function NewFacilityModal({ onClose, onCreated }) {
           <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
             {submitting ? 'Creating…' : 'Create Facility'}
           </button>
         </div>
@@ -602,7 +602,7 @@ function EditFacilityModal({ facility, onClose, onSaved }) {
           <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+          <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
             {submitting ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
@@ -681,7 +681,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
             <button type="button" onClick={onClose} style={{ padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               Cancel
             </button>
-            <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+            <button type="submit" disabled={submitting} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
               {submitting ? 'Sending…' : 'Send Invite'}
             </button>
           </div>
@@ -691,7 +691,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
       {result && (
         <div>
           {result.emailSent ? (
-            <p style={{ margin: '0 0 12px', fontSize: 14, color: '#0F172A', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 12px', fontSize: 14, color: '#10233F', lineHeight: 1.6 }}>
               Sent an invite email to <strong>{result.email}</strong>. They’ll receive a link to set their password and log in — and you can copy the same link below to send directly (in case the email lands in spam).
             </p>
           ) : (
@@ -712,7 +712,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
                 />
                 <button
                   onClick={() => { navigator.clipboard?.writeText(result.claimLink); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-                  style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#0F172A', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#10233F', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   {copied ? 'Copied ✓' : 'Copy'}
                 </button>
@@ -733,7 +733,7 @@ function InviteUserModal({ facility, onClose, onSent }) {
             </p>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-            <button onClick={onSent} style={{ padding: '10px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={onSent} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               Done
             </button>
           </div>
@@ -777,9 +777,9 @@ function InvitesListModal({ facility, onClose }) {
             const statusBg = inv.status === 'CLAIMED' ? '#ECFDF5'
               : inv.status === 'EXPIRED' ? '#FEF2F2' : '#FEF3C7'
             return (
-              <div key={inv.id} style={{ padding: '12px 4px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div key={inv.id} style={{ padding: '12px 4px', borderBottom: '1px solid #EAF1FA', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 14, marginBottom: 2 }}>{inv.email}</div>
+                  <div style={{ fontWeight: 600, color: '#10233F', fontSize: 14, marginBottom: 2 }}>{inv.email}</div>
                   <div style={{ fontSize: 12, color: '#94A3B8' }}>
                     {inv.facilityRole} · sent {new Date(inv.createdAt).toLocaleDateString()}
                     {inv.invitedByName ? ` by ${inv.invitedByName}` : ''}

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { payrollAPI } from '../../api.js'
 
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
 const ghostBtn = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
-const inputStyle = { padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }
-const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #E2E8F0' }
+const inputStyle = { padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F' }
+const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #DCE8F7' }
 const thL = { ...th, textAlign: 'left' }
-const td = { padding: '7px 10px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid #F1F5F9', textAlign: 'right' }
+const td = { padding: '7px 10px', fontSize: 13, color: '#10233F', borderBottom: '1px solid #EAF1FA', textAlign: 'right' }
 const tdL = { ...td, textAlign: 'left' }
 
 const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -22,7 +22,7 @@ function Stat({ label, value, accent }) {
   return (
     <div style={{ ...card, padding: '14px 18px', flex: '1 1 150px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: accent || '#0F172A', marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: accent || '#10233F', marginTop: 4 }}>{value}</div>
     </div>
   )
 }
@@ -47,7 +47,7 @@ export default function AgencyMetricsPage({ onNavigate }) {
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '8px 4px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>📈 Profitability</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>📈 Profitability</h1>
       <p style={{ fontSize: 14, color: '#64748B', marginTop: 6, marginBottom: 20 }}>
         Per-provider margin (what the facility pays you, all-in, vs. what you pay the provider), the separate
         off-site bonus bucket, and SNAP's payroll total to reconcile against Gusto.

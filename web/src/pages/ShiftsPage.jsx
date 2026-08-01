@@ -121,7 +121,7 @@ export default function ShiftsPage({ onNavigate }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>My Shifts</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>My Shifts</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{shifts.length} total shifts</p>
         </div>
         <button
@@ -147,7 +147,7 @@ export default function ShiftsPage({ onNavigate }) {
         style={{
           background: '#fff',
           borderRadius: 14,
-          border: '1px solid #E2E8F0',
+          border: '1px solid #DCE8F7',
           overflow: 'hidden',
           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
         }}
@@ -158,7 +158,7 @@ export default function ShiftsPage({ onNavigate }) {
             display: 'grid',
             gridTemplateColumns: '110px 160px 90px 80px 80px 130px 80px 1fr',
             background: '#F8FAFC',
-            borderBottom: '1px solid #E2E8F0',
+            borderBottom: '1px solid #DCE8F7',
             padding: '0',
           }}
         >
@@ -207,7 +207,7 @@ export default function ShiftsPage({ onNavigate }) {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '110px 160px 90px 80px 80px 130px 80px 1fr',
-                  borderBottom: '1px solid #F1F5F9',
+                  borderBottom: '1px solid #EAF1FA',
                   cursor: 'pointer',
                   background: isExpanded ? '#FAFAFE' : (i % 2 === 0 ? '#fff' : '#FAFAFA'),
                   transition: 'background 0.1s',
@@ -275,7 +275,7 @@ export default function ShiftsPage({ onNavigate }) {
                   <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', marginBottom: 16 }}>
                     <div>
                       <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Shift Total</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{fmt(total)}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: '#10233F' }}>{fmt(total)}</div>
                     </div>
                     {shift.status !== 'DEPOSIT_PENDING' && (
                       <div>
@@ -286,7 +286,7 @@ export default function ShiftsPage({ onNavigate }) {
                   </div>
 
                   {shift.providerName && (
-                    <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', marginBottom: 16, border: '1px solid #E2E8F0' }}>
+                    <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', marginBottom: 16, border: '1px solid #DCE8F7' }}>
                       <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Booked Provider</div>
                       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         <span style={{ fontWeight: 600, fontSize: 14 }}>{shift.providerName}</span>
@@ -316,7 +316,7 @@ export default function ShiftsPage({ onNavigate }) {
                             borderRadius: 10,
                             padding: '12px 16px',
                             marginBottom: 8,
-                            border: '1px solid #E2E8F0',
+                            border: '1px solid #DCE8F7',
                           }}
                         >
                           <div>

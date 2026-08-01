@@ -22,7 +22,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
     }
   }
 
-  const inp = { width: '100%', padding: '12px 16px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#0F172A', boxSizing: 'border-box', outline: 'none', background: '#fff' }
+  const inp = { width: '100%', padding: '12px 16px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 15, color: '#10233F', boxSizing: 'border-box', outline: 'none', background: '#fff' }
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -35,7 +35,7 @@ function ForcePasswordChange({ user, onDone, onLogout }) {
           <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 8, padding: '10px 14px', marginBottom: 24, fontSize: 13, color: '#92400E', fontWeight: 600 }}>
             Welcome, {user.name}. Please set a new password to continue.
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: '0 0 24px' }}>Set your password</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#10233F', margin: '0 0 24px' }}>Set your password</h2>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>New Password</label>
@@ -79,7 +79,7 @@ function SettingsHub({ initial = 'users' }) {
   const TABS = [['users', 'Users'], ['roster', 'Roster'], ['audit', 'Audit Log']]
   return (
     <div>
-      <div style={{ display: 'flex', gap: 4, padding: '0 32px', borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
+      <div style={{ display: 'flex', gap: 4, padding: '0 32px', borderBottom: '1px solid #DCE8F7', background: '#fff' }}>
         {TABS.map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '14px 18px', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', background: 'none',
@@ -250,7 +250,7 @@ export default function CredentialApp({ onBack }) {
       {narrow && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 300,
-          background: '#0F172A', display: 'flex', alignItems: 'center', gap: 12,
+          background: '#10233F', display: 'flex', alignItems: 'center', gap: 12,
           padding: '0 14px', borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}>
           <button

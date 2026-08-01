@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
 const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const STATUS_STYLE = {
@@ -45,7 +45,7 @@ export default function AdminMarketplaceFeesPage() {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1080, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Marketplace Fees</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>Marketplace Fees</h1>
       <div style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 20 }}>
         SNAP's 5% platform fee on dual-verified marketplace shifts. Fees accrue as <strong>Pending</strong> (a ledger of what
         facilities owe) — automatic charging turns on once Stripe billing is wired.
@@ -66,7 +66,7 @@ export default function AdminMarketplaceFeesPage() {
           ].map((c) => (
             <div key={c.label} style={card}>
               <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{c.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: c.alert ? '#DC2626' : '#0F172A' }}>{c.value}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: c.alert ? '#DC2626' : '#10233F' }}>{c.value}</div>
               {c.sub && <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{c.sub}</div>}
             </div>
           ))}
@@ -102,7 +102,7 @@ export default function AdminMarketplaceFeesPage() {
         <div style={{ ...card, color: '#64748B' }}>No fees recorded yet.</div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 0.8fr', padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 0.8fr', padding: '10px 16px', borderBottom: '1px solid #DCE8F7', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <div>Facility</div>
             <div>Provider</div>
             <div>Shift Date</div>
@@ -112,8 +112,8 @@ export default function AdminMarketplaceFeesPage() {
             <div>Status</div>
           </div>
           {fees.map((f) => (
-            <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 0.8fr', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center', fontSize: 13 }}>
-              <div style={{ color: '#0F172A', fontWeight: 600 }}>{f.facility?.name || '—'}</div>
+            <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 0.8fr', padding: '12px 16px', borderBottom: '1px solid #EAF1FA', alignItems: 'center', fontSize: 13 }}>
+              <div style={{ color: '#10233F', fontWeight: 600 }}>{f.facility?.name || '—'}</div>
               <div style={{ color: '#64748B' }}>{providerName(f)}</div>
               <div style={{ color: '#64748B' }}>{f.booking?.shift?.date?.slice(0, 10) || '—'}</div>
               <div style={{ color: '#64748B' }}>{fmtMoney(f.shiftValue)}</div>

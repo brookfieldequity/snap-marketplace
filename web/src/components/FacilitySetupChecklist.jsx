@@ -163,7 +163,7 @@ export default function FacilitySetupChecklist({ facility, onNavigate }) {
           {nextSteps.map((s, i) => (
             <button key={i} onClick={s.action} style={styles.stepBtn}>
               <div style={{ flex: 1, textAlign: 'left' }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{s.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#10233F' }}>{s.label}</div>
                 <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{s.detail}</div>
               </div>
               <div style={styles.stepCta}>{s.cta} →</div>
@@ -222,7 +222,7 @@ function rosterPreview(arr) {
 const styles = {
   shell: {
     background: '#fff',
-    border: '1px solid #E2E8F0',
+    border: '1px solid #DCE8F7',
     borderRadius: 16,
     boxShadow: '0 4px 16px rgba(15,23,42,0.04)',
     padding: '24px 28px',
@@ -239,7 +239,7 @@ const styles = {
     margin: 0,
     fontSize: 22,
     fontWeight: 800,
-    color: '#0F172A',
+    color: '#10233F',
     letterSpacing: '-0.01em',
   },
   subtitle: {
@@ -294,7 +294,7 @@ const styles = {
   rowTitle: {
     fontSize: 14,
     fontWeight: 700,
-    color: '#0F172A',
+    color: '#10233F',
   },
   rowDetail: {
     fontSize: 13,
@@ -305,7 +305,7 @@ const styles = {
   nextSteps: {
     marginTop: 20,
     paddingTop: 18,
-    borderTop: '1px solid #F1F5F9',
+    borderTop: '1px solid #EAF1FA',
   },
   nextStepsLabel: {
     fontSize: 11,
@@ -321,7 +321,7 @@ const styles = {
     gap: 12,
     width: '100%',
     background: '#F8FAFC',
-    border: '1px solid #E2E8F0',
+    border: '1px solid #DCE8F7',
     borderRadius: 12,
     padding: '12px 14px',
     cursor: 'pointer',

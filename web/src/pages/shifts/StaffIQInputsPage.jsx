@@ -10,10 +10,10 @@ function fmt(n) {
 const inputStyle = {
   width: '100%',
   padding: '10px 12px',
-  border: '1px solid #E2E8F0',
+  border: '1px solid #DCE8F7',
   borderRadius: 8,
   fontSize: 14,
-  color: '#0F172A',
+  color: '#10233F',
   background: '#F8FAFC',
   boxSizing: 'border-box',
 }
@@ -199,7 +199,7 @@ export default function StaffIQInputsPage({ onNavigate }) {
     <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
           StaffIQ Data Input
         </h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
@@ -214,8 +214,8 @@ export default function StaffIQInputsPage({ onNavigate }) {
 
       {/* Input Form */}
       <form onSubmit={handleSubmit}>
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginBottom: 28 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 24 }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginBottom: 28 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 24 }}>
             Facility Staffing Details
           </div>
 
@@ -446,7 +446,7 @@ export default function StaffIQInputsPage({ onNavigate }) {
           </div>
 
           {(result.inefficiency1Pct != null || result.inefficiency2Pct != null) && (
-            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 20, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ borderTop: '1px solid #EAF1FA', paddingTop: 20, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {result.inefficiency1Pct != null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#FEF2F2', borderRadius: 10 }}>
                   <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Team Model Inefficiency</span>
@@ -473,8 +473,8 @@ export default function StaffIQInputsPage({ onNavigate }) {
       )}
 
       {/* Score History Chart */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '28px 32px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '28px 32px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 16 }}>
           Score History
         </div>
         {historyLoading ? (

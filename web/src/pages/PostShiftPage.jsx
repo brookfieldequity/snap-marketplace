@@ -52,7 +52,7 @@ const inputStyle = {
   border: '1.5px solid #E2E8F0',
   borderRadius: 10,
   fontSize: 15,
-  color: '#0F172A',
+  color: '#10233F',
   outline: 'none',
   transition: 'border-color 0.15s',
 }
@@ -85,7 +85,7 @@ function Toggle({ label, description, checked, onChange }) {
       onClick={() => onChange(!checked)}
     >
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{label}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>{label}</div>
         {description && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{description}</div>}
       </div>
       <div
@@ -267,7 +267,7 @@ export default function PostShiftPage({ onNavigate }) {
         >
           ← {step === 1 ? 'Back to Shifts' : 'Back to Shift Details'}
         </button>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>
           Post a Shift
         </h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
@@ -284,7 +284,7 @@ export default function PostShiftPage({ onNavigate }) {
 
       {/* ── STEP 1 ─────────────────────────────────────────────────────────── */}
       {step === 1 && (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px' }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '32px' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Single vs Recurring mode */}
@@ -503,7 +503,7 @@ export default function PostShiftPage({ onNavigate }) {
             )}
 
             {/* Divider */}
-            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 20 }}>
+            <div style={{ borderTop: '1px solid #EAF1FA', paddingTop: 20 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#64748B', marginBottom: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                 Optional Enhancements
               </div>
@@ -591,7 +591,7 @@ export default function PostShiftPage({ onNavigate }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Summary card */}
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
             <div style={{ background: 'linear-gradient(135deg, #2563EB, #1E3A8A)', padding: '20px 28px' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.06em', marginBottom: 4 }}>
                 {isSeries ? 'SERIES CREATED' : 'SHIFT CREATED'}
@@ -615,7 +615,7 @@ export default function PostShiftPage({ onNavigate }) {
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>{value}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: '#10233F' }}>{value}</div>
                   </div>
                 ))}
               </div>
@@ -640,14 +640,14 @@ export default function PostShiftPage({ onNavigate }) {
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 20 }}>
+              <div style={{ borderTop: '1px solid #EAF1FA', paddingTop: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 14, color: '#64748B' }}>
                     {isSeries
                       ? `Estimated Total (${seriesCount} shifts)`
                       : `Estimated Total (${form.duration}h × ${fmt(form.payRate)})`}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{fmt(isSeries ? seriesEstimated : estimatedTotal)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>{fmt(isSeries ? seriesEstimated : estimatedTotal)}</span>
                 </div>
                 <div
                   style={{

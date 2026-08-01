@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { payrollAPI } from '../../api.js'
 
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
 const ghostBtn = { padding: '8px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const CLASS_LABEL = { W2: 'W-2', CONTRACTOR: '1099' }
@@ -83,7 +83,7 @@ export default function PayrollHistoryPage({ onNavigate }) {
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Payroll History</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>Payroll History</h1>
           <div style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Every payroll run you've exported. Edit the invoice # or delete a run.</div>
         </div>
         <button style={ghostBtn} onClick={() => onNavigate('payroll')}>
@@ -104,7 +104,7 @@ export default function PayrollHistoryPage({ onNavigate }) {
         <div style={{ ...card, color: '#64748B' }}>No payroll runs yet. Build and export one from the Payroll Builder.</div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '10px 16px', borderBottom: '1px solid #DCE8F7', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <div>Pay Period</div>
             <div>System</div>
             <div>Class</div>
@@ -124,9 +124,9 @@ export default function PayrollHistoryPage({ onNavigate }) {
 
             return (
               <React.Fragment key={run.id}>
-                <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '12px 16px', borderBottom: isEditing || isConfirming ? 'none' : '1px solid #F1F5F9', alignItems: 'center', fontSize: 13, background: isEditing || isConfirming ? '#FAFBFF' : '#fff' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '12px 16px', borderBottom: isEditing || isConfirming ? 'none' : '1px solid #EAF1FA', alignItems: 'center', fontSize: 13, background: isEditing || isConfirming ? '#FAFBFF' : '#fff' }}>
                   <div>
-                    <div style={{ color: '#0F172A', fontWeight: 600 }}>
+                    <div style={{ color: '#10233F', fontWeight: 600 }}>
                       {run.periodStart?.slice(0, 10)} — {run.periodEnd?.slice(0, 10)}
                     </div>
                     {run.invoiceNumber && !isEditing && (
@@ -188,7 +188,7 @@ export default function PayrollHistoryPage({ onNavigate }) {
 
                 {/* Edit panel */}
                 {isEditing && (
-                  <div style={{ padding: '0 16px 14px', borderBottom: '1px solid #F1F5F9', background: '#FAFBFF', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ padding: '0 16px 14px', borderBottom: '1px solid #EAF1FA', background: '#FAFBFF', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <label style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Invoice #</label>
                     <input
                       autoFocus
@@ -204,7 +204,7 @@ export default function PayrollHistoryPage({ onNavigate }) {
 
                 {/* Delete confirmation panel */}
                 {isConfirming && (
-                  <div style={{ padding: '0 16px 14px', borderBottom: '1px solid #F1F5F9', background: '#FFF8F8', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ padding: '0 16px 14px', borderBottom: '1px solid #EAF1FA', background: '#FFF8F8', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 600 }}>Delete this payroll run?</span>
                     <span style={{ fontSize: 12, color: '#64748B' }}>The stored CSV and all line items will be permanently removed.</span>
                   </div>

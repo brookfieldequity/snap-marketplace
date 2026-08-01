@@ -48,15 +48,15 @@ function shiftISO(iso, delta) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const inputStyle = { padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#fff', boxSizing: 'border-box' }
+const inputStyle = { padding: '9px 12px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F', background: '#fff', boxSizing: 'border-box' }
 
 function Badge({ bg, color, text }) {
   return <span style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: `1px solid ${color}33` }}>{text}</span>
 }
 
-function Stat({ label, value, color = '#0F172A' }) {
+function Stat({ label, value, color = '#10233F' }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '10px 16px', minWidth: 78, textAlign: 'center' }}>
+    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #DCE8F7', padding: '10px 16px', minWidth: 78, textAlign: 'center' }}>
       <div style={{ fontSize: 22, fontWeight: 800, color, letterSpacing: '-0.02em' }}>{value}</div>
       <div style={{ fontSize: 10, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
     </div>
@@ -73,7 +73,7 @@ function ProviderLine({ a, dot, note }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
       <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot, flexShrink: 0 }} />
-      <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+      <span style={{ fontSize: 13, color: '#10233F', fontWeight: 600 }}>
         {EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName || 'Provider'}
       </span>
       {note && <span style={{ fontSize: 10.5, color: '#94A3B8' }}>{note}</span>}
@@ -97,9 +97,9 @@ function LocationCard({ row }) {
   const nonClinical = assignments.filter((a) => a.role === 'NON_CLINICAL')
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', padding: '16px 18px', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1 }}>{row.location}</div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: '#10233F', flex: 1 }}>{row.location}</div>
         {cov && <Badge {...cov} />}
         <span style={{ fontSize: 11, fontWeight: 700, color: filled >= roomCount ? '#16A34A' : '#DC2626' }}>{filled}/{roomCount} rooms</span>
       </div>
@@ -138,7 +138,7 @@ function LocationCard({ row }) {
         const release = orderForRelease(assignments.filter((a) => a.rosterId))
         if (release.length === 0) return null
         return (
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #E2E8F0' }}>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCE8F7' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               🚪 Release order
             </div>
@@ -148,12 +148,12 @@ function LocationCard({ row }) {
                 const isSup = a.role === 'SUPERVISING_MD' || a.roomNumber >= 900
                 return (
                   <div key={a.id || a.roomNumber} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 20, height: 20, borderRadius: '50%', background: isLast ? '#0F172A' : '#2563EB', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-                    <span style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 600 }}>
+                    <span style={{ width: 20, height: 20, borderRadius: '50%', background: isLast ? '#10233F' : '#2563EB', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                    <span style={{ fontSize: 12.5, color: '#10233F', fontWeight: 600 }}>
                       {EMP_PREFIX[a.rosterEntry?.employmentCategory] || ''} {a.rosterEntry?.providerName || 'Provider'}
                     </span>
                     {isSup && <span style={{ fontSize: 10.5, color: '#94A3B8' }}>Supervisor</span>}
-                    {isLast && <span style={{ fontSize: 10, fontWeight: 700, color: '#0F172A' }}>closes 🔒</span>}
+                    {isLast && <span style={{ fontSize: 10, fontWeight: 700, color: '#10233F' }}>closes 🔒</span>}
                   </div>
                 )
               })}
@@ -199,14 +199,14 @@ export default function DailyViewPage({ onNavigate }) {
   const gaps = Math.max(0, totalRooms - filled)
   const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
-  const navBtn = { padding: '8px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }
+  const navBtn = { padding: '8px 14px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 1400, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setDateStr(shiftISO(dateStr, -1))} style={navBtn}>‹</button>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', minWidth: 270, textAlign: 'center' }}>{label}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#10233F', minWidth: 270, textAlign: 'center' }}>{label}</div>
           <button onClick={() => setDateStr(shiftISO(dateStr, 1))} style={navBtn}>›</button>
           <input type="date" value={dateStr} onChange={(e) => e.target.value && setDateStr(e.target.value)} style={inputStyle} />
           <button onClick={() => setDateStr(todayISO())} style={{ padding: '9px 16px', background: '#EFF6FF', border: '1px solid #A5B4FC', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: '#1D4ED8' }}>Today</button>
@@ -222,10 +222,10 @@ export default function DailyViewPage({ onNavigate }) {
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading…</div>}
 
       {!loading && dayRows.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '70px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+        <div style={{ textAlign: 'center', padding: '70px 40px', background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7' }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>🗓️</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Nothing scheduled for this day.</div>
-          <button onClick={() => onNavigate && onNavigate('schedule')} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Open Schedule Builder</button>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#10233F', marginBottom: 8 }}>Nothing scheduled for this day.</div>
+          <button onClick={() => onNavigate && onNavigate('schedule')} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Open Schedule Builder</button>
         </div>
       )}
 

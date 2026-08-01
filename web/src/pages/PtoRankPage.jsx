@@ -81,7 +81,7 @@ export default function PtoRankPage({ token }) {
     <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 20px', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 13, color: '#2563EB', fontWeight: 700 }}>🌴 {facility.name} · {win.year} PTO Selection</div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '6px 0 2px' }}>Rank your PTO weeks, {provider.name}</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: '6px 0 2px' }}>Rank your PTO weeks, {provider.name}</h1>
         <p style={{ fontSize: 14, color: '#64748B', margin: 0 }}>
           Pick up to <strong>{maxRanks}</strong> weeks you'd like off, then order them — #1 is your most wanted.
           Weeks are awarded by rank and seniority within each week's limit.
@@ -120,12 +120,12 @@ export default function PtoRankPage({ token }) {
         </div>
 
         {/* Ranked summary */}
-        <div style={{ position: 'sticky', top: 20, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Your ranking ({ranked.length}/{maxRanks})</div>
+        <div style={{ position: 'sticky', top: 20, background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 14, padding: 18 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>Your ranking ({ranked.length}/{maxRanks})</div>
           {ranked.length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', padding: '12px 0' }}>Tap weeks on the left to add them.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
             {ranked.map((w, i) => (
-              <div key={w} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 9, padding: '7px 10px' }}>
+              <div key={w} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #DCE8F7', borderRadius: 9, padding: '7px 10px' }}>
                 <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#2563EB', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#334155' }}>{weekLabel(w)}</span>
                 {editable && <>
@@ -148,7 +148,7 @@ export default function PtoRankPage({ token }) {
 }
 
 function miniBtn(disabled) {
-  return { width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', cursor: disabled ? 'not-allowed' : 'pointer', color: '#64748B', fontSize: 13, fontWeight: 700, opacity: disabled ? 0.4 : 1, flexShrink: 0 }
+  return { width: 26, height: 26, borderRadius: 7, border: '1px solid #DCE8F7', background: '#fff', cursor: disabled ? 'not-allowed' : 'pointer', color: '#64748B', fontSize: 13, fontWeight: 700, opacity: disabled ? 0.4 : 1, flexShrink: 0 }
 }
 function Centered({ children }) {
   return <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontFamily: 'system-ui, sans-serif', padding: 20 }}>{children}</div>

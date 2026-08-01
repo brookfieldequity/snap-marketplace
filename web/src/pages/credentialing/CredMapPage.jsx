@@ -100,7 +100,7 @@ function PacketPreview({ packet, passportDetail, onBack }) {
   // (or no data) for the canonical type, falling back to the generic line.
   const S = passportDetail?.sections
   const prov = passportDetail?.provider
-  const rowStyle = { fontSize: 12.5, color: '#0F172A', padding: '2px 0' }
+  const rowStyle = { fontSize: 12.5, color: '#10233F', padding: '2px 0' }
   const subStyle = { color: '#64748B' }
   // Provenance is stated ONCE in the footer (blanket "unless otherwise
   // noted" rule) — per-item stamps read as noise on a real packet.
@@ -217,7 +217,7 @@ function PacketPreview({ packet, passportDetail, onBack }) {
     if (t.status === 'AUTO_FILLED' && cred) {
       return (
         <div>
-          <div style={{ fontSize: 13.5, color: '#0F172A' }}>
+          <div style={{ fontSize: 13.5, color: '#10233F' }}>
             {cred.identifier && <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{cred.identifier}</span>}
             {cred.identifier && (cred.expirationDate || cred.status) && <span style={{ color: '#94A3B8' }}> · </span>}
             {cred.expirationDate && <span>expires {fmtShortDate(cred.expirationDate)}</span>}
@@ -256,24 +256,24 @@ function PacketPreview({ packet, passportDetail, onBack }) {
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>← Back to workspace</button>
         <div style={{ flex: 1 }} />
-        <button onClick={() => window.print()} style={{ padding: '9px 16px', background: '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+        <button onClick={() => window.print()} style={{ padding: '9px 16px', background: '#10233F', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
           🖨 Print / Save PDF
         </button>
       </div>
 
       {/* The paper */}
-      <div id="packet-preview" style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 4, boxShadow: '0 10px 40px rgba(15,23,42,0.08)', padding: '44px 52px' }}>
+      <div id="packet-preview" style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 4, boxShadow: '0 10px 40px rgba(15,23,42,0.08)', padding: '44px 52px' }}>
         {/* Letterhead */}
         <div style={{ borderBottom: '3px solid #0F172A', paddingBottom: 16, marginBottom: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>{packet.map?.name}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#10233F' }}>{packet.map?.name}</div>
               <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
                 Credentialing {packet.cycle === 'RENEWAL' ? 'Reappointment' : 'Initial Appointment'} Packet
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
               <div style={{ fontSize: 12, color: '#64748B', fontFamily: 'monospace' }}>NPI {packet.npi}</div>
             </div>
           </div>
@@ -285,7 +285,7 @@ function PacketPreview({ packet, passportDetail, onBack }) {
 
         {groups.map((g) => (
           <div key={g.section + g.tasks[0].id} style={{ marginBottom: 22, breakInside: 'avoid' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '1px solid #E2E8F0', paddingBottom: 5, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#10233F', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '1px solid #DCE8F7', paddingBottom: 5, marginBottom: 10 }}>
               {g.section}
             </div>
             {g.tasks.map((t) => (
@@ -300,7 +300,7 @@ function PacketPreview({ packet, passportDetail, onBack }) {
           </div>
         ))}
 
-        <div style={{ marginTop: 28, paddingTop: 12, borderTop: '1px solid #E2E8F0', fontSize: 10.5, color: '#94A3B8' }}>
+        <div style={{ marginTop: 28, paddingTop: 12, borderTop: '1px solid #DCE8F7', fontSize: 10.5, color: '#94A3B8' }}>
           Unless otherwise noted, all information and documents in this packet were populated directly from the provider's verified SNAP Passport, read live at the time of generation. Coordinator-provided, waived, and pending items are noted individually above.
         </div>
       </div>
@@ -374,7 +374,7 @@ function StickyNotesStrip({ notes, onAdd, onDone, onDelete }) {
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>📌 Reminders</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#10233F' }}>📌 Reminders</span>
         <button
           onClick={() => setAdding((v) => !v)}
           style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -400,7 +400,7 @@ function StickyNotesStrip({ notes, onAdd, onDone, onDelete }) {
                   <button key={c} onClick={() => setColor(c)} style={{ width: 14, height: 14, borderRadius: 3, background: c, border: color === c ? '2px solid #334155' : '1px solid rgba(0,0,0,0.15)', cursor: 'pointer', padding: 0 }} />
                 ))}
               </div>
-              <button onClick={submit} style={{ fontSize: 11, fontWeight: 800, background: '#0F172A', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>Stick it</button>
+              <button onClick={submit} style={{ fontSize: 11, fontWeight: 800, background: '#10233F', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>Stick it</button>
             </div>
           </div>
         )}
@@ -481,7 +481,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={busy ? undefined : onClose}>
       <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: '20px 24px 0' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>New Facility Application Template</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#10233F' }}>New Facility Application Template</div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 16 }}>
             Set up this facility's application once — every provider's packet populates from the passport.
           </div>
@@ -494,7 +494,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
           {busy ? (
             <div style={{ textAlign: 'center', padding: '30px 0' }}>
               <div style={{ fontSize: 34 }}>🔍</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F', marginTop: 10 }}>
                 {mode === 'upload' ? 'Reading the application…' : 'Setting up…'}
               </div>
               {mode === 'upload' && (
@@ -525,7 +525,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                   >
                     <div style={{ fontSize: 28 }}>📥</div>
                     {files.length > 0 ? (
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F', marginTop: 8 }}>
                         {files.map((f) => f.name).join(', ')}
                       </div>
                     ) : (
@@ -542,7 +542,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Template name (optional — SNAP reads it off the application)"
-                    style={{ width: '100%', marginTop: 14, padding: '11px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+                    style={{ width: '100%', marginTop: 14, padding: '11px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#10233F', boxSizing: 'border-box', outline: 'none' }}
                   />
                 </>
               )}
@@ -557,7 +557,7 @@ function NewMapModal({ aiAvailable, onClose, onAnalyze, onCreate }) {
                     onChange={(e) => setName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
                     placeholder='e.g. "Beacon Harbor ASC — Medical Staff Application"'
-                    style={{ width: '100%', padding: '11px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', boxSizing: 'border-box', outline: 'none' }}
+                    style={{ width: '100%', padding: '11px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#10233F', boxSizing: 'border-box', outline: 'none' }}
                   />
                 </>
               )}
@@ -619,14 +619,14 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={busy ? undefined : onClose}>
       <div style={{ width: '100%', maxWidth: 460, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: 24 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>⚡ Generate a packet</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#10233F' }}>⚡ Generate a packet</div>
         <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, marginBottom: 14 }}>
           {map.name} — SNAP fills every passport-covered item from the provider's passport and opens tasks for the rest.
         </div>
         {busy ? (
           <div style={{ textAlign: 'center', padding: '26px 0' }}>
             <div style={{ fontSize: 30 }}>⚡</div>
-            <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0F172A', marginTop: 8 }}>Reading {selected?.providerName}'s passport…</div>
+            <div style={{ fontSize: 14.5, fontWeight: 800, color: '#10233F', marginTop: 8 }}>Reading {selected?.providerName}'s passport…</div>
           </div>
         ) : (
           <>
@@ -635,9 +635,9 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search the roster…"
-              style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 13.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none', marginBottom: 10 }}
+              style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 13.5, color: '#10233F', boxSizing: 'border-box', outline: 'none', marginBottom: 10 }}
             />
-            <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: 10 }}>
+            <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #EAF1FA', borderRadius: 10 }}>
               {roster === null ? (
                 <div style={{ padding: 14, fontSize: 13, color: '#94A3B8' }}>Loading roster…</div>
               ) : filtered.length === 0 ? (
@@ -648,11 +648,11 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
                   onClick={() => setSelected(r)}
                   style={{
                     padding: '9px 13px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: selected?.id === r.id ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F8FAFC',
+                    background: selected?.id === r.id ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F1F6FC',
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{r.providerName}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>{r.providerName}</div>
                     <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{r.providerType || ''} · NPI {r.npi}</div>
                   </div>
                   {r.passport?.hasGrant
@@ -665,7 +665,7 @@ function GeneratePacketModal({ map, onClose, onGenerated }) {
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
               <label style={{ fontSize: 12.5, color: '#64748B', fontWeight: 600 }}>Cycle</label>
-              <select value={cycle} onChange={(e) => setCycle(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff' }}>
+              <select value={cycle} onChange={(e) => setCycle(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#fff' }}>
                 <option value="INITIAL">Initial appointment</option>
                 <option value="RENEWAL">Renewal / reappointment</option>
               </select>
@@ -799,16 +799,16 @@ function PacketWorkspace({ packetId, onBack }) {
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← {packet.map?.name || 'Application'}</button>
 
       {/* Header */}
-      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
+      <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#0F172A' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#10233F' }}>{packet.providerName || `NPI ${packet.npi}`}</div>
             <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
               NPI {packet.npi} · {packet.cycle === 'RENEWAL' ? 'Renewal' : 'Initial appointment'} · generated {fmtShortDate(packet.createdAt)}
             </div>
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: ps.bg, color: ps.fg }}>{ps.label}</span>
-          <button onClick={() => setShowPreview(true)} style={{ padding: '9px 16px', background: '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+          <button onClick={() => setShowPreview(true)} style={{ padding: '9px 16px', background: '#10233F', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             👁 Preview packet
           </button>
           {openSignatures.length > 0 && (
@@ -819,7 +819,7 @@ function PacketWorkspace({ packetId, onBack }) {
           <button onClick={renderNative} disabled={rendering} title="SNAP builds its own clean digital form of the facility's application, filled from the verified passport — always perfect, nothing to place" style={{ padding: '9px 16px', background: '#16A34A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 800, cursor: rendering ? 'wait' : 'pointer' }}>
             {rendering ? 'Building form…' : '📋 Generate SNAP’s digital form'}
           </button>
-          <button onClick={renderPdf} disabled={rendering} title="Fallback: type the provider's passport data onto the facility's own PDF — only for facilities that require their exact form" style={{ padding: '9px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: rendering ? 'wait' : 'pointer' }}>
+          <button onClick={renderPdf} disabled={rendering} title="Fallback: type the provider's passport data onto the facility's own PDF — only for facilities that require their exact form" style={{ padding: '9px 14px', background: '#F1F5F9', border: '1px solid #DCE8F7', borderRadius: 10, color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: rendering ? 'wait' : 'pointer' }}>
             {rendering ? '…' : '📄 Fill facility PDF'}
           </button>
           {data.generatedDoc?.token && (
@@ -871,7 +871,7 @@ function PacketWorkspace({ packetId, onBack }) {
       {signLink && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSignLink(null)}>
           <div style={{ width: '100%', maxWidth: 460, background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: 24 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>✍️ Signature link ready</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#10233F' }}>✍️ Signature link ready</div>
             <div style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
               {signLink.emailedTo
                 ? <>Emailed to <strong>{signLink.emailedTo}</strong> — one tap, they sign all {signLink.itemCount} item{signLink.itemCount === 1 ? '' : 's'} on their phone, and this board updates automatically.</>
@@ -881,7 +881,7 @@ function PacketWorkspace({ packetId, onBack }) {
               <input readOnly value={signLink.link} onFocus={(e) => e.target.select()} style={{ flex: 1, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 12, color: '#475569', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace' }} />
               <button
                 onClick={() => { navigator.clipboard?.writeText(signLink.link); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-                style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#0F172A', border: 'none', borderRadius: 10, color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{ padding: '10px 16px', background: copied ? '#16A34A' : '#10233F', border: 'none', borderRadius: 10, color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
                 {copied ? 'Copied ✓' : 'Copy'}
               </button>
@@ -903,11 +903,11 @@ function PacketWorkspace({ packetId, onBack }) {
             // lighter summary the generate pass stored on the task.
             const cred = (t.item.credentialType && detailByType[PASSPORT_TYPE_UI[t.item.credentialType]]) || t.passportCredential
             return (
-              <div key={t.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyTask === t.id ? 0.5 : 1 }}>
+              <div key={t.id} style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyTask === t.id ? 0.5 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}>{st.icon} {st.label}</span>
                   <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: complete ? '#64748B' : '#0F172A' }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: complete ? '#64748B' : '#10233F' }}>
                       {t.item.label}
                       {!t.item.required && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: '#94A3B8' }}>OPTIONAL</span>}
                       {t.item.fulfillment === 'SIGNATURE' && !t.item.esignOk && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 800, color: '#B91C1C' }}>✒️ WET INK</span>}
@@ -925,7 +925,7 @@ function PacketWorkspace({ packetId, onBack }) {
                   </div>
                   {!complete && (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <button onClick={() => setTask(t, { assignee: t.assignee === 'PROVIDER' ? 'COORDINATOR' : 'PROVIDER' })} title="Who owes this item" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, border: '1px solid #E2E8F0', background: t.assignee === 'PROVIDER' ? '#EFF6FF' : '#F8FAFC', color: t.assignee === 'PROVIDER' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
+                      <button onClick={() => setTask(t, { assignee: t.assignee === 'PROVIDER' ? 'COORDINATOR' : 'PROVIDER' })} title="Who owes this item" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, border: '1px solid #DCE8F7', background: t.assignee === 'PROVIDER' ? '#EFF6FF' : '#F8FAFC', color: t.assignee === 'PROVIDER' ? '#2563EB' : '#64748B', cursor: 'pointer' }}>
                         {t.assignee === 'PROVIDER' ? '👤 Provider' : '🗂 Coordinator'}
                       </button>
                       <button onClick={() => setTask(t, { status: 'DONE' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: 'none', background: '#DCFCE7', color: '#166534', cursor: 'pointer' }}>Mark done</button>
@@ -933,7 +933,7 @@ function PacketWorkspace({ packetId, onBack }) {
                     </div>
                   )}
                   {complete && t.status !== 'AUTO_FILLED' && (
-                    <button onClick={() => setTask(t, { status: t.item.fulfillment === 'SIGNATURE' ? 'NEEDS_SIGNATURE' : t.item.fulfillment === 'DOCUMENT' ? 'NEEDS_DOCUMENT' : 'NEEDS_ACTION' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#64748B', cursor: 'pointer' }}>Reopen</button>
+                    <button onClick={() => setTask(t, { status: t.item.fulfillment === 'SIGNATURE' ? 'NEEDS_SIGNATURE' : t.item.fulfillment === 'DOCUMENT' ? 'NEEDS_DOCUMENT' : 'NEEDS_ACTION' })} style={{ fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8, border: '1px solid #DCE8F7', background: '#fff', color: '#64748B', cursor: 'pointer' }}>Reopen</button>
                   )}
                 </div>
               </div>
@@ -1024,7 +1024,7 @@ function RenewalsView({ maps, onOpenPacket }) {
   }
 
   const stat = (label, count, color) => (
-    <div style={{ flex: 1, minWidth: 120, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px' }}>
+    <div style={{ flex: 1, minWidth: 120, background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px' }}>
       <div style={{ fontSize: 26, fontWeight: 900, color }}>{count}</div>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
     </div>
@@ -1043,23 +1043,23 @@ function RenewalsView({ maps, onOpenPacket }) {
         {stat('Overdue', buckets.OVERDUE.length, buckets.OVERDUE.length ? '#DC2626' : '#CBD5E1')}
         {stat('Due ≤ 90 days', buckets.SOON.length, buckets.SOON.length ? '#D97706' : '#CBD5E1')}
         {stat('Up to date', buckets.UPCOMING.length, '#16A34A')}
-        {stat('Tracked', appointments.length, '#0F172A')}
+        {stat('Tracked', appointments.length, '#10233F')}
       </div>
 
       {/* Track a provider (backfill) */}
       {adding ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
-          <select value={addMapId} onChange={(e) => setAddMapId(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
+          <select value={addMapId} onChange={(e) => setAddMapId(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#fff', maxWidth: 220 }}>
             <option value="">Facility application…</option>
             {confirmedMaps.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <select value={addNpi} onChange={(e) => setAddNpi(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', maxWidth: 220 }}>
+          <select value={addNpi} onChange={(e) => setAddNpi(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#fff', maxWidth: 220 }}>
             <option value="">Provider…</option>
             {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
           </select>
           <label style={{ fontSize: 12, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             Appointed
-            <input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} style={{ padding: '7px 9px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5 }} />
+            <input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} style={{ padding: '7px 9px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 12.5 }} />
           </label>
           <button onClick={add} style={{ padding: '8px 16px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}>Track</button>
           <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
@@ -1075,7 +1075,7 @@ function RenewalsView({ maps, onOpenPacket }) {
       {appointments.length === 0 && (
         <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '40px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 32 }}>🕰️</div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginTop: 8 }}>No renewal clocks yet</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F', marginTop: 8 }}>No renewal clocks yet</div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
             Providers land here when a packet is marked Sent, or track one manually above — record their appointment date once and SNAP watches the clock forever.
           </div>
@@ -1086,18 +1086,18 @@ function RenewalsView({ maps, onOpenPacket }) {
         <div key={key} style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, color, marginBottom: 8 }}>{title} ({buckets[key].length})</div>
           {buckets[key].map((a) => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: '#fff', border: '1px solid #E2E8F0', borderLeft: `4px solid ${color}`, borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyId === a.id ? 0.5 : 1 }}>
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: '#fff', border: '1px solid #DCE8F7', borderLeft: `4px solid ${color}`, borderRadius: 10, padding: '10px 14px', marginBottom: 8, opacity: busyId === a.id ? 0.5 : 1 }}>
               <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{a.providerName || `NPI ${a.npi}`}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>{a.providerName || `NPI ${a.npi}`}</div>
                 <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{a.map?.name}{a.map?.recredCycleMonths ? ` · ${a.map.recredCycleMonths}-month cycle` : ''}</div>
               </div>
               <label style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Appointed
-                <input type="date" defaultValue={isoDay(a.appointedAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.appointedAt)) patch(a, { appointedAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12 }} />
+                <input type="date" defaultValue={isoDay(a.appointedAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.appointedAt)) patch(a, { appointedAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 12 }} />
               </label>
               <label style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Next due
-                <input type="date" defaultValue={isoDay(a.nextDueAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.nextDueAt)) patch(a, { nextDueAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12 }} />
+                <input type="date" defaultValue={isoDay(a.nextDueAt)} onBlur={(e) => { if (e.target.value !== isoDay(a.nextDueAt)) patch(a, { nextDueAt: e.target.value || null }) }} style={{ padding: '6px 8px', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 12 }} />
               </label>
               {a._days !== null && (
                 <span style={{ fontSize: 11.5, fontWeight: 800, color, whiteSpace: 'nowrap', width: 76, textAlign: 'center' }}>
@@ -1174,7 +1174,7 @@ function AnvilSetup({ mapId, map }) {
   }
 
   return (
-    <div style={{ borderTop: '1px solid #E2E8F0', padding: '14px 24px', background: '#FAFAFF' }}>
+    <div style={{ borderTop: '1px solid #DCE8F7', padding: '14px 24px', background: '#FAFAFF' }}>
       <div style={{ fontSize: 13, fontWeight: 800, color: '#5B21B6' }}>🖇 Anvil template (flat / print-to-fill forms)</div>
       <div style={{ fontSize: 11.5, color: '#64748B', margin: '3px 0 10px' }}>
         For forms that aren't fillable PDFs. Build the template once in Anvil, paste its ID here, and map each Anvil field alias to passport data. When set, this form fills via Anvil for every provider.
@@ -1183,13 +1183,13 @@ function AnvilSetup({ mapId, map }) {
         value={castEid}
         onChange={(e) => { setCastEid(e.target.value); setSaved(false) }}
         placeholder="Anvil PDF Template ID (castEid)"
-        style={{ width: '100%', padding: '8px 11px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, color: '#0F172A', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace', marginBottom: 10 }}
+        style={{ width: '100%', padding: '8px 11px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, color: '#10233F', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace', marginBottom: 10 }}
       />
       {rows.map((r, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <input value={r.alias} onChange={(e) => setRow(i, { alias: e.target.value })} placeholder="Anvil field alias" style={{ flex: 1, padding: '6px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontFamily: 'monospace' }} />
+          <input value={r.alias} onChange={(e) => setRow(i, { alias: e.target.value })} placeholder="Anvil field alias" style={{ flex: 1, padding: '6px 9px', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 12, fontFamily: 'monospace' }} />
           <span style={{ color: '#94A3B8' }}>→</span>
-          <select value={r.key} onChange={(e) => setRow(i, { key: e.target.value })} style={{ flex: 1, padding: '6px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, background: '#fff' }}>
+          <select value={r.key} onChange={(e) => setRow(i, { key: e.target.value })} style={{ flex: 1, padding: '6px 9px', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 12, background: '#fff' }}>
             {Object.entries(VALUE_KEY_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
           </select>
           <button onClick={() => setRows((rr) => rr.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#CBD5E1', fontSize: 15, cursor: 'pointer', fontWeight: 700 }}>×</button>
@@ -1252,10 +1252,10 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
       <div style={{ width: '100%', maxWidth: 760, maxHeight: '88vh', background: '#fff', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #DCE8F7' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>Facility PDF — what SNAP types where</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#10233F' }}>Facility PDF — what SNAP types where</div>
               <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>
                 {!data ? 'Reading the facility form…'
                   : data.cleanPacket ? 'No facility form uploaded — SNAP produces a clean, complete packet instead.'
@@ -1269,7 +1269,7 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
           </div>
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Preview values for</span>
-            <select value={previewNpi} onChange={(e) => setPreviewNpi(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, color: '#0F172A', background: '#fff' }}>
+            <select value={previewNpi} onChange={(e) => setPreviewNpi(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 12.5, color: '#10233F', background: '#fff' }}>
               <option value="">— no provider —</option>
               {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
             </select>
@@ -1302,9 +1302,9 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
                 {data.fields.map((f) => {
                   const cur = edits[f.name] ?? f.source
                   return (
-                    <tr key={f.name} style={{ borderTop: '1px solid #F1F5F9' }}>
+                    <tr key={f.name} style={{ borderTop: '1px solid #EAF1FA' }}>
                       <td style={{ padding: '7px 6px', maxWidth: 260 }}>
-                        <div style={{ fontWeight: 700, color: '#0F172A' }}>{f.label || <span style={{ color: '#94A3B8', fontWeight: 400 }}>(no label)</span>}</div>
+                        <div style={{ fontWeight: 700, color: '#10233F' }}>{f.label || <span style={{ color: '#94A3B8', fontWeight: 400 }}>(no label)</span>}</div>
                         <div style={{ fontSize: 10.5, color: '#CBD5E1', fontFamily: 'monospace' }}>{f.name}</div>
                       </td>
                       <td style={{ padding: '7px 6px' }}>
@@ -1325,7 +1325,7 @@ function FieldMappingPanel({ mapId, map, roster, onClose }) {
           )}
         </div>
 
-        <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #DCE8F7', display: 'flex', alignItems: 'center', gap: 12 }}>
           {error && <span style={{ color: '#DC2626', fontSize: 12.5 }}>{error}</span>}
           {saved && <span style={{ color: '#16A34A', fontSize: 12.5, fontWeight: 700 }}>Saved ✓</span>}
           <div style={{ flex: 1 }} />
@@ -1378,10 +1378,10 @@ function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, d
             onChange={(e) => setLabel(e.target.value)}
             onBlur={commitLabel}
             onKeyDown={(e) => { if (e.key === 'Enter') commitLabel(); if (e.key === 'Escape') { setLabel(item.label); setEditingLabel(false) } }}
-            style={{ width: '100%', fontSize: 13.5, fontWeight: 600, color: '#0F172A', border: '1px solid #2563EB', borderRadius: 6, padding: '3px 8px', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', fontSize: 13.5, fontWeight: 600, color: '#10233F', border: '1px solid #2563EB', borderRadius: 6, padding: '3px 8px', outline: 'none', boxSizing: 'border-box' }}
           />
         ) : (
-          <div onClick={() => setEditingLabel(true)} title="Click to edit" style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}>
+          <div onClick={() => setEditingLabel(true)} title="Click to edit" style={{ fontSize: 13.5, fontWeight: 600, color: '#10233F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}>
             {item.aiConfidence && (
               <span title={`AI confidence: ${item.aiConfidence}`} style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 999, background: CONFIDENCE_DOT[item.aiConfidence] || '#94A3B8', marginRight: 7, verticalAlign: 'middle' }} />
             )}
@@ -1423,7 +1423,7 @@ function ItemRow({ item, taxonomy, onUpdate, onDelete, dragHandlers, dragging, d
         value={item.canonicalType || 'OTHER'}
         onChange={(e) => onUpdate({ canonicalType: e.target.value })}
         title="Canonical requirement type — drives the passport auto-fill wiring"
-        style={{ fontSize: 11.5, color: '#64748B', padding: '4px 6px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', cursor: 'pointer', maxWidth: 150 }}
+        style={{ fontSize: 11.5, color: '#64748B', padding: '4px 6px', borderRadius: 8, border: '1px solid #DCE8F7', background: '#F8FAFC', cursor: 'pointer', maxWidth: 150 }}
       >
         {taxonomy.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
       </select>
@@ -1566,13 +1566,13 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 14 }}>← All applications</button>
 
       {/* Header card */}
-      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
+      <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <input
             value={map.name}
             onChange={(e) => setMap({ ...map, name: e.target.value })}
             onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== map.name) patchMap({ name: e.target.value.trim() }) }}
-            style={{ flex: 1, minWidth: 240, fontSize: 19, fontWeight: 800, color: '#0F172A', border: 'none', outline: 'none', background: 'transparent' }}
+            style={{ flex: 1, minWidth: 240, fontSize: 19, fontWeight: 800, color: '#10233F', border: 'none', outline: 'none', background: 'transparent' }}
           />
           <StatusPill status={map.status} />
           <button
@@ -1594,7 +1594,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
             </button>
           )}
           {map.sourceDocName && (
-            <button onClick={() => setShowFieldMap(true)} title="Facility PDF fallback: see and correct what SNAP types onto the facility's own PDF" style={{ padding: '9px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, color: '#94A3B8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={() => setShowFieldMap(true)} title="Facility PDF fallback: see and correct what SNAP types onto the facility's own PDF" style={{ padding: '9px 14px', background: '#fff', border: '1px solid #DCE8F7', borderRadius: 10, color: '#94A3B8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
               🧩 Facility PDF setup
             </button>
           )}
@@ -1618,7 +1618,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
               placeholder="—"
               onChange={(e) => setMap({ ...map, recredCycleMonths: e.target.value === '' ? null : Number(e.target.value) })}
               onBlur={(e) => patchMap({ recredCycleMonths: e.target.value === '' ? null : Number(e.target.value) })}
-              style={{ width: 54, padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', outline: 'none' }}
+              style={{ width: 54, padding: '5px 8px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', outline: 'none' }}
             />
             months
           </label>
@@ -1627,7 +1627,7 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
             <select
               value={map.outputMode}
               onChange={(e) => patchMap({ outputMode: e.target.value })}
-              style={{ padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff', cursor: 'pointer' }}
+              style={{ padding: '5px 8px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#fff', cursor: 'pointer' }}
             >
               {OUTPUT_MODES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
             </select>
@@ -1666,14 +1666,14 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
 
       {/* Packets off this map */}
       {packets.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '14px 20px', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>📦 Provider packets</div>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '14px 20px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 8 }}>📦 Provider packets</div>
           {packets.map((p) => {
             const ps = PACKET_STATUS[p.status] || PACKET_STATUS.IN_PROGRESS
             return (
-              <div key={p.id} onClick={() => onOpenPacket(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', borderTop: '1px solid #F8FAFC', cursor: 'pointer' }}>
+              <div key={p.id} onClick={() => onOpenPacket(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', borderTop: '1px solid #F1F6FC', cursor: 'pointer' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{p.providerName || `NPI ${p.npi}`}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>{p.providerName || `NPI ${p.npi}`}</span>
                   <span style={{ fontSize: 11.5, color: '#94A3B8', marginLeft: 8 }}>{p.cycle === 'RENEWAL' ? 'Renewal' : 'Initial'} · {fmtShortDate(p.createdAt)}</span>
                 </div>
                 <div style={{ width: 120, height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
@@ -1731,9 +1731,9 @@ function MapBuilder({ mapId, taxonomy, onBack, onChanged, onOpenPacket, autoOpen
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') setAddOpen(false) }}
             placeholder="Requirement as the facility words it…"
-            style={{ flex: 1, fontSize: 13.5, border: 'none', outline: 'none', color: '#0F172A' }}
+            style={{ flex: 1, fontSize: 13.5, border: 'none', outline: 'none', color: '#10233F' }}
           />
-          <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ fontSize: 12, color: '#64748B', padding: '5px 8px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+          <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ fontSize: 12, color: '#64748B', padding: '5px 8px', borderRadius: 8, border: '1px solid #DCE8F7', background: '#F8FAFC' }}>
             {taxonomy.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <button onClick={addItem} style={{ padding: '7px 14px', background: '#2563EB', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Add</button>
@@ -1845,7 +1845,7 @@ export default function CredMapPage() {
     <div style={{ padding: '28px 32px', maxWidth: 1080 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Facility Applications</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#10233F', margin: 0 }}>Facility Applications</h1>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4 }}>
             Set up each facility's application template once — then any provider's packet builds itself from the passport, renewals included.
           </div>
@@ -1858,7 +1858,7 @@ export default function CredMapPage() {
       </div>
 
       {/* Maps / Renewals tabs */}
-      <div style={{ display: 'flex', gap: 4, margin: '16px 0 0', borderBottom: '1px solid #E2E8F0' }}>
+      <div style={{ display: 'flex', gap: 4, margin: '16px 0 0', borderBottom: '1px solid #DCE8F7' }}>
         {[['maps', '📦 Facilities'], ['renewals', '🔄 Renewals']].map(([key, label]) => (
           <button
             key={key}
@@ -1896,7 +1896,7 @@ export default function CredMapPage() {
       ) : maps.length === 0 ? (
         <div style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 36 }}>🗺️</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 10 }}>No facility applications set up yet</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginTop: 10 }}>No facility applications set up yet</div>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 6, maxWidth: 440, margin: '6px auto 0' }}>
             Upload a facility's blank application and SNAP learns their whole template in a minute or two. Set it up once — it works for every provider, every renewal.
           </div>
@@ -1910,12 +1910,12 @@ export default function CredMapPage() {
             <div
               key={m.id}
               onClick={() => setOpenMapId(m.id)}
-              style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '18px 20px', cursor: 'pointer', transition: 'box-shadow 0.15s' }}
+              style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '18px 20px', cursor: 'pointer', transition: 'box-shadow 0.15s' }}
               onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(15,23,42,0.08)' }}
               onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none' }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', lineHeight: 1.3 }}>{m.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F', lineHeight: 1.3 }}>{m.name}</div>
                 <StatusPill status={m.status} />
               </div>
               <div style={{ fontSize: 12, color: '#64748B', marginTop: 6 }}>

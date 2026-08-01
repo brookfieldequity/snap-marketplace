@@ -46,7 +46,7 @@ const TIERS = [
     name: 'Enterprise',
     price: '$10,000',
     per: '/mo',
-    color: '#0F172A',
+    color: '#10233F',
     features: [
       'Unlimited usage',
       'Dedicated account manager',
@@ -137,7 +137,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
     border: '1.5px solid #E2E8F0',
     borderRadius: 10,
     fontSize: 14,
-    color: '#0F172A',
+    color: '#10233F',
     outline: 'none',
   }
 
@@ -196,7 +196,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
             <div style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>
               SNAP
             </div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#10233F', marginTop: 8 }}>
               {step === 1 ? 'Register Your Facility' : step === 2 ? 'Choose a Plan' : 'How would you like to use SNAP?'}
             </h1>
             <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
@@ -355,7 +355,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                       key={tier.id}
                       onClick={() => setSelectedTier(tier.id)}
                       style={{
-                        border: isSelected ? `2px solid #2563EB` : '2px solid #E2E8F0',
+                        border: isSelected ? `2px solid #2563EB` : '2px solid #DCE8F7',
                         borderRadius: 16,
                         padding: '28px 24px',
                         cursor: 'pointer',
@@ -386,7 +386,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                         </div>
                       )}
 
-                      <div style={{ fontWeight: 700, fontSize: 18, color: '#0F172A', marginBottom: 4 }}>
+                      <div style={{ fontWeight: 700, fontSize: 18, color: '#10233F', marginBottom: 4 }}>
                         {tier.name}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: 20 }}>
@@ -466,7 +466,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                     alignItems: 'center',
                     gap: 20,
                     padding: '24px 28px',
-                    border: '2px solid #E2E8F0',
+                    border: '2px solid #DCE8F7',
                     borderRadius: 16,
                     cursor: 'pointer',
                     background: '#fff',
@@ -485,7 +485,7 @@ export default function FacilityRegisterPage({ onLogin, onBack }) {
                 >
                   <div style={{ fontSize: 36, flexShrink: 0 }}>{option.icon}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: '#10233F', marginBottom: 4 }}>
                       {option.label}
                     </div>
                     <div style={{ fontSize: 14, color: '#64748B', lineHeight: 1.5 }}>

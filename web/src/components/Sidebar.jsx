@@ -262,7 +262,7 @@ export default function Sidebar({ activePage, onNavigate, facilityName, onLogout
     <aside
       style={{
         width: 240,
-        background: '#0F172A',
+        background: '#10233F',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,

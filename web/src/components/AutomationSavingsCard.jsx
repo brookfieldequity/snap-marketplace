@@ -77,7 +77,7 @@ export default function AutomationSavingsCard({
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#10233F', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>💰</span>
             {title}
           </div>
@@ -104,7 +104,7 @@ export default function AutomationSavingsCard({
                 fontSize: 12,
                 fontWeight: 600,
                 background: period === opt.key ? '#FFFFFF' : 'transparent',
-                color: period === opt.key ? '#0F172A' : '#64748B',
+                color: period === opt.key ? '#10233F' : '#64748B',
                 border: 'none',
                 borderRadius: 6,
                 cursor: 'pointer',

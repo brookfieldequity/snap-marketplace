@@ -130,11 +130,11 @@ function ErrorState({ title, body }) {
   return (
     <div style={{ padding: '20px 4px' }}>
       <div style={{ fontSize: 36, marginBottom: 16 }}>🙁</div>
-      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>{title}</h2>
+      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#10233F' }}>{title}</h2>
       <p style={{ marginTop: 12, fontSize: 15, color: '#374151', lineHeight: 1.6 }}>
         {body}
       </p>
-      <div style={{ marginTop: 24, padding: '12px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#64748B' }}>
+      <div style={{ marginTop: 24, padding: '12px 14px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#64748B' }}>
         Email <a href="mailto:matt@snapmedical.app" style={{ color: '#2563EB', fontWeight: 700 }}>matt@snapmedical.app</a> if you need help — he’ll sort it out fast.
       </div>
     </div>
@@ -153,7 +153,7 @@ function ClaimForm({ info, password, setPassword, confirm, setConfirm, showPwd, 
       <h1 style={styles.welcome}>Welcome to SNAP Medical, {greeting}.</h1>
       <p style={styles.subline}>
         <strong>{info.invitedByName}</strong> invited you to manage{' '}
-        <strong style={{ color: '#0F172A' }}>{info.facilityName}</strong> as {roleArticle}.
+        <strong style={{ color: '#10233F' }}>{info.facilityName}</strong> as {roleArticle}.
       </p>
       <p style={styles.subline2}>
         Set a password to continue. You’ll land right in your facility’s dashboard.
@@ -209,7 +209,7 @@ function Success({ info }) {
   return (
     <div style={{ padding: '20px 4px', textAlign: 'center' }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-      <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0F172A' }}>You’re in.</h2>
+      <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#10233F' }}>You’re in.</h2>
       <p style={{ marginTop: 12, fontSize: 15, color: '#374151', lineHeight: 1.6 }}>
         Setting up your <strong>{info.facilityName}</strong> dashboard…
       </p>
@@ -234,7 +234,7 @@ const styles = {
     background: '#fff',
     borderRadius: 18,
     boxShadow: '0 25px 50px -12px rgba(37,99,235,0.18)',
-    border: '1px solid #E2E8F0',
+    border: '1px solid #DCE8F7',
     maxWidth: 460,
     width: '100%',
     overflow: 'hidden',
@@ -256,7 +256,7 @@ const styles = {
     margin: 0,
     fontSize: 24,
     fontWeight: 800,
-    color: '#0F172A',
+    color: '#10233F',
     letterSpacing: '-0.02em',
   },
   subline: {
@@ -287,7 +287,7 @@ const styles = {
     border: '1.5px solid #E2E8F0',
     borderRadius: 9,
     fontSize: 15,
-    color: '#0F172A',
+    color: '#10233F',
     outline: 'none',
     boxSizing: 'border-box',
     marginTop: 6,
@@ -332,7 +332,7 @@ const styles = {
     fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
-    borderTop: '1px solid #F1F5F9',
+    borderTop: '1px solid #EAF1FA',
   },
   spinner: {
     display: 'inline-block',

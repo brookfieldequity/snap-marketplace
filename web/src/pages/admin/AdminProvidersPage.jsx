@@ -62,7 +62,7 @@ export default function AdminProvidersPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Providers</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Providers</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{providers.length} registered providers</p>
         </div>
       </div>
@@ -79,7 +79,7 @@ export default function AdminProvidersPage() {
             style={{
               width: '100%', padding: '10px 14px 10px 36px',
               background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 10,
-              fontSize: 14, color: '#0F172A', outline: 'none',
+              fontSize: 14, color: '#10233F', outline: 'none',
             }}
             onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
             onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')}
@@ -107,9 +107,9 @@ export default function AdminProvidersPage() {
         </select>
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1.6fr 1.1fr 1.5fr 90px 70px 80px 85px 80px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1.6fr 1.1fr 1.5fr 90px 70px 80px 85px 80px', background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
           {['Name', 'Email', 'Specialty', 'Affiliations', 'Credentialed', 'VIP', 'VIP Pts', 'License', 'Shifts'].map((h) => (
             <div key={h} style={{ padding: '12px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
@@ -142,7 +142,7 @@ export default function AdminProvidersPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1.7fr 1.6fr 1.1fr 1.5fr 90px 70px 80px 85px 80px',
-                borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
+                borderBottom: i < filtered.length - 1 ? '1px solid #EAF1FA' : 'none',
                 background: i % 2 === 0 ? '#fff' : '#FAFAFA',
               }}
             >
@@ -151,7 +151,7 @@ export default function AdminProvidersPage() {
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #1E3A8A)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                   {initial}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#10233F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {fullName}
                 </div>
               </div>
@@ -235,7 +235,7 @@ export default function AdminProvidersPage() {
               </div>
 
               {/* Shifts */}
-              <div style={{ padding: '14px 14px', fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center' }}>
+              <div style={{ padding: '14px 14px', fontSize: 14, fontWeight: 700, color: '#10233F', display: 'flex', alignItems: 'center' }}>
                 {shiftsBooked}
               </div>
             </div>

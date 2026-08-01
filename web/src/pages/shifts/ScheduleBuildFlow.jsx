@@ -339,7 +339,7 @@ function RequestOutcomes({ outcomes }) {
   const tierLabel = (n) => (n ? `T${n}` : '')
   return (
     <div style={styles.requestsBlock}>
-      <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+      <div style={{ fontWeight: 800, color: '#10233F', marginBottom: 4 }}>
         Requests honored: {honored.length}/{outcomes.length}
       </div>
       {missed.length === 0 ? (
@@ -392,7 +392,7 @@ const styles = {
   modeGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 },
   modeCard: {
     textAlign: 'left', padding: 20, background: '#fff',
-    border: '2px solid #E2E8F0', borderRadius: 12, cursor: 'pointer',
+    border: '2px solid #DCE8F7', borderRadius: 12, cursor: 'pointer',
     transition: 'all 0.15s', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, position: 'relative',
   },
   modeCardOn: { borderColor: '#2563EB', background: '#F5F3FF' },
@@ -402,7 +402,7 @@ const styles = {
   modeChecked: { fontSize: 11, fontWeight: 700, color: '#2563EB', marginTop: 4 },
   actions: { display: 'flex', justifyContent: 'flex-end', gap: 12 },
   secondaryBtn: { padding: '12px 24px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' },
-  primaryBtn: { padding: '12px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' },
+  primaryBtn: { padding: '12px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' },
 
   // Building phase
   buildingWrap: { padding: '60px 40px', textAlign: 'center' },
@@ -415,7 +415,7 @@ const styles = {
 
   // Comparing phase
   compareGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 },
-  compareCard: { position: 'relative', padding: 20, background: '#fff', border: '2px solid #E2E8F0', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 12 },
+  compareCard: { position: 'relative', padding: 20, background: '#fff', border: '2px solid #DCE8F7', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 12 },
   compareCardTop: { borderColor: '#10B981', background: '#F0FDF4' },
   topBadge: { position: 'absolute', top: -10, left: 16, padding: '4px 10px', background: '#10B981', color: '#fff', fontSize: 10, fontWeight: 800, letterSpacing: 1, borderRadius: 999 },
   compareIcon: { fontSize: 24 },
@@ -424,7 +424,7 @@ const styles = {
   compareScore: { fontSize: 36, fontWeight: 800, color: '#2563EB', letterSpacing: '-0.02em' },
   compareScoreLabel: { fontSize: 12, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 },
   insightsList: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 },
-  insightRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F1F5F9' },
+  insightRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #EAF1FA' },
   insightLabel: { fontSize: 12, color: '#64748B' },
   insightValueWrap: { textAlign: 'right' },
   insightValue: { fontSize: 13, fontWeight: 700, color: '#1E293B' },
@@ -434,10 +434,10 @@ const styles = {
   savingsTop: { fontSize: 14, fontWeight: 800, color: '#065F46', letterSpacing: '-0.01em' },
   savingsSub: { fontSize: 10, color: '#047857', marginTop: 1 },
   warningsBlock: { fontSize: 11, color: '#92400E', background: '#FFFBEB', padding: 8, borderRadius: 6, marginTop: 4 },
-  requestsBlock: { fontSize: 11, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', padding: 8, borderRadius: 6, marginTop: 4 },
+  requestsBlock: { fontSize: 11, color: '#334155', background: '#F8FAFC', border: '1px solid #DCE8F7', padding: 8, borderRadius: 6, marginTop: 4 },
   warningsList: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 },
   warning: { fontSize: 10, color: '#92400E', lineHeight: 1.4 },
-  useBtn: { marginTop: 8, padding: '10px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+  useBtn: { marginTop: 8, padding: '10px 16px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
   compareFailed: { color: '#991B1B', fontSize: 13, fontWeight: 600 },
   compareFailedReason: { color: '#64748B', fontSize: 12, marginTop: 4, fontWeight: 400 },
 }

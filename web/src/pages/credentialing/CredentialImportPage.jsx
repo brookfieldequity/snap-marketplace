@@ -90,7 +90,7 @@ export default function CredentialImportPage() {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>Import Documents</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: '0 0 4px' }}>Import Documents</h1>
       <p style={{ fontSize: 14, color: '#64748B', margin: '0 0 20px' }}>
         Bring your existing credentialing files with you — drop PDFs, scans, Word docs (.docx), or a ZIP of your current folders.
         SNAP reads each document and suggests where it goes; you verify before anything is filed.
@@ -112,7 +112,7 @@ export default function CredentialImportPage() {
       >
         <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx,.zip" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} />
         <div style={{ fontSize: 34, marginBottom: 6 }}>📥</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F' }}>
           {uploading ? 'Uploading…' : 'Drop credentialing files here, or click to choose'}
         </div>
         <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4 }}>PDF, JPG, PNG, or a ZIP of folders · encrypted the moment they arrive</div>
@@ -120,11 +120,11 @@ export default function CredentialImportPage() {
 
       {/* Batch list */}
       {!batch && batches.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-          <div style={{ padding: '12px 18px', borderBottom: '1px solid #E2E8F0', fontSize: 13, fontWeight: 800, color: '#0F172A' }}>Previous imports</div>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #DCE8F7', fontSize: 13, fontWeight: 800, color: '#10233F' }}>Previous imports</div>
           {batches.map((b) => (
-            <div key={b.id} onClick={() => openBatch(b.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 18px', borderTop: '1px solid #F1F5F9', cursor: 'pointer', fontSize: 13.5 }}>
-              <span style={{ color: '#0F172A', fontWeight: 600 }}>{new Date(b.createdAt).toLocaleString('en-US')}</span>
+            <div key={b.id} onClick={() => openBatch(b.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 18px', borderTop: '1px solid #EAF1FA', cursor: 'pointer', fontSize: 13.5 }}>
+              <span style={{ color: '#10233F', fontWeight: 600 }}>{new Date(b.createdAt).toLocaleString('en-US')}</span>
               <span style={{ color: '#64748B' }}>
                 {Object.entries(b.counts).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(' · ')} — {b.status.toLowerCase()}
               </span>
@@ -194,10 +194,10 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
   }[item.status] || ['#94A3B8', item.status]
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px' }}>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 240 }}>
-          <a href={item.previewUrl || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 700, color: item.previewUrl ? '#2563EB' : '#0F172A', textDecoration: 'none' }}>
+          <a href={item.previewUrl || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 700, color: item.previewUrl ? '#2563EB' : '#10233F', textDecoration: 'none' }}>
             📄 {item.filename}
           </a>
           {item.sourcePath && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{item.sourcePath}</div>}
@@ -259,7 +259,7 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
               >🗄 Archive{isExpired ? ' ✓' : ''}</button>
               <button
                 onClick={() => onSave(item, { status: 'REJECTED' })}
-                style={{ padding: '8px 12px', background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '8px 12px', background: '#F1F5F9', color: '#64748B', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
               >Reject</button>
             </div>
           )}
@@ -284,7 +284,7 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
   )
 }
 
-const sel = { padding: '7px 9px', border: '1px solid #CBD5E1', borderRadius: 7, fontSize: 12.5, background: '#fff', color: '#0F172A' }
+const sel = { padding: '7px 9px', border: '1px solid #CBD5E1', borderRadius: 7, fontSize: 12.5, background: '#fff', color: '#10233F' }
 
 function Labeled({ label, children }) {
   return (

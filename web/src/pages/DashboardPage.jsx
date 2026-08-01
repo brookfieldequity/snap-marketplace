@@ -145,8 +145,8 @@ function StatCard({ label, value, icon, color = '#2563EB', sub }) {
         background: '#fff',
         borderRadius: 14,
         padding: '20px 24px',
-        border: '1px solid #E2E8F0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        border: '1px solid #DCE8F7',
+        boxShadow: '0 4px 18px rgba(15,43,91,0.06)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -269,7 +269,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>
             {greeting}, {facilityName || 'there'} 👋
           </h1>
           <p style={{ fontSize: 15, color: '#64748B', marginTop: 4 }}>
@@ -318,7 +318,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ fontSize: 20 }}>💰</div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F' }}>
             Your Cost Savings
           </h2>
           <div
@@ -373,7 +373,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🏆</span>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#0F172A' }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#10233F' }}>
               Total all-time savings with SNAP
             </span>
           </div>
@@ -425,7 +425,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 18 }}>⚠️</span>
-              <span style={{ fontWeight: 600, fontSize: 15, color: '#0F172A' }}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: '#10233F' }}>
                 {depositCount} shift{depositCount === 1 ? '' : 's'} need{depositCount === 1 ? 's' : ''} a deposit to go live
               </span>
             </div>
@@ -452,19 +452,19 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
       {/* ── Pending Applications ────────────────────────────────────────────── */}
       {pendingApplications.length > 0 && (
         <div style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#10233F', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>👤</span> Pending Applications
             <span style={{ background: '#EFF6FF', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #A5B4FC' }}>
               {pendingApplications.length}
             </span>
           </h2>
-          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
             {pendingApplications.map((app, i) => (
               <div
                 key={app.id || i}
                 style={{
                   padding: '16px 20px',
-                  borderBottom: i < pendingApplications.length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < pendingApplications.length - 1 ? '1px solid #EAF1FA' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -491,7 +491,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                     {(app.providerName || 'P').charAt(0)}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#0F172A' }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#10233F' }}>
                       {app.providerName}
                     </div>
                     <div style={{ fontSize: 13, color: '#64748B' }}>
@@ -542,10 +542,10 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
 
       {/* ── Upcoming Shifts ─────────────────────────────────────────────────── */}
       <div>
-        <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h2 style={{ fontSize: 17, fontWeight: 700, color: '#10233F', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 18 }}>📅</span> Upcoming Shifts (Next 7 Days)
         </h2>
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
           {upcomingShifts.length === 0 ? (
             <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
               No upcoming shifts in the next 7 days.{' '}
@@ -559,7 +559,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                 key={shift.id}
                 style={{
                   padding: '16px 20px',
-                  borderBottom: i < upcomingShifts.length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < upcomingShifts.length - 1 ? '1px solid #EAF1FA' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -572,7 +572,7 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                     style={{
                       textAlign: 'center',
                       background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
+                      border: '1px solid #DCE8F7',
                       borderRadius: 10,
                       padding: '8px 12px',
                       minWidth: 52,
@@ -581,12 +581,12 @@ export default function DashboardPage({ onNavigate, onFacilityNameLoaded, snapMo
                     <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>
                       {new Date(shift.date).toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', lineHeight: 1.1 }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: '#10233F', lineHeight: 1.1 }}>
                       {new Date(shift.date).getDate() + 1}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#0F172A' }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#10233F' }}>
                       {shift.specialty}
                     </div>
                     <div style={{ fontSize: 13, color: '#64748B' }}>

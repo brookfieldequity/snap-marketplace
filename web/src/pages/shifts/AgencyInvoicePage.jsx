@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { payrollAPI } from '../../api.js'
 
 // ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
-const primaryBtn = { padding: '10px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
+const primaryBtn = { padding: '10px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtn = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
-const inputStyle = { padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }
-const th = { textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #E2E8F0' }
-const td = { padding: '8px 10px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid #F1F5F9' }
+const inputStyle = { padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F' }
+const th = { textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #DCE8F7' }
+const td = { padding: '8px 10px', fontSize: 13, color: '#10233F', borderBottom: '1px solid #EAF1FA' }
 
 const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '')
@@ -119,7 +119,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
   return (
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '8px 4px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>🧾 Agency Invoice</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>🧾 Agency Invoice</h1>
       </div>
       <p style={{ fontSize: 14, color: '#64748B', marginTop: 0, marginBottom: 20 }}>
         What you owe each staffing agency this period: hours worked × each provider's all-in cost rate.
@@ -156,7 +156,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
         <div key={inv.employerId || inv.employerName} style={{ ...card, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{inv.employerName || 'Agency'}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#10233F' }}>{inv.employerName || 'Agency'}</div>
               <div style={{ fontSize: 12, color: '#64748B' }}>{fmtDate(inv.periodStart)} → {fmtDate(inv.periodEnd)} · {inv.providerCount} providers</div>
             </div>
             <button style={downloading ? { ...primaryBtn, background: '#CBD5E1', cursor: 'wait' } : primaryBtn} onClick={() => download(inv)} disabled={!!downloading}>
@@ -187,7 +187,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
             <tfoot>
               <tr>
                 <td style={{ ...td, borderBottom: 'none' }} colSpan={4}>
-                  <span style={{ fontWeight: 800, color: '#0F172A' }}>Total</span>
+                  <span style={{ fontWeight: 800, color: '#10233F' }}>Total</span>
                 </td>
                 <td style={{ ...td, borderBottom: 'none', textAlign: 'right', fontWeight: 800, color: '#2563EB', fontSize: 15 }}>{fmtMoney(inv.total)}</td>
               </tr>
@@ -198,7 +198,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
 
       {/* ── Invoice history — every export is frozen exactly as billed ── */}
       <div style={{ ...card, marginTop: 8, marginBottom: 24 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 2 }}>Invoice History</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginBottom: 2 }}>Invoice History</div>
         <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
           Each export is saved exactly as generated — re-downloads match the file you sent, even if hours or rates changed afterward. Saved invoices can be renumbered or deleted here.
         </div>
@@ -239,7 +239,7 @@ export default function AgencyInvoicePage({ onNavigate }) {
                       </span>
                     ) : (
                       <button
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: run.invoiceNumber ? '#0F172A' : '#94A3B8', padding: 0, textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: run.invoiceNumber ? '#10233F' : '#94A3B8', padding: 0, textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
                         title="Edit invoice number"
                         onClick={() => { setEditingRun(run.id); setInvoiceNoDraft(run.invoiceNumber || '') }}
                       >

@@ -3,12 +3,12 @@ import { payrollAPI, facilityAPI } from '../../api.js'
 import PayrollPeriodPicker from '../../components/PayrollPeriodPicker.jsx'
 
 // ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
-const primaryBtn = { padding: '10px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
+const primaryBtn = { padding: '10px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtn = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
-const inputStyle = { padding: '7px 9px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#0F172A' }
-const th = { textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #E2E8F0' }
-const td = { padding: '5px 8px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid #F1F5F9' }
+const inputStyle = { padding: '7px 9px', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 13, color: '#10233F' }
+const th = { textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 700, color: '#64748B', borderBottom: '1px solid #DCE8F7' }
+const td = { padding: '5px 8px', fontSize: 13, color: '#10233F', borderBottom: '1px solid #EAF1FA' }
 
 const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '')
 function defaultPeriod() {
@@ -157,7 +157,7 @@ export default function HourEntryPage({ onNavigate }) {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '8px 4px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>⏱ Provider Hours</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>⏱ Provider Hours</h1>
       <p style={{ fontSize: 14, color: '#64748B', marginTop: 6, marginBottom: 20 }}>
         Confirm worked hours for 1099 / per-diem providers before running payroll or the agency invoice.
         Seed pulls each provider's scheduled days pre-filled with the location's default shift window —
@@ -235,7 +235,7 @@ export default function HourEntryPage({ onNavigate }) {
         <div key={p.rosterEntryId} style={{ ...card, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div>
-              <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{p.providerName}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#10233F' }}>{p.providerName}</span>
               <span style={{ marginLeft: 10, fontSize: 12, color: '#64748B' }}>
                 {p.submittedHours} submitted / {p.totalHours} total hrs
                 {p.pendingCount > 0 && <span style={{ color: '#B45309', fontWeight: 700 }}> · {p.pendingCount} pending</span>}
@@ -347,8 +347,8 @@ function SiteDefaultsEditor({ defaults, locations, busy, onSave, onDelete }) {
         <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>No site defaults yet — pick a location below to add one.</div>
       )}
       {rows.map((loc) => (
-        <div key={loc} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #F1F5F9' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', minWidth: 160 }}>{loc}</span>
+        <div key={loc} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #EAF1FA' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#10233F', minWidth: 160 }}>{loc}</span>
           <input style={{ ...inputStyle, width: 100 }} type="time" value={valOf(loc, 'startTime')}
             onChange={(e) => setVal(loc, 'startTime', e.target.value)} />
           <span style={{ fontSize: 12, color: '#94A3B8' }}>–</span>

@@ -121,7 +121,7 @@ const styles = {
   panel: {
     position: 'fixed', bottom: 24, right: 24, width: 380, maxWidth: 'calc(100vw - 32px)',
     height: 560, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 18,
-    boxShadow: '0 25px 60px rgba(15,23,42,0.28)', border: '1px solid #E2E8F0',
+    boxShadow: '0 25px 60px rgba(15,23,42,0.28)', border: '1px solid #DCE8F7',
     zIndex: 900, display: 'flex', flexDirection: 'column', overflow: 'hidden',
   },
   header: { background: '#2563EB', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
@@ -134,8 +134,8 @@ const styles = {
   msgRow: { display: 'flex' },
   msg: { maxWidth: '82%', padding: '10px 13px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
   msgUser: { background: '#2563EB', color: '#fff', borderBottomRightRadius: 4 },
-  msgBot: { background: '#fff', color: '#0F172A', border: '1px solid #E2E8F0', borderBottomLeftRadius: 4 },
-  inputRow: { display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #F1F5F9', background: '#fff', alignItems: 'flex-end' },
-  input: { flex: 1, resize: 'none', border: '1.5px solid #E2E8F0', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, color: '#0F172A', outline: 'none', fontFamily: 'inherit', maxHeight: 96 },
-  send: { background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  msgBot: { background: '#fff', color: '#10233F', border: '1px solid #DCE8F7', borderBottomLeftRadius: 4 },
+  inputRow: { display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #EAF1FA', background: '#fff', alignItems: 'flex-end' },
+  input: { flex: 1, resize: 'none', border: '1.5px solid #E2E8F0', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, color: '#10233F', outline: 'none', fontFamily: 'inherit', maxHeight: 96 },
+  send: { background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
 }

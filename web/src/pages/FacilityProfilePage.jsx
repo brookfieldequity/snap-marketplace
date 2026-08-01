@@ -24,8 +24,8 @@ function TeamAccessCard() {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Team access</div>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F' }}>Team access</div>
       <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 12px' }}>
         {team.myRole === 'ADMIN'
           ? 'Locked-out teammate? Issue a temporary password — shown once, right here, no email needed.'
@@ -34,21 +34,21 @@ function TeamAccessCard() {
       {issued && (
         <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, color: '#16A34A', fontWeight: 700 }}>Temporary password for {issued.email}</div>
-          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#0F172A', margin: '6px 0' }}>{issued.tempPassword}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 18, color: '#10233F', margin: '6px 0' }}>{issued.tempPassword}</div>
           <div style={{ fontSize: 12, color: '#64748B' }}>
             Shown only once — share it directly (phone/text is best). They'll be asked to set their own password at sign-in.
           </div>
         </div>
       )}
       {team.members.map((m) => (
-        <div key={m.userId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
-          <div style={{ fontSize: 13, color: '#0F172A' }}>
+        <div key={m.userId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #EAF1FA' }}>
+          <div style={{ fontSize: 13, color: '#10233F' }}>
             {m.email}
             <span style={{ color: '#94A3B8', marginLeft: 8, fontSize: 12 }}>{m.facilityRole}</span>
             {m.pendingTempPassword && <span style={{ color: '#D97706', marginLeft: 8, fontSize: 12 }}>temp password pending</span>}
           </div>
           {team.myRole === 'ADMIN' && (
-            <button disabled={busy} onClick={() => issue(m)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#2563EB', cursor: 'pointer' }}>
+            <button disabled={busy} onClick={() => issue(m)} style={{ background: 'none', border: '1px solid #DCE8F7', borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#2563EB', cursor: 'pointer' }}>
               Issue temp password
             </button>
           )}
@@ -73,7 +73,7 @@ const inputStyle = {
   border: '1.5px solid #E2E8F0',
   borderRadius: 10,
   fontSize: 14,
-  color: '#0F172A',
+  color: '#10233F',
   outline: 'none',
   transition: 'border-color 0.15s',
 }
@@ -219,7 +219,7 @@ export default function FacilityProfilePage() {
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Facility Profile</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Facility Profile</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
           A complete profile helps providers choose your facility
         </p>
@@ -231,14 +231,14 @@ export default function FacilityProfilePage() {
       <div
         style={{
           background: '#fff',
-          border: '1px solid #E2E8F0',
+          border: '1px solid #DCE8F7',
           borderRadius: 14,
           padding: '20px 24px',
           marginBottom: 28,
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>Profile Completion</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>Profile Completion</span>
           <span
             style={{
               fontSize: 18,
@@ -268,14 +268,14 @@ export default function FacilityProfilePage() {
       </div>
 
       {/* Form */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '32px' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Loading...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Section: Basic Info */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #EAF1FA', paddingBottom: 10 }}>
               Basic Information
             </div>
 
@@ -330,7 +330,7 @@ export default function FacilityProfilePage() {
             </div>
 
             {/* Section: Provider-facing info */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginTop: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #EAF1FA', paddingBottom: 10, marginTop: 8 }}>
               Provider-Facing Details
             </div>
 
@@ -385,7 +385,7 @@ export default function FacilityProfilePage() {
 
             {/* Facility Photos */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #EAF1FA', paddingBottom: 10, marginBottom: 16 }}>
                 Facility Photos
               </div>
 
@@ -397,7 +397,7 @@ export default function FacilityProfilePage() {
                       <img
                         src={url}
                         alt={`Facility photo ${i + 1}`}
-                        style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #E2E8F0' }}
+                        style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #DCE8F7' }}
                       />
                       <button
                         onClick={() => handleDeletePhoto(url)}

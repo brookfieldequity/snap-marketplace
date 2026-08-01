@@ -58,7 +58,7 @@ export default function ProvidersPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>Providers</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>Providers</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>Manage your provider relationships</p>
         </div>
       </div>
@@ -78,7 +78,7 @@ export default function ProvidersPage() {
             border: '1.5px solid #E2E8F0',
             borderRadius: 10,
             fontSize: 14,
-            color: '#0F172A',
+            color: '#10233F',
             outline: 'none',
           }}
           onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
@@ -87,9 +87,9 @@ export default function ProvidersPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 120px 80px 140px 120px 100px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 120px 80px 140px 120px 100px', background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
           {['Provider', 'Specialty', 'Credentialed', 'Shifts', 'Avg Rating', 'Preferred', 'Action'].map((h) => (
             <div key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
@@ -107,7 +107,7 @@ export default function ProvidersPage() {
             style={{
               display: 'grid',
               gridTemplateColumns: '2fr 1.5fr 120px 80px 140px 120px 100px',
-              borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none',
+              borderBottom: i < filtered.length - 1 ? '1px solid #EAF1FA' : 'none',
               cursor: 'pointer',
               background: '#fff',
               transition: 'background 0.1s',
@@ -127,7 +127,7 @@ export default function ProvidersPage() {
                 {p.name.split(' ').map(w => w[0]).slice(1, 3).join('')}
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{p.name}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#10233F' }}>{p.name}</div>
                 {p.vip && (
                   <span style={{ background: '#F3E8FF', color: '#1E3A8A', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
                     ✦ VIP
@@ -148,14 +148,14 @@ export default function ProvidersPage() {
                   ✓ Verified
                 </span>
               ) : (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F8FAFC', color: '#94A3B8', border: '1px solid #E2E8F0', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F8FAFC', color: '#94A3B8', border: '1px solid #DCE8F7', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
                   Pending
                 </span>
               )}
             </div>
 
             {/* Shifts worked */}
-            <div style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center' }}>
+            <div style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#10233F', display: 'flex', alignItems: 'center' }}>
               {p.shiftsWorked}
             </div>
 
@@ -214,7 +214,7 @@ export default function ProvidersPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>{selectedProvider.name}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#10233F' }}>{selectedProvider.name}</div>
                 <div style={{ fontSize: 14, color: '#64748B', marginTop: 2 }}>{selectedProvider.specialty}</div>
               </div>
               <button onClick={() => setSP(null)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94A3B8' }}>×</button>
@@ -229,7 +229,7 @@ export default function ProvidersPage() {
               ].map(({ label, value }) => (
                 <div key={label} style={{ background: '#F8FAFC', borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{value}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#10233F' }}>{value}</div>
                 </div>
               ))}
             </div>

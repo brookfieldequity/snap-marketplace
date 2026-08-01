@@ -44,7 +44,7 @@ export default function AdminSidebar({ activePage, onNavigate, onLogout, narrow 
       style={{
         width: 240,
         minHeight: narrow ? undefined : '100vh',
-        background: '#0F172A',
+        background: '#10233F',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,

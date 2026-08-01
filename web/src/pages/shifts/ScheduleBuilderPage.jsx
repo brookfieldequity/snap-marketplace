@@ -126,19 +126,19 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
   const reqByRosterId = new Map(requests.map((r) => [r.rosterEntryId, r]))
 
   const inputSt = {
-    padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: 8,
-    fontSize: 13, color: '#0F172A', background: '#F8FAFC',
+    padding: '8px 12px', border: '1px solid #DCE8F7', borderRadius: 8,
+    fontSize: 13, color: '#10233F', background: '#F8FAFC',
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#10233F' }}>
           📅 Provider Availability — {monthName} {year}
         </div>
         <button
           onClick={openSendModal}
-          style={{ padding: '8px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
         >
           Request Availability
         </button>
@@ -154,7 +154,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+              <tr style={{ borderBottom: '1px solid #DCE8F7' }}>
                 {['Provider', 'Type', 'Status', 'Days Avail', 'Actions'].map((h) => (
                   <th key={h} style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#64748B', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
@@ -164,8 +164,8 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
               {requests.map((req) => {
                 const meta = AVAIL_STATUS_META[req.status] || AVAIL_STATUS_META.NOT_SENT
                 return (
-                  <tr key={req.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td style={{ padding: '8px 8px', color: '#0F172A', fontWeight: 500 }}>{req.providerName}</td>
+                  <tr key={req.id} style={{ borderBottom: '1px solid #EAF1FA' }}>
+                    <td style={{ padding: '8px 8px', color: '#10233F', fontWeight: 500 }}>{req.providerName}</td>
                     <td style={{ padding: '8px 8px', color: '#64748B' }}>
                       {req.employmentCategory === 'PER_DIEM' ? 'Per-Diem'
                         : req.employmentCategory === 'LOCUMS' ? 'Locums'
@@ -188,7 +188,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                               setSendState((s) => ({ ...s, selectedIds: new Set([req.rosterEntryId]), deadline: defaultDeadline(), deadlineTime: '23:59', via: 'SMS', result: null }))
                               setShowSendModal(true)
                             }}
-                            style={{ padding: '4px 10px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            style={{ padding: '4px 10px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                           >
                             Send
                           </button>
@@ -205,7 +205,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                         {(req.status === 'PENDING' || req.status === 'SUBMITTED') && req.link && (
                           <button
                             onClick={() => copyLink(req.link)}
-                            style={{ padding: '4px 10px', background: '#F8FAFC', color: '#2563EB', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            style={{ padding: '4px 10px', background: '#F8FAFC', color: '#2563EB', border: '1px solid #DCE8F7', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                           >
                             {copiedToken === req.link ? 'Copied!' : 'Copy Link'}
                           </button>
@@ -225,14 +225,14 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Request Availability</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F', margin: 0 }}>Request Availability</h2>
               <button onClick={() => setShowSendModal(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B' }}>✕</button>
             </div>
 
             {/* Month + year (read-only display) */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Month</div>
-              <div style={{ fontSize: 14, color: '#0F172A', fontWeight: 500 }}>{monthName} {year}</div>
+              <div style={{ fontSize: 14, color: '#10233F', fontWeight: 500 }}>{monthName} {year}</div>
             </div>
 
             {/* Deadline */}
@@ -282,7 +282,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                     </label>
                   </div>
                   {perDiemLocums.map((r) => (
-                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#10233F' }}>
                       <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
                       <span style={{ flex: 1 }}>{r.providerName}</span>
                       {r.phoneNumber
@@ -316,7 +316,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                     <span style={{ fontSize: 11, color: '#64748B' }}>Uncheck unless there's a scheduling exception</span>
                   </div>
                   {fullTime.map((r) => (
-                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#10233F' }}>
                       <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
                       <span style={{ flex: 1 }}>{r.providerName}</span>
                       {r.phoneNumber
@@ -332,7 +332,7 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Other</div>
                   {other.map((r) => (
-                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#0F172A' }}>
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px', cursor: 'pointer', fontSize: 13, color: '#10233F' }}>
                       <input type="checkbox" checked={sendState.selectedIds.has(r.id)} onChange={() => toggleRosterId(r.id)} />
                       <span style={{ flex: 1 }}>{r.providerName}</span>
                       {r.phoneNumber
@@ -473,8 +473,8 @@ function SiteRoomChip({ r, year, month, onApplied }) {
     finally { setBusy(false) }
   }
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#334155', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 10px' }}>
-      <strong style={{ color: '#0F172A', fontWeight: 700 }}>{r.location}</strong>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#334155', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, padding: '5px 10px' }}>
+      <strong style={{ color: '#10233F', fontWeight: 700 }}>{r.location}</strong>
       <span style={{ fontSize: 11, fontWeight: 700, color: m.fg, background: m.bg, border: `1px solid ${m.bd}`, padding: '2px 7px', borderRadius: 999 }}>{m.label}</span>
       {r.status === 'RETURNED' && r.submittedAt && (
         <span style={{ color: '#94A3B8' }}>{r.daysSubmitted}d · {new Date(r.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -483,9 +483,9 @@ function SiteRoomChip({ r, year, month, onApplied }) {
         <span title={r.notes.map((n) => `${n.date}: ${n.note}`).join('\n')} style={{ color: '#B45309', fontWeight: 700 }}>✎{r.notes.length}</span>
       )}
       {canSet && (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 2, paddingLeft: 7, borderLeft: '1px solid #E2E8F0' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 2, paddingLeft: 7, borderLeft: '1px solid #DCE8F7' }}>
           <input type="number" min={0} max={50} value={val} onChange={(e) => setVal(e.target.value)} placeholder="rms" style={{ width: 46, padding: '3px 6px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12 }} />
-          <button onClick={apply} disabled={busy || val === ''} title="Set this many rooms for every day of this site this month" style={{ padding: '4px 9px', background: busy || val === '' ? '#CBD5E1' : '#0F172A', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: busy || val === '' ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>Set all days</button>
+          <button onClick={apply} disabled={busy || val === ''} title="Set this many rooms for every day of this site this month" style={{ padding: '4px 9px', background: busy || val === '' ? '#CBD5E1' : '#10233F', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: busy || val === '' ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>Set all days</button>
           {msg && <span style={{ fontSize: 11, fontWeight: 700, color: msg === 'Set ✓' ? '#16A34A' : '#B45309', whiteSpace: 'nowrap' }}>{msg}</span>}
         </span>
       )}
@@ -511,10 +511,10 @@ function RoomCountPanel({ year, month, onNavigate, onApplied }) {
   const returned = rows.filter((r) => r.status === 'RETURNED').length
 
   return (
-    <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
+    <div style={{ border: '1px solid #DCE8F7', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>🏥 Room-Count Cards — {monthName} {year}</div>
-        <button onClick={() => onNavigate && onNavigate('room-counts')} style={{ padding: '7px 14px', background: '#fff', color: '#2563EB', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F' }}>🏥 Room-Count Cards — {monthName} {year}</div>
+        <button onClick={() => onNavigate && onNavigate('room-counts')} style={{ padding: '7px 14px', background: '#fff', color: '#2563EB', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
           Manage & send →
         </button>
       </div>
@@ -552,12 +552,12 @@ function SiteShareRow({ location, year, month }) {
     finally { setBusy(false) }
   }
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '5px 8px 5px 10px' }}>
-      <strong style={{ color: '#0F172A', fontWeight: 700 }}>{location}</strong>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, padding: '5px 8px 5px 10px' }}>
+      <strong style={{ color: '#10233F', fontWeight: 700 }}>{location}</strong>
       {link ? (
         <>
-          <input readOnly value={link} onFocus={(e) => e.target.select()} style={{ width: 188, padding: '3px 6px', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 11, color: '#475569', fontFamily: 'monospace' }} />
-          <button onClick={() => copy(link)} style={{ padding: '4px 9px', background: copied ? '#16A34A' : '#0F172A', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>{copied ? 'Copied ✓' : 'Copy'}</button>
+          <input readOnly value={link} onFocus={(e) => e.target.select()} style={{ width: 188, padding: '3px 6px', border: '1px solid #DCE8F7', borderRadius: 6, fontSize: 11, color: '#475569', fontFamily: 'monospace' }} />
+          <button onClick={() => copy(link)} style={{ padding: '4px 9px', background: copied ? '#16A34A' : '#10233F', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>{copied ? 'Copied ✓' : 'Copy'}</button>
         </>
       ) : (
         <button onClick={gen} disabled={busy} style={{ padding: '4px 10px', background: busy ? '#CBD5E1' : '#2563EB', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: busy ? 'default' : 'pointer' }}>{busy ? '…' : '🔗 Get link'}</button>
@@ -570,8 +570,8 @@ function ShareSchedulePanel({ locations, year, month }) {
   if (!locations || locations.length === 0) return null
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
   return (
-    <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>📤 Send site schedules — {monthName} {year}</div>
+    <div style={{ border: '1px solid #DCE8F7', borderRadius: 12, background: '#fff', padding: '16px 18px', marginBottom: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#10233F' }}>📤 Send site schedules — {monthName} {year}</div>
       <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Each surgical center gets a link to their own monthly schedule — viewable on any device and printable to PDF. Publish first, then send.</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
         {locations.map((loc) => <SiteShareRow key={loc} location={loc} year={year} month={month} />)}
@@ -584,8 +584,8 @@ function getDaysInMonth(year, month) { return new Date(year, month, 0).getDate()
 function getFirstDayOfWeek(year, month) { const d = new Date(year, month - 1, 1).getDay(); return (d + 6) % 7 }
 
 const inputStyle = {
-  width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0',
-  borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#F8FAFC', boxSizing: 'border-box',
+  width: '100%', padding: '10px 12px', border: '1px solid #DCE8F7',
+  borderRadius: 8, fontSize: 14, color: '#10233F', background: '#F8FAFC', boxSizing: 'border-box',
 }
 
 function Modal({ title, onClose, children, wide }) {
@@ -593,7 +593,7 @@ function Modal({ title, onClose, children, wide }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: wide ? 720 : 480, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>{title}</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F', margin: 0 }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B' }}>✕</button>
         </div>
         {children}
@@ -602,9 +602,9 @@ function Modal({ title, onClose, children, wide }) {
   )
 }
 
-function StatBox({ label, value, color = '#0F172A', poweredBy }) {
+function StatBox({ label, value, color = '#10233F', poweredBy }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '14px 20px', minWidth: 110 }}>
+    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #DCE8F7', padding: '14px 20px', minWidth: 110 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color, letterSpacing: '-0.02em' }}>{value}</div>
       {poweredBy && <div style={{ fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginTop: 2 }}>Powered by StaffIQ™</div>}
@@ -652,7 +652,7 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
   }
 
   const cell = (label, value, sub, color, big) => (
-    <div style={{ flex: 1, minWidth: 150, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+    <div style={{ flex: 1, minWidth: 150, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #DCE8F7' }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ fontSize: big ? 26 : 22, fontWeight: 800, color, letterSpacing: '-0.02em', marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{sub}</div>}
@@ -660,9 +660,9 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
   )
 
   return (
-    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+    <div style={{ background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 12, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>💵 Cost vs. your manual process</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#10233F' }}>💵 Cost vs. your manual process</div>
         {hasRate && !editing && (
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
             <button onClick={() => { setVal(String(rate)); setEditing(true) }} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -685,10 +685,10 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
               <span style={{ position: 'absolute', left: 12, top: 10, color: '#94A3B8' }}>$</span>
               <input type="number" value={val} onChange={(e) => setVal(e.target.value)} placeholder="1500" style={{ ...inputStyle, width: 170, paddingLeft: 22 }} />
             </div>
-            <button onClick={save} disabled={saving} style={{ padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={save} disabled={saving} style={{ padding: '10px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Saving…' : 'Save'}
             </button>
-            {hasRate && <button onClick={() => setEditing(false)} style={{ padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>}
+            {hasRate && <button onClick={() => setEditing(false)} style={{ padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>}
           </div>
           <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, maxWidth: 580 }}>
             Your fully-loaded cost to staff one anesthetizing location for one day under your current/agency process. SNAP compares it to what each built schedule actually costs.
@@ -722,7 +722,7 @@ function CostComparisonPanel({ rate, summary, onSaveRate, saving, onEditSiteRate
             <div style={{ marginTop: 10, fontSize: 11, color: '#64748B', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {siteBreakdown.map((s) => (
                 <span key={s.siteName}>
-                  <strong style={{ color: '#0F172A' }}>{s.siteName}</strong> · {s.roomDays} rd × {fmt(s.rateUsed)}{!s.hasOverride && <span style={{ color: '#94A3B8' }}> (default)</span>}
+                  <strong style={{ color: '#10233F' }}>{s.siteName}</strong> · {s.roomDays} rd × {fmt(s.rateUsed)}{!s.hasOverride && <span style={{ color: '#94A3B8' }}> (default)</span>}
                 </span>
               ))}
             </div>
@@ -776,14 +776,14 @@ function AllocationPanel({ year, month }) {
       {actual != null && (
         <div style={{ position: 'absolute', left: 0, top: 0, height: 8, width: `${Math.min(100, actual)}%`, background: Math.abs((actual ?? 0) - target) >= 10 ? '#F59E0B' : '#0891B2', borderRadius: 4, opacity: 0.85 }} />
       )}
-      <div title={`target ${target}%`} style={{ position: 'absolute', left: `${Math.min(100, target)}%`, top: -2, width: 2, height: 12, background: '#0F172A', borderRadius: 1 }} />
+      <div title={`target ${target}%`} style={{ position: 'absolute', left: `${Math.min(100, target)}%`, top: -2, width: 2, height: 12, background: '#10233F', borderRadius: 1 }} />
     </div>
   )
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px', marginBottom: 20, boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>🎯 Site allocation</span>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#10233F' }}>🎯 Site allocation</span>
         <span style={{ fontSize: 11.5, color: '#94A3B8' }}>target (▮) vs actual this month · {providers.length} provider{providers.length === 1 ? '' : 's'} with targets</span>
         {suggestions.length > 0 && (
           <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#ECFEFF', border: '1px solid #A5F3FC', color: '#155E75' }}>
@@ -799,7 +799,7 @@ function AllocationPanel({ year, month }) {
       {/* Drift suggestions always visible — they're the actionable part. */}
       {suggestions.map((s) => (
         <div key={`${s.rosterId}:${s.location}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', borderRadius: 10, background: '#ECFEFF', border: '1px dashed #67E8F9' }}>
-          <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, color: '#0F172A' }}>
+          <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, color: '#10233F' }}>
             <b>{s.providerName}</b> has run <b>{s.observedPct}%</b> at {s.location} over {s.windowMonths} months — the card says <b>{s.targetPct}%</b>. Reality votes to amend it.
           </div>
           <button
@@ -815,8 +815,8 @@ function AllocationPanel({ year, month }) {
       {open && (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {providers.map((p) => (
-            <div key={p.rosterId} style={{ borderTop: '1px solid #F8FAFC', paddingTop: 8 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>
+            <div key={p.rosterId} style={{ borderTop: '1px solid #F1F6FC', paddingTop: 8 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#10233F' }}>
                 {p.providerName}
                 <span style={{ color: '#94A3B8', fontWeight: 500 }}> · {p.monthDays} day{p.monthDays === 1 ? '' : 's'} this month</span>
               </div>
@@ -981,11 +981,11 @@ function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
       ) : rows.length === 0 ? (
         <div style={{ fontSize: 13, color: '#64748B' }}>No sites yet. Generate a schedule or add rooms to populate this list.</div>
       ) : (
-        <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: '1px solid #DCE8F7', borderRadius: 10, overflow: 'hidden' }}>
           {rows.map((row) => (
-            <div key={row.siteName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #F1F5F9' }}>
+            <div key={row.siteName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #EAF1FA' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{row.siteName}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>{row.siteName}</div>
                 <div style={{ fontSize: 11, color: '#94A3B8' }}>
                   {row.roomDays > 0 ? `${row.roomDays} room-days this month` : 'not on current schedule'}
                   {row.hasOverride ? ' · override active' : ' · using default'}
@@ -1001,7 +1001,7 @@ function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
                   style={{ ...inputStyle, width: 110, paddingLeft: 20 }}
                 />
               </div>
-              <button onClick={() => saveRow(row)} disabled={savingKey === row.siteName} style={{ padding: '8px 14px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingKey === row.siteName ? 'default' : 'pointer', opacity: savingKey === row.siteName ? 0.6 : 1 }}>
+              <button onClick={() => saveRow(row)} disabled={savingKey === row.siteName} style={{ padding: '8px 14px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingKey === row.siteName ? 'default' : 'pointer', opacity: savingKey === row.siteName ? 0.6 : 1 }}>
                 {savingKey === row.siteName ? '…' : 'Save'}
               </button>
               <button onClick={() => clearRow(row)} disabled={!row.hasOverride || savingKey === row.siteName} style={{ padding: '8px 12px', background: '#fff', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: (!row.hasOverride || savingKey === row.siteName) ? 'not-allowed' : 'pointer', opacity: !row.hasOverride ? 0.4 : 1 }}>
@@ -1012,7 +1012,7 @@ function SiteRatesModal({ siteBreakdown, defaultRate, onClose, onDirty }) {
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={onClose} style={{ padding: '9px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
           Done
         </button>
       </div>
@@ -1583,9 +1583,9 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={prevMonth} style={{ padding: '8px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }}>‹</button>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', minWidth: 160, textAlign: 'center' }}>{monthName} {year}</div>
-          <button onClick={nextMonth} style={{ padding: '8px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }}>›</button>
+          <button onClick={prevMonth} style={{ padding: '8px 14px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }}>‹</button>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#10233F', minWidth: 160, textAlign: 'center' }}>{monthName} {year}</div>
+          <button onClick={nextMonth} style={{ padding: '8px 14px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, cursor: 'pointer', fontSize: 16, color: '#374151' }}>›</button>
         </div>
         <div style={{ display: 'flex', gap: 10, flex: 1, flexWrap: 'wrap' }}>
           <StatBox label="Total Shifts" value={summary?.totalShifts ?? '—'} />
@@ -1647,7 +1647,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
               padding: '10px 20px',
               background: '#F8FAFC',
               color: '#374151',
-              border: '1px solid #E2E8F0',
+              border: '1px solid #DCE8F7',
               borderRadius: 10,
               fontSize: 13,
               fontWeight: 700,
@@ -1679,13 +1679,13 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           >
             {drafting ? 'Drafting…' : '⚡ Draft Month'}
           </button>
-          <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
+          <button onClick={handlePublish} disabled={publishing} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer', opacity: publishing ? 0.7 : 1 }}>
             {publishing ? 'Publishing...' : '📢 Publish Schedule'}
           </button>
-          <button onClick={() => setShowOutListRules(true)} title="Set out-list rules and one-click build the release order" style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+          <button onClick={() => setShowOutListRules(true)} title="Set out-list rules and one-click build the release order" style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
             🚪 Out Lists
           </button>
-          <button onClick={handleExport} disabled={exporting} style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer', color: '#374151' }}>
+          <button onClick={handleExport} disabled={exporting} style={{ padding: '10px 20px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer', color: '#374151' }}>
             {exporting ? 'Exporting...' : '⬇️ Export CSV'}
           </button>
         </div>
@@ -1837,7 +1837,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: '#fff', border: '2px solid #E2E8F0' }} />
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: '#fff', border: '2px solid #DCE8F7' }} />
           <span style={{ fontSize: 11, color: '#64748B', fontWeight: 500 }}>No schedule</span>
         </div>
       </div>
@@ -1967,7 +1967,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                 >
                   {/* Header row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? '#2563EB' : '#0F172A' }}>{day}</span>
+                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? '#2563EB' : '#10233F' }}>{day}</span>
                     <button
                       onClick={e => { e.stopPropagation(); setAddLocModal({ dateStr }); setLocForm({ location: '', roomsRequired: 1 }) }}
                       title="Add location"
@@ -2009,7 +2009,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                   {/* Shift summary */}
                   {hasSchedule ? (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: sc ? sc.text : '#0F172A', marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: sc ? sc.text : '#10233F', marginBottom: 4 }}>
                         {filledRooms}/{totalRooms} rooms filled{ghostRooms > 0 ? <span style={{ color: '#0891B2', fontWeight: 800 }}> · 🔮 {ghostRooms} proposed</span> : null}
                       </div>
                       {(() => {
@@ -2061,7 +2061,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           const prev = curDay > 1 ? padDate(curDay - 1) : null
           const next = curDay < daysInMonth ? padDate(curDay + 1) : null
           const label = new Date(dayDetailModal + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-          const arrow = (on) => ({ width: 30, height: 30, borderRadius: 8, border: '1px solid #E2E8F0', background: on ? '#F8FAFC' : '#F1F5F9', color: on ? '#374151' : '#CBD5E1', fontSize: 18, lineHeight: 1, cursor: on ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 })
+          const arrow = (on) => ({ width: 30, height: 30, borderRadius: 8, border: '1px solid #DCE8F7', background: on ? '#F8FAFC' : '#F1F5F9', color: on ? '#374151' : '#CBD5E1', fontSize: 18, lineHeight: 1, cursor: on ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 })
           return (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
               <button onClick={() => prev && setDayDetailModal(prev)} disabled={!prev} title="Previous day" style={arrow(!!prev)}>‹</button>
@@ -2127,7 +2127,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {idle.map((p) => (
                           <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                            <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                            <span style={{ color: '#10233F', fontWeight: 600 }}>
                               {p.name}
                               <span style={{ color: '#64748B', fontWeight: 500 }}> · {p.type === 'ANESTHESIOLOGIST' ? 'MD' : p.type === 'CRNA' ? 'CRNA' : (p.type || '')}{p.category ? ` · ${p.category === 'FULL_TIME' ? 'FT' : p.category === 'PER_DIEM' ? 'PD' : p.category === 'LOCUMS' ? 'Locums' : p.category}` : ''}</span>
                             </span>
@@ -2150,7 +2150,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {pto.map((p, i) => (
-                          <div key={i} style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+                          <div key={i} style={{ fontSize: 13, color: '#10233F', fontWeight: 600 }}>
                             {p.name}<span style={{ color: '#94A3B8', fontWeight: 500 }}> · {p.type}</span>
                           </div>
                         ))}
@@ -2168,7 +2168,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         {(flagsByDate[dayDetailModal] || []).map((f) => (
                           <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: 12.5, color: '#0F172A', fontWeight: 700 }}>{f.published ? '📣 ' : ''}{f.title}</div>
+                              <div style={{ fontSize: 12.5, color: '#10233F', fontWeight: 700 }}>{f.published ? '📣 ' : ''}{f.title}</div>
                               <div style={{ fontSize: 11.5, color: '#64748B' }}>{f.detail}</div>
                             </div>
                             {f.fix?.action === 'UNASSIGN' && (
@@ -2227,7 +2227,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                 <div key={row.id} style={{ marginBottom: 20, border: `1px solid ${sc.border}`, borderRadius: 12, overflow: 'hidden' }}>
                   {/* Location header */}
                   <div style={{ background: sc.bg, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#10233F', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
                       {row.location}
                       {cov && (
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: cov.bg, color: cov.color }}>
@@ -2244,7 +2244,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                           title="Remove a room"
                           style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', cursor: required <= 1 ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, color: '#374151', opacity: required <= 1 ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >−</button>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', minWidth: 22, textAlign: 'center' }}>{required}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#10233F', minWidth: 22, textAlign: 'center' }}>{required}</span>
                         <button
                           onClick={() => handleEditRooms(row, +1)}
                           disabled={editingLocation === row.id}
@@ -2556,8 +2556,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             <input style={inputStyle} type="number" min="1" max="20" value={locForm.roomsRequired} onChange={e => setLocForm(p => ({ ...p, roomsRequired: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={() => setAddLocModal(null)} style={{ padding: '9px 18px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
-            <button onClick={handleAddLocation} disabled={savingLoc} style={{ padding: '9px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: savingLoc ? 'not-allowed' : 'pointer', opacity: savingLoc ? 0.7 : 1 }}>
+            <button onClick={() => setAddLocModal(null)} style={{ padding: '9px 18px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
+            <button onClick={handleAddLocation} disabled={savingLoc} style={{ padding: '9px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: savingLoc ? 'not-allowed' : 'pointer', opacity: savingLoc ? 0.7 : 1 }}>
               {savingLoc ? 'Saving...' : 'Save Location'}
             </button>
           </div>

@@ -3,11 +3,11 @@ import { payrollAPI } from '../../api.js'
 import PayrollPeriodPicker from '../../components/PayrollPeriodPicker.jsx'
 
 // ── Shared styles (match the SNAP Shifts light theme) ──────────────────────────
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
-const primaryBtn = { padding: '10px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
+const primaryBtn = { padding: '10px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtn = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
 const disabledBtn = { ...primaryBtn, background: '#CBD5E1', cursor: 'not-allowed' }
-const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }
+const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F' }
 
 const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '')
@@ -337,7 +337,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Payroll Builder</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>Payroll Builder</h1>
           <div style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
             Turn your SNAP Shifts data into a ready-to-upload {activeSystem?.system || 'ADP / Gusto'} payroll file.
             SNAP processes the data — you stay the payor.
@@ -349,7 +349,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
       </div>
 
       {/* Step tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E2E8F0', marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #DCE8F7', marginBottom: 24 }}>
         {STEPS.map((label, i) => {
           const n = i + 1
           const active = step === n
@@ -422,7 +422,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                     ...card,
                     cursor: 'pointer',
                     textAlign: 'center',
-                    border: selected ? '2px solid #2563EB' : '1px solid #E2E8F0',
+                    border: selected ? '2px solid #2563EB' : '1px solid #DCE8F7',
                     background: selected ? '#EFF6FF' : '#fff',
                   }}
                 >
@@ -508,8 +508,8 @@ export default function PayrollBuilderPage({ onNavigate }) {
                 {mapping.headers.map((h) => {
                   const mapped = mapping.fieldMapping[h]
                   return (
-                    <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
-                      <div style={{ width: 220, color: '#0F172A', fontWeight: 500 }}>{h}</div>
+                    <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid #EAF1FA', fontSize: 13 }}>
+                      <div style={{ width: 220, color: '#10233F', fontWeight: 500 }}>{h}</div>
                       <div style={{ color: '#CBD5E1' }}>←</div>
                       <select
                         value={mapped || ''}
@@ -612,7 +612,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                   { label: 'Providers', value: vis.length },
                   { label: 'Total Hours', value: vis.reduce((s, i) => s + Number(i.regularHours || 0) + Number(i.otHours || 0), 0).toFixed(1) },
                   { label: 'Total Gross', value: fmtMoney(vis.reduce((s, i) => s + Number(i.grossPay || 0), 0)) },
-                  { label: 'Total Bonus', value: fmtMoney(totalBonus), color: totalBonus > 0 ? '#7C3AED' : '#0F172A' },
+                  { label: 'Total Bonus', value: fmtMoney(totalBonus), color: totalBonus > 0 ? '#7C3AED' : '#10233F' },
                   { label: 'Approved', value: `${approvedCount} / ${vis.length}` },
                 ]
                 return (
@@ -620,7 +620,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                     {cards.map((c) => (
                       <div key={c.label} style={{ ...card, padding: 16 }}>
                         <div style={{ fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{c.label}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: c.color || '#0F172A' }}>{c.value}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: c.color || '#10233F' }}>{c.value}</div>
                       </div>
                     ))}
                   </div>
@@ -639,7 +639,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
               ) : (
                 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
                   {/* Table header */}
-                  <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 16px', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 16px', borderBottom: '1px solid #DCE8F7', fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     <div>Provider</div>
                     <div>Role</div>
                     <div>{hasOtColumn ? 'Reg Hrs' : 'Hours'}</div>
@@ -658,13 +658,13 @@ export default function PayrollBuilderPage({ onNavigate }) {
                             display: 'grid',
                             gridTemplateColumns: gridCols,
                             padding: '10px 16px',
-                            borderBottom: '1px solid #F1F5F9',
+                            borderBottom: '1px solid #EAF1FA',
                             alignItems: 'center',
                             background: open ? '#F8FAFC' : '#fff',
                           }}
                         >
                           <div style={{ cursor: 'pointer' }} onClick={() => setExpanded(open ? null : item.rosterEntryId)}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>
                               {open ? '▾ ' : '▸ '}{item.providerName}
                             </div>
                             {item.useBusinessNameForPayroll && item.businessName && (
@@ -686,11 +686,11 @@ export default function PayrollBuilderPage({ onNavigate }) {
                               type="number"
                               value={item.otHours}
                               onChange={(e) => updateItem(idx, { otHours: e.target.value })}
-                              style={{ ...inputStyle, width: 64, padding: '5px 7px', color: Number(item.otHours) > 0 ? '#B45309' : '#0F172A', background: Number(item.otHours) > 0 ? '#FFFBEB' : '#fff' }}
+                              style={{ ...inputStyle, width: 64, padding: '5px 7px', color: Number(item.otHours) > 0 ? '#B45309' : '#10233F', background: Number(item.otHours) > 0 ? '#FFFBEB' : '#fff' }}
                             />
                           )}
                           {/* Rate is read-only here — it comes from the roster card */}
-                          <div style={{ fontSize: 14, color: item.missingRate ? '#DC2626' : '#0F172A' }}>
+                          <div style={{ fontSize: 14, color: item.missingRate ? '#DC2626' : '#10233F' }}>
                             {item.hourlyRate != null ? '$' + Number(item.hourlyRate).toFixed(2) : '—'}
                           </div>
                           <div>
@@ -726,7 +726,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                           </div>
                         </div>
                         {open && (
-                          <div style={{ background: '#F8FAFC', padding: '10px 16px 14px 32px', borderBottom: '1px solid #F1F5F9' }}>
+                          <div style={{ background: '#F8FAFC', padding: '10px 16px 14px 32px', borderBottom: '1px solid #EAF1FA' }}>
                             <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Shift Detail</div>
                             {item.shiftDetail && item.shiftDetail.length > 0 ? (
                               <table style={{ fontSize: 12, color: '#475569', borderCollapse: 'collapse', width: '100%', maxWidth: 520 }}>
@@ -796,7 +796,7 @@ export default function PayrollBuilderPage({ onNavigate }) {
                               </div>
 
                               {/* Reimbursement — separate payroll line, pre-filled from the import. */}
-                              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
+                              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #EAF1FA' }}>
                                 <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Reimbursement ($)</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                   <input type="number" step="0.01" min="0" value={item.reimbursement ?? ''} placeholder="0"
@@ -903,9 +903,9 @@ export default function PayrollBuilderPage({ onNavigate }) {
               ...(exported.run.totalBonus > 0 ? [['Total Bonus', fmtMoney(exported.run.totalBonus)]] : []),
               ...(exported.run.totalReimbursement > 0 ? [['Total Reimb.', fmtMoney(exported.run.totalReimbursement)]] : []),
             ].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #EAF1FA', fontSize: 13 }}>
                 <span style={{ color: '#64748B' }}>{k}</span>
-                <span style={{ color: k === 'Total Bonus' ? '#7C3AED' : k === 'Total Reimb.' ? '#0369A1' : '#0F172A', fontWeight: 600 }}>{v}</span>
+                <span style={{ color: k === 'Total Bonus' ? '#7C3AED' : k === 'Total Reimb.' ? '#0369A1' : '#10233F', fontWeight: 600 }}>{v}</span>
               </div>
             ))}
           </div>

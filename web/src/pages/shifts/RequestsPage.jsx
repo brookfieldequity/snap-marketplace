@@ -573,9 +573,9 @@ export default function RequestsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: stacked ? 'auto' : '100%', minHeight: stacked ? '100%' : 0, background: '#F8FAFC' }}>
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
-      <div style={{ padding: narrow ? '14px 16px 12px' : '20px 28px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#fff', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
+      <div style={{ padding: narrow ? '14px 16px 12px' : '20px 28px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#fff', borderBottom: '1px solid #DCE8F7', flexShrink: 0 }}>
         <div>
-          <h1 style={{ fontSize: narrow ? 19 : 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
+          <h1 style={{ fontSize: narrow ? 19 : 22, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>Provider Requests</h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>
             {narrow
               ? 'Press and hold a sticky note to drag it into a tier'
@@ -585,11 +585,11 @@ export default function RequestsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {/* Tab toggle */}
           {[{ k: 'BOARD', label: `Board${pendingBadge ? ` · ${pendingBadge}` : ''}` }, { k: 'HISTORY', label: 'History' }].map(({ k, label }) => (
-            <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: tab === k ? '#0F172A' : '#fff', color: tab === k ? '#fff' : '#64748B', border: `1.5px solid ${tab === k ? '#0F172A' : '#E2E8F0'}` }}>
+            <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: tab === k ? '#10233F' : '#fff', color: tab === k ? '#fff' : '#64748B', border: `1.5px solid ${tab === k ? '#10233F' : '#E2E8F0'}` }}>
               {label}
             </button>
           ))}
-          <button onClick={openAdd} style={{ padding: '7px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={openAdd} style={{ padding: '7px 16px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             + Add
           </button>
           {work.length > 0 && (
@@ -613,7 +613,7 @@ export default function RequestsPage() {
           {/* Left: calendar + PTO + notes. Phones stack it above the board;
               iPad/desktop keep it as a fixed left column that never moves when
               the tier strip swipes. Content capped so the calendar stays mini. */}
-          <div style={{ width: stacked ? '100%' : (narrow ? 264 : 232), flexShrink: 0, borderRight: stacked ? 'none' : '1px solid #E2E8F0', borderBottom: stacked ? '1px solid #E2E8F0' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: stacked ? 'center' : 'stretch', overflowY: stacked ? 'visible' : 'auto' }}>
+          <div style={{ width: stacked ? '100%' : (narrow ? 264 : 232), flexShrink: 0, borderRight: stacked ? 'none' : '1px solid #DCE8F7', borderBottom: stacked ? '1px solid #DCE8F7' : 'none', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: stacked ? 'center' : 'stretch', overflowY: stacked ? 'visible' : 'auto' }}>
 
             {/* Mini calendar */}
             <div style={{ padding: '18px 16px 12px', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
@@ -622,7 +622,7 @@ export default function RequestsPage() {
                   style={{ width: 28, height: 28, border: 'none', background: '#F1F5F9', borderRadius: 7, cursor: 'pointer', fontSize: 14, color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   ‹
                 </button>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>{monthLabel}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#10233F' }}>{monthLabel}</span>
                 <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1); setSelDay(null) }}
                   style={{ width: 28, height: 28, border: 'none', background: '#F1F5F9', borderRadius: 7, cursor: 'pointer', fontSize: 14, color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   ›
@@ -681,7 +681,7 @@ export default function RequestsPage() {
               ))}
             </div>
 
-            <div style={{ borderTop: '1px solid #F1F5F9' }} />
+            <div style={{ borderTop: '1px solid #EAF1FA' }} />
 
             {/* PTO section */}
             {ptoPending.length > 0 && (
@@ -691,7 +691,7 @@ export default function RequestsPage() {
                 </div>
                 {ptoPending.map((r) => (
                   <div key={r.id} style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>{r.rosterEntry?.providerName || 'Provider'}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#10233F' }}>{r.rosterEntry?.providerName || 'Provider'}</div>
                     <div style={{ fontSize: 11, color: '#4338CA', marginTop: 2 }}>{dateLabel(r)}</div>
                     {r.note && <div style={{ fontSize: 11, color: '#64748B', marginTop: 3, fontStyle: 'italic' }}>"{r.note}"</div>}
                     {r.conflicts?.count > 0 && (
@@ -945,7 +945,7 @@ function KanbanColumn({ narrow, stacked, dropId, title, subtitle, count, color, 
         width: narrow ? 'min(82vw, 320px)' : 'auto',
         display: 'flex',
         flexDirection: 'column',
-        borderRight: isLast ? 'none' : '1px solid #E2E8F0',
+        borderRight: isLast ? 'none' : '1px solid #DCE8F7',
         minWidth: 0,
         transition: 'background 0.15s',
         background: isDrop ? (light || '#F0FDF4') : 'transparent',
@@ -1092,7 +1092,7 @@ const miniBtn = {
 function HistoryList({ requests }) {
   const visible = requests.filter((r) => r.status !== 'PENDING')
   if (visible.length === 0) return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '48px 24px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '48px 24px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
       No accepted or declined requests yet.
     </div>
   )
@@ -1103,9 +1103,9 @@ function HistoryList({ requests }) {
         const s    = STATUS_STYLE[r.status] || STATUS_STYLE.PENDING
         const tier = r.status === 'ACCEPTED' && r.tier ? TIER_BY_N[r.tier] : null
         return (
-          <div key={r.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div key={r.id} style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: '14px 18px', boxShadow: '0 4px 18px rgba(15,43,91,0.06)' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#0F172A' }}>{r.rosterEntry?.providerName || 'Provider'}</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#10233F' }}>{r.rosterEntry?.providerName || 'Provider'}</span>
               <Chip bg={t.bg} color={t.color} border={t.border}>{t.label}</Chip>
               <Chip bg={s.bg} color={s.color} border={s.bg}>{s.label}</Chip>
               {tier && <Chip bg={tier.bg} color={tier.color} border={tier.border}>Tier {tier.n} · {tier.label}</Chip>}
@@ -1157,12 +1157,12 @@ function AddRequestModal({ roster, locations, onClose, onCreated }) {
   }
 
   const lbl = { fontSize: 12.5, fontWeight: 700, color: '#475569', marginBottom: 5, display: 'block' }
-  const inp = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', boxSizing: 'border-box' }
+  const inp = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#10233F', boxSizing: 'border-box' }
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: 480, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Add a request</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>Add a request</div>
         <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>Logged on the provider's behalf and pre-accepted at the tier you choose.</div>
 
         <div style={{ marginBottom: 14 }}>
@@ -1229,7 +1229,7 @@ function AddRequestModal({ roster, locations, onClose, onCreated }) {
         {err && <div style={{ fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={submit} disabled={saving} style={{ padding: '8px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'Adding…' : 'Add request'}</button>
+          <button onClick={submit} disabled={saving} style={{ padding: '8px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'Adding…' : 'Add request'}</button>
         </div>
       </div>
     </div>

@@ -56,26 +56,26 @@ export default function CredReportsPage() {
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 1000 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Reports</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#10233F', margin: 0 }}>Reports</h1>
       <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4, marginBottom: 22 }}>
         Pick the providers and the columns you need — SNAP compiles one always-current spreadsheet you can send to any facility.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
         {/* Providers */}
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px' }}>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '16px 18px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>1 · Pick providers <span style={{ color: '#94A3B8', fontWeight: 600 }}>({pickedNpis.size})</span></div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F' }}>1 · Pick providers <span style={{ color: '#94A3B8', fontWeight: 600 }}>({pickedNpis.size})</span></div>
             <button onClick={() => setPickedNpis(pickedNpis.size === filtered.length ? new Set() : new Set(filtered.map((r) => r.npi)))} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
               {pickedNpis.size === filtered.length && filtered.length ? 'Clear all' : 'Select all'}
             </button>
           </div>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search providers…" style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box', outline: 'none', marginBottom: 8 }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search providers…" style={{ width: '100%', padding: '8px 11px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, boxSizing: 'border-box', outline: 'none', marginBottom: 8 }} />
           <div style={{ maxHeight: 340, overflowY: 'auto' }}>
             {filtered.length === 0 ? <div style={{ fontSize: 13, color: '#94A3B8', padding: 12 }}>No providers.</div> : filtered.map((r) => (
-              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', cursor: 'pointer', borderTop: '1px solid #F8FAFC' }}>
+              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', cursor: 'pointer', borderTop: '1px solid #F1F6FC' }}>
                 <input type="checkbox" checked={pickedNpis.has(r.npi)} onChange={() => toggle(pickedNpis, setPickedNpis, r.npi)} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>{r.providerName}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#10233F' }}>{r.providerName}</span>
                 <span style={{ fontSize: 11.5, color: '#94A3B8', fontFamily: 'monospace' }}>{r.providerType || ''}</span>
               </label>
             ))}
@@ -83,8 +83,8 @@ export default function CredReportsPage() {
         </div>
 
         {/* Columns */}
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>2 · Pick columns <span style={{ color: '#94A3B8', fontWeight: 600 }}>({pickedFields.size})</span></div>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '16px 18px' }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#10233F', marginBottom: 10 }}>2 · Pick columns <span style={{ color: '#94A3B8', fontWeight: 600 }}>({pickedFields.size})</span></div>
           <div style={{ maxHeight: 388, overflowY: 'auto' }}>
             {fields.map((f) => (
               <label key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', cursor: 'pointer' }}>
@@ -102,7 +102,7 @@ export default function CredReportsPage() {
           {pickedNpis.size} provider{pickedNpis.size === 1 ? '' : 's'} × {orderedPickedFields.length} column{orderedPickedFields.length === 1 ? '' : 's'}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', border: '1px solid #DCE8F7', borderRadius: 8, overflow: 'hidden' }}>
           {[['xlsx', 'Excel'], ['csv', 'CSV']].map(([k, label]) => (
             <button key={k} onClick={() => setFormat(k)} style={{ padding: '8px 16px', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', background: format === k ? '#2563EB' : '#fff', color: format === k ? '#fff' : '#64748B' }}>{label}</button>
           ))}

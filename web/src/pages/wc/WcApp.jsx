@@ -8,7 +8,7 @@ import { wcAPI } from '../../api.js'
 // counter on the dashboard is the same ledger the contingency invoice bills.
 
 const BLUE = '#2563EB'
-const DARK = '#0F172A'
+const DARK = '#10233F'
 const MID = '#64748B'
 const RED = '#B91C1C'
 const GREEN = '#15803D'
@@ -43,7 +43,7 @@ function Badge({ status }) {
 
 const card = {
   background: '#fff', borderRadius: 14, padding: 20,
-  boxShadow: '0 1px 3px rgba(15,23,42,0.08)', border: '1px solid #E2E8F0',
+  boxShadow: '0 1px 3px rgba(15,23,42,0.08)', border: '1px solid #DCE8F7',
 }
 const btn = (bg = BLUE) => ({
   background: bg, color: '#fff', border: 'none', borderRadius: 8,
@@ -57,7 +57,7 @@ const inp = {
   padding: '8px 10px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: 13, width: '100%',
 }
 const th = { textAlign: 'left', padding: '10px 12px', fontSize: 12, color: MID, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }
-const td = { padding: '10px 12px', fontSize: 13, color: DARK, borderTop: '1px solid #F1F5F9' }
+const td = { padding: '10px 12px', fontSize: 13, color: DARK, borderTop: '1px solid #EAF1FA' }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ function Dashboard({ onNavigate, onOpenCase }) {
           workItems.slice(0, 8).map((w) => (
             <div key={w.id} onClick={() => onOpenCase(w.case.id)} style={{
               display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 0',
-              borderTop: '1px solid #F1F5F9', cursor: 'pointer', alignItems: 'center',
+              borderTop: '1px solid #EAF1FA', cursor: 'pointer', alignItems: 'center',
             }}>
               <div style={{ fontSize: 13, color: DARK }}>
                 <strong>{w.case.claimNumber || w.case.patientRef || w.case.id.slice(-6)}</strong>
@@ -403,7 +403,7 @@ function CaseDetail({ caseId, onBack }) {
         <div style={card}>
           <h3 style={{ margin: '0 0 8px', fontSize: 15, color: DARK }}>Packet (auto-staged)</h3>
           {c.documents.map((d) => (
-            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
+            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #EAF1FA' }}>
               <div style={{ fontSize: 13, color: DARK }}>
                 <strong>{DOC_LABELS[d.type] || d.type}</strong>
                 {d.status === 'SENT'

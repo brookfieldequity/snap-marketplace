@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { facilityAPI } from '../../api.js'
 import NpiReviewModal from './NpiReviewModal.jsx'
 
-const filterSel = { padding: '9px 11px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13, color: '#334155', background: '#fff', cursor: 'pointer' }
+const filterSel = { padding: '9px 11px', border: '1px solid #DCE8F7', borderRadius: 9, fontSize: 13, color: '#334155', background: '#fff', cursor: 'pointer' }
 
 const TYPE_BADGE = {
   CRNA: { bg: '#EFF6FF', color: '#1D4ED8', label: 'CRNA' },
@@ -142,7 +142,7 @@ function Modal({ title, onClose, children }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>{title}</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#10233F', margin: 0 }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B', lineHeight: 1 }}>✕</button>
         </div>
         {children}
@@ -164,19 +164,19 @@ function Field({ label, required, children }) {
 
 function SectionDivider({ label }) {
   return (
-    <div style={{ borderTop: '1px solid #E2E8F0', margin: '20px 0 14px', paddingTop: 14 }}>
+    <div style={{ borderTop: '1px solid #DCE8F7', margin: '20px 0 14px', paddingTop: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
     </div>
   )
 }
 
 const inputStyle = {
-  width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0',
-  borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#F8FAFC',
+  width: '100%', padding: '9px 12px', border: '1px solid #DCE8F7',
+  borderRadius: 8, fontSize: 14, color: '#10233F', background: '#F8FAFC',
   boxSizing: 'border-box', outline: 'none',
 }
 
-const primaryBtnStyle = { padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const primaryBtnStyle = { padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtnStyle = { padding: '10px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
 const linkBtnStyle = { background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }
 
@@ -780,7 +780,7 @@ export default function InternalRosterPage({ onNavigate }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Internal Provider Roster</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>Internal Provider Roster</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{roster.length} provider{roster.length !== 1 ? 's' : ''} on your roster</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -836,7 +836,7 @@ export default function InternalRosterPage({ onNavigate }) {
           </button>
           <button
             onClick={openAdd}
-            style={{ padding: '11px 22px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
           </button>
@@ -857,7 +857,7 @@ export default function InternalRosterPage({ onNavigate }) {
           Stays in view as the coordinator scrolls a long roster so the bulk
           action stays one click away. */}
       {selectedIds.size > 0 && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#0F172A', color: '#fff', borderRadius: 12, padding: '12px 18px', marginBottom: 16, boxShadow: '0 4px 14px rgba(15,23,42,0.18)' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, background: '#10233F', color: '#fff', borderRadius: 12, padding: '12px 18px', marginBottom: 16, boxShadow: '0 4px 14px rgba(15,23,42,0.18)' }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>
             {selectedIds.size} selected
             {selectedIds.size < roster.length && (
@@ -883,20 +883,20 @@ export default function InternalRosterPage({ onNavigate }) {
       {/* Resolve-from-registry result */}
       {reclassifyResult && (
         <Modal title="Roster resolved from registry" onClose={() => setReclassifyResult(null)}>
-          <div style={{ fontSize: 14, color: '#0F172A', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, color: '#10233F', marginBottom: 14 }}>
             Checked {reclassifyResult.checked} provider{reclassifyResult.checked !== 1 ? 's' : ''} against the national registry.{' '}
             <strong>{reclassifyResult.updated} updated.</strong>
           </div>
           {reclassifyResult.changes?.length > 0 ? (
-            <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
+            <div style={{ border: '1px solid #DCE8F7', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
               {reclassifyResult.changes.map((c, i) => {
                 const bits = []
                 if (c.npiAdded) bits.push('+ NPI')
                 if (c.to && c.to !== c.from) bits.push(`${(c.from && TYPE_BADGE[c.from]?.label) || 'untyped'} → ${TYPE_BADGE[c.to]?.label || c.to}`)
                 if (c.unbenched) bits.push('activated')
                 return (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
-                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{c.name}</span>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: '1px solid #EAF1FA', fontSize: 13 }}>
+                    <span style={{ fontWeight: 600, color: '#10233F' }}>{c.name}</span>
                     <span style={{ color: '#059669', whiteSpace: 'nowrap', fontWeight: 600 }}>{bits.join(' · ')}</span>
                   </div>
                 )
@@ -940,7 +940,7 @@ export default function InternalRosterPage({ onNavigate }) {
                       <button onClick={() => { const s = {}; clinical.forEach((p) => { if (hasContact(p)) s[p.id] = true }); setInviteSel(s) }} style={linkBtnStyle}>Select all</button>
                       <button onClick={() => setInviteSel({})} style={linkBtnStyle}>Clear</button>
                     </div>
-                    <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
+                    <div style={{ border: '1px solid #DCE8F7', borderRadius: 10, maxHeight: 320, overflowY: 'auto' }}>
                       {clinical.map((p) => {
                         const contact = hasContact(p)
                         const status = p.credentialingStatus || 'NOT_INVITED'
@@ -953,10 +953,10 @@ export default function InternalRosterPage({ onNavigate }) {
                         else if (status === 'INVITED') { note = 'Already invited — re-send'; noteColor = '#2563EB' }
                         else if (p.externallyCredentialed && !expiring) { note = `Already credentialed — defers to renewal${p.licenseExpiration ? ' (' + p.licenseExpiration.substring(0, 10) + ')' : ''}`; noteColor = '#A16207' }
                         return (
-                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid #F1F5F9', cursor: contact ? 'pointer' : 'not-allowed', opacity: contact ? 1 : 0.6 }}>
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid #EAF1FA', cursor: contact ? 'pointer' : 'not-allowed', opacity: contact ? 1 : 0.6 }}>
                             <input type="checkbox" checked={!!inviteSel[p.id]} disabled={!contact} onChange={() => toggleInvite(p.id)} style={{ width: 16, height: 16 }} />
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{p.providerName}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>{p.providerName}</div>
                               <div style={{ fontSize: 12, color: noteColor }}>{note}</div>
                             </div>
                           </label>
@@ -980,7 +980,7 @@ export default function InternalRosterPage({ onNavigate }) {
             </>
           ) : (
             <>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 12 }}>
                 ✅ {inviteResult.sent} invite{inviteResult.sent !== 1 ? 's' : ''} sent
               </div>
               {inviteResult.skippedCount > 0 && (
@@ -1037,11 +1037,11 @@ export default function InternalRosterPage({ onNavigate }) {
       )}
 
       {!loading && !error && roster.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+        <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No providers on your roster yet.</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F', marginBottom: 8 }}>No providers on your roster yet.</div>
           <div style={{ fontSize: 14, color: '#64748B', marginBottom: 24 }}>Add your first provider to start building your schedule.</div>
-          <button onClick={openAdd} style={{ padding: '11px 24px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={openAdd} style={{ padding: '11px 24px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             + Add Your First Provider
           </button>
         </div>
@@ -1054,7 +1054,7 @@ export default function InternalRosterPage({ onNavigate }) {
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
             placeholder="🔍 Search providers…"
-            style={{ flex: '1 1 220px', maxWidth: 320, padding: '9px 13px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13.5, outline: 'none', background: '#fff' }}
+            style={{ flex: '1 1 220px', maxWidth: 320, padding: '9px 13px', border: '1px solid #DCE8F7', borderRadius: 9, fontSize: 13.5, outline: 'none', background: '#fff' }}
           />
           <select value={fType} onChange={(e) => setFType(e.target.value)} style={filterSel}>
             <option value="">All types</option>
@@ -1116,7 +1116,7 @@ export default function InternalRosterPage({ onNavigate }) {
                   style={{ position: 'absolute', top: 14, right: 14, width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB' }}
                 />
                 <div style={{ paddingRight: 28 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', marginBottom: 8 }}>{p.providerName}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: '#10233F', marginBottom: 8 }}>{p.providerName}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <Badge bg={typeBadge.bg} color={typeBadge.color} label={typeBadge.label} />
                     <Badge bg={empBadge.bg} color={empBadge.color} label={empBadge.label} />
@@ -1236,7 +1236,7 @@ export default function InternalRosterPage({ onNavigate }) {
                     tab, rules + balances in PTO → Reports. */}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                  <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                  <button onClick={() => openEdit(p)} style={{ padding: '6px 14px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                     ✏️ Edit
                   </button>
                   {!p.snapAccountLinked && (
@@ -1289,7 +1289,7 @@ export default function InternalRosterPage({ onNavigate }) {
           {/* Roster-card tabs (7/31): Schedule / Payroll / Profile. Purely
               presentational — every field stays mounted (display toggling),
               so form state and save behavior are unchanged. */}
-          <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #E2E8F0', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #DCE8F7', marginBottom: 16 }}>
             {[['schedule', '📅 Schedule'], ['payroll', '💵 Payroll'], ['profile', '👤 Profile']].map(([k, label]) => (
               <button
                 key={k}
@@ -1453,14 +1453,14 @@ export default function InternalRosterPage({ onNavigate }) {
                 return (
                   <>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
-                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
                       {sites.map((name, i) => {
                         const v = siteCred[name] || {}
                         return (
-                          <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < sites.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                          <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < sites.length - 1 ? '1px solid #EAF1FA' : 'none' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
                               <input type="checkbox" checked={!!v.on} onChange={() => toggleSite(name)} style={{ width: 16, height: 16 }} />
-                              <span style={{ fontSize: 13, color: '#0F172A' }}>{name}</span>
+                              <span style={{ fontSize: 13, color: '#10233F' }}>{name}</span>
                             </label>
                             {v.on && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1535,7 +1535,7 @@ export default function InternalRosterPage({ onNavigate }) {
                 </label>
               </Field>
               {form.dualEmployment && (
-                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
+                <div style={{ background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
                   <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
                     W-2 salary uses the Annual Base Rate above. The Payee Type / Business Name / EIN / All-In Cost above describe the <strong>1099</strong> side.
                   </div>
@@ -1598,10 +1598,10 @@ export default function InternalRosterPage({ onNavigate }) {
           </div>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+            <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
               {saving ? 'Saving...' : 'Save Provider'}
             </button>
           </div>
@@ -1672,10 +1672,10 @@ export default function InternalRosterPage({ onNavigate }) {
               )}
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowUploadModal(false)} disabled={uploading} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                <button onClick={() => setShowUploadModal(false)} disabled={uploading} style={{ padding: '9px 20px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                   Cancel
                 </button>
-                <button onClick={handleUpload} disabled={!uploadFile || uploading} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !uploadFile || uploading ? 'not-allowed' : 'pointer', opacity: !uploadFile || uploading ? 0.6 : 1 }}>
+                <button onClick={handleUpload} disabled={!uploadFile || uploading} style={{ padding: '9px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !uploadFile || uploading ? 'not-allowed' : 'pointer', opacity: !uploadFile || uploading ? 0.6 : 1 }}>
                   {uploading ? 'Importing…' : 'Import'}
                 </button>
               </div>
@@ -1730,7 +1730,7 @@ export default function InternalRosterPage({ onNavigate }) {
                     Review NPIs now
                   </button>
                 )}
-                <button onClick={async () => { setShowUploadModal(false); await load(); await loadNpiReview() }} style={{ padding: '9px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={async () => { setShowUploadModal(false); await load(); await loadNpiReview() }} style={{ padding: '9px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   Done
                 </button>
               </div>
@@ -1774,7 +1774,7 @@ export default function InternalRosterPage({ onNavigate }) {
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={() => copyClaimCode(claimCodeModal.code)}
-              style={{ flex: 1, padding: '11px 16px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              style={{ flex: 1, padding: '11px 16px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
             >
               {claimCodeCopied ? '✓ Copied' : '📋 Copy code'}
             </button>

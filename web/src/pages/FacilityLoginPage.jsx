@@ -116,7 +116,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
     border: '1.5px solid #E2E8F0',
     borderRadius: 10,
     fontSize: 15,
-    color: '#0F172A',
+    color: '#10233F',
     outline: 'none',
     transition: 'border-color 0.15s',
   }
@@ -165,7 +165,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
           <div style={{ fontSize: 28, fontWeight: 900, color: '#2563EB', letterSpacing: '-0.04em' }}>
             SNAP
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginTop: 8 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#10233F', marginTop: 8 }}>
             {view === 'login' ? 'Facility Sign In' : view === 'change' ? 'Set a New Password' : 'Reset Password'}
           </h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
@@ -192,7 +192,7 @@ export default function FacilityLoginPage({ onLogin, onRegister, onBack }) {
                 <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} style={inputStyle} />
               </div>
               {error && <div style={{ color: '#DC2626', fontSize: 13 }}>{error}</div>}
-              <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+              <button type="submit" disabled={loading} style={{ width: '100%', padding: '13px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
                 {loading ? 'Saving…' : 'Set Password & Continue'}
               </button>
             </div>

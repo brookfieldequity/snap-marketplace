@@ -12,7 +12,7 @@ function Reveal({ name }) {
   return (
     <div style={{ textAlign: 'center', padding: '48px 0' }}>
       <div style={{ fontSize: 40 }}>📄</div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 12 }}>Reading {name || 'the CV'}…</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginTop: 12 }}>Reading {name || 'the CV'}…</div>
       <div style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>SNAP is pulling the full profile — contact, training, work history, certifications.</div>
     </div>
   )
@@ -31,14 +31,14 @@ function Field({ label, value, editable, onChange, low }) {
           autoFocus value={v} onChange={(e) => setV(e.target.value)}
           onBlur={() => { setEditing(false); if (v !== (value || '')) onChange(v) }}
           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-          style={{ flex: 1, fontSize: 14, color: '#0F172A', border: '1px solid #2563EB', borderRadius: 6, padding: '2px 8px', outline: 'none' }}
+          style={{ flex: 1, fontSize: 14, color: '#10233F', border: '1px solid #2563EB', borderRadius: 6, padding: '2px 8px', outline: 'none' }}
         />
       ) : (
         <div
           onClick={editable ? () => setEditing(true) : undefined}
           title={editable ? 'Click to edit' : undefined}
           style={{
-            flex: 1, fontSize: 14, color: empty ? '#CBD5E1' : '#0F172A', cursor: editable ? 'text' : 'default',
+            flex: 1, fontSize: 14, color: empty ? '#CBD5E1' : '#10233F', cursor: editable ? 'text' : 'default',
             borderBottom: low && !empty ? '2px solid #FCD34D' : '2px solid transparent', paddingBottom: 1,
           }}
         >
@@ -52,7 +52,7 @@ function Field({ label, value, editable, onChange, low }) {
 function Section({ title, children }) {
   return (
     <div style={{ marginBottom: 22 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0', paddingBottom: 6, marginBottom: 10 }}>{title}</div>
+      <div style={{ fontSize: 12, fontWeight: 800, color: '#10233F', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #DCE8F7', paddingBottom: 6, marginBottom: 10 }}>{title}</div>
       {children}
     </div>
   )
@@ -129,7 +129,7 @@ export default function CredCvReader() {
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 780 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Read a CV</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#10233F', margin: 0 }}>Read a CV</h1>
       <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 4, marginBottom: 20 }}>
         Upload a provider's CV and SNAP fills their whole profile — contact, training, work history, certifications. Glance, then save. No typing.
       </div>
@@ -138,16 +138,16 @@ export default function CredCvReader() {
 
 
       {done ? (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '40px 24px', textAlign: 'center' }}>
           <div style={{ width: 60, height: 60, borderRadius: 999, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: 28 }}>✓</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', marginTop: 14 }}>Saved to {selectedName || 'the'} passport</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#10233F', marginTop: 14 }}>Saved to {selectedName || 'the'} passport</div>
           <div style={{ fontSize: 13.5, color: '#64748B', marginTop: 8 }}>
             Added {done.counts?.education || 0} education/training, {done.counts?.workHistory || 0} work-history, and {done.counts?.affiliations || 0} affiliation entries, plus contact details. Every Cred Map packet for this provider now fills from it.
           </div>
           <button onClick={() => { setProfile(null); setFile(null); setDone(null); setNpi('') }} style={{ marginTop: 18, padding: '11px 22px', background: '#2563EB', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>Read another CV</button>
         </div>
       ) : reading ? (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16 }}><Reveal name={file?.name} /></div>
+        <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16 }}><Reveal name={file?.name} /></div>
       ) : !profile ? (
         <>
           <div
@@ -167,19 +167,19 @@ export default function CredCvReader() {
       ) : (
         <>
           {/* Provider picker + summary */}
-          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 800, color: '#166534' }}>✨ Read {filledCount} details from the CV</span>
             {low && <span style={{ fontSize: 11.5, fontWeight: 700, color: '#92400E', background: '#FEF3C7', borderRadius: 999, padding: '3px 10px' }}>Give the amber items a glance</span>}
             <div style={{ flex: 1 }} />
             <label style={{ fontSize: 12.5, color: '#64748B', fontWeight: 600 }}>Save to</label>
-            <select value={npi} onChange={(e) => setNpi(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#fff' }}>
+            <select value={npi} onChange={(e) => setNpi(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#fff' }}>
               <option value="">Pick provider…</option>
               {roster.map((r) => <option key={r.id} value={r.npi}>{r.providerName}</option>)}
             </select>
           </div>
 
           {/* The dossier */}
-          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: '24px 28px' }}>
+          <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 16, padding: '24px 28px' }}>
             <Section title="Identity">
               <Field label="First name" value={profile.identity?.firstName} editable low={low} onChange={(v) => setField('identity', 'firstName', v)} />
               <Field label="Middle" value={profile.identity?.middleName} editable low={low} onChange={(v) => setField('identity', 'middleName', v)} />
@@ -200,7 +200,7 @@ export default function CredCvReader() {
             {(profile.education?.length > 0) && (
               <Section title="Education & Training">
                 {profile.education.map((e, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '3px 0' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '3px 0' }}>
                     <strong>{LEVEL_LABEL[e.level] || e.level}</strong>{e.institution ? ` — ${e.institution}` : ''}
                     {e.degreeOrProgram ? <span style={{ color: '#64748B' }}> · {e.degreeOrProgram}</span> : null}
                     {e.graduationDate ? <span style={{ color: '#94A3B8' }}> · {e.graduationDate}</span> : null}
@@ -211,7 +211,7 @@ export default function CredCvReader() {
             {(profile.workHistory?.length > 0) && (
               <Section title="Work History">
                 {profile.workHistory.map((w, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '3px 0' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '3px 0' }}>
                     <strong>{w.role || 'Position'}</strong>{w.employer ? ` — ${w.employer}` : ''}
                     <span style={{ color: '#94A3B8' }}> · {w.startDate || '?'} – {w.currentlyEmployed ? 'present' : (w.endDate || '?')}</span>
                     {w.location ? <span style={{ color: '#64748B' }}> · {w.location}</span> : null}
@@ -222,7 +222,7 @@ export default function CredCvReader() {
             {(profile.affiliations?.length > 0) && (
               <Section title="Hospital Affiliations">
                 {profile.affiliations.map((h, i) => (
-                  <div key={i} style={{ fontSize: 13.5, color: '#0F172A', padding: '3px 0' }}>
+                  <div key={i} style={{ fontSize: 13.5, color: '#10233F', padding: '3px 0' }}>
                     <strong>{h.hospitalName}</strong>
                     <span style={{ color: '#94A3B8' }}> · {h.startDate || '?'} – {h.currentlyActive ? 'present' : (h.endDate || '?')}</span>
                   </div>
@@ -231,7 +231,7 @@ export default function CredCvReader() {
             )}
             {profile.boardCertification?.certifyingBoard && (
               <Section title="Board Certification">
-                <div style={{ fontSize: 13.5, color: '#0F172A' }}>
+                <div style={{ fontSize: 13.5, color: '#10233F' }}>
                   <strong>{profile.boardCertification.certifyingBoard}</strong>
                   {profile.boardCertification.specialty ? <span style={{ color: '#64748B' }}> · {profile.boardCertification.specialty}</span> : null}
                   {profile.boardCertification.status ? <span style={{ color: '#166534', fontWeight: 700 }}> · {profile.boardCertification.status}</span> : null}

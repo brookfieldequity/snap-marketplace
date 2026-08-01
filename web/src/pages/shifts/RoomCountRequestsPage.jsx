@@ -5,7 +5,7 @@ import { facilityAPI } from '../../api.js'
 // site, one-click send the monthly tokenized link to each site, and watch the
 // status board. Returned cards feed the schedule builder as the demand source.
 
-const NAVY = '#0F172A', ROYAL = '#2563EB', SLATE = '#475569', MUTED = '#94A3B8', LINE = '#E2E8F0'
+const NAVY = '#10233F', ROYAL = '#2563EB', SLATE = '#475569', MUTED = '#94A3B8', LINE = '#E2E8F0'
 const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 const STATUS_META = {

@@ -10,10 +10,10 @@ function fmt(n) {
 const inputStyle = {
   width: '100%',
   padding: '10px 12px',
-  border: '1px solid #E2E8F0',
+  border: '1px solid #DCE8F7',
   borderRadius: 8,
   fontSize: 14,
-  color: '#0F172A',
+  color: '#10233F',
   background: '#F8FAFC',
   boxSizing: 'border-box',
 }
@@ -169,7 +169,7 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
     <div style={{ padding: '32px 40px', maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>
           StaffIQ Calculator
         </h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>
@@ -180,8 +180,8 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
       {/* Two-column layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
         {/* Left — Inputs */}
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 28 }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 28 }}>
             Your Facility
           </div>
 
@@ -218,14 +218,14 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
             </div>
           </Field>
 
-          <div style={{ marginTop: 8, padding: '12px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+          <div style={{ marginTop: 8, padding: '12px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #DCE8F7', fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
             Results update instantly as you adjust your inputs. No account required.
           </div>
         </div>
 
         {/* Right — Results */}
-        <div style={{ background: '#F8FAFC', borderRadius: 16, border: '1px solid #E2E8F0', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 28 }}>
+        <div style={{ background: '#F8FAFC', borderRadius: 16, border: '1px solid #DCE8F7', padding: '32px 36px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F', marginBottom: 28 }}>
             Your Estimate
           </div>
 
@@ -235,7 +235,7 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
             color="#0F172A"
           />
 
-          <div style={{ borderTop: '1px solid #E2E8F0', margin: '20px 0' }} />
+          <div style={{ borderTop: '1px solid #DCE8F7', margin: '20px 0' }} />
 
           <ResultRow
             label="Annual waste from team model inefficiency (Inefficiency #1)"
@@ -249,7 +249,7 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
             color="#F59E0B"
           />
 
-          <div style={{ borderTop: '1px solid #E2E8F0', margin: '20px 0' }} />
+          <div style={{ borderTop: '1px solid #DCE8F7', margin: '20px 0' }} />
 
           <ResultRow
             label="Total estimated annual staffing inefficiency"
@@ -259,7 +259,7 @@ export default function StaffIQCalculatorPage({ onNavigate }) {
             sub="Conservative estimate based on 8% industry standard inefficiency rate"
           />
 
-          <div style={{ padding: '14px 18px', background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px', background: '#fff', borderRadius: 10, border: '1px solid #DCE8F7', marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: '#475569', marginBottom: 6 }}>
               Your facility is likely wasting <strong style={{ color: '#EF4444' }}>{inefficiencyPct}%</strong> of your annual staffing budget
             </div>

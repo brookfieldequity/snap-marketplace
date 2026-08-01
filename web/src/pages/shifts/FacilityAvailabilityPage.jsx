@@ -37,11 +37,11 @@ function shiftMonth(key, delta) {
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputStyle = {
-  width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0',
-  borderRadius: 8, fontSize: 14, color: '#0F172A', background: '#F8FAFC',
+  width: '100%', padding: '9px 12px', border: '1px solid #DCE8F7',
+  borderRadius: 8, fontSize: 14, color: '#10233F', background: '#F8FAFC',
   boxSizing: 'border-box', outline: 'none',
 }
-const primaryBtnStyle = { padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const primaryBtnStyle = { padding: '10px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 const ghostBtnStyle = { padding: '9px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 
 function Badge({ bg, color, label }) {
@@ -250,7 +250,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
     <div style={{ padding: '32px 40px', maxWidth: 1240, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Availability</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>Availability</h1>
         <p style={{ fontSize: 14, color: '#64748B', marginTop: 4, maxWidth: 760 }}>
           Set who can work each day this month — it feeds the schedule builder. Full-time providers are available unless marked off; per-diem/locums must be marked available.
         </p>
@@ -259,7 +259,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
       {/* Month selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <button onClick={() => changeMonth(-1)} style={{ ...ghostBtnStyle, padding: '8px 14px', fontSize: 16, lineHeight: 1 }} title="Previous month">‹</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', minWidth: 170, textAlign: 'center' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#10233F', minWidth: 170, textAlign: 'center' }}>
           {MONTH_NAMES[month0]} {year}
         </div>
         <button onClick={() => changeMonth(1)} style={{ ...ghostBtnStyle, padding: '8px 14px', fontSize: 16, lineHeight: 1 }} title="Next month">›</button>
@@ -274,9 +274,9 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
       {loading && <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8', fontSize: 15 }}>Loading availability…</div>}
 
       {!loading && !error && members.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+        <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #DCE8F7' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>No providers to schedule yet.</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F', marginBottom: 8 }}>No providers to schedule yet.</div>
           <div style={{ fontSize: 14, color: '#64748B' }}>Add providers to your roster first, then come back to set their availability.</div>
         </div>
       )}
@@ -284,8 +284,8 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
       {!loading && !error && members.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, alignItems: 'start' }}>
           {/* LEFT — member list */}
-          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            <div style={{ padding: 14, borderBottom: '1px solid #F1F5F9' }}>
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
+            <div style={{ padding: 14, borderBottom: '1px solid #EAF1FA' }}>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -307,12 +307,12 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                     onClick={() => selectMember(m.rosterEntryId)}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                      padding: '12px 16px', border: 'none', borderBottom: '1px solid #F1F5F9',
+                      padding: '12px 16px', border: 'none', borderBottom: '1px solid #EAF1FA',
                       borderLeft: isSel ? '3px solid #2563EB' : '3px solid transparent',
                       background: isSel ? '#EFF6FF' : '#fff',
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>{m.name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F', marginBottom: 6 }}>{m.name}</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <Badge bg={tb.bg} color={tb.color} label={tb.label} />
                       <Badge bg={eb.bg} color={eb.color} label={eb.label} />
@@ -326,17 +326,17 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
           {/* RIGHT — calendar + actions for the selected member */}
           <div>
             {!selectedMember ? (
-              <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '80px 40px', textAlign: 'center', color: '#64748B' }}>
+              <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', padding: '80px 40px', textAlign: 'center', color: '#64748B' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>👈</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#0F172A' }}>Select a provider to set their availability.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#10233F' }}>Select a provider to set their availability.</div>
               </div>
             ) : (
               <>
                 {/* Selected-member header + quick actions */}
-                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 22px', marginBottom: 18 }}>
+                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', padding: '18px 22px', marginBottom: 18 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>{selectedMember.name}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#10233F' }}>{selectedMember.name}</div>
                       <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>
                         Default this month: {selectedMember.defaultAvailable
                           ? <strong style={{ color: '#15803D' }}>Available</strong>
@@ -350,7 +350,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                   </div>
 
                   {/* Range editor */}
-                  <div style={{ borderTop: '1px solid #F1F5F9', marginTop: 16, paddingTop: 16 }}>
+                  <div style={{ borderTop: '1px solid #EAF1FA', marginTop: 16, paddingTop: 16 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Mark date range</div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                       <div>
@@ -387,7 +387,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                 </div>
 
                 {/* Calendar */}
-                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px' }}>
+                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', padding: '20px 22px' }}>
                   {/* Month nav — also on the calendar so you don't scroll up */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
                     <button
@@ -395,7 +395,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                       style={{ width: 36, height: 36, border: '1.5px solid #E2E8F0', borderRadius: 9, background: '#F8FAFC', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontWeight: 700 }}
                       title="Previous month"
                     >‹</button>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', minWidth: 160, textAlign: 'center' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#10233F', minWidth: 160, textAlign: 'center' }}>
                       {MONTH_NAMES[month0]} {year}
                     </div>
                     <button
@@ -463,9 +463,9 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                   {editorDate && (() => {
                     const eff = effectiveFor(selectedMember, editorDate)
                     return (
-                      <div style={{ marginTop: 18, borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
+                      <div style={{ marginTop: 18, borderTop: '1px solid #EAF1FA', paddingTop: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#10233F' }}>
                             {(() => {
                               const { year: ey, month0: em } = parseMonthKey(editorDate.slice(0, 7))
                               return `${MONTH_NAMES[em]} ${Number(editorDate.slice(8))}, ${ey}`
@@ -523,7 +523,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
             )}
 
             {/* Legend */}
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', marginTop: 16, padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, fontSize: 12, color: '#475569' }}>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', marginTop: 16, padding: '12px 16px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 12, fontSize: 12, color: '#475569' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#F0FDF4', border: '1.5px solid #BBF7D0' }} /> Available</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#FEF2F2', border: '1.5px solid #FECACA' }} /> Unavailable</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563EB' }} /> Provider-set</span>

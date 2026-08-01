@@ -41,7 +41,7 @@ function Toggle({ on, onClick, label, hint }) {
         <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
       </span>
       <span>
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>{label}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: '#10233F' }}>{label}</span>
         {hint && <span style={{ display: 'block', fontSize: 11.5, color: '#64748B', marginTop: 2, lineHeight: 1.4 }}>{hint}</span>}
       </span>
     </button>
@@ -126,7 +126,7 @@ export default function OutListRulesModal({ year, month, monthName, onClose, onD
       <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>🚪 Out List Rules</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F', margin: 0 }}>🚪 Out List Rules</h2>
             <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>Set the rules once, then build every day's release order in one click.</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B' }}>✕</button>
@@ -159,7 +159,7 @@ export default function OutListRulesModal({ year, month, monthName, onClose, onD
             </div>
 
             {/* Rule toggles */}
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #EAF1FA' }}>
               <div style={sectionTitle}>Fairness rules</div>
               <Toggle on={rules.lateSiteNoCloseAdjacent} onClick={() => patch('lateSiteNoCloseAdjacent', !rules.lateSiteNoCloseAdjacent)}
                 label="Late site → no closing the adjacent day"
@@ -173,7 +173,7 @@ export default function OutListRulesModal({ year, month, monthName, onClose, onD
             </div>
 
             {/* One-click run */}
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #EAF1FA' }}>
               <div style={sectionTitle}>Build the out lists</div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                 <button onClick={() => setScope('month')} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${scope === 'month' ? '#2563EB' : '#CBD5E1'}`, background: scope === 'month' ? '#EFF6FF' : '#fff', color: scope === 'month' ? '#1D4ED8' : '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -183,7 +183,7 @@ export default function OutListRulesModal({ year, month, monthName, onClose, onD
                   One week
                 </button>
                 {scope === 'week' && (
-                  <select value={weekStart} onChange={(e) => setWeekStart(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#0F172A', background: '#F8FAFC' }}>
+                  <select value={weekStart} onChange={(e) => setWeekStart(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, color: '#10233F', background: '#F8FAFC' }}>
                     {weeks.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
                   </select>
                 )}
@@ -211,10 +211,10 @@ export default function OutListRulesModal({ year, month, monthName, onClose, onD
             {error && <div style={{ color: '#DC2626', fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 10, flexWrap: 'wrap' }}>
-              <button onClick={saveRules} disabled={saving || !dirty} style={{ padding: '9px 16px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', color: '#0F172A', opacity: dirty ? 1 : 0.55 }}>
+              <button onClick={saveRules} disabled={saving || !dirty} style={{ padding: '9px 16px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', color: '#10233F', opacity: dirty ? 1 : 0.55 }}>
                 {saving ? 'Saving…' : dirty ? 'Save rules' : 'Rules saved'}
               </button>
-              <button onClick={run} disabled={running} style={{ padding: '10px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1 }}>
+              <button onClick={run} disabled={running} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1 }}>
                 {running ? 'Building…' : `⚡ Build ${scope === 'week' ? 'week' : monthName} out lists`}
               </button>
             </div>

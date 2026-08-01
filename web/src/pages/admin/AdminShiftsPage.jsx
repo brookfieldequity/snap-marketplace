@@ -57,7 +57,7 @@ export default function AdminShiftsPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>All Shifts</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em' }}>All Shifts</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{shifts.length} total shifts</p>
         </div>
       </div>
@@ -68,10 +68,10 @@ export default function AdminShiftsPage() {
           onClick={() => setFilter('all')}
           style={{
             padding: '7px 16px',
-            background: filter === 'all' ? '#0F172A' : '#fff',
+            background: filter === 'all' ? '#10233F' : '#fff',
             color: filter === 'all' ? '#fff' : '#64748B',
             border: '1.5px solid',
-            borderColor: filter === 'all' ? '#0F172A' : '#E2E8F0',
+            borderColor: filter === 'all' ? '#10233F' : '#E2E8F0',
             borderRadius: 20,
             fontSize: 13,
             fontWeight: 600,
@@ -86,10 +86,10 @@ export default function AdminShiftsPage() {
             onClick={() => setFilter(s)}
             style={{
               padding: '7px 16px',
-              background: filter === s ? '#0F172A' : '#fff',
+              background: filter === s ? '#10233F' : '#fff',
               color: filter === s ? '#fff' : '#64748B',
               border: '1.5px solid',
-              borderColor: filter === s ? '#0F172A' : '#E2E8F0',
+              borderColor: filter === s ? '#10233F' : '#E2E8F0',
               borderRadius: 20,
               fontSize: 12,
               fontWeight: 600,
@@ -102,9 +102,9 @@ export default function AdminShiftsPage() {
         ))}
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #DCE8F7', overflow: 'hidden' }}>
         {/* Head */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 100px 70px 70px 70px 130px 180px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 100px 70px 70px 70px 130px 180px', background: '#F8FAFC', borderBottom: '1px solid #DCE8F7' }}>
           {['Facility', 'Specialty', 'Date', 'Hrs', 'Rate', 'Total', 'Status', 'Override Status'].map((h) => (
             <div key={h} style={{ padding: '12px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {h}
@@ -126,20 +126,20 @@ export default function AdminShiftsPage() {
             style={{
               display: 'grid',
               gridTemplateColumns: '2fr 1.5fr 100px 70px 70px 70px 130px 180px',
-              borderBottom: i < displayed.length - 1 ? '1px solid #F1F5F9' : 'none',
+              borderBottom: i < displayed.length - 1 ? '1px solid #EAF1FA' : 'none',
               background: shift.status === 'DISPUTED' ? '#FFF5F5' : (i % 2 === 0 ? '#fff' : '#FAFAFA'),
               alignItems: 'center',
             }}
           >
             <div style={{ padding: '12px 14px' }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>{shift.facilityName}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#10233F' }}>{shift.facilityName}</div>
               {shift.providerName && <div style={{ fontSize: 11, color: '#64748B' }}>{shift.providerName}</div>}
             </div>
             <div style={{ padding: '12px 14px', fontSize: 13, color: '#374151' }}>{shift.specialty}</div>
             <div style={{ padding: '12px 14px', fontSize: 13, color: '#374151' }}>{shift.date}</div>
-            <div style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{shift.duration}h</div>
+            <div style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#10233F' }}>{shift.duration}h</div>
             <div style={{ padding: '12px 14px', fontSize: 13, color: '#374151' }}>{fmt(shift.payRate)}</div>
-            <div style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{fmt(shift.payRate * shift.duration)}</div>
+            <div style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#10233F' }}>{fmt(shift.payRate * shift.duration)}</div>
             <div style={{ padding: '12px 14px' }}>
               <StatusBadge status={shift.status} />
             </div>

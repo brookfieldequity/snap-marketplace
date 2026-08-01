@@ -102,7 +102,7 @@ export default function OutListModal({ dayId, title, onClose, onSaved }) {
       <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>🚪 Out List Builder</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#10233F', margin: 0 }}>🚪 Out List Builder</h2>
             {title && <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{title}</div>}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748B' }}>✕</button>
@@ -149,12 +149,12 @@ export default function OutListModal({ dayId, title, onClose, onSaved }) {
                 const tag = ROLE_TAG[r.role]
                 const isLast = i === rows.length - 1
                 return (
-                  <div key={r.assignmentId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 10, background: '#F8FAFC' }}>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: isLast ? '#0F172A' : '#2563EB', color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div key={r.assignmentId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid #DCE8F7', borderRadius: 10, background: '#F8FAFC' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: isLast ? '#10233F' : '#2563EB', color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       {i + 1}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {EMP_PREFIX[r.employmentCategory] || ''} {r.providerName || 'Unnamed'}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
@@ -163,7 +163,7 @@ export default function OutListModal({ dayId, title, onClose, onSaved }) {
                         </span>
                         {tag && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: tag.bg, color: tag.color }}>{tag.text}</span>}
                         {i === 0 && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#059669' }}>· leaves first</span>}
-                        {isLast && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#0F172A' }}>· closes 🔒</span>}
+                        {isLast && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#10233F' }}>· closes 🔒</span>}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
@@ -181,7 +181,7 @@ export default function OutListModal({ dayId, title, onClose, onSaved }) {
                   onClick={() => save(false)}
                   disabled={saving}
                   title="Save the order but hide it from the floor runner"
-                  style={{ padding: '9px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', color: '#374151' }}
+                  style={{ padding: '9px 16px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', color: '#374151' }}
                 >
                   Unpublish
                 </button>
@@ -189,14 +189,14 @@ export default function OutListModal({ dayId, title, onClose, onSaved }) {
               <button
                 onClick={() => save(undefined)}
                 disabled={saving}
-                style={{ padding: '9px 16px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', color: '#0F172A' }}
+                style={{ padding: '9px 16px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', color: '#10233F' }}
               >
                 {saving ? 'Saving…' : 'Save draft'}
               </button>
               <button
                 onClick={() => save(true)}
                 disabled={saving}
-                style={{ padding: '9px 18px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
+                style={{ padding: '9px 18px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
               >
                 {saving ? 'Saving…' : '📢 Save & publish to floor'}
               </button>

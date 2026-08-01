@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../../api.js'
 
-const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }
-const selectStyle = { padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', minWidth: 280 }
+const card = { background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, padding: 20 }
+const selectStyle = { padding: '8px 10px', border: '1px solid #DCE8F7', borderRadius: 8, fontSize: 14, color: '#10233F', minWidth: 280 }
 
 export default function AdminFeatureFlagsPage() {
   const [facilities, setFacilities] = useState([])
@@ -68,7 +68,7 @@ export default function AdminFeatureFlagsPage() {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 980, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Feature Flags</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#10233F', margin: 0 }}>Feature Flags</h1>
       <div style={{ fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 20 }}>
         Per-facility feature access. Each flag defaults from the facility's subscription tier; set an override to force it
         on or off. Only SNAP admins see this.
@@ -108,9 +108,9 @@ export default function AdminFeatureFlagsPage() {
               const state = data.flags[f.name] || { enabled: false, source: 'TIER' }
               const busy = savingFlag === f.name
               return (
-                <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid #F1F5F9' }}>
+                <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid #EAF1FA' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#10233F' }}>
                       {f.label}
                       {f.adminOnly && (
                         <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 4, padding: '1px 6px' }}>
