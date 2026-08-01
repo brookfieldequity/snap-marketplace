@@ -774,7 +774,7 @@ function AllocationPanel({ year, month }) {
   const Bar = ({ target, actual }) => (
     <div style={{ position: 'relative', width: 120, height: 8, background: '#F1F5F9', borderRadius: 4, flexShrink: 0 }}>
       {actual != null && (
-        <div style={{ position: 'absolute', left: 0, top: 0, height: 8, width: `${Math.min(100, actual)}%`, background: Math.abs((actual ?? 0) - target) >= 10 ? '#F59E0B' : '#7C3AED', borderRadius: 4, opacity: 0.85 }} />
+        <div style={{ position: 'absolute', left: 0, top: 0, height: 8, width: `${Math.min(100, actual)}%`, background: Math.abs((actual ?? 0) - target) >= 10 ? '#F59E0B' : '#0891B2', borderRadius: 4, opacity: 0.85 }} />
       )}
       <div title={`target ${target}%`} style={{ position: 'absolute', left: `${Math.min(100, target)}%`, top: -2, width: 2, height: 12, background: '#0F172A', borderRadius: 1 }} />
     </div>
@@ -786,7 +786,7 @@ function AllocationPanel({ year, month }) {
         <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>🎯 Site allocation</span>
         <span style={{ fontSize: 11.5, color: '#94A3B8' }}>target (▮) vs actual this month · {providers.length} provider{providers.length === 1 ? '' : 's'} with targets</span>
         {suggestions.length > 0 && (
-          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#F5F3FF', border: '1px solid #DDD6FE', color: '#5B21B6' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: '#ECFEFF', border: '1px solid #A5F3FC', color: '#155E75' }}>
             📊 {suggestions.length} drift suggestion{suggestions.length === 1 ? '' : 's'}
           </span>
         )}
@@ -798,14 +798,14 @@ function AllocationPanel({ year, month }) {
 
       {/* Drift suggestions always visible — they're the actionable part. */}
       {suggestions.map((s) => (
-        <div key={`${s.rosterId}:${s.location}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', borderRadius: 10, background: '#F5F3FF', border: '1px dashed #A78BFA' }}>
+        <div key={`${s.rosterId}:${s.location}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', borderRadius: 10, background: '#ECFEFF', border: '1px dashed #67E8F9' }}>
           <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, color: '#0F172A' }}>
             <b>{s.providerName}</b> has run <b>{s.observedPct}%</b> at {s.location} over {s.windowMonths} months — the card says <b>{s.targetPct}%</b>. Reality votes to amend it.
           </div>
           <button
             onClick={() => applySuggestion(s)}
             disabled={applying === `${s.rosterId}:${s.location}`}
-            style={{ fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: applying === `${s.rosterId}:${s.location}` ? 0.5 : 1 }}
+            style={{ fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8, background: '#0891B2', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: applying === `${s.rosterId}:${s.location}` ? 0.5 : 1 }}
           >
             Set target to {s.suggestPct}%
           </button>
@@ -1675,7 +1675,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
             onClick={handleDraft}
             disabled={drafting}
             title={lastDraft ? `Last draft: ${lastDraft.receipt?.summary || ''} · ${new Date(lastDraft.createdAt).toLocaleString()}` : 'Fill every empty room by roster allocation — your placements never move'}
-            style={{ padding: '10px 20px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: drafting ? 'not-allowed' : 'pointer', opacity: drafting ? 0.7 : 1 }}
+            style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #0891B2, #06B6D4)', boxShadow: '0 2px 12px rgba(8,145,178,0.35)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: drafting ? 'not-allowed' : 'pointer', opacity: drafting ? 0.7 : 1 }}
           >
             {drafting ? 'Drafting…' : '⚡ Draft Month'}
           </button>
@@ -1809,7 +1809,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
       )}
 
       {/* Schedule Intelligence banner */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ECFEFF', border: '1px solid #A5F3FC', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
         <span style={{ fontSize: 16 }}>🧠</span>
         <div style={{ flex: 1, fontSize: 13, color: '#172554' }}>
           <strong>StaffIQ Schedule Intelligence</strong> — Suggestions are ranked by provider availability, preferences, and cost optimization.
@@ -2010,7 +2010,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                   {hasSchedule ? (
                     <>
                       <div style={{ fontSize: 11, fontWeight: 700, color: sc ? sc.text : '#0F172A', marginBottom: 4 }}>
-                        {filledRooms}/{totalRooms} rooms filled{ghostRooms > 0 ? <span style={{ color: '#7C3AED', fontWeight: 800 }}> · 🔮 {ghostRooms} proposed</span> : null}
+                        {filledRooms}/{totalRooms} rooms filled{ghostRooms > 0 ? <span style={{ color: '#0891B2', fontWeight: 800 }}> · 🔮 {ghostRooms} proposed</span> : null}
                       </div>
                       {(() => {
                         const n = dayRows.reduce((s, row) => s + (row.assignments || []).filter(a => a.rosterId && isHardOff(a.rosterId, dateStr)).length, 0)
@@ -2253,7 +2253,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                         >+</button>
                         <span style={{ fontSize: 11, color: '#64748B', marginLeft: 2 }}>rooms</span>
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled{proposedCount > 0 ? <span style={{ color: '#7C3AED' }}> · 🔮 {proposedCount}</span> : null}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: sc.text }}>{filled}/{required} filled{proposedCount > 0 ? <span style={{ color: '#0891B2' }}> · 🔮 {proposedCount}</span> : null}</div>
                       {/* Out-List Builder: post-publish release order for this
                           site/day. Available once anyone is staffed. */}
                       {(filled > 0 || supervisors.length > 0) && (
@@ -2305,14 +2305,14 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                               </div>
                             ) : assignment.ghost ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                <div title="Proposed by the draft engine — this per-diem's availability hasn't come back yet. Never published or shown to sites/providers until you confirm." style={{ fontSize: 11, color: '#6D28D9', fontWeight: 800, background: '#F5F3FF', border: '1px dashed #A78BFA', borderRadius: 6, padding: '2px 8px' }}>
+                                <div title="Proposed by the draft engine — this per-diem's availability hasn't come back yet. Never published or shown to sites/providers until you confirm." style={{ fontSize: 11, color: '#0E7490', fontWeight: 800, background: '#ECFEFF', border: '1px dashed #67E8F9', borderRadius: 6, padding: '2px 8px' }}>
                                   🔮 {EMP_PREFIX[assignment.rosterEntry.employmentCategory]} {assignment.rosterEntry.providerName} — proposed
                                 </div>
                                 <button
                                   onClick={() => handleAssign(row.id, roomNum, assignedRosterId)}
                                   disabled={isLoading}
                                   title="Confirm: make this a real assignment (locks it as yours)"
-                                  style={{ fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 6, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}
+                                  style={{ fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 6, background: '#0891B2', color: '#fff', border: 'none', cursor: 'pointer', flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}
                                 >
                                   ✓ Confirm
                                 </button>
@@ -2410,19 +2410,19 @@ export default function ScheduleBuilderPage({ onNavigate }) {
                                 if (slot.ghost) {
                                   return (
                                     <div key={slot.roomNumber} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <div style={{ flex: 1, fontSize: 11.5, color: '#6D28D9', fontWeight: 800, background: '#F5F3FF', border: '1px dashed #A78BFA', borderRadius: 6, padding: '5px 10px' }}>
+                                      <div style={{ flex: 1, fontSize: 11.5, color: '#0E7490', fontWeight: 800, background: '#ECFEFF', border: '1px dashed #67E8F9', borderRadius: 6, padding: '5px 10px' }}>
                                         🔮 {slot.name || mds.find(p => p.id === slot.currentId)?.providerName || 'Proposed MD'} — proposed supervisor
                                       </div>
                                       <button
                                         onClick={() => handleAssign(row.id, slot.roomNumber, slot.currentId, 'SUPERVISING_MD')}
                                         disabled={isLoading}
-                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
+                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#0891B2', color: '#fff', border: 'none', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
                                       >✓ Confirm</button>
                                       <button
                                         onClick={() => handleAssign(row.id, slot.roomNumber, '')}
                                         disabled={isLoading}
                                         title="Dismiss this proposal"
-                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#fff', color: '#6D28D9', border: '1px solid #A78BFA', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
+                                        style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 6, background: '#fff', color: '#0E7490', border: '1px solid #67E8F9', cursor: 'pointer', opacity: isLoading ? 0.5 : 1 }}
                                       >✕</button>
                                     </div>
                                   )

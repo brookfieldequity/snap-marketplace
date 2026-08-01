@@ -204,9 +204,9 @@ function FlagsPanel() {
           the same way N times — automate it?") + the rules already on.
           Per-rule opt-in; rules run at draft time, machine placements only. */}
       {offers.map((o) => (
-        <div key={o.flagType} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '9px 12px', borderRadius: 10, background: '#F5F3FF', border: '1px dashed #A78BFA' }}>
+        <div key={o.flagType} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '9px 12px', borderRadius: 10, background: '#ECFEFF', border: '1px dashed #67E8F9' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#5B21B6' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#155E75' }}>
               🎓 You've fixed this the same way {o.resolutionCount}× — automate it?
             </div>
             <div style={{ fontSize: 12, color: '#0F172A', fontWeight: 600 }}>{o.label}</div>
@@ -215,7 +215,7 @@ function FlagsPanel() {
           <button
             onClick={() => decideOffer(o, true)}
             disabled={savingRule === o.flagType}
-            style={{ fontSize: 11.5, fontWeight: 800, padding: '6px 12px', borderRadius: 8, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: savingRule === o.flagType ? 0.5 : 1 }}
+            style={{ fontSize: 11.5, fontWeight: 800, padding: '6px 12px', borderRadius: 8, background: '#0891B2', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', opacity: savingRule === o.flagType ? 0.5 : 1 }}
           >
             Turn on
           </button>
@@ -223,7 +223,7 @@ function FlagsPanel() {
             onClick={() => decideOffer(o, false)}
             disabled={savingRule === o.flagType}
             title="Don't automate — keep fixing by hand (won't be offered again)"
-            style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 10px', borderRadius: 8, background: '#fff', color: '#6D28D9', border: '1px solid #A78BFA', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 10px', borderRadius: 8, background: '#fff', color: '#0E7490', border: '1px solid #67E8F9', cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             No thanks
           </button>
@@ -233,13 +233,13 @@ function FlagsPanel() {
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F8FAFC', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active rules</span>
           {activeRules.map((r) => (
-            <span key={r.flagType} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: '#F5F3FF', border: '1px solid #DDD6FE', color: '#5B21B6' }}>
+            <span key={r.flagType} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: '#ECFEFF', border: '1px solid #A5F3FC', color: '#155E75' }}>
               ⚙️ {r.label}
               <button
                 onClick={() => decideOffer(r, false)}
                 disabled={savingRule === r.flagType}
                 title="Turn this rule off"
-                style={{ background: 'none', border: 'none', color: '#7C3AED', fontWeight: 800, cursor: 'pointer', fontSize: 11, padding: 0 }}
+                style={{ background: 'none', border: 'none', color: '#0891B2', fontWeight: 800, cursor: 'pointer', fontSize: 11, padding: 0 }}
               >
                 ✕
               </button>
