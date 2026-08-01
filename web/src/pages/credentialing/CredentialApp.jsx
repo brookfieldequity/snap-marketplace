@@ -245,7 +245,7 @@ export default function CredentialApp({ onBack }) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#F8FAFC' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(160deg, #EAF2FF 0%, #F7FAFF 34%, #FDFCF8 100%)' }}>
       {/* Phone-only top bar — hosts the hamburger since there's no desktop header */}
       {narrow && (
         <div style={{

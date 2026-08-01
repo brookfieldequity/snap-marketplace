@@ -613,6 +613,16 @@ export default function SnapShiftsDashboard({ onNavigate }) {
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1300, margin: '0 auto' }}>
 
+      {/* Morning Light greeting — the app's welcome, on the web. */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontFamily: "'Nunito', 'Inter', sans-serif", fontWeight: 800, fontSize: 26, color: '#0F2B5B', letterSpacing: '-0.015em' }}>
+          {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}
+        </div>
+        <div style={{ fontSize: 13.5, color: '#47586E', marginTop: 2 }}>
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — here's where things stand.
+        </div>
+      </div>
+
       <FlagsPanel />
       <ActivityFeed onNavigate={onNavigate} />
 

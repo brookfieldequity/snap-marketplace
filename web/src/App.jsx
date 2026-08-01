@@ -424,8 +424,11 @@ export default function App() {
             left: 0,
             right: 0,
             height: 56,
-            background: '#fff',
-            borderBottom: '1px solid #E2E8F0',
+            // Morning Light: glassy header over the dawn-wash ground.
+            background: 'rgba(255,255,255,0.78)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            borderBottom: '1px solid rgba(37,99,235,0.10)',
             zIndex: 200,
             display: 'flex',
             alignItems: 'center',
@@ -459,7 +462,7 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0,
-                background: '#F1F5F9',
+                background: 'rgba(37,99,235,0.07)',
                 borderRadius: 999,
                 padding: 3,
               }}
@@ -476,7 +479,8 @@ export default function App() {
                     fontWeight: 600,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
-                    background: activeTab === tab ? '#2563EB' : 'transparent',
+                    background: activeTab === tab ? 'linear-gradient(135deg, #2563EB, #3B82F6)' : 'transparent',
+                    boxShadow: activeTab === tab ? '0 2px 10px rgba(37,99,235,0.35)' : 'none',
                     color: activeTab === tab ? '#fff' : '#64748B',
                   }}
                 >
@@ -520,7 +524,7 @@ export default function App() {
             tabs={availableTabs.map((t) => ({ key: t, label: TAB_META[t].label, active: activeTab === t }))}
             onTab={navigateTab}
           />
-          <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, minHeight: 'calc(100vh - 56px)', background: '#F8FAFC' }}>
+          <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, minHeight: 'calc(100vh - 56px)', background: 'linear-gradient(160deg, #EAF2FF 0%, #F7FAFF 34%, #FDFCF8 100%)' }}>
             <Suspense fallback={<PageLoader />}>
             {/* Brief moment before /me answers and the landing tab is chosen */}
             {!facilityPage && <PageLoader />}
@@ -659,7 +663,7 @@ export default function App() {
           onClose={() => setNavOpen(false)}
           topOffset={52}
         />
-        <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, paddingTop: narrow ? 52 : 0, minHeight: '100vh', background: '#F8FAFC' }}>
+        <main style={{ flex: 1, marginLeft: narrow ? 0 : 240, paddingTop: narrow ? 52 : 0, minHeight: '100vh', background: 'linear-gradient(160deg, #EAF2FF 0%, #F7FAFF 34%, #FDFCF8 100%)' }}>
           <Suspense fallback={<PageLoader />}>
           {adminPage === 'overview'          && <AdminOverviewPage />}
           {adminPage === 'demo'             && <AdminDemoPage />}
