@@ -12,7 +12,18 @@ const AVAIL_STATUS_META = {
   LOCKED:   { label: 'Locked',   bg: '#F1F5F9', color: '#475569' },
 }
 
-function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
+function ProviderAvailabilityPanel({ year, month, roster, facilityId, onNavigate }) {
+  // Open the Set Availability page focused on this month + provider — the
+  // place to SEE a returned submission day-by-day and override it.
+  function viewSubmission(rosterEntryId) {
+    try {
+      sessionStorage.setItem('snapAvailFocus', JSON.stringify({
+        month: `${year}-${String(month).padStart(2, '0')}`,
+        rosterEntryId,
+      }))
+    } catch { /* ignore */ }
+    if (onNavigate) onNavigate('availability')
+  }
   const [requests, setRequests]         = useState([])
   const [loadingReqs, setLoadingReqs]   = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)
@@ -165,7 +176,11 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                 const meta = AVAIL_STATUS_META[req.status] || AVAIL_STATUS_META.NOT_SENT
                 return (
                   <tr key={req.id} style={{ borderBottom: '1px solid #EAF1FA' }}>
-                    <td style={{ padding: '8px 8px', color: '#10233F', fontWeight: 500 }}>{req.providerName}</td>
+                    <td
+                      onClick={() => viewSubmission(req.rosterEntryId)}
+                      title="See their month day-by-day (and adjust) in Set Availability"
+                      style={{ padding: '8px 8px', color: req.submittedAt ? '#2563EB' : '#10233F', fontWeight: req.submittedAt ? 700 : 500, cursor: 'pointer' }}
+                    >{req.providerName}</td>
                     <td style={{ padding: '8px 8px', color: '#64748B' }}>
                       {req.employmentCategory === 'PER_DIEM' ? 'Per-Diem'
                         : req.employmentCategory === 'LOCUMS' ? 'Locums'
@@ -200,6 +215,15 @@ function ProviderAvailabilityPanel({ year, month, roster, facilityId }) {
                             style={{ padding: '4px 10px', background: '#F59E0B', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: reminding === req.id ? 0.6 : 1 }}
                           >
                             {reminding === req.id ? '…' : 'Remind'}
+                          </button>
+                        )}
+                        {req.submittedAt && (
+                          <button
+                            onClick={() => viewSubmission(req.rosterEntryId)}
+                            title="See the returned days and adjust them"
+                            style={{ padding: '4px 10px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            View / adjust
                           </button>
                         )}
                         {(req.status === 'PENDING' || req.status === 'SUBMITTED') && req.link && (
@@ -1705,6 +1729,7 @@ export default function ScheduleBuilderPage({ onNavigate }) {
         month={month}
         roster={roster}
         facilityId={facility?.id}
+        onNavigate={onNavigate}
       />
 
       <AllocationPanel year={year} month={month} />

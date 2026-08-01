@@ -53,7 +53,18 @@ function Badge({ bg, color, label }) {
 }
 
 export default function FacilityAvailabilityPage({ onNavigate }) {
+  // Deep-link focus from the builder's availability panel ("View / adjust"
+  // on a returned request): jump straight to that month + provider.
+  const focus = (() => {
+    try {
+      const raw = sessionStorage.getItem('snapAvailFocus')
+      if (!raw) return null
+      sessionStorage.removeItem('snapAvailFocus')
+      return JSON.parse(raw)
+    } catch { return null }
+  })()
   const [month, setMonth] = useState(() => {
+    if (focus?.month) return focus.month
     const d = new Date()
     return monthKey(d.getFullYear(), d.getMonth())
   })
@@ -61,7 +72,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(focus?.rosterEntryId || null)
 
   // Day editor (inline panel)
   const [editorDate, setEditorDate] = useState(null) // 'YYYY-MM-DD'
