@@ -238,7 +238,7 @@ router.get('/activity', facilityAuth, async (req, res) => {
     const since = new Date(Date.now() - windowDays * 86400000);
     const fid = req.facility.id;
 
-    const [cards, avails, requests, timeOff, draftRuns] = await Promise.all([
+    const [cards, avails, requests, timeOff, draftRuns, adminAvail] = await Promise.all([
       prisma.roomCountRequest.findMany({
         where: { facilityId: fid, OR: [{ submittedAt: { gte: since } }, { lastUpdatedAt: { gte: since } }] },
         select: { location: true, year: true, month: true, submittedAt: true, lastUpdatedAt: true },
@@ -261,6 +261,14 @@ router.get('/activity', facilityAuth, async (req, res) => {
         select: { year: true, month: true, receipt: true, filled: true, ghosts: true, confirmed: true, withdrawn: true, createdAt: true },
         take: 50,
       }).catch(() => []),
+      // Admin availability edits (Set Availability page): source ADMIN rows
+      // touched in the window. Grouped per provider below — a painted range
+      // is one event, not thirty.
+      prisma.rosterAvailability.findMany({
+        where: { facilityId: fid, source: 'ADMIN', updatedAt: { gte: since } },
+        select: { rosterEntryId: true, date: true, available: true, updatedAt: true, rosterEntry: { select: { providerName: true } } },
+        take: 500,
+      }).catch(() => []),
     ]);
 
     const fmtD = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -269,6 +277,30 @@ router.get('/activity', facilityAuth, async (req, res) => {
 
     for (const r of draftRuns) {
       events.push({ ts: r.createdAt, icon: '⚡', kind: 'DRAFT_RUN', title: `Draft updated — ${r.month}/${String(r.year).slice(2)}`, detail: r.receipt?.summary || `${r.filled} filled, ${r.ghosts} proposed` });
+    }
+    // One event per provider per burst of admin availability edits.
+    {
+      const byProvider = new Map();
+      for (const a of adminAvail) {
+        const g = byProvider.get(a.rosterEntryId) || { name: a.rosterEntry?.providerName || 'Provider', dates: [], on: 0, off: 0, ts: a.updatedAt };
+        g.dates.push(a.date);
+        if (a.available) g.on += 1; else g.off += 1;
+        if (a.updatedAt > g.ts) g.ts = a.updatedAt;
+        byProvider.set(a.rosterEntryId, g);
+      }
+      for (const g of byProvider.values()) {
+        g.dates.sort((a, b) => new Date(a) - new Date(b));
+        const parts = [];
+        if (g.on) parts.push(`${g.on} available`);
+        if (g.off) parts.push(`${g.off} unavailable`);
+        events.push({
+          ts: g.ts,
+          icon: '✏️',
+          kind: 'AVAIL_ADMIN_EDIT',
+          title: `You adjusted ${g.name}'s availability`,
+          detail: `${g.dates.length} day(s) set ${parts.length ? `(${parts.join(', ')})` : ''} · ${span(g.dates[0], g.dates[g.dates.length - 1])}`,
+        });
+      }
     }
 
     for (const c of cards) {

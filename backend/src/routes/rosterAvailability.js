@@ -106,7 +106,9 @@ router.get('/', facilityAuth, async (req, res) => {
     for (const sub of availSubs) {
       const key = `${sub.request.rosterEntryId}::${isoOf(sub.date)}`;
       if (!providerMap.has(key)) {
-        providerMap.set(key, { available: sub.available, note: sub.note });
+        // maybe = a soft yes from the link ("could work if needed") — kept
+        // distinct so the grid can mark it instead of flattening it to "no".
+        providerMap.set(key, { available: sub.available, note: sub.note, maybe: sub.maybe === true });
       }
     }
 
@@ -134,7 +136,9 @@ router.get('/', facilityAuth, async (req, res) => {
       else if (providerEntry) { source = 'PROVIDER'; note = providerEntry.note; }
       else { source = 'DEFAULT'; note = null; }
       if (!overrides[rid]) overrides[rid] = {};
-      overrides[rid][date] = { available, source, note: note || null };
+      // maybe survives only while nothing authoritative overrides the day.
+      const maybe = source === 'PROVIDER' && providerEntry?.maybe === true;
+      overrides[rid][date] = { available, source, note: note || null, ...(maybe && { maybe: true }) };
     }
 
     const members = roster.map((r) => ({

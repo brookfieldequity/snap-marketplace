@@ -130,7 +130,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
   // otherwise the member's default.
   function effectiveFor(member, dateStr) {
     const ov = overrides[member.rosterEntryId]?.[dateStr]
-    if (ov) return { available: ov.available, source: ov.source, note: ov.note, override: true }
+    if (ov) return { available: ov.available, source: ov.source, note: ov.note, maybe: ov.maybe === true, override: true }
     return { available: member.defaultAvailable, source: 'DEFAULT', note: null, override: false }
   }
 
@@ -431,9 +431,10 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                       // per-diem/locums DEFAULT-unavailable, so it reads clearly at a
                       // glance). The override dot below still distinguishes explicit
                       // marks from the default.
-                      const bg = eff.available ? '#F0FDF4' : '#FEF2F2'
-                      const border = isOpen ? '#2563EB' : (eff.available ? '#BBF7D0' : '#FECACA')
-                      const txt = eff.available ? '#15803D' : '#B91C1C'
+                      const isMaybe = eff.maybe === true
+                      const bg = isMaybe ? '#FFFBEB' : eff.available ? '#F0FDF4' : '#FEF2F2'
+                      const border = isOpen ? '#2563EB' : (isMaybe ? '#FCD34D' : eff.available ? '#BBF7D0' : '#FECACA')
+                      const txt = isMaybe ? '#B45309' : eff.available ? '#15803D' : '#B91C1C'
                       // Source dot: PROVIDER (blue) vs ADMIN (amber) — colors kept
                       // far apart for at-a-glance distinction. PTO gets a corner
                       // "PTO" label instead of a dot (below).
@@ -445,7 +446,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                           key={dateStr}
                           onClick={() => openDay(dateStr)}
                           disabled={isPast}
-                          title={isPast ? 'In the past' : `${eff.available ? 'Available' : 'Unavailable'}${eff.override ? ` · ${eff.source}` : ' · default'}${eff.note ? ` · ${eff.note}` : ''}`}
+                          title={isPast ? 'In the past' : `${isMaybe ? 'MAYBE — soft yes, worth a call' : eff.available ? 'Available' : 'Unavailable'}${eff.override ? ` · ${eff.source}` : ' · default'}${eff.note ? ` · ${eff.note}` : ''}`}
                           style={{
                             position: 'relative', aspectRatio: '1 / 1', borderRadius: 9,
                             background: isPast ? '#FAFAFA' : bg,
@@ -456,6 +457,10 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
                             padding: 4,
                           }}
                         >
+                          {/* Maybe from the link: a soft yes — corner ? badge */}
+                          {isMaybe && (
+                            <span style={{ position: 'absolute', top: 1, right: 4, fontSize: 11, fontWeight: 900, color: isPast ? '#CBD5E1' : '#D97706' }}>?</span>
+                          )}
                           {/* PTO gets a clear corner label, not just a dot */}
                           {eff.source === 'PTO' && (
                             <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, fontWeight: 800, letterSpacing: '0.02em', color: isPast ? '#CBD5E1' : '#B91C1C' }}>PTO</span>
@@ -537,6 +542,7 @@ export default function FacilityAvailabilityPage({ onNavigate }) {
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', marginTop: 16, padding: '12px 16px', background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 12, fontSize: 12, color: '#475569' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#F0FDF4', border: '1.5px solid #BBF7D0' }} /> Available</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#FEF2F2', border: '1.5px solid #FECACA' }} /> Unavailable</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: '#FFFBEB', border: '1.5px solid #FCD34D', position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: '#D97706' }}>?</span> Maybe (soft yes — worth a call)</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563EB' }} /> Provider-set</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D97706' }} /> Admin-set</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 9, fontWeight: 800, color: '#B91C1C' }}>PTO</span> Time off</span>
