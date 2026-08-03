@@ -163,7 +163,7 @@ router.post('/:token/submit', async (req, res) => {
         submittedAt: true,
         smsConsentAt: true,
         rosterEntryId: true,
-        rosterEntry: { select: { providerName: true, linkedProviderId: true } },
+        rosterEntry: { select: { providerName: true, linkedProviderId: true, phoneNumber: true } },
         facility: { select: { name: true } },
       },
     });
@@ -248,6 +248,46 @@ router.post('/:token/submit', async (req, res) => {
         },
       });
     });
+
+    // Record the consent in the SMS opt-in ledger keyed by phone number —
+    // sendSMS() only texts numbers with an active SmsOptIn row, so without
+    // this write the checkbox wouldn't actually enable texts. Non-fatal: the
+    // availability submission is already saved.
+    if (consent && request.rosterEntry?.phoneNumber) {
+      try {
+        const { normalizePhone } = require('../services/notifications');
+        const e164 = normalizePhone(request.rosterEntry.phoneNumber);
+        if (e164) {
+          const consentText =
+            'I agree to receive scheduling text messages from SNAP at this number. ' +
+            'Message frequency varies; message & data rates may apply. Reply STOP to ' +
+            'opt out, HELP for help. Consent is not a condition of employment or service.';
+          await prisma.smsOptIn.upsert({
+            where: { phoneNumber: e164 },
+            create: {
+              phoneNumber: e164,
+              source: 'AVAIL_PAGE',
+              firstName: null,
+              lastName: request.rosterEntry.providerName?.slice(0, 100) || null,
+              ipAddress: (req.ip || '').slice(0, 100) || null,
+              userAgent: (req.headers['user-agent'] || '').slice(0, 300) || null,
+              consentText,
+            },
+            update: {
+              consentedAt: now,
+              source: 'AVAIL_PAGE',
+              ipAddress: (req.ip || '').slice(0, 100) || null,
+              userAgent: (req.headers['user-agent'] || '').slice(0, 300) || null,
+              consentText,
+              revokedAt: null,
+              revokedVia: null,
+            },
+          });
+        }
+      } catch (optInErr) {
+        console.error('[avail] SMS opt-in write failed (submission still saved):', optInErr.message);
+      }
+    }
 
     // Availability unification: mirror the submitted days into the provider's
     // app calendar (ProviderAvailability) when this roster row is linked to a

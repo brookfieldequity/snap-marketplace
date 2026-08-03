@@ -2438,10 +2438,10 @@ router.post('/availability-requests/send', facilityAuth, async (req, res) => {
     const sendSMS_ = sendSMS; // already imported at top of file
     const sendVia = (via || 'SMS').toUpperCase();
 
-    // Load roster entries to get phone numbers
+    // Load roster entries to get phone numbers + emails
     const entries = await prisma.internalRosterEntry.findMany({
       where: { id: { in: rosterEntryIds }, facilityId: req.facility.id },
-      select: { id: true, providerName: true, phoneNumber: true },
+      select: { id: true, providerName: true, phoneNumber: true, snapAccountEmail: true },
     });
     const entryMap = new Map(entries.map((e) => [e.id, e]));
 
@@ -2499,19 +2499,34 @@ router.post('/availability-requests/send', facilityAuth, async (req, res) => {
         let sendError = null;
 
         // SMS: only marked sent when Twilio actually accepted the message.
+        // SNAP is the sender brand (Twilio TFV); the facility is named in the
+        // body as context, never as the message prefix.
         if (wantSMS) {
           if (!entry.phoneNumber) {
             sendError = 'No phone number on file';
           } else {
-            const smsBody = `${facilityName}: Submit your ${monthName} availability by ${deadlineStr}. ${link} Reply STOP to opt out.`;
+            const smsBody = `SNAP: ${facilityName} has requested your ${monthName} availability — submit by ${deadlineStr}: ${link}`;
             const r = await sendSMS_(entry.phoneNumber, smsBody);
             sent = r.sent;
             if (!r.sent) sendError = r.reason;
           }
         }
-        // Email not yet wired.
-        if (wantEmail && !sent && !sendError) {
-          sendError = 'Email delivery is not yet available';
+        // Email — works today via SendGrid, independent of Twilio/TFV status.
+        // Carries the opt-in-form link so providers can enable texts themselves.
+        if (wantEmail) {
+          if (!entry.snapAccountEmail) {
+            if (!sent) sendError = sendError || 'No email on file';
+          } else {
+            const emailHtml = scheduleEmailHtml(
+              `${monthName} availability request`,
+              `${facilityName} has requested your ${monthName} ${yr} availability. Please submit the days you're available by <strong>${deadlineStr}</strong>.<br/><br/>` +
+                `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#2563EB;color:#fff;border-radius:10px;font-weight:700;text-decoration:none">Submit availability</a><br/><br/>` +
+                `<span style="font-size:12px;color:#64748B">Prefer a text next time? Opt in to SNAP scheduling texts at <a href="${baseUrl}/sms-optin" style="color:#2563EB">${baseUrl.replace(/^https?:\/\//, '')}/sms-optin</a>.</span>`,
+              facilityName
+            );
+            await sendEmail(entry.snapAccountEmail, `${facilityName} — ${monthName} availability request`, emailHtml);
+            sent = true;
+          }
         }
 
         results.push({ rosterEntryId, token: record.token, sent, error: sendError });
@@ -2599,7 +2614,7 @@ router.post('/availability-requests/:id/remind', facilityAuth, async (req, res) 
       where: { id: req.params.id },
       include: {
         facility: { select: { name: true } },
-        rosterEntry: { select: { providerName: true, phoneNumber: true } },
+        rosterEntry: { select: { providerName: true, phoneNumber: true, snapAccountEmail: true } },
       },
     });
 
@@ -2618,23 +2633,37 @@ router.post('/availability-requests/:id/remind', facilityAuth, async (req, res) 
       month: 'long', day: 'numeric', year: 'numeric',
     });
     const link = `${availPublicBaseUrl()}/avail/${record.token}`;
-    const smsBody = `${facilityName}: Reminder — submit your ${monthName} availability by ${deadlineStr}. ${link} Reply STOP to opt out.`;
+    const smsBody = `SNAP: Reminder from ${facilityName} — submit your ${monthName} availability by ${deadlineStr}: ${link}`;
 
     let sent = false;
     let error = null;
     if (record.rosterEntry?.phoneNumber) {
-      try {
-        await sendSMS(record.rosterEntry.phoneNumber, smsBody);
-        sent = true;
-        await prisma.availabilityRequest.update({
-          where: { id: record.id },
-          data: { sentAt: now },
-        });
-      } catch (smsErr) {
-        error = smsErr.message;
-      }
+      // sendSMS never throws — it reports { sent, reason } (and now refuses
+      // numbers without a recorded opt-in), so check the result honestly.
+      const r = await sendSMS(record.rosterEntry.phoneNumber, smsBody);
+      sent = r.sent;
+      if (!r.sent) error = r.reason;
     } else {
       error = 'No phone number on file';
+    }
+    // Email fallback — reaches the provider even while SMS is unavailable or
+    // the provider hasn't opted in to texts yet.
+    if (!sent && record.rosterEntry?.snapAccountEmail) {
+      const emailHtml = scheduleEmailHtml(
+        `Reminder: ${monthName} availability`,
+        `A reminder from ${facilityName} — please submit your ${monthName} availability by <strong>${deadlineStr}</strong>.<br/><br/>` +
+          `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#2563EB;color:#fff;border-radius:10px;font-weight:700;text-decoration:none">Submit availability</a>`,
+        facilityName
+      );
+      await sendEmail(record.rosterEntry.snapAccountEmail, `Reminder — ${facilityName} ${monthName} availability`, emailHtml);
+      sent = true;
+      error = null;
+    }
+    if (sent) {
+      await prisma.availabilityRequest.update({
+        where: { id: record.id },
+        data: { sentAt: now },
+      });
     }
 
     res.json({ ok: true, sent, error });

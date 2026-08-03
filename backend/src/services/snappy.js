@@ -169,7 +169,7 @@ async function execTool(name, input, ctx) {
     const body = `${input.summary}\n\nFacility: ${facilityName}\nUser: ${userEmail}\n\n--- Conversation ---\n${transcript}`;
     // Fire both channels; never throw back into the model loop.
     try { await sendEmail(SUPPORT_EMAIL, subject, `<pre style="white-space:pre-wrap;font-family:inherit">${body.replace(/</g, '&lt;')}</pre>`); } catch (e) { console.error('[snappy] escalation email failed:', e.message); }
-    try { await sendSMS(SUPPORT_SMS, `SNAP support: ${facilityName} — ${input.summary}`.slice(0, 300)); } catch (e) { console.error('[snappy] escalation SMS failed:', e.message); }
+    try { await sendSMS(SUPPORT_SMS, `SNAP support: ${facilityName} — ${input.summary}`.slice(0, 300), { internal: true }); } catch (e) { console.error('[snappy] escalation SMS failed:', e.message); }
     return { escalated: true };
   }
 
@@ -294,7 +294,7 @@ async function escalateToHuman(input, ctx, who) {
   const subject = `Snappy escalation — ${who} (${input.urgency || 'normal'})`;
   const body = `${input.summary}\n\nFrom: ${who}\nUser: ${userEmail}\n\n--- Conversation ---\n${transcript}`;
   try { await sendEmail(SUPPORT_EMAIL, subject, `<pre style="white-space:pre-wrap;font-family:inherit">${body.replace(/</g, '&lt;')}</pre>`); } catch (e) { console.error('[snappy] escalation email failed:', e.message); }
-  try { await sendSMS(SUPPORT_SMS, `SNAP support: ${who} — ${input.summary}`.slice(0, 300)); } catch (e) { console.error('[snappy] escalation SMS failed:', e.message); }
+  try { await sendSMS(SUPPORT_SMS, `SNAP support: ${who} — ${input.summary}`.slice(0, 300), { internal: true }); } catch (e) { console.error('[snappy] escalation SMS failed:', e.message); }
   return { escalated: true };
 }
 

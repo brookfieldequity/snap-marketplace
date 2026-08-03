@@ -12,6 +12,7 @@ import PublicSchedulePage from './pages/public/PublicSchedulePage.jsx'
 import FacilityClaimPage from './pages/FacilityClaimPage.jsx'
 import PtoRankPage from './pages/PtoRankPage.jsx'
 import SmsTermsPage from './pages/SmsTermsPage.jsx'
+import SmsOptInPage from './pages/public/SmsOptInPage.jsx'
 import FacilityLoginPage from './pages/FacilityLoginPage.jsx'
 import FacilityRegisterPage from './pages/FacilityRegisterPage.jsx'
 import AdminLoginPage from './pages/AdminLoginPage.jsx'
@@ -150,6 +151,13 @@ export default function App() {
   // carriers for SMS (toll-free / A2P) opt-in verification.
   if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/sms-terms') {
     return <SmsTermsPage />
+  }
+
+  // Public SMS opt-in form — no login. This is the customer-facing consent
+  // form (phone input + disclosures + submit) supplied to Twilio for
+  // toll-free verification; SNAP is the sender brand.
+  if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/sms-optin') {
+    return <SmsOptInPage />
   }
 
   // Public PTO ranking route — /pto-rank/{token}. No login: a provider clicks

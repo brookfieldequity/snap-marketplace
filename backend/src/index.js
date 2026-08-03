@@ -154,6 +154,10 @@ app.use('/api/facilities', holidayRoutes); // mounts /:id/holidays/* under /api/
 app.use('/api/automation-events', automationEventsRoutes);
 // Provider availability self-submission — public, token-gated (no auth middleware).
 app.use('/api/avail', require('./routes/avail'));
+
+// SMS opt-in / opt-out — public (the carrier-facing consent form at /sms-optin).
+// Throttled like the other unauthenticated do-real-work endpoints.
+app.use('/api/sms', publicToolsLimiter, require('./routes/sms').router);
 app.use('/api/schedule-share', require('./routes/scheduleShare'));
 // Provider e-sign link — public, token-gated (no auth middleware). See
 // routes/sign.js and the Cred Map packet workspace's "Send for signature".

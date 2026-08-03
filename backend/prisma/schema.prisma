@@ -2771,6 +2771,33 @@ model AvailDaySubmission {
   @@index([requestId])
 }
 
+// ── SMS opt-in ledger ─────────────────────────────────────────────────────────
+// One row per phone number that has verifiably opted in to receive SNAP texts.
+// sendSMS() refuses any number without an active row here (revokedAt null) —
+// SNAP is the message sender (single brand, toll-free 855-677-SNAP), and this
+// table is the audit trail behind the carrier-facing opt-in story: the public
+// web form at /sms-optin (source WEB_FORM) and the consent checkbox on the
+// availability link page (source AVAIL_PAGE). Keyed by E.164 number, not by
+// roster entry or user, because the same person may appear on several rosters
+// and consent belongs to the phone's owner, not to any one facility.
+model SmsOptIn {
+  id          String    @id @default(cuid())
+  phoneNumber String    @unique // E.164, e.g. +16175551234
+  consentedAt DateTime  @default(now())
+  source      String    @default("WEB_FORM") // WEB_FORM | AVAIL_PAGE
+  firstName   String?
+  lastName    String?
+  ipAddress   String?
+  userAgent   String?
+  // Snapshot of the disclosure text the person agreed to, so consent evidence
+  // survives later copy edits to the form.
+  consentText String?
+  revokedAt   DateTime?
+  revokedVia  String? // FORM | STOP
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 // ── Facility Room-Count Card ──────────────────────────────────────────────────
 // The customer (an anesthesia group like CAPA/Melrose) sends a tokenized,
 // no-login link to each LOCATION it covers (BOSS, Kenmore, the endoscopy unit,

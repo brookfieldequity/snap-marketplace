@@ -34,14 +34,17 @@ export default function SmsTermsPage() {
 
         <h2 style={styles.h2}>How numbers are collected &amp; consent</h2>
         <p style={styles.p}>
-          A provider&rsquo;s mobile number is provided by the healthcare facility
-          that contracts or employs them, through SNAP Medical&rsquo;s roster
-          management, so that SNAP can deliver that provider&rsquo;s work schedule
-          and shift notifications. In addition, when a provider submits their
-          availability through SNAP, they affirmatively confirm &mdash; by checking
-          a consent box &mdash; that they agree to receive these scheduling text
-          messages. Providers may opt out of texts at any time (see below) without
-          affecting their work relationship.
+          SNAP is the sender of every message in this program, and SNAP only
+          sends texts to phone numbers whose owners have opted in directly with
+          SNAP. Consent is collected in two ways: (1) through our opt-in form at{' '}
+          <a style={styles.a} href="/sms-optin">ai.snapmedical.app/sms-optin</a>,
+          where a person enters their own mobile number, reviews the consent
+          disclosures, and submits; or (2) by checking the SMS consent box shown
+          when submitting availability through a SNAP scheduling page. A facility
+          may keep a provider&rsquo;s number in its SNAP roster for scheduling
+          records, but SNAP does not send SMS to that number unless the provider
+          has opted in themselves. Providers may opt out of texts at any time
+          (see below) without affecting their work relationship.
         </p>
 
         <h2 style={styles.h2}>Message frequency</h2>

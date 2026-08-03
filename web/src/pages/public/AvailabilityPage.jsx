@@ -737,7 +737,7 @@ export default function AvailabilityPage({ token }) {
               style={{ marginTop: 1, width: 16, height: 16, flex: 'none', accentColor: '#2563EB', cursor: 'pointer' }}
             />
             <span>
-              I agree to receive scheduling text messages from my facility via SNAP. Message frequency varies; message &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of employment or service.{' '}
+              I agree to receive scheduling text messages from SNAP at the number on file. Message frequency varies; message &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of employment or service.{' '}
               <a href="/sms-terms" target="_blank" rel="noreferrer" style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}>SMS Terms</a>
               {' · '}
               <a href="https://api.snapmedical.app/privacy" target="_blank" rel="noreferrer" style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}>Privacy Policy</a>

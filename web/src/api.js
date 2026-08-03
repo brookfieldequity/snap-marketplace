@@ -1047,6 +1047,23 @@ export const availAPI = {
     }),
 }
 
+// ─── Public SMS opt-in / opt-out API ──────────────────────────────────────────
+// No auth — backs the carrier-facing consent form at /sms-optin.
+export const smsAPI = {
+  optIn: ({ phoneNumber, firstName, lastName, consent }) =>
+    apiFetch(`${BASE}/sms/opt-in`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber, firstName, lastName, consent: Boolean(consent) }),
+    }),
+  optOut: (phoneNumber) =>
+    apiFetch(`${BASE}/sms/opt-out`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber }),
+    }),
+}
+
 // ─── Public Room-Count Submission API ─────────────────────────────────────────
 // No auth — the URL token is the credential. Site scheduler declares how many
 // rooms run each day for the month.

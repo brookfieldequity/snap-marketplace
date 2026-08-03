@@ -14,18 +14,55 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   } catch { /* twilio not installed or misconfigured — skip */ }
 }
 
+// Normalize a US phone number to E.164 (+1XXXXXXXXXX). Returns null when the
+// input can't be a valid US number. Shared with the /api/sms opt-in routes so
+// the opt-in ledger and the send path key numbers identically.
+function normalizePhone(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/\D/g, '');
+  if (cleaned.length === 10) return `+1${cleaned}`;
+  if (cleaned.length === 11 && cleaned.startsWith('1')) return `+${cleaned}`;
+  return null;
+}
+
 // Returns { sent: boolean, reason?: string }. Never throws — fire-and-forget
 // callers stay safe, and callers that care (the availability-request send
 // endpoint) get an honest status instead of a silent no-op reported as success.
-async function sendSMS(to, body) {
+//
+// This is the single enforcement point for SNAP's carrier-compliance posture
+// (SNAP is the sender/brand, not the facilities — Twilio TFV, Aug 2026):
+//   1. OPT-IN GATE — refuses any number without an active SmsOptIn row
+//      (web form /sms-optin or availability-page consent). Fails CLOSED.
+//   2. BRAND — every message leads with "SNAP:" so the sender identity is
+//      unambiguous regardless of what the call site composed.
+//   3. STOP LINE — appends the opt-out line when the body doesn't have one.
+// opts.internal=true bypasses only the opt-in gate — for operational alerts
+// to our own numbers (Snappy support pages), never for provider traffic.
+async function sendSMS(to, body, opts = {}) {
   if (!twilioClient) return { sent: false, reason: 'SMS is not configured' };
   if (!process.env.TWILIO_PHONE_NUMBER) return { sent: false, reason: 'No sender number configured' };
   if (!to) return { sent: false, reason: 'No phone number on file' };
-  const cleaned = to.replace(/\D/g, '');
-  if (cleaned.length < 10) return { sent: false, reason: 'Invalid phone number' };
-  const e164 = cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
+  const e164 = normalizePhone(to);
+  if (!e164) return { sent: false, reason: 'Invalid phone number' };
+
+  if (!opts.internal) {
+    try {
+      const optIn = await prisma.smsOptIn.findUnique({ where: { phoneNumber: e164 } });
+      if (!optIn || optIn.revokedAt) {
+        return { sent: false, reason: 'Recipient has not opted in to SMS' };
+      }
+    } catch (err) {
+      console.error('SMS opt-in check failed (send blocked):', err.message);
+      return { sent: false, reason: 'Opt-in check unavailable' };
+    }
+  }
+
+  let text = String(body || '').trim();
+  if (!/^SNAP\b/i.test(text)) text = `SNAP: ${text}`;
+  if (!/\bSTOP\b/.test(text)) text = `${text} Reply STOP to opt out.`;
+
   try {
-    await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: e164 });
+    await twilioClient.messages.create({ body: text, from: process.env.TWILIO_PHONE_NUMBER, to: e164 });
     return { sent: true };
   } catch (err) {
     console.error('Twilio SMS error:', err.message);
@@ -716,4 +753,5 @@ module.exports = {
   sendSMS,
   sendPush,
   sendEmail,
+  normalizePhone,
 };
