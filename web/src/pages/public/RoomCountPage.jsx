@@ -65,12 +65,13 @@ export default function RoomCountPage({ token }) {
     const { year, month } = data
     const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+    const holidaySet = new Set(data.holidays || [])
     const cells = []
     for (let i = 0; i < firstDow; i++) cells.push(null)
     for (let d = 1; d <= daysInMonth; d++) {
       const date = iso(year, month, d)
       const dow = new Date(Date.UTC(year, month - 1, d)).getUTCDay()
-      cells.push({ d, date, isWeekend: dow === 0 || dow === 6 })
+      cells.push({ d, date, isWeekend: dow === 0 || dow === 6, isHoliday: holidaySet.has(date) })
     }
     return cells
   }, [data])
@@ -100,7 +101,9 @@ export default function RoomCountPage({ token }) {
     setCounts((prev) => {
       const next = new Map(prev)
       for (const cell of calendar) {
-        if (cell && !cell.isWeekend) next.set(cell.date, n)
+        // Skip practice holidays — the schedule doesn't run them by default.
+        // A site that DOES run a holiday can still type a count on the day.
+        if (cell && !cell.isWeekend && !cell.isHoliday) next.set(cell.date, n)
       }
       return next
     })
@@ -195,6 +198,9 @@ export default function RoomCountPage({ token }) {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: cell.isWeekend ? MUTED : SLATE, alignSelf: 'flex-end', paddingRight: 4 }}>{cell.d}</div>
+                {cell.isHoliday && (
+                  <div style={{ fontSize: 7.5, fontWeight: 800, letterSpacing: '0.04em', color: '#B45309', textAlign: 'center' }}>HOLIDAY</div>
+                )}
                 <input
                   inputMode="numeric" value={val} disabled={locked}
                   onChange={(e) => setCount(cell.date, e.target.value)}

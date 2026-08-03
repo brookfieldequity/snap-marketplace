@@ -724,9 +724,10 @@ export default function AvailabilityPage({ token }) {
         zIndex: 100,
         maxWidth: 520, margin: '0 auto',
       }}>
-        {/* SMS opt-in consent — required before submitting. Providers give
-            explicit, recorded consent to receive scheduling texts (Twilio/CTIA
-            toll-free verification requirement). */}
+        {/* SMS opt-in consent — OPTIONAL (E2E finding, 8/3): gating submit on
+            consent contradicted "consent is not a condition of employment or
+            service" (CTIA language). Checking it records SMS opt-in; leaving
+            it unchecked just means no scheduling texts. */}
         {!isLocked && (
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 11.5, lineHeight: 1.4, color: '#64748B' }}>
             <input
@@ -755,18 +756,18 @@ export default function AvailabilityPage({ token }) {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={!hasChanges || saving || !consent}
-              title={!consent ? 'Please agree to the SMS terms to submit' : undefined}
+              disabled={!hasChanges || saving}
+              title={!consent ? 'Submitting without the SMS box just means no scheduling texts' : undefined}
               style={{
                 padding: '12px 26px',
-                background: hasChanges && !saving && consent ? 'linear-gradient(135deg,#2563EB,#3B82F6)' : '#CBD5E1',
+                background: hasChanges && !saving ? 'linear-gradient(135deg,#2563EB,#3B82F6)' : '#CBD5E1',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 12,
                 fontSize: 15,
                 fontWeight: 700,
-                cursor: hasChanges && !saving && consent ? 'pointer' : 'default',
-                boxShadow: hasChanges && !saving && consent ? '0 6px 16px rgba(37,99,235,0.35)' : 'none',
+                cursor: hasChanges && !saving ? 'pointer' : 'default',
+                boxShadow: hasChanges && !saving ? '0 6px 16px rgba(37,99,235,0.35)' : 'none',
                 transition: 'all 0.15s',
               }}
             >

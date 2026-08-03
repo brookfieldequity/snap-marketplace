@@ -1390,10 +1390,15 @@ router.get('/summary', facilityAuth, async (req, res) => {
 
       for (const assignment of day.assignments) {
         if (assignment.rosterId) {
-          filled += 1;
+          // "Filled" counts OR rooms only — supervising MDs (>= 900) and
+          // non-clinical slots are real people/cost but not rooms, so they'd
+          // push filled past totalShifts and show "Remaining: -21" (E2E
+          // finding, 8/3). Cost still counts everyone below.
+          const isRoomSlot = assignment.roomNumber < 900 && assignment.role !== 'NON_CLINICAL' && !assignment.ghost;
+          if (isRoomSlot) filled += 1;
           // Same real-rate math as the schedule builder so the page shows ONE
           // consistent SNAP cost: each provider's actual rate x shift hours.
-          if (assignment.rosterEntry) {
+          if (assignment.rosterEntry && !assignment.ghost) {
             estimatedCost += scheduleBuilder.SHIFT_HOURS_PER_DAY * scheduleBuilder.effectiveHourlyRate(assignment.rosterEntry);
             const re = assignment.rosterEntry;
             const hasRate = (re.hourlyRate && re.hourlyRate > 0) || (re.annualRate && re.annualRate > 0);
@@ -1403,7 +1408,7 @@ router.get('/summary', facilityAuth, async (req, res) => {
       }
     }
 
-    const unfilled = totalShifts - filled;
+    const unfilled = Math.max(0, totalShifts - filled);
 
     res.json({
       totalShifts,

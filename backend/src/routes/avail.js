@@ -37,9 +37,13 @@ router.get('/:token', async (req, res) => {
     const now = new Date();
     const isLocked = now > new Date(request.deadline);
 
-    // Derive a friendly first name from providerName (first word).
+    // Derive a friendly first name from providerName. Rosters store
+    // "Last, First" — greet with the part AFTER the comma ("Hi Rachel"),
+    // never "Hi Anderson," (E2E finding, 8/3).
     const fullName = request.rosterEntry?.providerName || '';
-    const providerFirstName = fullName.split(/\s+/)[0] || fullName;
+    const providerFirstName = (fullName.includes(',')
+      ? (fullName.split(',')[1] || '').trim().split(/\s+/)[0]
+      : fullName.split(/\s+/)[0]) || fullName.replace(/,/g, '').trim();
 
     let submissions = request.daySubmissions.map((s) => ({
       date: s.date.toISOString().slice(0, 10),

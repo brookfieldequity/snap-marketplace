@@ -46,6 +46,20 @@ router.get('/:token', async (req, res) => {
       note: d.note || null,
     }));
 
+    // Practice holidays for the month, so the card can label them and
+    // "fill all weekdays" can skip them (E2E finding, 8/3: sites blindly
+    // filled Labor Day, creating a card-vs-schedule contradiction for
+    // every location).
+    let holidays = [];
+    try {
+      const { getActiveHolidayDates } = require('./holidays');
+      const holidaySet = await getActiveHolidayDates(request.facilityId, request.year);
+      const prefix = `${request.year}-${String(request.month).padStart(2, '0')}-`;
+      holidays = [...holidaySet].filter((d) => d.startsWith(prefix));
+    } catch (e) {
+      console.error('[roomcount] holiday lookup failed:', e.message);
+    }
+
     res.json({
       location: request.location,
       facilityName: request.facility?.name || '',
@@ -56,6 +70,7 @@ router.get('/:token', async (req, res) => {
       isLocked,
       submittedAt: request.submittedAt?.toISOString() || null,
       counts,
+      holidays,
     });
   } catch (err) {
     console.error('[roomcount] GET failed:', err);
