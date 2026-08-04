@@ -264,6 +264,22 @@ export default function DataUploadPage({ onNavigate }) {
                     }}>
                       {u.status || 'Uploaded'}
                     </span>
+                    {u.id && (
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Delete "${u.fileName || 'this upload'}" and its ${u.rowCount ?? ''} records?\n\nUse this to remove a stale upload after re-uploading a corrected file — records from multiple uploads otherwise stack and double-count the month in StaffIQ.`)) return
+                          try {
+                            const r = await facilityAPI.deleteUpload(u.id)
+                            alert(`Deleted ${r.fileName} (${r.deletedRecords} records removed).`)
+                            facilityAPI.getUploads().then(d => setUploads(Array.isArray(d) ? d : d.uploads || [])).catch(() => {})
+                          } catch (e) { alert(e.message || 'Delete failed.') }
+                        }}
+                        title="Delete this upload and its records (for stale/corrected files)"
+                        style={{ padding: '5px 10px', background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        🗑
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -311,7 +311,8 @@ export const facilityAPI = {
   // Schedule Builder
   scheduleExists: () => apiFetch(`${BASE}/schedule/exists`, { headers: facilityHeaders() }),
   getScheduleMonth: (year, month) => apiFetch(`${BASE}/schedule/month?year=${year}&month=${month}`, { headers: facilityHeaders() }),
-  materializeFromStaffiq: (year, month, replace) => apiFetch(`${BASE}/schedule/materialize-from-staffiq`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, replace }) }),
+  materializeFromStaffiq: (year, month, replace, uploadId) => apiFetch(`${BASE}/schedule/materialize-from-staffiq`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify({ year, month, replace, ...(uploadId ? { uploadId } : {}) }) }),
+  staffiqUploadsForMonth: (year, month) => apiFetch(`${BASE}/schedule/staffiq-uploads?year=${year}&month=${month}`, { headers: facilityHeaders() }),
   upsertScheduleDay: (data) => apiFetch(`${BASE}/schedule/days`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
   getRoomCountGrid: (location, year, month) => apiFetch(`${BASE}/room-requests/grid?location=${encodeURIComponent(location)}&year=${year}&month=${month}`, { headers: facilityHeaders() }),
   getScheduleActivity: (days) => apiFetch(`${BASE}/schedule/activity${days ? `?days=${days}` : ''}`, { headers: facilityHeaders() }),
@@ -448,6 +449,7 @@ export const facilityAPI = {
     return data;
   },
   confirmUpload: (data) => apiFetch(`${BASE}/data-upload/confirm`, { method: 'POST', headers: facilityHeaders(), body: JSON.stringify(data) }),
+  deleteUpload: (id) => apiFetch(`${BASE}/data-upload/${id}`, { method: 'DELETE', headers: facilityHeaders() }),
 
   // Calculator
   calcAgencyReplacement: (inputs) => apiFetch(`${BASE}/calculator/agency-replacement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inputs) }),

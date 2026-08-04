@@ -526,25 +526,73 @@ router.post('/days', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /staffiq-uploads?year&month — which Data Upload files contain records
+// for the given month. Feeds the Pull-from-StaffIQ picker so a client with a
+// corrected re-upload (or a year of history) can choose the source file
+// instead of silently materializing the union of every overlapping upload.
+router.get('/staffiq-uploads', facilityAuth, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    const month = parseInt(req.query.month, 10);
+    if (!year || !month || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
+    }
+    const { start, end } = monthRange(year, month);
+    const counts = await prisma.schedulingRecord.groupBy({
+      by: ['sourceUploadId'],
+      where: { facilityId: req.facility.id, shiftDate: { gte: start, lt: end }, providerName: { not: null } },
+      _count: { _all: true },
+    });
+    const ids = counts.map((c) => c.sourceUploadId).filter(Boolean);
+    const uploads = ids.length
+      ? await prisma.schedulingUpload.findMany({
+          where: { id: { in: ids }, facilityId: req.facility.id },
+          select: { id: true, fileName: true, uploadedAt: true },
+        })
+      : [];
+    const byId = new Map(uploads.map((u) => [u.id, u]));
+    const result = counts
+      .map((c) => ({
+        id: c.sourceUploadId,
+        fileName: c.sourceUploadId ? (byId.get(c.sourceUploadId)?.fileName || '(deleted upload)') : '(untagged legacy records)',
+        uploadedAt: c.sourceUploadId ? (byId.get(c.sourceUploadId)?.uploadedAt || null) : null,
+        recordsInMonth: c._count._all,
+      }))
+      .sort((a, b) => (b.uploadedAt || 0) > (a.uploadedAt || 0) ? 1 : -1);
+    res.json({ uploads: result });
+  } catch (err) {
+    console.error('[schedule] staffiq-uploads failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /materialize-from-staffiq — turn an uploaded real schedule (StaffIQ
 // SchedulingRecords, roster-matched at upload) into actual Schedule Builder
 // days + assignments for one month. Groups records by date + location; each
 // provider-shift becomes a room assignment (rosterId from the upload's
 // fingerprint match; unmatched names are reported back, not silently dropped
 // into anonymous slots). Existing location-days are skipped unless
-// { replace: true }, which deletes and recreates them.
+// { replace: true }, which deletes and recreates them. Optional { uploadId }
+// scopes the pull to ONE Data Upload file (the picker's selection) so
+// overlapping uploads — corrected re-exports, split months — don't merge.
 router.post('/materialize-from-staffiq', facilityAuth, async (req, res) => {
   try {
     const year = parseInt(req.body?.year, 10);
     const month = parseInt(req.body?.month, 10);
     const replace = !!req.body?.replace;
+    const uploadId = typeof req.body?.uploadId === 'string' && req.body.uploadId ? req.body.uploadId : null;
     if (!year || !month || month < 1 || month > 12) {
       return res.status(400).json({ error: 'Valid year and month (1-12) are required' });
     }
     const { start, end } = monthRange(year, month);
 
     const recs = await prisma.schedulingRecord.findMany({
-      where: { facilityId: req.facility.id, shiftDate: { gte: start, lt: end }, providerName: { not: null } },
+      where: {
+        facilityId: req.facility.id,
+        shiftDate: { gte: start, lt: end },
+        providerName: { not: null },
+        ...(uploadId ? { sourceUploadId: uploadId } : {}),
+      },
       select: { providerName: true, shiftDate: true, facilityLocation: true, matchedRosterId: true },
     });
     if (recs.length === 0) {

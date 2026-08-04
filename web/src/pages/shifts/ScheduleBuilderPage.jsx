@@ -1093,6 +1093,8 @@ export default function ScheduleBuilderPage({ onNavigate }) {
   // Schedule Builder v2 — the build flow modal. selectedRunId persists
   // across navigations so we can offer the "Re-score after edits" button.
   const [showBuildFlow, setShowBuildFlow] = useState(false)
+  // Pull-from-StaffIQ source picker: { uploads, selectedId ('ALL' = combine), replace, busy }
+  const [pullPicker, setPullPicker] = useState(null)
   const [selectedRunId, setSelectedRunId] = useState(null)
   const [selectedRunScore, setSelectedRunScore] = useState(null)
   const [selectedRunRecs, setSelectedRunRecs] = useState(null)
@@ -1652,19 +1654,23 @@ export default function ScheduleBuilderPage({ onNavigate }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={async () => {
-              // Materialize the REAL schedule uploaded to StaffIQ into builder
-              // days + assignments for the month on screen.
-              if (!window.confirm(`Populate ${monthName} ${year} from the schedule uploaded to StaffIQ → Data Upload?`)) return
-              const hasDays = Object.keys(daysByDate).length > 0
-              const replace = hasDays && window.confirm(`${monthName} already has schedule days.\n\nOK = replace overlapping location-days with the uploaded schedule\nCancel = keep existing days, only add missing ones`)
+              // Open the source picker: which Data Upload file feeds this month.
+              // Overlapping uploads (corrected re-exports, split months) merge
+              // silently without an explicit choice — so the choice is explicit.
               try {
-                const r = await facilityAPI.materializeFromStaffiq(year, month, replace)
-                const unmatchedNote = r.unmatchedNames?.length
-                  ? `\n\nNames not on the roster (rooms created unassigned):\n${r.unmatchedNames.map(u => `· ${u.name} (${u.count})`).join('\n')}`
-                  : ''
-                alert(`Done: ${r.daysCreated} location-day(s), ${r.assignmentsCreated} assignment(s) (${r.matchedAssignments} matched to roster)${r.skippedExisting ? `, ${r.skippedExisting} existing kept` : ''}${r.replaced ? `, ${r.replaced} replaced` : ''}.${unmatchedNote}`)
-                load()
-              } catch (e) { alert(e.message || 'Import failed.') }
+                const { uploads } = await facilityAPI.staffiqUploadsForMonth(year, month)
+                if (!uploads || uploads.length === 0) {
+                  alert(`No uploaded schedule records found for ${monthName} ${year}. Upload the schedule in StaffIQ → Data Upload first.`)
+                  return
+                }
+                const firstWithId = uploads.find(u => u.id)
+                setPullPicker({
+                  uploads,
+                  selectedId: uploads.length === 1 ? (uploads[0].id || 'ALL') : (firstWithId ? firstWithId.id : 'ALL'),
+                  replace: false,
+                  busy: false,
+                })
+              } catch (e) { alert(e.message || 'Could not load uploads.') }
             }}
             title="Turn the real schedule uploaded to StaffIQ into actual builder days + assignments for this month"
             style={{
@@ -1680,6 +1686,97 @@ export default function ScheduleBuilderPage({ onNavigate }) {
           >
             ⬇ Pull from StaffIQ
           </button>
+          {pullPicker && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                 onClick={() => !pullPicker.busy && setPullPicker(null)}>
+              <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 480, maxWidth: '94vw', boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}
+                   onClick={(e) => e.stopPropagation()}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#10233F', marginBottom: 4 }}>
+                  Populate {monthName} {year} from StaffIQ
+                </div>
+                <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
+                  {pullPicker.uploads.length === 1
+                    ? 'This uploaded schedule will be used:'
+                    : 'Multiple uploads contain this month — choose the source:'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {pullPicker.uploads.map((u) => (
+                    <label key={u.id || 'legacy'} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
+                      border: `2px solid ${pullPicker.selectedId === (u.id || 'ALL') ? '#2563EB' : '#E2E8F0'}`,
+                      borderRadius: 10, cursor: 'pointer', background: pullPicker.selectedId === (u.id || 'ALL') ? '#EFF6FF' : '#fff',
+                    }}>
+                      <input
+                        type="radio"
+                        name="pull-source"
+                        checked={pullPicker.selectedId === (u.id || 'ALL')}
+                        onChange={() => setPullPicker(p => ({ ...p, selectedId: u.id || 'ALL' }))}
+                        style={{ marginTop: 2, accentColor: '#2563EB' }}
+                      />
+                      <span style={{ fontSize: 13, color: '#10233F', lineHeight: 1.4 }}>
+                        <strong>{u.fileName}</strong>
+                        <br />
+                        <span style={{ fontSize: 11.5, color: '#64748B' }}>
+                          {u.recordsInMonth} record{u.recordsInMonth === 1 ? '' : 's'} in {monthName}
+                          {u.uploadedAt ? ` · uploaded ${new Date(u.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {pullPicker.uploads.length > 1 && (
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                      border: `2px solid ${pullPicker.selectedId === 'ALL' ? '#2563EB' : '#E2E8F0'}`,
+                      borderRadius: 10, cursor: 'pointer', background: pullPicker.selectedId === 'ALL' ? '#EFF6FF' : '#fff',
+                    }}>
+                      <input type="radio" name="pull-source" checked={pullPicker.selectedId === 'ALL'}
+                             onChange={() => setPullPicker(p => ({ ...p, selectedId: 'ALL' }))}
+                             style={{ accentColor: '#2563EB' }} />
+                      <span style={{ fontSize: 13, color: '#10233F' }}>
+                        Combine all uploads
+                        <span style={{ fontSize: 11.5, color: '#64748B' }}> — only for a month legitimately split across files</span>
+                      </span>
+                    </label>
+                  )}
+                </div>
+                {Object.keys(daysByDate).length > 0 && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#374151', marginBottom: 16, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={pullPicker.replace}
+                           onChange={(e) => setPullPicker(p => ({ ...p, replace: e.target.checked }))}
+                           style={{ accentColor: '#DC2626' }} />
+                    <span><strong>Replace</strong> overlapping location-days already in {monthName} (unchecked = keep existing, only add missing)</span>
+                  </label>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button onClick={() => setPullPicker(null)} disabled={pullPicker.busy}
+                          style={{ padding: '9px 18px', background: '#F8FAFC', color: '#374151', border: '1px solid #DCE8F7', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={pullPicker.busy}
+                    onClick={async () => {
+                      setPullPicker(p => ({ ...p, busy: true }))
+                      try {
+                        const uploadId = pullPicker.selectedId === 'ALL' ? null : pullPicker.selectedId
+                        const r = await facilityAPI.materializeFromStaffiq(year, month, pullPicker.replace, uploadId)
+                        const unmatchedNote = r.unmatchedNames?.length
+                          ? `\n\nNames not on the roster (rooms created unassigned):\n${r.unmatchedNames.map(u => `· ${u.name} (${u.count})`).join('\n')}`
+                          : ''
+                        alert(`Done: ${r.daysCreated} location-day(s), ${r.assignmentsCreated} assignment(s) (${r.matchedAssignments} matched to roster)${r.skippedExisting ? `, ${r.skippedExisting} existing kept` : ''}${r.replaced ? `, ${r.replaced} replaced` : ''}.${unmatchedNote}`)
+                        setPullPicker(null)
+                        load()
+                      } catch (e) {
+                        alert(e.message || 'Import failed.')
+                        setPullPicker(p => p ? { ...p, busy: false } : null)
+                      }
+                    }}
+                    style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#2563EB,#3B82F6)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    {pullPicker.busy ? 'Populating…' : 'Populate month'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <button
             onClick={() => setShowBuildFlow(true)}
             style={{

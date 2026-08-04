@@ -554,6 +554,25 @@ router.post('/confirm', facilityAuth, async (req, res) => {
 
 // ── GET /stats — aggregate stats for facility ─────────────────────────────────
 
+// DELETE /:id — remove an upload AND its scheduling records. This is the
+// correction workflow: re-upload the fixed export, then delete the stale one —
+// records stack across uploads otherwise (nothing replaces on re-upload), which
+// would double-count the month in StaffIQ analysis and Pull-from-StaffIQ.
+router.delete('/:id', facilityAuth, async (req, res) => {
+  try {
+    const upload = await prisma.schedulingUpload.findUnique({ where: { id: req.params.id } });
+    if (!upload || upload.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+    const recs = await prisma.schedulingRecord.deleteMany({ where: { sourceUploadId: upload.id, facilityId: req.facility.id } });
+    await prisma.schedulingUpload.delete({ where: { id: upload.id } });
+    res.json({ ok: true, deletedRecords: recs.count, fileName: upload.fileName });
+  } catch (err) {
+    console.error('[dataupload] delete failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/stats', facilityAuth, async (req, res) => {
   try {
     const uploads = await prisma.schedulingUpload.findMany({
