@@ -13,6 +13,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Used to center the shift map near you and sort shifts by distance.",
+        "NSPhotoLibraryUsageDescription": "SNAP accesses your photo library only when you choose a profile photo. For example, when you tap your avatar on the Profile tab, you can select a photo from your library to use as the profile picture facilities see when booking you for shifts.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -42,7 +43,15 @@
     "plugins": [
       "expo-font",
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SNAP accesses your photo library only when you choose a profile photo. For example, when you tap your avatar on the Profile tab, you can select a photo from your library to use as the profile picture facilities see when booking you for shifts.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

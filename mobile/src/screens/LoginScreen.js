@@ -164,6 +164,8 @@ export default function LoginScreen({ navigation }) {
       handleSocialComingSoon('Apple');
       return;
     }
+    // The native Apple button has no `disabled` prop — guard re-entry here.
+    if (oauthLoading) return;
     setOauthLoading(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -253,20 +255,29 @@ export default function LoginScreen({ navigation }) {
             )}
 
             {Platform.OS === 'ios' && (
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={handleAppleSignIn}
-                disabled={oauthLoading}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.socialIconApple}></Text>
-                <Text style={styles.socialButtonText}>Continue with Apple</Text>
-                {!APPLE_ENABLED && (
+              APPLE_ENABLED ? (
+                // Apple's own button (artwork + text rendered by the system) —
+                // App Review rejects hand-rolled Apple logos (Guideline 4).
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+                  cornerRadius={12}
+                  style={styles.appleButton}
+                  onPress={handleAppleSignIn}
+                />
+              ) : (
+                <TouchableOpacity
+                  style={styles.socialButton}
+                  onPress={handleAppleSignIn}
+                  disabled={oauthLoading}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.socialButtonText}>Continue with Apple</Text>
                   <View style={styles.comingSoonBadge}>
                     <Text style={styles.comingSoonText}>Soon</Text>
                   </View>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )
             )}
           </View>
 
@@ -424,12 +435,9 @@ const styles = StyleSheet.create({
     width: 20,
     textAlign: 'center',
   },
-  socialIconApple: {
-    fontSize: 16,
-    color: COLORS.textDark,
-    marginRight: 12,
-    width: 20,
-    textAlign: 'center',
+  appleButton: {
+    height: 50,
+    width: '100%',
   },
   socialButtonText: {
     flex: 1,
