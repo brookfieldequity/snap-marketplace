@@ -137,7 +137,7 @@ router.post('/', facilityAuth, async (req, res) => {
 
         const rosterEntries = (
           await prisma.internalRosterEntry.findMany({
-            where: { facilityId: req.facility.id, providerType: providerTypeRequired },
+            where: { facilityId: req.facility.id, providerType: providerTypeRequired, archivedAt: null },
             select: { id: true, linkedProviderId: true, phoneNumber: true },
           })
         ).filter((e) => !alreadyScheduled.has(e.id)); // off OR on PTO (not working)

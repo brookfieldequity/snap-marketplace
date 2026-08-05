@@ -195,7 +195,7 @@ router.post('/:id/activate', facilityAuth, async (req, res) => {
     (async () => {
       try {
         const rosterEntries = await prisma.internalRosterEntry.findMany({
-          where: { facilityId: req.facility.id },
+          where: { facilityId: req.facility.id, archivedAt: null },
           select: { linkedProviderId: true, phoneNumber: true },
         });
 
@@ -245,7 +245,7 @@ router.post('/:id/remind', facilityAuth, async (req, res) => {
         const submittedProviderIds = new Set(existing.submissions.map((s) => s.providerId));
 
         const rosterEntries = await prisma.internalRosterEntry.findMany({
-          where: { facilityId: req.facility.id, linkedProviderId: { not: null } },
+          where: { facilityId: req.facility.id, linkedProviderId: { not: null }, archivedAt: null },
           select: { linkedProviderId: true },
         });
 
@@ -294,7 +294,7 @@ router.get('/:id/report', facilityAuth, async (req, res) => {
 
     // Roster entries with linkedProviderId that have no submission
     const linkedEntries = await prisma.internalRosterEntry.findMany({
-      where: { facilityId: req.facility.id, linkedProviderId: { not: null } },
+      where: { facilityId: req.facility.id, linkedProviderId: { not: null }, archivedAt: null },
       select: { id: true, providerName: true, linkedProviderId: true },
     });
 

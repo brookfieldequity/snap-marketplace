@@ -454,7 +454,7 @@ async function notifyWindowOpened(windowId) {
     const msgBody = `${window.facility.name} is now collecting availability for "${window.windowName}". Please submit your availability by ${closeStr}. Open the SNAP app to respond.`;
 
     const rosterEntries = await prisma.internalRosterEntry.findMany({
-      where: { facilityId: window.facility.id, ...(window.notifyAll ? {} : {}) },
+      where: { facilityId: window.facility.id, archivedAt: null, ...(window.notifyAll ? {} : {}) },
     });
 
     const linkedIds = rosterEntries.filter((r) => r.linkedProviderId).map((r) => r.linkedProviderId);
@@ -489,7 +489,7 @@ async function notifyIncentiveShiftPosted(incentiveShiftId) {
     const msgBody = `${shift.facility.name} has a shift available on ${dateStr} at ${shift.facilityLocation} for ${shift.durationHours} hours. Incentive rate: $${shift.incentiveRate}/hour. Open the SNAP app to accept or decline.`;
 
     const rosterEntries = await prisma.internalRosterEntry.findMany({
-      where: { facilityId: shift.facilityId, providerType: shift.providerTypeRequired },
+      where: { facilityId: shift.facilityId, providerType: shift.providerTypeRequired, archivedAt: null },
     });
 
     const linkedIds = rosterEntries.filter((r) => r.linkedProviderId).map((r) => r.linkedProviderId);

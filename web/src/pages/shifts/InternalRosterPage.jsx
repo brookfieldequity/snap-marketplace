@@ -188,6 +188,9 @@ export default function InternalRosterPage({ onNavigate }) {
   const [fType, setFType] = useState('')     // '' | CRNA | ANESTHESIOLOGIST | ANESTHESIA_ASSISTANT | NONCLINICAL
   const [fEmp, setFEmp] = useState('')       // '' | FULL_TIME | PER_DIEM | LOCUMS
   const [fEmployer, setFEmployer] = useState('') // '' | employer string
+  // Archived providers (Matt, 8/5): hidden by default, one toggle to see them.
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivingIds, setArchivingIds] = useState({})
   const visibleRoster = useMemo(() => {
     const q = searchQ.trim().toLowerCase()
     return roster.filter((p) => {
@@ -238,13 +241,13 @@ export default function InternalRosterPage({ onNavigate }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  useEffect(() => { load(); loadNpiReview() }, [])
+  useEffect(() => { load(); loadNpiReview() }, [showArchived])
 
   async function load() {
     setLoading(true)
     try {
       const [data, sites] = await Promise.all([
-        facilityAPI.getRoster(),
+        facilityAPI.getRoster(showArchived),
         facilityAPI.getRosterLocations().catch(() => ({ locations: [] })),
       ])
       setRoster(Array.isArray(data) ? data : data.roster || [])
@@ -483,6 +486,31 @@ export default function InternalRosterPage({ onNavigate }) {
       alert('Save failed: ' + e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleArchive(p) {
+    if (!window.confirm(`Archive ${p.providerName}? They leave the active roster (and the draft engine, availability requests, and incentive lists) but every record is kept. You can unarchive any time via "Show archived".`)) return
+    setArchivingIds((prev) => ({ ...prev, [p.id]: true }))
+    try {
+      await facilityAPI.archiveRosterEntry(p.id)
+      await load()
+    } catch (e) {
+      alert('Archive failed: ' + e.message)
+    } finally {
+      setArchivingIds((prev) => ({ ...prev, [p.id]: false }))
+    }
+  }
+
+  async function handleUnarchive(p) {
+    setArchivingIds((prev) => ({ ...prev, [p.id]: true }))
+    try {
+      await facilityAPI.unarchiveRosterEntry(p.id)
+      await load()
+    } catch (e) {
+      alert('Unarchive failed: ' + e.message)
+    } finally {
+      setArchivingIds((prev) => ({ ...prev, [p.id]: false }))
     }
   }
 
@@ -1075,6 +1103,13 @@ export default function InternalRosterPage({ onNavigate }) {
               <option key={e} value={e}>{e}</option>
             ))}
           </select>
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            title="Archived providers keep all their records but are hidden from the active roster and every scheduling surface"
+            style={{ padding: '8px 13px', background: showArchived ? '#FEF3C7' : '#F8FAFC', border: `1px solid ${showArchived ? '#FCD34D' : '#DCE8F7'}`, borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: showArchived ? '#92400E' : '#64748B', cursor: 'pointer' }}
+          >
+            {showArchived ? `📦 Showing archived (${roster.filter((p) => p.archivedAt).length})` : '📦 Show archived'}
+          </button>
           {(searchQ || fType || fEmp || fEmployer) && (
             <button onClick={() => { setSearchQ(''); setFType(''); setFEmp(''); setFEmployer('') }} style={{ padding: '8px 13px', background: '#F1F5F9', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
               Clear ({visibleRoster.length}/{roster.length})
@@ -1107,7 +1142,7 @@ export default function InternalRosterPage({ onNavigate }) {
 
             const isSelected = selectedIds.has(p.id)
             return (
-              <div key={p.id} style={{ position: 'relative', background: '#fff', borderRadius: 14, border: `1px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`, padding: '20px 22px', boxShadow: isSelected ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div key={p.id} style={{ position: 'relative', background: '#fff', borderRadius: 14, border: `1px solid ${isSelected ? '#2563EB' : p.archivedAt ? '#FCD34D' : '#E2E8F0'}`, padding: '20px 22px', boxShadow: isSelected ? '0 0 0 3px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 10, opacity: p.archivedAt ? 0.65 : 1 }}>
                 <input
                   type="checkbox"
                   checked={isSelected}
@@ -1118,6 +1153,9 @@ export default function InternalRosterPage({ onNavigate }) {
                 <div style={{ paddingRight: 28 }}>
                   <div style={{ fontWeight: 700, fontSize: 16, color: '#10233F', marginBottom: 8 }}>{p.providerName}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {p.archivedAt && (
+                      <Badge bg="#FEF3C7" color="#92400E" label={`📦 Archived ${new Date(p.archivedAt).toLocaleDateString()}`} />
+                    )}
                     <Badge bg={typeBadge.bg} color={typeBadge.color} label={typeBadge.label} />
                     <Badge bg={empBadge.bg} color={empBadge.color} label={empBadge.label} />
                     {!p.isNonClinical && (
@@ -1269,7 +1307,26 @@ export default function InternalRosterPage({ onNavigate }) {
                       {p.credentialingStatus === 'INVITED' ? '↻ Re-invite to SNAP Credentialing' : '✉️ Invite to SNAP Credentialing'}
                     </button>
                   )}
-                  <button onClick={() => handleDelete(p.id)} disabled={deletingIds[p.id]} style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626', marginLeft: 'auto' }}>
+                  {p.archivedAt ? (
+                    <button
+                      onClick={() => handleUnarchive(p)}
+                      disabled={archivingIds[p.id]}
+                      title="Restore to the active roster"
+                      style={{ padding: '6px 14px', background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#15803D', marginLeft: 'auto' }}
+                    >
+                      {archivingIds[p.id] ? '...' : '↩️ Unarchive'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleArchive(p)}
+                      disabled={archivingIds[p.id]}
+                      title="Take off the active roster — all records kept, reversible via Show archived"
+                      style={{ padding: '6px 14px', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#92400E', marginLeft: 'auto' }}
+                    >
+                      {archivingIds[p.id] ? '...' : '📦 Archive'}
+                    </button>
+                  )}
+                  <button onClick={() => handleDelete(p.id)} disabled={deletingIds[p.id]} title="Permanent delete — only possible for providers with no work history; otherwise use Archive" style={{ padding: '6px 14px', background: '#FFF5F5', border: '1px solid #FCA5A5', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#DC2626' }}>
                     {deletingIds[p.id] ? '...' : '🗑️'}
                   </button>
                 </div>

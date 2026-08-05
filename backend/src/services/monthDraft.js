@@ -56,7 +56,7 @@ async function runMonthDraft(facilityId, year, month) {
       where: { facilityId, date: { gte: monthStart, lt: monthEnd } },
       include: { assignments: { include: { rosterEntry: { select: { providerName: true } } } } },
     }),
-    prisma.internalRosterEntry.findMany({ where: { facilityId } }),
+    prisma.internalRosterEntry.findMany({ where: { facilityId, archivedAt: null } }),
   ]);
   if (days.length === 0) return { error: 'NO_DAYS' };
   if (roster.length === 0) return { error: 'NO_ROSTER' };

@@ -209,7 +209,13 @@ function toProviderLocation(l) {
 router.get('/', facilityAuth, async (req, res) => {
   try {
     const entries = await prisma.internalRosterEntry.findMany({
-      where: { facilityId: req.facility.id },
+      // Archived providers stay out of the roster unless explicitly requested
+      // ("Show archived" toggle) — their records all survive, they just leave
+      // the active views.
+      where: {
+        facilityId: req.facility.id,
+        ...(req.query.includeArchived === '1' ? {} : { archivedAt: null }),
+      },
       include: {
         locations: { select: { facilityName: true, shiftSharePct: true } },
         // employerRef drives the EOR rate firewall — see services/rosterLens.js
@@ -1310,6 +1316,49 @@ router.post('/bulk-delete', facilityAuth, async (req, res) => {
 });
 
 // DELETE /:id — delete a roster entry
+// ── Archive / unarchive (Matt, 8/5) ──────────────────────────────────────────
+// Soft-remove from the active roster: every record survives, the provider just
+// stops appearing in active views (roster default, draft engine, availability
+// blasts, incentive pools, PTO builder). Reversible any time.
+router.post('/:id/archive', facilityAuth, async (req, res) => {
+  try {
+    const existing = await prisma.internalRosterEntry.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, facilityId: true, providerName: true, archivedAt: true },
+    });
+    if (!existing || existing.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (existing.archivedAt) return res.json({ success: true, archivedAt: existing.archivedAt });
+    const updated = await prisma.internalRosterEntry.update({
+      where: { id: existing.id },
+      data: { archivedAt: new Date() },
+      select: { archivedAt: true },
+    });
+    res.json({ success: true, archivedAt: updated.archivedAt });
+  } catch (err) {
+    console.error('[roster] archive failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/unarchive', facilityAuth, async (req, res) => {
+  try {
+    const existing = await prisma.internalRosterEntry.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, facilityId: true },
+    });
+    if (!existing || existing.facilityId !== req.facility.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    await prisma.internalRosterEntry.update({ where: { id: existing.id }, data: { archivedAt: null } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[roster] unarchive failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.delete('/:id', facilityAuth, async (req, res) => {
   try {
     const existing = await prisma.internalRosterEntry.findUnique({
@@ -1342,7 +1391,7 @@ router.delete('/:id', facilityAuth, async (req, res) => {
     if (blockers.length) {
       return res.status(409).json({
         error: `${existing.providerName} has work history (${blockers.join(', ')}) that must be kept. ` +
-          'Instead of deleting, set their site percentages to 0 — they stay credentialed and off the draft engine.',
+          'Use Archive instead — they leave the active roster but every record survives.',
       });
     }
 

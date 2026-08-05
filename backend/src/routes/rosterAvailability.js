@@ -37,7 +37,7 @@ router.get('/', facilityAuth, async (req, res) => {
     const facilityId = req.facility.id;
 
     const roster = await prisma.internalRosterEntry.findMany({
-      where: { facilityId, providerType: { not: null }, isNonClinical: { not: true } },
+      where: { facilityId, providerType: { not: null }, isNonClinical: { not: true }, archivedAt: null },
       select: { id: true, providerName: true, providerType: true, employmentCategory: true, onSetSchedule: true, linkedProviderId: true },
       orderBy: { providerName: 'asc' },
     });

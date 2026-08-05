@@ -49,7 +49,7 @@ async function ownedWindow(id, facilityId) {
 // that are PTO-eligible — W-2 / full-time, or admin-flagged).
 async function eligibleEntries(facilityId) {
   const rows = await prisma.internalRosterEntry.findMany({
-    where: { facilityId, isNonClinical: { not: true } },
+    where: { facilityId, isNonClinical: { not: true }, archivedAt: null },
     select: { id: true, providerName: true, providerType: true, ptoEligible: true, is1099: true, isFullTime: true, employmentCategory: true, ptoDaysAnnual: true, seniorityRank: true },
     orderBy: { providerName: 'asc' },
   });

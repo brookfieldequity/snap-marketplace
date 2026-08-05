@@ -837,6 +837,13 @@ model InternalRosterEntry {
   // True for back-office / non-clinical staff who belong on the roster for
   // payroll purposes but are never scheduled into ORs and don't need an NPI.
   isNonClinical             Boolean             @default(false)
+  // Soft archive (Matt, 8/5): departed providers keep every record (schedule,
+  // payroll, hours, PTO) but leave the active roster — hidden from the roster
+  // page by default and excluded from all ACTIVE surfaces (draft engine,
+  // availability blasts, incentive/window notify pools, PTO builder).
+  // Historical surfaces (payroll, schedule history, StaffIQ tagging) still see
+  // them. null = active.
+  archivedAt                DateTime?
   // Schedule classification, SPLIT from payroll classification (Matt, 7/31):
   // "on the set schedule" = automatically drafted every month around PTO.
   // null = auto from employmentCategory (FULL_TIME/PART_TIME yes, others no);
