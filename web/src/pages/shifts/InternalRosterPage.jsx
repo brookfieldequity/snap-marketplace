@@ -803,6 +803,29 @@ export default function InternalRosterPage({ onNavigate }) {
 
   const cat = form.employmentCategory
 
+  // Header menus (Matt, 8/5): 9 peer buttons had no hierarchy. The two real
+  // workflows (Add Provider, Invite to Credentialing) stay visible; setup-time
+  // imports and housekeeping collapse into two dropdowns, with Clear-all
+  // demoted behind a deliberate extra click.
+  const [openMenu, setOpenMenu] = useState(null) // null | 'import' | 'maintenance'
+  const menuItemStyle = (danger) => ({
+    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+    width: '100%', padding: '10px 14px', background: 'transparent', border: 'none',
+    borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+    color: danger ? '#B91C1C' : '#10233F', fontSize: 13.5, fontWeight: 600,
+  })
+  const menuDesc = { fontSize: 11.5, fontWeight: 400, color: '#94A3B8', lineHeight: 1.4 }
+  function MenuPanel({ children }) {
+    return (
+      <>
+        <div onClick={() => setOpenMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 91, background: '#fff', border: '1px solid #DCE8F7', borderRadius: 12, boxShadow: '0 12px 32px rgba(15,23,42,0.14)', padding: 6, width: 300, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {children}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
@@ -811,27 +834,74 @@ export default function InternalRosterPage({ onNavigate }) {
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#10233F', letterSpacing: '-0.02em', margin: 0 }}>Internal Provider Roster</h1>
           <p style={{ fontSize: 14, color: '#64748B', marginTop: 4 }}>{roster.length} provider{roster.length !== 1 ? 's' : ''} on your roster</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={openUpload}
-            style={{ padding: '11px 18px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>📥</span> Upload Roster
-          </button>
-          <label
-            title="Bulk-set each card's all-in (CAPA) rate from a sheet with a name/business column and an all-in rate column"
-            style={{ padding: '11px 18px', background: '#fff', color: '#047857', border: '1.5px solid #6EE7B7', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: allInUploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: allInUploading ? 0.6 : 1 }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>💲</span> {allInUploading ? 'Uploading…' : 'Upload All-In Rates'}
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleAllInUpload} disabled={allInUploading} style={{ display: 'none' }} />
-          </label>
-          <label
-            title="Bulk-set each card's payroll PAY rate from a sheet with a name/business column and a rate column"
-            style={{ padding: '11px 18px', background: '#fff', color: '#7C3AED', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: payRateUploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: payRateUploading ? 0.6 : 1 }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>👤</span> {payRateUploading ? 'Uploading…' : 'Upload Pay Rates'}
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={handlePayRateUpload} disabled={payRateUploading} style={{ display: 'none' }} />
-          </label>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Import ▾ — setup-time bulk data loads */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setOpenMenu(openMenu === 'import' ? null : 'import')}
+              style={{ padding: '11px 16px', background: openMenu === 'import' ? '#F1F5F9' : '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <span style={{ fontSize: 15, lineHeight: 1 }}>⬆️</span>
+              {allInUploading || payRateUploading ? 'Uploading…' : 'Import'}
+              <span style={{ fontSize: 10, color: '#94A3B8' }}>▾</span>
+            </button>
+            {openMenu === 'import' && (
+              <MenuPanel>
+                <button onClick={() => { setOpenMenu(null); openUpload() }} style={menuItemStyle()}>
+                  <span>📥 Upload Roster</span>
+                  <span style={menuDesc}>Import providers in bulk from a spreadsheet</span>
+                </button>
+                <label style={{ ...menuItemStyle(), cursor: allInUploading ? 'default' : 'pointer', opacity: allInUploading ? 0.6 : 1 }}>
+                  <span>💲 {allInUploading ? 'Uploading…' : 'Upload All-In Rates'}</span>
+                  <span style={menuDesc}>Bulk-set all-in (CAPA) rates from a name + rate sheet</span>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setOpenMenu(null); handleAllInUpload(e) }} disabled={allInUploading} style={{ display: 'none' }} />
+                </label>
+                <label style={{ ...menuItemStyle(), cursor: payRateUploading ? 'default' : 'pointer', opacity: payRateUploading ? 0.6 : 1 }}>
+                  <span>👤 {payRateUploading ? 'Uploading…' : 'Upload Pay Rates'}</span>
+                  <span style={menuDesc}>Bulk-set payroll pay rates from a name + rate sheet</span>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setOpenMenu(null); handlePayRateUpload(e) }} disabled={payRateUploading} style={{ display: 'none' }} />
+                </label>
+              </MenuPanel>
+            )}
+          </div>
+
+          {/* Maintenance ▾ — housekeeping + the demoted danger zone */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setOpenMenu(openMenu === 'maintenance' ? null : 'maintenance')}
+              style={{ padding: '11px 16px', background: openMenu === 'maintenance' ? '#F1F5F9' : '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <span style={{ fontSize: 15, lineHeight: 1 }}>⚙️</span>
+              {relinking || syncing || reclassifying || bulkDeleting ? 'Working…' : 'Maintenance'}
+              <span style={{ fontSize: 10, color: '#94A3B8' }}>▾</span>
+            </button>
+            {openMenu === 'maintenance' && (
+              <MenuPanel>
+                <button onClick={() => { setOpenMenu(null); handleRelink() }} disabled={relinking} style={menuItemStyle()}>
+                  <span>🔗 {relinking ? 'Linking…' : 'Sync app accounts'}</span>
+                  <span style={menuDesc}>Link roster entries to providers already in the SNAP app (by NPI or email)</span>
+                </button>
+                <button onClick={() => { setOpenMenu(null); handleSyncStatus() }} disabled={syncing} style={menuItemStyle()}>
+                  <span>↻ {syncing ? 'Refreshing…' : 'Refresh credentialing status'}</span>
+                  <span style={menuDesc}>Check for providers who completed their invite</span>
+                </button>
+                <button onClick={() => { setOpenMenu(null); handleReclassify() }} disabled={reclassifying} style={menuItemStyle()}>
+                  <span>🔎 {reclassifying ? 'Resolving…' : 'Resolve from NPI registry'}</span>
+                  <span style={menuDesc}>Fill NPIs and MD/CRNA types from the national registry</span>
+                </button>
+                {roster.length > 0 && (
+                  <>
+                    <div style={{ height: 1, background: '#FEE2E2', margin: '4px 8px' }} />
+                    <button onClick={() => { setOpenMenu(null); handleClearAll() }} disabled={bulkDeleting} style={menuItemStyle(true)}>
+                      <span>🗑️ {bulkDeleting ? 'Deleting…' : 'Clear entire roster'}</span>
+                      <span style={menuDesc}>Deletes every provider — typed confirmation required</span>
+                    </button>
+                  </>
+                )}
+              </MenuPanel>
+            )}
+          </div>
+
           <button
             onClick={openInviteModal}
             style={{ padding: '11px 18px', background: '#fff', color: '#1D4ED8', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -839,45 +909,11 @@ export default function InternalRosterPage({ onNavigate }) {
             <span style={{ fontSize: 16, lineHeight: 1 }}>✉️</span> Invite to Credentialing
           </button>
           <button
-            onClick={handleRelink}
-            disabled={relinking}
-            title="Link any roster entries whose providers have already registered in the SNAP mobile app (matches by NPI or email)"
-            style={{ padding: '11px 16px', background: '#fff', color: '#047857', border: '1.5px solid #6EE7B7', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: relinking ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: relinking ? 0.6 : 1 }}
-          >
-            <span style={{ fontSize: 15, lineHeight: 1 }}>🔗</span> {relinking ? 'Linking…' : 'Sync app accounts'}
-          </button>
-          <button
-            onClick={handleSyncStatus}
-            disabled={syncing}
-            title="Check for providers who have completed their invite"
-            style={{ padding: '11px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: syncing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: syncing ? 0.6 : 1 }}
-          >
-            <span style={{ fontSize: 15, lineHeight: 1 }}>↻</span> {syncing ? 'Refreshing…' : 'Refresh status'}
-          </button>
-          <button
-            onClick={handleReclassify}
-            disabled={reclassifying}
-            title="Look up every provider in the national NPI registry — fill in NPIs, set MD/CRNA type, and activate any clinicians the import benched"
-            style={{ padding: '11px 16px', background: '#fff', color: '#475569', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: reclassifying ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: reclassifying ? 0.6 : 1 }}
-          >
-            <span style={{ fontSize: 15, lineHeight: 1 }}>🔎</span> {reclassifying ? 'Resolving…' : 'Resolve from registry'}
-          </button>
-          <button
             onClick={openAdd}
-            style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', boxShadow: '0 2px 10px rgba(37,99,235,0.3)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '11px 22px', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.35)', display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Provider
           </button>
-          {roster.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              disabled={bulkDeleting}
-              title="Delete every provider on this facility's roster — typed-confirmation required"
-              style={{ padding: '11px 16px', background: '#fff', color: '#B91C1C', border: '1.5px solid #FCA5A5', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: bulkDeleting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: bulkDeleting ? 0.6 : 1 }}
-            >
-              <span style={{ fontSize: 15, lineHeight: 1 }}>🗑️</span> Clear all
-            </button>
-          )}
         </div>
       </div>
 
