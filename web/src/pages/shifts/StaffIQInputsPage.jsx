@@ -442,7 +442,11 @@ export default function StaffIQInputsPage({ onNavigate }) {
             {result.score}
           </div>
           <div style={{ fontSize: 15, color: '#475569', marginBottom: 20 }}>
-            {result.status || result.message}
+            {/* status arrives as { label, message, zone } — rendering the raw
+                object is React error #31 and blanks the whole page. */}
+            {typeof result.status === 'string'
+              ? result.status
+              : result.status?.message || result.message || ''}
           </div>
 
           {(result.inefficiency1Pct != null || result.inefficiency2Pct != null) && (

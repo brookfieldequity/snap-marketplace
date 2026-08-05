@@ -1314,16 +1314,47 @@ router.delete('/:id', facilityAuth, async (req, res) => {
   try {
     const existing = await prisma.internalRosterEntry.findUnique({
       where: { id: req.params.id },
+      select: {
+        id: true, facilityId: true, providerName: true,
+        _count: {
+          select: {
+            scheduleAssignments: true, payrollLineItems: true, hourEntries: true,
+            ptoAllocations: true, scheduleFeedback: true, incentiveResponses: true,
+          },
+        },
+      },
     });
 
     if (!existing || existing.facilityId !== req.facility.id) {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    await prisma.internalRosterEntry.delete({ where: { id: req.params.id } });
+    // Providers with real work history can't be hard-deleted: schedule
+    // assignments are the record of who worked, and payroll/hour/PTO rows
+    // cascade away with the entry — that history must survive. The supported
+    // path is keeping them on the roster with 0% site shares.
+    const c = existing._count;
+    const blockers = [];
+    if (c.scheduleAssignments > 0) blockers.push(`${c.scheduleAssignments} schedule assignment(s)`);
+    if (c.payrollLineItems > 0) blockers.push(`${c.payrollLineItems} payroll line(s)`);
+    if (c.hourEntries > 0) blockers.push(`${c.hourEntries} hour entr${c.hourEntries === 1 ? 'y' : 'ies'}`);
+    if (c.ptoAllocations > 0) blockers.push(`${c.ptoAllocations} PTO grant(s)`);
+    if (blockers.length) {
+      return res.status(409).json({
+        error: `${existing.providerName} has work history (${blockers.join(', ')}) that must be kept. ` +
+          'Instead of deleting, set their site percentages to 0 — they stay credentialed and off the draft engine.',
+      });
+    }
+
+    // No work history — clean the small non-cascading rows, then delete.
+    await prisma.$transaction([
+      prisma.scheduleFeedback.deleteMany({ where: { rosterId: existing.id } }),
+      prisma.internalIncentiveShiftResponse.deleteMany({ where: { rosterId: existing.id } }),
+      prisma.internalRosterEntry.delete({ where: { id: existing.id } }),
+    ]);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error('[roster] delete failed:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
