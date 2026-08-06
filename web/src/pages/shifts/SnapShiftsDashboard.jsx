@@ -448,7 +448,9 @@ function UnifiedSavingsCard({ unified, loading }) {
 
       <div style={{ fontSize: 11, color: '#64748B', marginTop: 14, lineHeight: 1.5 }}>
         {isProjected
-          ? 'Projected from your inputs and industry-typical staffing patterns — your real schedules and fills replace the estimates automatically.'
+          ? (unified.assumptions?.lever1Source === 'schedule_analysis'
+            ? 'Projected from the full StaffIQ analysis of your own schedule data — becomes Realized as months scheduled through SNAP deliver measurable savings.'
+            : 'Projected from your inputs and industry-typical staffing patterns — your real schedules and fills replace the estimates automatically.')
           : `Measured from your facility's own data over the last ${unified.realizedWindowDays || 30} days · ${unified.confidence}% confidence and climbing.`}
       </div>
 

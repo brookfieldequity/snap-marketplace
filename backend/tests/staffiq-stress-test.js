@@ -11,7 +11,7 @@ const BACKEND = require('path').join(__dirname, '..');
 // ── Prisma mock ────────────────────────────────────────────────────────────────
 const state = {
   profile: null, profiles: [], input: null, bookings: [],
-  benchmarks: {}, outcomes: [], facilities: [],
+  benchmarks: {}, outcomes: [], facilities: [], analysis: null,
 };
 const calls = [];
 
@@ -27,6 +27,9 @@ const mockPrisma = {
   },
   staffIQInput: {
     findFirst: async (args) => { calls.push(['input.findFirst', args]); return state.input; },
+  },
+  staffIQInsight: {
+    findFirst: async (args) => { calls.push(['insight.findFirst', args]); return state.analysis; },
   },
   shiftBooking: {
     findMany: async (args) => {
@@ -79,6 +82,7 @@ function section(t) { console.log(`\n═══ ${t} ═══`); }
 function resetState() {
   state.profile = null; state.profiles = []; state.input = null;
   state.bookings = []; state.benchmarks = {}; state.outcomes = []; state.facilities = [];
+  state.analysis = null;
   calls.length = 0;
 }
 const NOW = Date.now();
@@ -359,15 +363,28 @@ section('5. Savings authority — basis selection per lever');
   r = await learning.projectFacilitySavings('f1');
   check('12 observed days < 20 → lever1 still projected', r.components.find(c => c.key === 'staffing_efficiency').basis === 'projected');
 
-  // 5f. Profile at/above gate → lever1 realized, exact math
+  // 5f. Profile at/above gate → lever1 STAYS PROJECTED (Matt, 8/6): uploaded
+  // history measures the facility's existing premium, which is not savings
+  // SNAP delivered. Hero flips to realized only once SNAP-scheduled months
+  // show measurable improvement (not yet built → realized gated off).
   state.profile.observationCount = 40;
   r = await learning.projectFacilitySavings('f1');
   const l1r = r.components.find(c => c.key === 'staffing_efficiency');
-  const expectL1 = Math.round(200 * 6 * 21.7 + 50 * 4 * 4.34);
-  check(`lever1 realized = waste/room × rooms × freq = $${expectL1}`, l1r.monthly === expectL1 && l1r.basis === 'realized', l1r);
-  check('overall basis = realized once any lever is realized', r.basis === 'realized');
+  check('lever1 stays PROJECTED even with a ready profile (no SNAP-delivered savings yet)', l1r.basis === 'projected', l1r);
+  check('overall basis stays projected', r.basis === 'projected');
   check('confidence = obs/60 capped (40/60 → 67%)', r.confidence === 67, r.confidence);
-  check('realized score = 100 − waste/cost (200/3000 → 93)', r.score === 93 && r.scoreBasis === 'realized', { score: r.score, basis: r.scoreBasis });
+  check('score still measured from profile (200/3000 → 93, realized basis)', r.score === 93 && r.scoreBasis === 'realized', { score: r.score, basis: r.scoreBasis });
+
+  // 5h. A full schedule analysis exists → lever1 projected = the Insights
+  // number (annual/12), source labeled, score from the analysis waste ratio.
+  state.analysis = { insightData: { totalAnnualWaste: 388002, wasteRatioPct: 2.6 } };
+  r = await learning.projectFacilitySavings('f1');
+  const l1a = r.components.find(c => c.key === 'staffing_efficiency');
+  check('lever1 projected = analysis annual/12 = $32,334', l1a.monthly === Math.round(388002 / 12) && l1a.basis === 'projected', l1a);
+  check('assumptions.lever1Source = schedule_analysis', r.assumptions.lever1Source === 'schedule_analysis');
+  check('score prefers the analysis waste ratio (100 − 2.6 → 97)', r.score === 97 && r.scoreBasis === 'realized', { score: r.score });
+  check('savingsVersion = learned_v4', r.savingsVersion === 'learned_v4');
+  state.analysis = null;
 
   // 5g. Confidence caps at 100
   state.profile.observationCount = 500;

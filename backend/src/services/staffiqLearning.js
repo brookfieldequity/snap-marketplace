@@ -513,13 +513,19 @@ async function computeSavingsLevers(facilityId) {
   const now = new Date();
   const windowStart = new Date(now.getTime() - REALIZED_WINDOW_DAYS * 86400000);
 
-  const [profile, latestInput, recentBookings] = await Promise.all([
+  const [profile, latestInput, recentBookings, latestAnalysis] = await Promise.all([
     prisma.facilityStaffingProfile.findUnique({ where: { facilityId } }),
     prisma.staffIQInput.findFirst({ where: { facilityId }, orderBy: { calculatedAt: 'desc' } }),
     prisma.shiftBooking.findMany({
       where: { shift: { facilityId }, confirmedAt: { gte: windowStart }, completedAt: { not: null } },
       include: { shift: { select: { specialty: true, durationHours: true, currentRate: true } } },
     }),
+    // The latest full schedule analysis — the best available theoretical basis
+    // for lever 1 (the same number the StaffIQ Insights page shows).
+    prisma.staffIQInsight.findFirst({
+      where: { facilityId, insightType: 'UTILIZATION' },
+      orderBy: { generatedAt: 'desc' },
+    }).catch(() => null),
   ]);
 
   // Effective agency bill rates: facility-entered when present, priors otherwise.
@@ -540,22 +546,36 @@ async function computeSavingsLevers(facilityId) {
     && profile.avgWeekdayWastePerRoom != null;
 
   // ── Lever 1 — staffing-model efficiency ──────────────────────────────────
-  // Realized: learned waste-per-room (vs the optimal care team) over a month of
-  // room-days. avgWeekdayWastePerRoom applies across all weekdays; the Friday
-  // figure is the EXTRA shortfall on Fridays (see staffiqScore.js).
-  let lever1Realized = null;
+  // MEASURED (calibration only, NOT the hero): learned waste-per-room over a
+  // month of room-days — what the mix premium currently runs. This used to be
+  // labeled "realized", which was wrong (Matt, 8/6): measuring a facility's
+  // existing premium is not savings SNAP delivered. It still feeds the
+  // calibration snapshots as the measured-actuality side.
+  let lever1Measured = null;
   if (profileReady) {
     const rooms = profile.avgRoomsByDow || {};
     const weekdayRooms = Number(rooms.weekday) || 0;
     const fridayRooms = Number(rooms.friday) || weekdayRooms;
-    lever1Realized = (profile.avgWeekdayWastePerRoom || 0) * weekdayRooms * WEEKDAYS_PER_MONTH
+    lever1Measured = (profile.avgWeekdayWastePerRoom || 0) * weekdayRooms * WEEKDAYS_PER_MONTH
       + (profile.avgFridayWastePerRoom || 0) * fridayRooms * FRIDAYS_PER_MONTH;
   }
-  // Projected: the team-model + overstaffing inefficiency the input form already
-  // computed (annual) → monthly. Includes the labeled industry-typical floor.
-  const lever1Projected = latestInput
-    ? ((latestInput.inefficiency1Cost || 0) + (latestInput.inefficiency2Cost || 0)) / 12
-    : null;
+  // REALIZED: deliberately null until it can mean what it says — savings
+  // actually delivered, i.e. months scheduled through SNAP whose measured
+  // premium came in below the pre-SNAP baseline. Until that improvement
+  // tracking exists, lever 1 stays theoretical (basis: projected).
+  const lever1Realized = null;
+  // Projected: prefer the full schedule analysis (the Insights-page number,
+  // annualized → monthly) — it's measured from the facility's own schedules at
+  // their own rates. Fall back to the 2-minute inputs-form heuristic only when
+  // no analysis has been run.
+  const analysisAnnualWaste = latestAnalysis?.insightData?.totalAnnualWaste;
+  const lever1Projected = analysisAnnualWaste != null
+    ? analysisAnnualWaste / 12
+    : (latestInput
+      ? ((latestInput.inefficiency1Cost || 0) + (latestInput.inefficiency2Cost || 0)) / 12
+      : null);
+  const lever1Source = analysisAnnualWaste != null ? 'schedule_analysis'
+    : (latestInput ? 'inputs_form' : 'none');
 
   // ── Lever 2 — agency displacement ────────────────────────────────────────
   // Realized: savings vs agency on shifts SNAP filled in the trailing window.
@@ -581,11 +601,12 @@ async function computeSavingsLevers(facilityId) {
   return {
     profile,
     latestInput,
+    latestAnalysis,
     profileReady,
     agencyRates,
     agencyRateSource,
     bookingsInWindow: recentBookings.length,
-    lever1: { projected: lever1Projected, realized: lever1Realized },
+    lever1: { projected: lever1Projected, realized: lever1Realized, measured: lever1Measured, source: lever1Source },
     lever2: { projected: lever2Projected, realized: lever2Realized },
   };
 }
@@ -607,10 +628,14 @@ async function projectFacilitySavings(facilityId) {
     const basis = anyRealized ? 'realized' : (anyProjected ? 'projected' : 'insufficient');
 
     if (basis === 'insufficient') {
-      return { monthly: null, annual: null, basis, confidence: 0, components: [], savingsVersion: 'learned_v3' };
+      return { monthly: null, annual: null, basis, confidence: 0, components: [], savingsVersion: 'learned_v4' };
     }
 
     const monthly = Math.round(lever1 + lever2);
+    // Annualize from the unrounded levers so the yearly figure matches the
+    // analysis page to the dollar (monthly×12 drifts by rounding).
+    const annual = Math.round((lever1 + lever2) * 12);
+    const lever1Source = L.lever1.source; // 'schedule_analysis' | 'inputs_form' | 'none'
     const confidence = profile
       ? Math.min(100, Math.round(((profile.observationCount || 0) / 60) * 100))
       : (latestInput ? 35 : 0);
@@ -625,7 +650,13 @@ async function projectFacilitySavings(facilityId) {
     let scoreBasis = 'insufficient';
     if (lever1Basis !== 'none') {
       let wasteRatioPct = null;
-      if (profileReady && profile.avgCostPerRoom > 0) {
+      // The score grades how efficient the facility IS — a measured basis is
+      // correct here (unlike lever-1 "realized", which must mean delivered
+      // savings). Prefer the latest full analysis, then the learned profile.
+      if (L.latestAnalysis?.insightData?.wasteRatioPct != null) {
+        wasteRatioPct = L.latestAnalysis.insightData.wasteRatioPct;
+        scoreBasis = 'realized';
+      } else if (profileReady && profile.avgCostPerRoom > 0) {
         wasteRatioPct = (profile.avgWeekdayWastePerRoom / profile.avgCostPerRoom) * 100;
         scoreBasis = 'realized';
       } else if (latestInput) {
@@ -640,13 +671,13 @@ async function projectFacilitySavings(facilityId) {
 
     return {
       monthly,
-      annual: monthly * 12,
-      basis,                       // 'projected' until enough of the facility's own data is in
+      annual,
+      basis,                       // 'projected' until SNAP-scheduled months deliver measurable improvement
       score,                       // 0-100; gap from 100 = waste% = lever-1 $/spend
       scoreBasis,                  // 'projected' | 'realized' | 'insufficient'
       networkMedianScore: NETWORK_MEDIAN_SCORE, // 88 — benchmark context for "you're X, median is 88"
       confidence,
-      savingsVersion: 'learned_v3',
+      savingsVersion: 'learned_v4',
       realizedWindowDays: REALIZED_WINDOW_DAYS, // realized = trailing window, not calendar month
       components: [
         { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: lever1Basis },
@@ -657,6 +688,7 @@ async function projectFacilitySavings(facilityId) {
       assumptions: {
         agencyRates: L.agencyRates,
         agencyRateSource: L.agencyRateSource, // 'facility' | 'mixed' | 'estimated'
+        lever1Source, // 'schedule_analysis' (the Insights number) | 'inputs_form' heuristic
         efficiencyFloorApplied: lever1Basis === 'projected' && !!latestInput
           ? !!(calculateStaffIQScore(latestInput).floorApplied)
           : false,
@@ -664,7 +696,7 @@ async function projectFacilitySavings(facilityId) {
     };
   } catch (err) {
     console.error('projectFacilitySavings failed (non-fatal):', err.message);
-    return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v3' };
+    return { monthly: null, annual: null, basis: 'insufficient', confidence: 0, components: [], savingsVersion: 'learned_v4' };
   }
 }
 
@@ -681,7 +713,7 @@ function projectFromInputs(raw = {}) {
   const num = (v) => (v != null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : null);
   const rooms = num(raw.totalLocations);
   if (!rooms || rooms <= 0) {
-    return { monthly: null, annual: null, basis: 'insufficient', components: [], savingsVersion: 'learned_v3' };
+    return { monthly: null, annual: null, basis: 'insufficient', components: [], savingsVersion: 'learned_v4' };
   }
 
   const inputs = {
@@ -724,7 +756,7 @@ function projectFromInputs(raw = {}) {
     wasteRatioPct: Math.round(((sc.inefficiency1Pct || 0) + (sc.inefficiency2Pct || 0)) * 10) / 10,
     totalBudget: sc.totalBudget, // annual staffing spend the waste% applies to
     confidence: 35, // projection-only confidence, same as the dashboard's input-only state
-    savingsVersion: 'learned_v3',
+    savingsVersion: 'learned_v4',
     inputs, // echo the resolved inputs so the pitch can show what was assumed
     components: [
       { key: 'staffing_efficiency', label: 'Staffing-model efficiency', monthly: Math.round(lever1), basis: 'projected' },
@@ -764,8 +796,10 @@ async function recordSavingsSnapshots() {
         const projected = (L.lever1.projected != null || L.lever2.projected != null)
           ? Math.round((L.lever1.projected || 0) + (L.lever2.projected || 0))
           : null;
-        const realized = (L.lever1.realized != null || L.lever2.realized != null)
-          ? Math.round((L.lever1.realized || 0) + (L.lever2.realized || 0))
+        // Actuality side of calibration = the MEASURED premium (plus genuinely
+        // realized marketplace fills) — hero 'realized' stays gated separately.
+        const realized = (L.lever1.measured != null || L.lever2.realized != null)
+          ? Math.round((L.lever1.measured || 0) + (L.lever2.realized || 0))
           : null;
         if (projected == null && realized == null) continue; // nothing to measure yet
 
@@ -776,13 +810,13 @@ async function recordSavingsSnapshots() {
             predictedDollar: projected,
             realizedDollar: realized,
             metadata: {
-              lever1: { projected: round0(L.lever1.projected), realized: round0(L.lever1.realized) },
+              lever1: { projected: round0(L.lever1.projected), measured: round0(L.lever1.measured), source: L.lever1.source },
               lever2: { projected: round0(L.lever2.projected), realized: round0(L.lever2.realized) },
               agencyRateSource: L.agencyRateSource,
               observationCount: L.profile?.observationCount || 0,
               bookingsInWindow: L.bookingsInWindow,
               realizedWindowDays: REALIZED_WINDOW_DAYS,
-              savingsVersion: 'learned_v3',
+              savingsVersion: 'learned_v4',
             },
           },
         });
