@@ -155,12 +155,12 @@ section('1. Day-level efficiency math (room model: supervisor sits NO room)');
   const underLeveraged = score.analyzeDayEfficiency(3, 2, 370, 250, 8, 4); // 1 sup + 2 solo + 2 CRNAs
   check('leverage-up: under-leveraged day still flagged — fill toward 1:4 with MORE CRNAs',
     underLeveraged.pattern === 'PROBLEM_MIX' && underLeveraged.dailyWaste === (1610 - 1370) * 8);
-  const allMd3 = score.analyzeDayEfficiency(3, 0, 370, 250, 8, 4);
+  const luAllMd3 = score.analyzeDayEfficiency(3, 0, 370, 250, 8, 4);
   check('leverage-up: 3-room all-MD day at real rates is genuinely optimal (no structural waste)',
-    allMd3.pattern === 'ALL_MD' && allMd3.dailyWaste === 0);
-  const allMd4 = score.analyzeDayEfficiency(4, 0, 370, 250, 8, 4); // full 1:4 pod would win here
+    luAllMd3.pattern === 'ALL_MD' && luAllMd3.dailyWaste === 0);
+  const luAllMd4 = score.analyzeDayEfficiency(4, 0, 370, 250, 8, 4); // full 1:4 pod would win here
   check('leverage-up: 4-room all-MD day still priced against the full care-team pod (structural)',
-    allMd4.pattern === 'ALL_MD' && allMd4.dailyWaste === (1480 - 1370) * 8);
+    luAllMd4.pattern === 'ALL_MD' && luAllMd4.dailyWaste === (1480 - 1370) * 8);
 }
 
 section('2. Friday detection (the fixed false-positive)');
