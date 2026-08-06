@@ -140,6 +140,27 @@ section('1. Day-level efficiency math (room model: supervisor sits NO room)');
   check('1 room: solo MD ($390) beats supervised single CRNA ($650)', score.optimalStaffingCost(1, 390, 260, 4) === 390);
   check('4 rooms @1:4: care team ($1,430) beats 4 solo MDs ($1,560)', score.optimalStaffingCost(4, 390, 260, 4) === 1430);
   check('3 rooms @1:3: care team ties all-MD at $1,170 (default-rate equivalence)', score.optimalStaffingCost(3, 390, 260, 3) === 1170);
+
+  // LEVERAGE-UP-ONLY constraint (Matt, 2026-08-05). At CAPA's real rates
+  // ($370 MD / $250 CRNA) solo MDs edge out partial care teams, and the old
+  // unconstrained counterfactual recommended CUTTING CRNAs — flagging ordinary
+  // care-team days as inefficient. minCrnas pins the floor.
+  check('leverage-up: unconstrained optimal for 2 rooms @370/250 is 2 solo MDs ($740)',
+    score.optimalStaffingCost(2, 370, 250, 4) === 740);
+  check('leverage-up: with 2 CRNAs present, optimal keeps them ($870 — never "cut CRNAs")',
+    score.optimalStaffingCost(2, 370, 250, 4, 2) === 870);
+  const smallCareTeam = score.analyzeDayEfficiency(1, 2, 370, 250, 8, 4); // 1 MD supervising 2 CRNAs
+  check('leverage-up: ordinary small care-team day at real rates is EFFICIENT (zero waste)',
+    smallCareTeam.dailyWaste === 0 && smallCareTeam.isEfficient);
+  const underLeveraged = score.analyzeDayEfficiency(3, 2, 370, 250, 8, 4); // 1 sup + 2 solo + 2 CRNAs
+  check('leverage-up: under-leveraged day still flagged — fill toward 1:4 with MORE CRNAs',
+    underLeveraged.pattern === 'PROBLEM_MIX' && underLeveraged.dailyWaste === (1610 - 1370) * 8);
+  const allMd3 = score.analyzeDayEfficiency(3, 0, 370, 250, 8, 4);
+  check('leverage-up: 3-room all-MD day at real rates is genuinely optimal (no structural waste)',
+    allMd3.pattern === 'ALL_MD' && allMd3.dailyWaste === 0);
+  const allMd4 = score.analyzeDayEfficiency(4, 0, 370, 250, 8, 4); // full 1:4 pod would win here
+  check('leverage-up: 4-room all-MD day still priced against the full care-team pod (structural)',
+    allMd4.pattern === 'ALL_MD' && allMd4.dailyWaste === (1480 - 1370) * 8);
 }
 
 section('2. Friday detection (the fixed false-positive)');

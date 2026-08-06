@@ -50,12 +50,24 @@ const DEFAULT_SUPERVISION_RATIO = 3;
  * supervised at up to 1:ratio — and the supervising MD NEVER sits a room
  * (clinical rule locked with Matt 2026-07-10). Scans every solo/care-team mix,
  * so all-MD, all-care-team, and hybrids all compete on price.
+ *
+ * LEVERAGE-UP-ONLY constraint (Matt, 2026-08-05): pass minCrnas = the CRNAs
+ * actually present and the counterfactual may only keep or ADD CRNAs — never
+ * cut them. Without it, rate combinations where solo MDs edge out partial care
+ * teams (e.g. $370 MD vs $250 CRNA below full 1:4 leverage) made the model
+ * flag ordinary care-team days with a "use fewer CRNAs" recommendation nobody
+ * would act on, inflating inefficient-day counts. The savings claim is now
+ * strictly "unused supervision capacity → fill toward leverage with CRNAs".
+ * minCrnas = 0 (the default) preserves the unconstrained scan — still used for
+ * all-MD days, where pricing the care-team alternative IS the point
+ * (structural bucket).
  */
-function optimalStaffingCost(rooms, anesRate, crnaRate, supervisionRatio) {
+function optimalStaffingCost(rooms, anesRate, crnaRate, supervisionRatio, minCrnas = 0) {
   if (rooms <= 0) return 0;
   const ratio = Math.max(1, supervisionRatio || DEFAULT_SUPERVISION_RATIO);
+  const maxSolo = Math.max(0, rooms - Math.max(0, minCrnas));
   let best = Infinity;
-  for (let solo = 0; solo <= rooms; solo++) {
+  for (let solo = 0; solo <= maxSolo; solo++) {
     const crnaRooms = rooms - solo;
     const cost = solo * anesRate
       + (crnaRooms > 0 ? Math.ceil(crnaRooms / ratio) * anesRate + crnaRooms * crnaRate : 0);
@@ -87,7 +99,9 @@ function analyzeDayEfficiency(anesCount, crnaCount, anesRate = DEFAULT_ANES_RATE
   const totalRooms = crnaCount + soloMDs;
 
   const actualCost = (anesCount * anesRate + crnaCount * crnaRate) * shiftHours;
-  const optimalCost = optimalStaffingCost(totalRooms, anesRate, crnaRate, ratio) * shiftHours;
+  // Leverage-up-only: the counterfactual keeps every CRNA who worked and may
+  // only convert solo-MD rooms to (additional) supervised-CRNA rooms.
+  const optimalCost = optimalStaffingCost(totalRooms, anesRate, crnaRate, ratio, crnaCount) * shiftHours;
 
   const dailyWaste = Math.max(0, actualCost - optimalCost);
   const isEfficient = dailyWaste === 0;
