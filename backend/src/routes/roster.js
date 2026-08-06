@@ -508,6 +508,57 @@ router.get('/locations', facilityAuth, async (req, res) => {
   }
 });
 
+// GET /site-share-suggestions — check entered shift-shares against StaffIQ
+// schedule history (and suggest full splits for blank cards). Read-only;
+// see services/siteShareSuggest.js for the checker/cold-start split.
+router.get('/site-share-suggestions', facilityAuth, async (req, res) => {
+  try {
+    const { computeSiteShareSuggestions } = require('../services/siteShareSuggest');
+    res.json(await computeSiteShareSuggestions(req.facility.id));
+  } catch (err) {
+    console.error('[roster/site-share-suggestions] error:', err);
+    res.status(500).json({ error: 'Failed to compute site-share suggestions' });
+  }
+});
+
+// POST /site-shares/apply — bulk-accept suggestions: upsert shiftSharePct on
+// ProviderLocation rows (creating the row when the card doesn't list the site
+// yet). Explicit coordinator action; nothing changes on its own.
+router.post('/site-shares/apply', facilityAuth, async (req, res) => {
+  try {
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
+    if (changes.length === 0) return res.status(400).json({ error: 'changes[] required' });
+    for (const c of changes) {
+      const n = Number(c?.pct);
+      if (!c?.rosterEntryId || !c?.site || !Number.isFinite(n) || n < 0 || n > 100) {
+        return res.status(400).json({ error: 'Each change needs rosterEntryId, site, and pct (0-100)' });
+      }
+    }
+    const ids = [...new Set(changes.map((c) => c.rosterEntryId))];
+    const owned = await prisma.internalRosterEntry.findMany({
+      where: { id: { in: ids }, facilityId: req.facility.id },
+      select: { id: true },
+    });
+    const ownedSet = new Set(owned.map((e) => e.id));
+    const rejected = ids.filter((id) => !ownedSet.has(id));
+    if (rejected.length > 0) return res.status(404).json({ error: 'Roster entry not found' });
+
+    let applied = 0;
+    for (const c of changes) {
+      await prisma.providerLocation.upsert({
+        where: { rosterEntryId_facilityName: { rosterEntryId: c.rosterEntryId, facilityName: c.site } },
+        update: { shiftSharePct: Number(c.pct) },
+        create: { rosterEntryId: c.rosterEntryId, facilityName: c.site, shiftSharePct: Number(c.pct) },
+      });
+      applied += 1;
+    }
+    res.json({ ok: true, applied });
+  } catch (err) {
+    console.error('[roster/site-shares/apply] error:', err);
+    res.status(500).json({ error: 'Failed to apply site shares' });
+  }
+});
+
 // POST / — create a roster entry
 router.post('/', facilityAuth, async (req, res) => {
   try {

@@ -151,6 +151,234 @@ function Modal({ title, onClose, children }) {
   )
 }
 
+// ─── ✨ Site-share check (2026-08-06) ─────────────────────────────────────────
+// One engine, two modes: providers WITH shares get checked against the trailing
+// 3 months of uploaded schedules (deliberate 0% is never questioned); providers
+// with blank cards get a suggested split from all history. Suggestion only —
+// every write is an explicit click here.
+function ShareBar({ split }) {
+  const palette = ['#34D399', '#A5B4FC', '#FCA5A5', '#FCD34D', '#67E8F9', '#F9A8D4', '#C4B5FD']
+  return (
+    <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', background: '#F1F5F9' }}>
+      {split.map((s, i) => (
+        <div key={s.site} title={`${s.site} ${s.pct}%`} style={{ width: `${s.pct}%`, background: palette[i % palette.length] }} />
+      ))}
+    </div>
+  )
+}
+
+function SiteShareCheckModal({ onClose, onApplied }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [selected, setSelected] = useState({})
+  const [applying, setApplying] = useState(false)
+  const [doneIds, setDoneIds] = useState({})
+  const [showMatches, setShowMatches] = useState(false)
+  const [touched, setTouched] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = await facilityAPI.getSiteShareSuggestions()
+        setData(d)
+        const sel = {}
+        ;(d.coldStart || []).forEach((c) => { sel[c.rosterId] = true })
+        setSelected(sel)
+      } catch (e) {
+        setError(e.message)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  async function applyOne(rosterId, site, pct, key) {
+    setApplying(true)
+    try {
+      await facilityAPI.applySiteShares([{ rosterEntryId: rosterId, site, pct }])
+      setDoneIds((prev) => ({ ...prev, [key]: true }))
+      setTouched(true)
+    } catch (e) {
+      alert('Could not apply: ' + e.message)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  async function applySelectedColdStart() {
+    const rows = (data?.coldStart || []).filter((c) => selected[c.rosterId] && !doneIds[c.rosterId])
+    const changes = rows.flatMap((c) => c.split.filter((s) => s.applicable).map((s) => ({ rosterEntryId: c.rosterId, site: s.site, pct: s.pct })))
+    if (changes.length === 0) return
+    setApplying(true)
+    try {
+      await facilityAPI.applySiteShares(changes)
+      setDoneIds((prev) => {
+        const next = { ...prev }
+        rows.forEach((c) => { next[c.rosterId] = true })
+        return next
+      })
+      setTouched(true)
+    } catch (e) {
+      alert('Could not apply: ' + e.message)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  function close() {
+    if (touched && onApplied) onApplied()
+    onClose()
+  }
+
+  const checker = data?.checker || []
+  const cleanCount = checker.filter((c) => c.discrepancies.length === 0 && c.unset.length === 0).length
+  const flagged = checker.filter((c) => c.discrepancies.length > 0 || c.unset.length > 0 || c.newSites.length > 0)
+  const coldStart = data?.coldStart || []
+  const insufficient = data?.insufficient || []
+  const selectedCount = coldStart.filter((c) => selected[c.rosterId] && !doneIds[c.rosterId]).length
+  const rowStyle = { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: '1px solid #EAF1FA' }
+  const pill = (bg, color, text) => <span style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{text}</span>
+
+  return (
+    <Modal title="✨ Site share check" onClose={close}>
+      {loading && <div style={{ color: '#64748B', fontSize: 14, padding: '12px 0' }}>Reading your schedule history…</div>}
+      {error && <div style={{ color: '#B91C1C', fontSize: 14, padding: '12px 0' }}>{error}</div>}
+      {data && !loading && !data.dataRange && (
+        <div style={{ color: '#64748B', fontSize: 14, padding: '12px 0' }}>
+          No uploaded schedule history yet. Upload schedules under StaffIQ → Data Upload first — suggestions are computed from real scheduled days.
+        </div>
+      )}
+      {data && data.dataRange && (
+        <>
+          <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>
+            From your uploaded schedules · {data.dataRange.start} → {data.dataRange.end} · {data.dataRange.records.toLocaleString()} assignments. Nothing changes until you apply.
+          </div>
+
+          {checker.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>Entered shares vs. reality</span>
+                {pill('#ECFDF5', '#047857', `✓ ${cleanCount} match`)}
+                {flagged.length > 0 && pill('#FFF7ED', '#C2410C', `${flagged.length} to review`)}
+                <button onClick={() => setShowMatches(!showMatches)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#2563EB', fontSize: 12, cursor: 'pointer' }}>
+                  {showMatches ? 'Hide matches' : 'Show matches'}
+                </button>
+              </div>
+              {showMatches && (
+                <div style={{ fontSize: 12, color: '#64748B', background: '#F8FAFC', border: '1px solid #EAF1FA', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                  {checker.filter((c) => c.discrepancies.length === 0 && c.unset.length === 0).map((c) => (
+                    <div key={c.rosterId} style={{ padding: '2px 0' }}>
+                      ✓ <b>{c.providerName}</b> — {c.matches.map((m) => `${m.site} ${m.targetPct}%${m.zeroRespected ? ' (0% honored)' : ` (saw ${m.observedPct}%)`}`).join(' · ')}
+                    </div>
+                  ))}
+                  {cleanCount === 0 && <div>None yet.</div>}
+                </div>
+              )}
+              {flagged.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 10, overflow: 'hidden' }}>
+                  {flagged.map((c) => (
+                    <div key={c.rosterId} style={{ borderBottom: '1px solid #EAF1FA' }}>
+                      <div style={{ ...rowStyle, background: '#F8FAFC', borderBottom: 'none' }}>
+                        <b style={{ fontSize: 13, color: '#10233F' }}>{c.providerName}</b>
+                        <span style={{ fontSize: 11.5, color: '#94A3B8' }}>{c.windowDays} days in the last {c.windowMonths} months</span>
+                      </div>
+                      {c.discrepancies.map((d) => {
+                        const key = `${c.rosterId}::${d.site}`
+                        return (
+                          <div key={key} style={rowStyle}>
+                            <span style={{ fontSize: 13, color: '#334155', flex: 1 }}>
+                              {d.site}: card says <b>{d.targetPct}%</b>, schedules show <b>{d.observedPct}%</b>
+                            </span>
+                            {doneIds[key]
+                              ? pill('#ECFDF5', '#047857', 'Updated ✓')
+                              : <button disabled={applying} onClick={() => applyOne(c.rosterId, d.site, d.suggestPct, key)} style={{ padding: '5px 12px', background: '#fff', border: '1.5px solid #2563EB', color: '#2563EB', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Set to {d.suggestPct}%</button>}
+                          </div>
+                        )
+                      })}
+                      {c.unset.map((u) => {
+                        const key = `${c.rosterId}::${u.site}`
+                        return (
+                          <div key={key} style={rowStyle}>
+                            <span style={{ fontSize: 13, color: '#334155', flex: 1 }}>
+                              {u.site}: no share set — schedules show <b>{u.observedPct}%</b>
+                            </span>
+                            {doneIds[key]
+                              ? pill('#ECFDF5', '#047857', 'Set ✓')
+                              : <button disabled={applying} onClick={() => applyOne(c.rosterId, u.site, u.suggestPct, key)} style={{ padding: '5px 12px', background: '#fff', border: '1.5px solid #2563EB', color: '#2563EB', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Set to {u.suggestPct}%</button>}
+                          </div>
+                        )
+                      })}
+                      {c.newSites.map((s) => {
+                        const key = `${c.rosterId}::${s.site}`
+                        return (
+                          <div key={key} style={rowStyle}>
+                            <span style={{ fontSize: 13, color: '#334155', flex: 1 }}>
+                              {s.site}: <span style={{ color: '#C2410C', fontWeight: 600 }}>not on their card</span> — schedules show <b>{s.observedPct}%</b>
+                            </span>
+                            {s.applicable
+                              ? (doneIds[key]
+                                ? pill('#ECFDF5', '#047857', 'Added ✓')
+                                : <button disabled={applying} onClick={() => applyOne(c.rosterId, s.site, s.suggestPct, key)} style={{ padding: '5px 12px', background: '#fff', border: '1.5px solid #C2410C', color: '#C2410C', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Add at {s.suggestPct}%</button>)
+                              : <span style={{ fontSize: 11.5, color: '#94A3B8' }} title="This name doesn't match a coverage-template site, so it can't be saved to the card.">unrecognized site</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {coldStart.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#10233F' }}>No shares set — suggested from history</span>
+                <button disabled={applying || selectedCount === 0} onClick={applySelectedColdStart} style={{ marginLeft: 'auto', padding: '7px 14px', background: selectedCount > 0 ? '#2563EB' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: selectedCount > 0 ? 'pointer' : 'default' }}>
+                  {applying ? 'Applying…' : `Apply to ${selectedCount} selected`}
+                </button>
+              </div>
+              <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 10, overflow: 'hidden' }}>
+                {coldStart.map((c) => (
+                  <div key={c.rosterId} style={rowStyle}>
+                    {doneIds[c.rosterId]
+                      ? <span style={{ width: 16, textAlign: 'center' }}>✓</span>
+                      : <input type="checkbox" checked={!!selected[c.rosterId]} onChange={() => setSelected((p) => ({ ...p, [c.rosterId]: !p[c.rosterId] }))} style={{ width: 16, height: 16 }} />}
+                    <div style={{ width: 170 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#10233F' }}>{c.providerName}</div>
+                      <div style={{ fontSize: 11, color: '#94A3B8' }}>{c.providerType === 'ANESTHESIOLOGIST' ? 'MD' : c.providerType} · {c.totalDays} days on record</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <ShareBar split={c.split} />
+                      <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 3 }}>
+                        {c.split.map((s) => `${s.site} ${s.pct}%${s.newSite && s.applicable ? ' (new)' : ''}${!s.applicable ? ' (unrecognized — skipped)' : ''}`).join(' · ')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 6 }}>Rounded to 5% and summing to 100 — you can fine-tune any card afterward.</div>
+            </div>
+          )}
+
+          {insufficient.length > 0 && (
+            <div style={{ fontSize: 12, color: '#94A3B8', background: '#F8FAFC', border: '1px solid #EAF1FA', borderRadius: 8, padding: '8px 12px' }}>
+              {insufficient.map((i) => (
+                <div key={i.rosterId} style={{ padding: '2px 0' }}>{i.providerName} — {i.reason}</div>
+              ))}
+            </div>
+          )}
+
+          {checker.length === 0 && coldStart.length === 0 && insufficient.length === 0 && (
+            <div style={{ color: '#64748B', fontSize: 14 }}>No roster-matched schedule history found for current providers.</div>
+          )}
+        </>
+      )}
+    </Modal>
+  )
+}
+
 function Field({ label, required, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -212,6 +440,8 @@ export default function InternalRosterPage({ onNavigate }) {
   // Credentialed sites + shift-share. siteList = all facility sites; siteCred =
   // per-site { on, pct } for the provider being edited.
   const [siteList, setSiteList] = useState([])
+  const [showShareCheck, setShowShareCheck] = useState(false)
+  const [suggestingShares, setSuggestingShares] = useState(false)
   const [siteCred, setSiteCred] = useState({})
   const [invitedIds, setInvitedIds] = useState({})
   const [deletingIds, setDeletingIds] = useState({})
@@ -766,6 +996,49 @@ export default function InternalRosterPage({ onNavigate }) {
 
   function setF(k, v) { setForm((p) => ({ ...p, [k]: v })) }
 
+  // ✨ Fill BLANK share fields on the open edit form from schedule history.
+  // Never overwrites a number the coordinator typed — card-vs-reality
+  // disagreements are the Maintenance ▾ "Check site shares" job, where both
+  // numbers are shown side by side.
+  async function suggestSharesForEdit() {
+    if (!editTarget) return
+    setSuggestingShares(true)
+    try {
+      const d = await facilityAPI.getSiteShareSuggestions()
+      const cold = (d.coldStart || []).find((c) => c.rosterId === editTarget.id)
+      const chk = (d.checker || []).find((c) => c.rosterId === editTarget.id)
+      const insuff = (d.insufficient || []).find((c) => c.rosterId === editTarget.id)
+      const fills = cold
+        ? cold.split.filter((s) => s.applicable).map((s) => ({ site: s.site, pct: s.pct }))
+        : chk
+          ? chk.unset.map((u) => ({ site: u.site, pct: u.suggestPct }))
+          : []
+      let applied = 0
+      if (fills.length > 0) {
+        setSiteCred((prev) => {
+          const next = { ...prev }
+          fills.forEach((f) => {
+            const cur = next[f.site]
+            if (!cur || cur.pct === '' || cur.pct == null) {
+              next[f.site] = { on: true, pct: String(f.pct) }
+              applied += 1
+            }
+          })
+          return next
+        })
+      }
+      if (fills.length === 0) {
+        if (insuff) alert(insuff.reason + '.')
+        else if (chk) alert('Every share on this card already has a value. To compare them against schedule history, use Maintenance → Check site shares.')
+        else alert('No roster-matched schedule history found for this provider.')
+      }
+    } catch (e) {
+      alert('Could not read schedule history: ' + e.message)
+    } finally {
+      setSuggestingShares(false)
+    }
+  }
+
   function toggleSite(name) {
     setSiteCred((s) => ({ ...s, [name]: { on: !s[name]?.on, pct: s[name]?.pct || '' } }))
   }
@@ -888,6 +1161,10 @@ export default function InternalRosterPage({ onNavigate }) {
                 <button onClick={() => { setOpenMenu(null); handleReclassify() }} disabled={reclassifying} style={menuItemStyle()}>
                   <span>🔎 {reclassifying ? 'Resolving…' : 'Resolve from NPI registry'}</span>
                   <span style={menuDesc}>Fill NPIs and MD/CRNA types from the national registry</span>
+                </button>
+                <button onClick={() => { setOpenMenu(null); setShowShareCheck(true) }} style={menuItemStyle()}>
+                  <span>✨ Check site shares</span>
+                  <span style={menuDesc}>Compare entered shift-shares against your uploaded schedules — and suggest splits for blank cards</span>
                 </button>
                 {roster.length > 0 && (
                   <>
@@ -1372,6 +1649,10 @@ export default function InternalRosterPage({ onNavigate }) {
         </div>
       )}
 
+      {showShareCheck && (
+        <SiteShareCheckModal onClose={() => setShowShareCheck(false)} onApplied={load} />
+      )}
+
       {showModal && (
         <Modal title={editTarget ? 'Edit Provider' : 'Add Provider'} onClose={() => setShowModal(false)}>
           {/* Identity — always visible above the tabs */}
@@ -1545,7 +1826,14 @@ export default function InternalRosterPage({ onNavigate }) {
                 const anyOn = Object.values(siteCred).some((v) => v.on)
                 return (
                   <>
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <div style={{ fontSize: 11, color: '#94A3B8', flex: 1 }}>Check each site this provider is credentialed at, then set their share of shifts there.</div>
+                      {editTarget && (
+                        <button type="button" onClick={suggestSharesForEdit} disabled={suggestingShares} style={{ padding: '4px 10px', background: '#fff', border: '1px solid #DCE8F7', color: '#2563EB', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }} title="Fill blank share fields from your uploaded schedule history — never overwrites a number you typed.">
+                          ✨ {suggestingShares ? 'Reading…' : 'Suggest from history'}
+                        </button>
+                      )}
+                    </div>
                     <div style={{ background: '#F8FAFC', border: '1px solid #DCE8F7', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
                       {sites.map((name, i) => {
                         const v = siteCred[name] || {}
