@@ -257,9 +257,17 @@ router.post('/analyze', async (req, res) => {
       return true;
     });
 
-    // Analyze each (non-excluded) facility location at its own ratio
+    // Analyze each (non-excluded) facility location at its own ratio and its
+    // own day length. Sites run different shift lengths (Matt, 8/5: BOSS ~9h,
+    // Kenmore ~10h) — a per-site shiftHours in staffiqLocationConfig overrides
+    // the facility-wide inputs-form value, since both spend and waste scale
+    // linearly with hours.
     const facilityResults = analyzableLocations.map(([locationName, dayRecords]) =>
-      analyzeFacilitySchedule(dayRecords, locationName, { ...rates, supervisionRatio: ratioFor(locationName) })
+      analyzeFacilitySchedule(dayRecords, locationName, {
+        ...rates,
+        shiftHours: cfgFor(locationName)?.shiftHours > 0 ? cfgFor(locationName).shiftHours : rates.shiftHours,
+        supervisionRatio: ratioFor(locationName),
+      })
     );
 
     // Calculate overall score
@@ -474,6 +482,10 @@ router.post('/analyze', async (req, res) => {
           source: rateSource,
           // Per-site acceptable leverage (config → builder templates → 1:3 default).
           supervisionRatios: Object.fromEntries(analyzableLocations.map(([name]) => [name, ratioFor(name)])),
+          // Per-site day length (config override → facility-wide shiftHours).
+          shiftHoursBySite: Object.fromEntries(analyzableLocations.map(([name]) => [
+            name, cfgFor(name)?.shiftHours > 0 ? cfgFor(name).shiftHours : rates.shiftHours,
+          ])),
         },
       },
     });
