@@ -15,6 +15,28 @@ const CONF_COLOR = { HIGH: '#10B981', MEDIUM: '#F59E0B', LOW: '#EF4444' }
 
 function isoDay(d) { return d ? String(d).slice(0, 10) : '' }
 
+// ── Vitality tiers (2026-08-06): greens float, unknowns sit middle, reds sink.
+// Tier follows the document's LIFE (expiration), not its workflow status —
+// confirming a card changes nothing here. Yellow means "should carry an
+// expiration but none was read" (or the file couldn't be read); doc types that
+// don't expire by nature (CV, OTHER) count as active. Items are sorted once
+// per server fetch so cards never jump around mid-review; tints update live.
+const EXPIRING_DOC_TYPES = new Set(['LICENSE', 'DEA', 'MALPRACTICE_FACE_SHEET'])
+function vitalityTier(item) {
+  if (item.status === 'REJECTED') return 3
+  if (['ARCHIVE', 'ARCHIVED'].includes(item.status)) return 2
+  if (item.suggestedExpiration) return new Date(item.suggestedExpiration) < new Date() ? 2 : 0
+  if (item.status === 'FAILED' || item.status === 'PENDING') return 1
+  return (EXPIRING_DOC_TYPES.has(item.suggestedDocType) || item.suggestedCredentialType) ? 1 : 0
+}
+const TIER_CARD = {
+  0: { background: '#F0FDF4', border: '1px solid #BBF7D0' },
+  1: { background: '#FFFBEB', border: '1px solid #FDE68A' },
+  2: { background: '#FEF2F2', border: '1px solid #FECACA' },
+  3: { background: '#F8FAFC', border: '1px solid #E2E8F0' },
+}
+const sortByVitality = (items) => [...(items || [])].sort((a, b) => vitalityTier(a) - vitalityTier(b))
+
 export default function CredentialImportPage() {
   const [batches, setBatches] = useState([])
   const [batch, setBatch] = useState(null) // open batch detail
@@ -31,7 +53,9 @@ export default function CredentialImportPage() {
   useEffect(() => { loadList() }, [loadList])
 
   const openBatch = useCallback((id) => {
-    credentialAPI.getIntake(id).then(setBatch).catch((e) => setNotice(e.message))
+    credentialAPI.getIntake(id)
+      .then((b) => setBatch({ ...b, items: sortByVitality(b.items) }))
+      .catch((e) => setNotice(e.message))
   }, [])
 
   // Poll while the open batch is still processing.
@@ -136,8 +160,26 @@ export default function CredentialImportPage() {
       {/* Review queue */}
       {batch && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <button onClick={() => { setBatch(null); loadList() }} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← All imports</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+              <button onClick={() => { setBatch(null); loadList() }} style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← All imports</button>
+              {(() => {
+                const tiers = (batch.items || []).map(vitalityTier)
+                const n = (t) => tiers.filter((x) => x === t).length
+                const dot = (color, label, count) => count > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: color, display: 'inline-block' }} />{count} {label}
+                  </span>
+                )
+                return (
+                  <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center' }}>
+                    {dot('#059669', 'active', n(0))}
+                    {dot('#B45309', 'unknown', n(1))}
+                    {dot('#DC2626', 'expired', n(2))}
+                  </span>
+                )
+              })()}
+            </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               {batch.status === 'PROCESSING' && <span style={{ fontSize: 13, color: '#F59E0B', fontWeight: 700 }}>Reading documents… {pending} to go</span>}
               <button
@@ -193,8 +235,10 @@ function IntakeCard({ item, onSave, onReviewProfile }) {
     ARCHIVE: ['#0EA5E9', 'Marked for archive'], ARCHIVED: ['#0EA5E9', 'Filed to archive'],
   }[item.status] || ['#94A3B8', item.status]
 
+  const tierStyle = TIER_CARD[vitalityTier(item)] || { background: '#fff', border: '1px solid #DCE8F7' }
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #DCE8F7', borderRadius: 14, padding: '14px 18px' }}>
+    <div style={{ ...tierStyle, borderRadius: 14, padding: '14px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 240 }}>
           <a href={item.previewUrl || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 700, color: item.previewUrl ? '#2563EB' : '#10233F', textDecoration: 'none' }}>
