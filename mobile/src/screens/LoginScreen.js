@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import GoogleLogo from '../components/GoogleLogo';
 import { authAPI } from '../api/client';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -74,7 +75,7 @@ function GoogleSignInButton({ onToken, disabled }) {
       disabled={disabled || !request}
       activeOpacity={0.75}
     >
-      <Text style={styles.socialIcon}>G</Text>
+      <View style={styles.socialIconWrap}><GoogleLogo size={18} /></View>
       <Text style={styles.socialButtonText}>Continue with Google</Text>
     </TouchableOpacity>
   );
@@ -246,7 +247,7 @@ export default function LoginScreen({ navigation }) {
                 disabled={oauthLoading}
                 activeOpacity={0.75}
               >
-                <Text style={styles.socialIcon}>G</Text>
+                <View style={styles.socialIconWrap}><GoogleLogo size={18} /></View>
                 <Text style={styles.socialButtonText}>Continue with Google</Text>
                 <View style={styles.comingSoonBadge}>
                   <Text style={styles.comingSoonText}>Soon</Text>
@@ -427,13 +428,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  socialIcon: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#EA4335',
+  // Official Google "G" artwork (GoogleLogo component) — brand guidelines
+  // forbid a styled letter, same class of fix as the native Apple button.
+  socialIconWrap: {
     marginRight: 12,
     width: 20,
-    textAlign: 'center',
+    alignItems: 'center',
   },
   appleButton: {
     height: 50,

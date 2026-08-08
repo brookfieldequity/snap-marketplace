@@ -515,7 +515,7 @@ export default function AvailabilityScreen() {
                       <Text style={styles.incentiveBadge}>💰</Text>
                     )}
                     {hasNote && !hasIncentive && (
-                      <Text style={styles.noteBadge}>📝</Text>
+                      <Text style={styles.noteBadge}>✏️</Text>
                     )}
                   </TouchableOpacity>
                 );
@@ -1025,8 +1025,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 1,
     right: 2,
-    fontSize: 8,
-    lineHeight: 10,
+    // Single pencil glyph — the two-glyph memo emoji (📝) rendered as an
+    // unreadable blob at badge size (Matt, 8/6).
+    fontSize: 9,
+    lineHeight: 11,
   },
   // Note editor modal (Task #20)
   noteOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', padding: 24 },
